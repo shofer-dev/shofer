@@ -15,6 +15,7 @@ import { ContextProxy } from "../core/config/ContextProxy"
 import { focusPanel } from "../utils/focusPanel"
 import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { handleNewTask } from "./handleTask"
+import { handleAttachRemoteTask, handleDetachRemoteTask } from "./handleAttachRemoteTask"
 import { importSettingsWithFeedback } from "../core/config/importExport"
 
 /**
@@ -162,12 +163,9 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		// Surface the parallel-tasks side panel inside the webview.
 		visibleProvider.postMessageToWebview({ type: "action", action: "tasksButtonClicked" })
 	},
-	marketplaceButtonClicked: () => {
-		const visibleProvider = getVisibleProviderOrLog(outputChannel)
-		if (!visibleProvider) return
-		visibleProvider.postMessageToWebview({ type: "action", action: "marketplaceButtonClicked" })
-	},
 	newTask: handleNewTask,
+	attachRemoteTask: handleAttachRemoteTask,
+	detachRemoteTask: handleDetachRemoteTask,
 	setCustomStoragePath: async () => {
 		const { promptForCustomStoragePath } = await import("../utils/storage")
 		await promptForCustomStoragePath()

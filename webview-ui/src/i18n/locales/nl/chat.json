@@ -108,7 +108,6 @@
 	"enhancePromptDescription": "De knop 'Prompt verbeteren' helpt je prompt te verbeteren door extra context, verduidelijking of herformulering te bieden. Probeer hier een prompt te typen en klik opnieuw op de knop om te zien hoe het werkt.",
 	"modeSelector": {
 		"title": "Modi",
-		"marketplace": "Modus Marktplaats",
 		"settings": "Modus Instellingen",
 		"description": "Gespecialiseerde persona's die het gedrag van Shofer aanpassen.",
 		"searchPlaceholder": "Zoek modi...",

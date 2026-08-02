@@ -4,6 +4,7 @@ import type { Socket } from "net"
 import type { ShoferEvents } from "./events.js"
 import type { ShoferSettings } from "./global-settings.js"
 import type { HistoryItem } from "./history.js"
+import type { ShoferMessage, TokenUsage } from "./message.js"
 import type { ProviderSettingsEntry, ProviderSettings } from "./provider-settings.js"
 import type { IpcMessage, IpcServerEvents } from "./ipc.js"
 
@@ -83,6 +84,20 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 		taskId: string,
 		response: { askResponse: string; text?: string; images?: string[]; askId?: string; mode?: string },
 	): Promise<void>
+
+	/**
+	 * The conversation a task has accumulated, plus its live counters — the raw
+	 * material a transport shapes into a task snapshot for a controller attaching
+	 * to a task that is already running.
+	 *
+	 * Reads the live instance when the task is running here, and the persisted
+	 * `ui_messages.jsonl` otherwise, so a task that has been restarted, backgrounded
+	 * or completed is just as readable. `undefined` means this host knows no such
+	 * task (as opposed to a task with an empty conversation).
+	 *
+	 * @param taskId The id of the task to read.
+	 */
+	getTaskConversation(taskId: string): Promise<{ messages: ShoferMessage[]; tokenUsage?: TokenUsage } | undefined>
 
 	// ─── Reverse data channel ─────────────────────────────────────────
 	// Executor side of a plugin-owned per-task feature: resolve the managed task by id

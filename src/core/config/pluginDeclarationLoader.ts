@@ -68,7 +68,7 @@ async function readScopeDeclaration(root: string | undefined): Promise<PluginDec
 /**
  * Load, merge, and resolve the three scopes' plugin declarations for the given
  * scope roots. Each declared plugin is resolved **independently** so one
- * unsupported source (a `marketplace:`/http(s) ref, which
+ * unsupported source (an http(s) ref, which
  * {@link resolvePluginDeclaration} rejects with a whole-batch
  * {@link PluginResolveError}) cannot abort discovery of the rest — the failure is
  * captured into {@link LoadedPluginDeclarations.errors} and the remaining plugins
@@ -98,7 +98,7 @@ export async function loadPluginDeclarations(
 				errors.push(`${warning.name}: ${warning.message}`)
 			}
 		} catch (error) {
-			// A PluginResolveError (unsupported marketplace/remote source) is a hard,
+			// A PluginResolveError (unsupported remote URL source) is a hard,
 			// per-source failure — isolate it so a single bad declaration does not kill
 			// discovery of the physically-present and locally-sourced plugins.
 			errors.push(error instanceof PluginResolveError ? error.message : `${name}: ${String(error)}`)

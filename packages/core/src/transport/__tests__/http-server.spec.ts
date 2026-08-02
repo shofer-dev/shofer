@@ -65,6 +65,9 @@ describe("createRequestHandler (§11)", () => {
 			sendMessage: vi.fn(async () => {}),
 			cancelTask: vi.fn(async () => {}),
 			respondToAsk: vi.fn(async () => {}),
+			getTaskSnapshot: vi.fn(async (taskId: string) =>
+				taskId === "missing" ? undefined : { taskId, messages: [] },
+			),
 			pluginRequest: vi.fn(async () => ({ changes: [] })),
 			subscribe: vi.fn((l: (e: ServerEvent) => void) => {
 				events.push(l)
@@ -240,6 +243,23 @@ describe("createRequestHandler (§11)", () => {
 		expect(res.statusCode).toBe(404)
 	})
 
+	describe("GET /api/v1/task/:id/snapshot", () => {
+		it("returns the task snapshot", async () => {
+			const res = mockRes()
+			await run(mockReq("GET", "/api/v1/task/t%201/snapshot"), res as unknown as ServerResponse)
+			expect(res.statusCode).toBe(200)
+			expect(JSON.parse(res.body)).toEqual({ taskId: "t 1", messages: [] })
+			// The id is decoded before it reaches the API.
+			expect(api.getTaskSnapshot).toHaveBeenCalledWith("t 1")
+		})
+
+		it("404s a task this host does not own", async () => {
+			const res = mockRes()
+			await run(mockReq("GET", "/api/v1/task/missing/snapshot"), res as unknown as ServerResponse)
+			expect(res.statusCode).toBe(404)
+		})
+	})
+
 	describe("auth + version handshake", () => {
 		const authed = () => createRequestHandler(api, { token: "s3cret", version: "1.2.3" })
 		const call = async (h: ReturnType<typeof createRequestHandler>, req: IncomingMessage) => {
@@ -273,6 +293,20 @@ describe("createRequestHandler (§11)", () => {
 			const res = await call(authed(), mockReq("POST", "/api/v1/task", { prompt: "hi" }))
 			expect(res.statusCode).toBe(401)
 			expect(api.createTask).not.toHaveBeenCalled()
+		})
+
+		it("401s the snapshot route without a token — a transcript is not open data", async () => {
+			const res = await call(authed(), mockReq("GET", "/api/v1/task/t1/snapshot"))
+			expect(res.statusCode).toBe(401)
+			expect(api.getTaskSnapshot).not.toHaveBeenCalled()
+		})
+
+		it("serves the snapshot with the correct token", async () => {
+			const req = mockReq("GET", "/api/v1/task/t1/snapshot")
+			;(req.headers as Record<string, string>) = { authorization: "Bearer s3cret" }
+			const res = await call(authed(), req)
+			expect(res.statusCode).toBe(200)
+			expect(api.getTaskSnapshot).toHaveBeenCalledWith("t1")
 		})
 
 		it("allows the task API with the correct token", async () => {

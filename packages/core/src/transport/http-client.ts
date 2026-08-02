@@ -1,4 +1,6 @@
-import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent } from "@shofer/types"
+import { taskSnapshotSchema } from "@shofer/types"
+
+import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent, TaskSnapshot } from "@shofer/types"
 
 /**
  * Typed HTTP/SSE client SDK for the shofer server (v3 architecture §11).
@@ -47,6 +49,22 @@ export class ShoferHttpClient implements AgentApi {
 		await this.post(`/task/${encodeURIComponent(taskId)}/ask`, response)
 	}
 
+	/**
+	 * Backfill a task's state so far. `undefined` when the server has no such task
+	 * (404) — the one status this method treats as an answer rather than a failure,
+	 * because "that task does not live here" is information the caller acts on.
+	 *
+	 * The body is validated against `taskSnapshotSchema`: a snapshot from a host on
+	 * a different build must fail closed rather than be rendered as `any`.
+	 */
+	async getTaskSnapshot(taskId: string): Promise<TaskSnapshot | undefined> {
+		const body = await this.get(`/task/${encodeURIComponent(taskId)}/snapshot`, { notFoundAsUndefined: true })
+		if (body === undefined) return undefined
+		const parsed = taskSnapshotSchema.safeParse(body)
+		if (!parsed.success) throw new Error(`shofer server returned an unreadable task snapshot for ${taskId}`)
+		return parsed.data
+	}
+
 	// ── Reverse data channel ──────────────────────────────────────────────────────
 
 	async pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
@@ -63,15 +81,29 @@ export class ShoferHttpClient implements AgentApi {
 	/** Subscribe to the SSE event stream; returns an unsubscribe fn (aborts the request). */
 	subscribe(listener: (event: ServerEvent) => void): () => void {
 		const controller = new AbortController()
-		void this.streamEvents(listener, controller.signal)
+		void this.streamEvents("/event", listener, controller.signal)
 		return () => controller.abort()
 	}
 
-	private async get(path: string): Promise<unknown> {
+	/**
+	 * Subscribe to ONE task's events (`GET /api/v1/task/:id/event`); returns an
+	 * unsubscribe fn. Not part of {@link AgentApi} — that interface's `subscribe`
+	 * is the whole-host firehose — but it is what an attached view wants: a
+	 * connection that exists only while something is watching that task, carrying
+	 * only that task's content.
+	 */
+	subscribeTask(taskId: string, listener: (event: ServerEvent) => void): () => void {
+		const controller = new AbortController()
+		void this.streamEvents(`/task/${encodeURIComponent(taskId)}/event`, listener, controller.signal)
+		return () => controller.abort()
+	}
+
+	private async get(path: string, opts: { notFoundAsUndefined?: boolean } = {}): Promise<unknown> {
 		const res = await this.doFetch(`${this.base}${path}`, {
 			method: "GET",
 			headers: { ...this.authHeaders },
 		})
+		if (res.status === 404 && opts.notFoundAsUndefined) return undefined
 		if (!res.ok) throw new Error(`shofer server ${path} → ${res.status}`)
 		const text = await res.text()
 		return text ? JSON.parse(text) : undefined
@@ -88,10 +120,14 @@ export class ShoferHttpClient implements AgentApi {
 		return text ? JSON.parse(text) : undefined
 	}
 
-	private async streamEvents(listener: (event: ServerEvent) => void, signal: AbortSignal): Promise<void> {
+	private async streamEvents(
+		path: string,
+		listener: (event: ServerEvent) => void,
+		signal: AbortSignal,
+	): Promise<void> {
 		let res: Response
 		try {
-			res = await this.doFetch(`${this.base}/event`, {
+			res = await this.doFetch(`${this.base}${path}`, {
 				headers: { accept: "text/event-stream", ...this.authHeaders },
 				signal,
 			})

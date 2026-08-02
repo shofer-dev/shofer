@@ -189,12 +189,6 @@ describe("resolvePluginDeclaration", () => {
 		expect(await nodeFs.readFile(path.join(result.resolved[0]!.dir, "plugin.json"), "utf-8")).toContain("arch")
 	})
 
-	it("throws PluginResolveError for a marketplace: source", async () => {
-		await expect(
-			resolvePluginDeclaration(decl("mkt", { source: "marketplace:some-id@1.0.0", version: "1.0.0" }), cacheDir),
-		).rejects.toBeInstanceOf(PluginResolveError)
-	})
-
 	it("throws PluginResolveError for a remote URL source", async () => {
 		await expect(
 			resolvePluginDeclaration(

@@ -62,7 +62,6 @@ import { DIFF_VIEW_URI_SCHEME } from "./integrations/editor/DiffViewProvider"
 import { TerminalRegistry } from "@shofer/core"
 import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
 import { McpServerManager } from "./services/mcp/McpServerManager"
-import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "@shofer/core"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -155,8 +154,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		),
 	)
 
-	// Set VS Code context key for marketplace visibility
-	vscode.commands.executeCommand("setContext", "shofer:marketplaceEnabled", MARKETPLACE_ENABLED)
 	context.subscriptions.push(outputChannel)
 	setMcpOutputChannel(outputChannel)
 	outputChannel.appendLine(`${Package.name} extension activated - ${JSON.stringify(Package)}`)

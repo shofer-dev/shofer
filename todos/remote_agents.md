@@ -1,12 +1,16 @@
 # Remote agents — Temporal dispatch, AgentApi observation
 
-> **Status: Phase 1 (removal) EXECUTED — the bespoke "Shofer Workers" fleet
-> layer, the config-sync channel, and the split-host substrate are gone from
-> the codebase, and the docs they anchored (`v3_architecture.md`,
-> `config_sync.md`, `headless.md`) are consolidated into
+> **Status: Phases 1–2 EXECUTED.** The bespoke "Shofer Workers" fleet layer,
+> the config-sync channel and the split-host substrate are gone (Phase 1), and
+> core now carries the two generic seams that replace them (Phase 2): the
+> AgentApi **task-snapshot** route with the **attachment primitive** built on
+> it, and the **task-placement** broadcast a dispatcher plugin claims. The docs
+> the removed layer anchored (`v3_architecture.md`, `config_sync.md`,
+> `headless.md`) are consolidated into
 > [`host-boundary.md`](../docs/host-boundary.md) and
-> [`cli.md`](../docs/cli.md). Phases 2–4 are not built.** This doc captures the
-> END STATE for horizontal scaling / remote agents and the ROADMAP.
+> [`cli.md`](../docs/cli.md). **Phases 3–4 (the plugin pair, durable fan-out)
+> are not built.** This doc captures the END STATE for horizontal scaling /
+> remote agents and the ROADMAP.
 
 ## 0. The decision
 
@@ -305,21 +309,33 @@ Bump minor `Y` (settings keys and persisted/wire shapes removed).
 **Done when:** `rg` over the repo finds none of the removed symbols; all
 packages build and test green; the docs above are coherent with the code.
 
-### Phase 2 — the core seams: attachment + placement
+### Phase 2 — the core seams: attachment + placement — ✅ DONE (shofer 2.46.0)
 
-- New AgentApi **task snapshot** route (messages so far, outstanding asks,
-  status, token usage) served from the worker's task store.
-- Core **attach/detach** implementation per §2b, rendering into the chat view;
-  per-view focus so an editor tab and the sidebar can watch different tasks.
-- The **task-placement seam** (§2a-2): task creation broadcasts a placement
-  question a plugin may claim ("dispatched — here is the task reference"), a
-  sibling of the `resolve-task-cwd` broadcast; unclaimed tasks run in-process
+- AgentApi **task snapshot** — `getTaskSnapshot(taskId)` over
+  `GET /api/v1/task/:id/snapshot`: the whole transcript, the ask the task is
+  blocked on, lifecycle and token usage, assembled in `ShoferApiAgent` from the
+  worker's live task or its persisted `ui_messages.jsonl`
+  ([`agentapi.md`](../docs/agentapi.md#task-snapshots--attaching-to-a-running-task)).
+- Core **attach/detach** per §2b — `TaskAttachmentManager` + `AttachedTask`
+  (`src/core/attach/`): subscribe the task-scoped SSE, backfill, render into the
+  chat view with the normal ask affordances, `sendMessage` and cancel routed to
+  the owning host. Focus is per view; a connection exists only while attached.
+  Entry points: the `shofer.attachRemoteTask` / `shofer.detachRemoteTask`
+  commands.
+- The **task-placement seam** (§2a-2) — `resolveTaskPlacement` broadcasts
+  `"resolve-task-placement"` at `newTask`; a claim (`{ dispatched: { taskId,
+  address?, token? } }`) attaches instead of creating a local task, an
+  `{ error }` aborts creation, and no answer leaves the in-process path
   unchanged.
 
 **Done when:** against a plain `shofer serve` running a task, a controller can
 attach mid-task by `(address, taskId, token)`, render the full transcript
 including an ask raised _before_ attach, answer it, send a follow-up message,
-detach and re-attach — with `workers.json` and every Phase-1 symbol gone.
+detach and re-attach — with `workers.json` and every Phase-1 symbol gone. Held
+by `src/core/attach/__tests__/attach-e2e.test.ts`, which runs that exact
+sequence through the real `ShoferApiAgent`, HTTP handler, `ShoferHttpClient` and
+attachment manager (only the socket is substituted — the test sandbox blocks
+loopback).
 
 ### Phase 3 — the plugin pair
 

@@ -87,15 +87,12 @@ export interface HttpServerOptions {
  *   GET  /api/v1/whoami              → { version } (authed; one-shot liveness+version+auth)
  *   GET  /api/v1/event               → SSE event stream (worker-wide: ALL tasks)
  *   GET  /api/v1/task/:id/event      → SSE event stream filtered to ONE task
- *   POST /api/v1/task                → { prompt, taskId?, apiConfiguration? } → { taskId }
+ *   GET  /api/v1/task/:id/snapshot   → 200 TaskSnapshot | 404 (attach backfill)
+ *   POST /api/v1/task                → { prompt, mode, taskId?, apiConfiguration? } → { taskId }
  *   POST /api/v1/task/:id/message    → { message }
  *   POST /api/v1/task/:id/cancel
- *   POST /api/v1/task/:id/ask        → { askResponse, text?, images?, askId? } (interactive approval)
- *   POST /api/v1/task/:id/plugin-request      → { plugin, method, params } → 200 { result }       (L3)
- *   GET  /api/v1/task/:id/changed-files       → 200 ChangedFilesPayload                            (L3)
- *   POST /api/v1/task/:id/changed-files/diff  → { relPath } → 200 { original, final }              (L3)
- *   POST /api/v1/task/:id/changed-files/revert→ { relPath? } → 202 (one file, or all when omitted) (L3)
- *   POST /api/v1/task/:id/changed-files/accept→ { relPath? } → 202 (one file, or all when omitted) (L3)
+ *   POST /api/v1/task/:id/ask        → { askResponse, text?, images?, askId?, mode? } (interactive approval)
+ *   POST /api/v1/task/:id/plugin-request → { plugin, method, params } → 200 { result }
  */
 export function createHttpServer(api: AgentApi, opts: HttpServerOptions = {}): http.Server {
 	return http.createServer(createRequestHandler(api, opts))
@@ -165,6 +162,18 @@ export function createRequestHandler(
 			})
 			req.on("close", unsubscribe)
 			return
+		}
+
+		// Backfill for a controller attaching to a task that is ALREADY running: the
+		// transcript so far, the ask it is blocked on, lifecycle and token usage. A
+		// host that owns no such task answers 404 rather than an empty snapshot, so
+		// the caller can tell "not here" apart from "nothing said yet".
+		const snapshotMatch = path.match(new RegExp(`^${base}/task/([^/]+)/snapshot$`))
+		if (method === "GET" && snapshotMatch) {
+			const snapshotTaskId = decodeURIComponent(snapshotMatch[1]!)
+			const snapshot = await api.getTaskSnapshot(snapshotTaskId)
+			if (!snapshot) return send(res, 404, { error: `no task ${snapshotTaskId}` })
+			return send(res, 200, snapshot)
 		}
 
 		if (method === "POST" && path === `${base}/task`) {

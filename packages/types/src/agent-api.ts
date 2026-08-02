@@ -11,12 +11,106 @@
  * the wire-protocol modules can share it.
  */
 
+import { z } from "zod"
+
+import { taskStateSchema } from "./history.js"
+import { shoferAskSchema, shoferMessageSchema, tokenUsageSchema } from "./message.js"
 import type { ProviderSettings } from "./provider-settings.js"
 
 /** A streamed agent event. `type` is the event name; other fields are event-specific. */
 export interface ServerEvent {
 	type: string
 	[key: string]: unknown
+}
+
+/**
+ * The `ask` a task is currently blocked on, carried in a {@link TaskSnapshot}.
+ *
+ * A task that raised an ask BEFORE a controller attached is still blocked on it —
+ * nothing on the executor resolves an interactive ask locally — so the snapshot has
+ * to name it explicitly rather than leaving the controller to re-derive it from the
+ * transcript. The fields are exactly what {@link AgentApi.respondToAsk} needs to
+ * answer it (`askId` routes the answer to the outstanding ask).
+ */
+export const outstandingAskSchema = z.object({
+	/** The ask kind (`tool`, `command`, `followup`, …). */
+	ask: shoferAskSchema,
+	/** Stable id of the outstanding ask; echoed back in {@link AskResponse.askId}. */
+	askId: z.string().optional(),
+	/** The ask's payload text (tool JSON, the question, …), as rendered. */
+	text: z.string().optional(),
+	/** Timestamp of the ask message, which is also its identity in `messages`. */
+	ts: z.number(),
+})
+
+export type OutstandingAsk = z.infer<typeof outstandingAskSchema>
+
+/**
+ * A task's state so far, as read from the host that owns it — the backfill half of
+ * attaching to a running task (the live half is the task-scoped event stream).
+ *
+ * It is deliberately the WHOLE conversation rather than a tail: a controller that
+ * attaches mid-task renders the same transcript the owning host shows, including an
+ * ask raised before it attached. Tasks persist their messages, so this is readable
+ * for a task that is running, idle, or long finished.
+ */
+export const taskSnapshotSchema = z.object({
+	taskId: z.string(),
+	/** The task's first prompt (its title in history) — the synthetic header's text. */
+	summary: z.string().optional(),
+	/** Creation timestamp (ms since epoch), when the host knows it. */
+	createdAt: z.number().optional(),
+	/** Lifecycle + completion rating, as the owning host currently records them. */
+	state: taskStateSchema.optional(),
+	/** The reduced-but-real conversation: every `ShoferMessage` the task has emitted. */
+	messages: z.array(shoferMessageSchema),
+	/** The ask the task is blocked on, when it is blocked on one. */
+	outstandingAsk: outstandingAskSchema.optional(),
+	/** Authoritative token/cost counters, so an attached view's meter is real. */
+	tokenUsage: tokenUsageSchema.optional(),
+})
+
+export type TaskSnapshot = z.infer<typeof taskSnapshotSchema>
+
+/**
+ * A reference to a task that has ALREADY been created somewhere else — the answer a
+ * plugin gives when it claims a task at the placement seam.
+ *
+ * `address` is the base URL of the owning host's AgentApi (e.g.
+ * `http://worker-3:30099`); with it the controller attaches and renders the task
+ * like a local one. Without it the dispatch is recorded but not observable — a
+ * dispatcher that cannot (yet) say where the task landed.
+ */
+export const dispatchedTaskRefSchema = z.object({
+	taskId: z.string().min(1),
+	address: z.string().min(1).optional(),
+	token: z.string().min(1).optional(),
+})
+
+export type DispatchedTaskRef = z.infer<typeof dispatchedTaskRefSchema>
+
+/**
+ * A plugin's answer to the `"resolve-task-placement"` broadcast: either a claim
+ * (the task was dispatched — here is its reference) or a failure. A plugin that
+ * does not recognise the question throws, which `requestAll` reads as "no answer".
+ */
+export const taskPlacementAnswerSchema = z.union([
+	z.object({ error: z.string().min(1) }),
+	z.object({ dispatched: dispatchedTaskRefSchema }),
+])
+
+export type TaskPlacementAnswer = z.infer<typeof taskPlacementAnswerSchema>
+
+/** Parameters of the `"resolve-task-placement"` broadcast — what the task would be. */
+export interface TaskPlacementQuestion {
+	/** The initial prompt the task would run with. */
+	prompt: string
+	/** The mode slug the front-end selected, when it did. */
+	mode?: string
+	/** The API-configuration profile name the front-end selected, when it did. */
+	apiConfigName?: string
+	/** The directory placement already resolved (`resolve-task-cwd`), when any. */
+	cwd?: string
 }
 
 /**
@@ -75,6 +169,19 @@ export interface AgentApi {
 	 * approvals round-trip exactly like a local task's.
 	 */
 	respondToAsk(taskId: string, response: AskResponse): Promise<void>
+
+	/**
+	 * The task's state so far — messages, the ask it is blocked on, lifecycle and
+	 * token usage. `undefined` when the host knows no such task.
+	 *
+	 * The backfill half of attaching to a task that is ALREADY running: a controller
+	 * reads the transcript up to now, then subscribes the task's event stream for
+	 * what comes next. Without it an attaching view would start mid-conversation and
+	 * would never learn about an ask raised before it arrived — which, because a
+	 * served host never resolves interactive asks locally, is exactly the state a
+	 * task is most likely to be found in.
+	 */
+	getTaskSnapshot(taskId: string): Promise<TaskSnapshot | undefined>
 
 	// ── Reverse data channel ──────────────────────────────────────────────────────
 	// A plugin-owned per-task feature for a REMOTE (shadow) task: the controller reads

@@ -56,6 +56,7 @@ The full method set (see the source for exact signatures):
 | `sendMessage(taskId, message)`                                            | Send a follow-up message to a running task.                                                                                                                                                                                                 |
 | `cancelTask(taskId)`                                                      | Abort a task.                                                                                                                                                                                                                               |
 | `respondToAsk(taskId, AskResponse)`                                       | Answer an outstanding `ask` (interactive tool approval / follow-up). The reverse of the `ask` events on the stream, so a remote task's approvals round-trip like a local one's.                                                             |
+| `getTaskSnapshot(taskId)` → `TaskSnapshot \| undefined`                   | The task's state so far — see [Task snapshots](#task-snapshots-attaching-to-a-running-task). `undefined` when the host owns no such task.                                                                                                  |
 | `subscribe(listener)` → `unsubscribe`                                     | Subscribe to the agent event stream ([`ServerEvent`](#event-model)).                                                                                                                                                                        |
 
 ### Reverse data channel
@@ -92,6 +93,7 @@ GET  /health                      liveness + version (open)
 GET  /api/v1/whoami               { version } (authed; one-shot liveness+auth)
 GET  /api/v1/event                SSE event stream (worker-wide: ALL tasks) → subscribe()
 GET  /api/v1/task/:id/event       SSE event stream filtered to ONE task   → subscribe() + filter
+GET  /api/v1/task/:id/snapshot    TaskSnapshot (404 = not this host's task) → getTaskSnapshot()
 POST /api/v1/task                 { prompt, mode, taskId?, apiConfiguration? } → createTask()
 POST /api/v1/task/:id/message     { message }                 → sendMessage()
 POST /api/v1/task/:id/cancel                                  → cancelTask()
@@ -105,6 +107,53 @@ POST /api/v1/task/:id/plugin-request        { plugin, method, params? } → { re
 executor subscribes per authorized task, so it never receives — or has to demux —
 other tenants' content; the worker-wide stream stays for single-tenant / whole-worker
 consumers.
+
+## Task snapshots — attaching to a running task
+
+`subscribe` only carries what happens NEXT. A controller that reaches a task already in
+flight — the normal case for a dispatched task, and for any controller that restarted —
+needs what came before, so the surface has one read method: `getTaskSnapshot(taskId)`,
+served over `GET /api/v1/task/:id/snapshot` (bearer-authed like every other `/api/v1`
+route; `404` when the host owns no such task).
+
+[`taskSnapshotSchema`](../packages/types/src/agent-api.ts) is the wire shape:
+
+| Field            | Meaning                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------- |
+| `taskId`         | The task, on the host that owns it.                                                           |
+| `summary`        | Its title (the first prompt) — what a synthetic task header renders.                          |
+| `createdAt`      | Creation timestamp, when the host knows one.                                                  |
+| `state`          | `TaskState` — lifecycle, plus the completion rating when there is one.                        |
+| `messages`       | The WHOLE `ShoferMessage` conversation, not a tail.                                           |
+| `outstandingAsk` | The ask the task is blocked on: `{ ask, askId?, text?, ts }` — enough to answer via `respondToAsk`. |
+| `tokenUsage`     | Authoritative counters, so an attached view's token/cost meter is the executor's, not a guess. |
+
+`outstandingAsk` matters more than it looks: a served worker **never resolves an
+interactive ask locally**, so a task found mid-flight is very often blocked on one raised
+before anyone attached. It is derived from the transcript — the last message is an ask,
+complete, not auto-approved, not already answered — which means the same rule applies to a
+live task and to one rehydrated from disk.
+
+Backfill + the per-task stream are the two halves of **attaching**:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Controller
+    participant N as Worker (shofer serve)
+
+    C->>N: GET /api/v1/task/:id/event — subscribe FIRST (buffer)
+    C->>N: GET /api/v1/task/:id/snapshot
+    N-->>C: TaskSnapshot — transcript, outstanding ask, state, usage
+    Note over C: replay buffered deltas onto the snapshot<br/>(upsert by ts, so the overlap resolves itself)
+    N-->>C: SSE: everything from here on
+    C->>N: POST /api/v1/task/:id/ask — answer the pre-attach ask
+    C->>N: POST /api/v1/task/:id/message — follow up
+```
+
+Subscribing before fetching is what closes the hole a busy task would otherwise fall
+into; because message deltas are keyed by `ts`, replaying the buffered ones over the
+snapshot is idempotent.
 
 ## Running `shofer serve`
 

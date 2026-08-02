@@ -424,9 +424,6 @@ The user-scope equivalent lives at `~/.shofer/mcp.json` (org policy can supply a
 third, read-only layer at the org-global scope root). It can also be managed
 through the Settings UI.
 
-When installing MCP servers from the Shofer Marketplace, they are added
-to `.shofer/mcp.json` for project-scoped installs.
-
 ---
 
 ### `.shofer/custom-instructions.md` — Custom Instructions

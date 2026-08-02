@@ -110,7 +110,7 @@ flowchart TB
         direction TB
         SP["ShoferProvider<br/>webview lifecycle · state management · postMessage"]
         TASK["Task (agent)<br/>recursivelyMakeShoferRequests · LLM streaming<br/>tool dispatch · ask() · save/load"]
-        SVC["CodeIndexManager · GitIndexManager · Search · Glob<br/>MCP · Skills · Marketplace · TaskManager · Plugins"]
+        SVC["CodeIndexManager · GitIndexManager · Search · Glob<br/>MCP · Skills · TaskManager · Plugins"]
         VSCAPI["vscode.* API surface<br/>workspace.fs · window.createTerminal · commands<br/>window.activeTextEditor · workspace.findFiles"]
         SP --> VSCAPI
         TASK --> VSCAPI

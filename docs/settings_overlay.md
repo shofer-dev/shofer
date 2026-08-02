@@ -232,8 +232,8 @@ customModes:
 
 Created with an empty `customModes: []` template on first access
 ([`CustomModesManager.getCustomModesFilePath()`](../src/core/config/CustomModesManager.ts)).
-Every non-project mode write (Settings UI, marketplace "global" install,
-import at global level) targets this file.
+Every non-project mode write (Settings UI, import at global level) targets
+this file.
 
 ### 2b-org. Org-global scope — `<org .shofer>/shofermodes`
 

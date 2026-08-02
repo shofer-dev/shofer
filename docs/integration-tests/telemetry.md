@@ -90,7 +90,6 @@
     - Open ModeSelector dropdown → verify `MODE_SELECTOR_OPENED` is captured.
     - Click Share → Organization → verify `SHARE_ORGANIZATION_CLICKED` is captured.
     - Click Share → Public → verify `SHARE_PUBLIC_CLICKED` is captured.
-    - Install a marketplace item → verify `MARKETPLACE_ITEM_INSTALLED` is captured.
     - Switch settings tab → verify `TAB_SHOWN` is captured with the correct `tab` value.
     - Dismiss an upsell banner → verify `UPSELL_DISMISSED` is captured with `upsellId`.
 

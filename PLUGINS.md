@@ -1,7 +1,7 @@
 # Writing Shofer Plugins
 
-A **plugin** extends Shofer's _behavior_, not just its data. Where the marketplace curates data
-items and the custom-tool registry adds tools, a plugin is a self-contained bundle that can
+A **plugin** extends Shofer's _behavior_, not just its data. Where the custom-tool
+registry adds tools, a plugin is a self-contained bundle that can
 contribute modes, skills, slash commands, MCP servers, and rules **declaratively**, and — if it
 ships code — register tools, transform the system prompt, hook the task/tool lifecycle, run a
 background service, call the host LLM, and render UI into the app.
@@ -702,21 +702,14 @@ the Plugins settings tab unchanged. Without `--enable`, a freshly installed plug
 (the per-plugin consent gate). `--overwrite` replaces an already-installed plugin of the same name
 (the upgrade path).
 
-### Marketplace Plugins tab
+### Install surfaces
 
-The Marketplace's **Plugins** tab lists discovered plugins with enable/disable toggles, an uninstall
-action, and the "uses AI (billed)" badge + consent affordance, plus **two install affordances**:
-
-- **Install from file** — opens a native picker for a local `.shofer-plugin` archive (the webview
-  can't read local files, so the extension does the pick + unpack).
-- **Install from URL** — paste a direct `http(s)` link to a `.shofer-plugin` archive; the extension
-  downloads it via the core helper (https-only + size-capped + zip-slip / manifest validated),
-  unpacks it into the global plugins dir, and re-discovers. Freshly installed plugins stay disabled
-  (matching install-from-file), so you enable them afterward.
-
-> The Settings → **Plugins** tab shows the same discovered-plugin list with enable/disable toggles
-> (plus the `settings-tab` UI region), but the install affordances + AI-consent controls live in the
-> Marketplace Plugins tab.
+Install/uninstall are **CLI verbs and declarations only** — there is no webview
+install surface. The Settings → **Plugins** tab shows the discovered-plugin list
+with enable/disable toggles, schema-driven config editing, the `settings-tab` UI
+region, and the "uses AI (billed)" badge + consent affordance
+(`{ action: "setAiConsent" }`). Freshly installed plugins stay disabled (the
+per-plugin consent gate), so you enable them there afterward.
 
 > **Direct-URL install is supported; a remote _registry_ is not.** There is no
 > `shofer plugin search` / `install name@version` / hosted directory — install is a local archive,
@@ -725,8 +718,7 @@ action, and the "uses AI (billed)" badge + consent affordance, plus **two instal
 
 ### The https / size policy (URL install)
 
-Both the CLI (`shofer plugin install <URL>`) and the Marketplace "Install from URL" go through the
-same host-agnostic core helper:
+The CLI (`shofer plugin install <URL>`) goes through the host-agnostic core helper:
 
 - **`https` only** by default. A plain `http://` URL is refused unless the host is loopback
   (`localhost`/`127.0.0.1`) or, on the CLI, `--allow-insecure-http` is passed.
@@ -739,8 +731,8 @@ same host-agnostic core helper:
 
 ## Plugin declarations (`.shofer/plugins.json`)
 
-The discovery directories in [§1](#discovery-directories) and the CLI/Marketplace
-installs in [§8](#8-packaging--install) cover a plugin whose **code is already
+The discovery directories in [§1](#discovery-directories) and the CLI installs
+in [§8](#8-packaging--install) cover a plugin whose **code is already
 present** as an installed directory. A `.shofer/plugins.json` **declaration** covers
 the complementary need — stating **which** plugins a scope wants, **from where**,
 and at **which version** — without committing the plugin bytes. "Declare, don't
@@ -771,10 +763,10 @@ source/version/enablement lockfile.
 Each entry is `{ source, version, config?, enabled? }`:
 
 - **`source`** — a local **directory** path or a local **`.shofer-plugin`** archive
-  path resolve today. A `marketplace:<id>@<ver>` ref or an `http(s)` URL is reserved
-  for a later pass — the resolver raises a `PluginResolveError` ("marketplace/remote
-  sources not yet supported") for those, isolated per-declaration so it never blocks
-  discovery of the physically-present plugins.
+  path resolve today. An `http(s)` URL is reserved for a later pass — the resolver
+  raises a `PluginResolveError` ("remote URL sources not yet supported") for it,
+  isolated per-declaration so it never blocks discovery of the physically-present
+  plugins.
 - **`version`** — the version the resolver materializes under.
 - **`config`** — the user's config overrides, merged with the manifest's `config`
   defaults (see [§3](#config)).
@@ -959,7 +951,6 @@ external-edit watch granularity) that Phase 7's path-carrying watch closed.
 - Runtime (manager/loader/registry/sandbox/ai/storage/services/pack): `packages/core/src/plugins/`
 - CLI: `apps/cli/src/commands/plugin/`
 - UI: `webview-ui/src/components/settings/PluginsSettings.tsx`,
-  `webview-ui/src/components/marketplace/PluginsTab.tsx`,
   `webview-ui/src/components/plugins/` (`PluginSlot`, component resolver)
 - Worked examples: `plugins/live-memory/` (+ `plugins/live-memory/DOGFOOD.md`) and
   `plugins/basics/` (+ its `DESIGN.md`) — the latter is a whole _feature set_

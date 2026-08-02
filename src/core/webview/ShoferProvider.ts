@@ -39,7 +39,6 @@ import {
 	type ExtensionState,
 	type OrgLockedResources,
 	type ShoferAPI,
-	type MarketplaceInstalledMetadata,
 	ShoferEventName,
 	requestyDefaultModelId,
 	openRouterDefaultModelId,
@@ -124,7 +123,6 @@ import type {
 import { getApiMetrics } from "@shofer/core"
 import { applyPluginSecretEdits, redactPluginSecretConfig, splitPluginConfigBySecrets } from "@shofer/core"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
-import { MarketplaceManager } from "../../services/marketplace"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 import { TaskManager } from "../../services/task-manager/TaskManager"
 
@@ -154,6 +152,7 @@ import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { buildPluginHostImportMap } from "./pluginHostImportMap"
 import { PluginPanelManager } from "./PluginPanelManager"
+import { TaskAttachmentManager } from "../attach/TaskAttachmentManager"
 import { REQUESTY_BASE_URL } from "@shofer/core"
 import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
 import { addTaskLogListener } from "@shofer/core"
@@ -217,7 +216,6 @@ export class ShoferProvider
 	 * `ctx.ui.showPanel`). Lazily created; owns its panels' lifecycle.
 	 */
 	private readonly pluginPanelManager = new PluginPanelManager(this)
-	private marketplaceManager: MarketplaceManager
 	private taskCreationCallback: (task: Task) => void
 	/**
 	 * Public accessor for the task-creation event-forwarding callback. Tasks
@@ -550,7 +548,6 @@ export class ShoferProvider
 			this.log(`Failed to initialize Skills Manager: ${error}`)
 		})
 
-		this.marketplaceManager = new MarketplaceManager(this.context, this.customModesManager)
 
 		// Forward <most> task events to the provider.
 		// We do something fairly similar for the IPC-based API.
@@ -1260,6 +1257,10 @@ export class ShoferProvider
 
 		this._disposed = true
 
+		// This view is going away: close its remote attachment (if any) so the SSE
+		// connection to the other host does not outlive the thing rendering it.
+		TaskAttachmentManager.getInstance().detach(this, { silent: true })
+
 		// Phase 3: H8 disposables removed
 
 		// Clear all tasks from the stack.
@@ -1311,7 +1312,6 @@ export class ShoferProvider
 		}
 		this.pluginManagerBuild = undefined
 		this.pluginPanelManager.dispose()
-		this.marketplaceManager?.cleanup()
 		this.customModesManager?.dispose()
 
 		if (this.archivedCleanupTimer) {
@@ -3415,7 +3415,7 @@ export class ShoferProvider
 	 */
 	private setWebviewMessageListener(webview: vscode.Webview) {
 		const onReceiveMessage = async (message: WebviewMessage) =>
-			webviewMessageHandler(this, message, this.marketplaceManager)
+			webviewMessageHandler(this, message)
 
 		const messageDisposable = webview.onDidReceiveMessage(onReceiveMessage)
 		this.webviewDisposables.push(messageDisposable)
@@ -4693,51 +4693,6 @@ export class ShoferProvider
 	}
 
 	/**
-	 * Fetches marketplace data on demand to avoid blocking main state updates
-	 */
-	async fetchMarketplaceData() {
-		try {
-			const [marketplaceResult, marketplaceInstalledMetadata] = await Promise.all([
-				this.marketplaceManager.getMarketplaceItems().catch((error) => {
-					webviewLog.error("Failed to fetch marketplace items:", error)
-					return { organizationMcps: [], marketplaceItems: [], errors: [error.message] }
-				}),
-				this.marketplaceManager.getInstallationMetadata().catch((error) => {
-					webviewLog.error("Failed to fetch installation metadata:", error)
-					return { project: {}, global: {} } as MarketplaceInstalledMetadata
-				}),
-			])
-
-			// Send marketplace data separately
-			this.postMessageToWebview({
-				type: "marketplaceData",
-				organizationMcps: marketplaceResult.organizationMcps || [],
-				marketplaceItems: marketplaceResult.marketplaceItems || [],
-				marketplaceInstalledMetadata: marketplaceInstalledMetadata || { project: {}, global: {} },
-				errors: marketplaceResult.errors,
-			})
-		} catch (error) {
-			webviewLog.error("Failed to fetch marketplace data:", error)
-
-			// Send empty data on error to prevent UI from hanging
-			this.postMessageToWebview({
-				type: "marketplaceData",
-				organizationMcps: [],
-				marketplaceItems: [],
-				marketplaceInstalledMetadata: { project: {}, global: {} },
-				errors: [error instanceof Error ? error.message : String(error)],
-			})
-
-			// Show user-friendly error notification for network issues
-			if (error instanceof Error && error.message.includes("timeout")) {
-				getHost().notifier.warn(
-					"Marketplace data could not be loaded due to network restrictions. Core functionality remains available.",
-				)
-			}
-		}
-	}
-
-	/**
 	 * Merges allowed commands from global state and workspace configuration
 	 * with proper validation and deduplication
 	 */
@@ -4904,6 +4859,14 @@ export class ShoferProvider
 		const cwd = this.cwd
 		const currentTask = this.getCurrentTask()
 
+		// A view attached to a task running on ANOTHER host renders that task, not
+		// this host's current one. The override has to live here, on the full-state
+		// push, because any global push (settings changed, MCP lifecycle, a focus
+		// swap) would otherwise clobber the attached conversation with whatever the
+		// local stack happens to hold. Four render fields short-circuit below;
+		// everything else on the state is genuinely this host's.
+		const attached = TaskAttachmentManager.getInstance().get(this)
+
 		// Re-seed the workflow visualization from the *focused* task. The viz
 		// fields below are normally pushed as deltas by WorkflowTask via
 		// postConfigUpdate, but those are global keys any live workflow writes to.
@@ -4961,8 +4924,9 @@ export class ShoferProvider
 			autoCondenseContext: autoCondenseContext ?? true,
 			autoCondenseContextPercent: autoCondenseContextPercent ?? 90,
 			uriScheme: vscode.env.uriScheme,
-			currentTaskId: currentTask?.taskId,
+			currentTaskId: attached?.taskId ?? currentTask?.taskId,
 			currentTaskItem: (() => {
+				if (attached) return attached.toTaskItem()
 				if (!currentTask?.taskId) return undefined
 				const stored = this.taskHistoryStore.get(currentTask.taskId)
 				// Resolve the live cost limit by walking up to the root task,
@@ -4981,6 +4945,7 @@ export class ShoferProvider
 				return stored ? { ...stored, costLimit: liveCostLimit } : undefined
 			})(),
 			shoferMessages: (() => {
+				if (attached) return attached.messages
 				const msgs = currentTask?.shoferMessages || []
 				// LLM hint: diagnostic for the task-switch home-screen flash.
 				// Fires when we are about to broadcast an empty messages array
@@ -5009,9 +4974,11 @@ export class ShoferProvider
 			})(),
 			// T1.B: signal the webview that older messages exist on disk
 			// and a "Load older messages" sentinel should be shown.
-			hasMoreShoferMessages: currentTask?.hasMoreShoferMessages ?? false,
-			currentTaskTodos: currentTask?.todoList || [],
-			messageQueue: currentTask?.messageQueueService?.messages ?? [],
+			hasMoreShoferMessages: attached ? false : (currentTask?.hasMoreShoferMessages ?? false),
+			// An attached task's todos and queue live on the host that runs it —
+			// never surface this host's local task's here.
+			currentTaskTodos: attached ? [] : currentTask?.todoList || [],
+			messageQueue: attached ? [] : (currentTask?.messageQueueService?.messages ?? []),
 			taskHistory: this.taskHistoryStore.getAll().filter((item: HistoryItem) => item.ts && item.task),
 			soundEnabled: soundEnabled ?? false,
 			ttsEnabled: ttsEnabled ?? false,
@@ -6298,6 +6265,11 @@ export class ShoferProvider
 
 			await this.updateTaskHistory(historyItem)
 
+			// A new LOCAL task takes focus in THIS view — drop any remote attachment
+			// it was rendering so the state push below shows the new task rather than
+			// the one on the other host.
+			TaskAttachmentManager.getInstance().detach(this, { silent: true })
+
 			// Notify the webview of the new current task and switch to the chat tab.
 			await this.postInitState()
 			await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
@@ -6325,6 +6297,11 @@ export class ShoferProvider
 	 */
 	public async focusTask(taskId: string): Promise<void> {
 		try {
+			// Focusing from the task list is always a LOCAL task (an attached remote
+			// task is not in this host's history), so this view stops rendering
+			// whatever it was attached to.
+			TaskAttachmentManager.getInstance().detach(this, { silent: true })
+
 			// Check if we already have this task focused
 			const currentTask = this.getCurrentTask()
 			if (currentTask?.taskId === taskId) {

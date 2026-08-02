@@ -54,8 +54,8 @@ async function withHookTimeout<T>(
  * Collects {@link ShoferPlugin}s and runs their hooks at the right points:
  * tool contribution, system-prompt transformation, and event observation.
  * Host-agnostic — no `vscode` imports — so it runs in the extension, the CLI, or
- * a future server. The marketplace becomes curation/distribution over this
- * substrate rather than the extension mechanism itself.
+ * a future server. Distribution/curation layers sit above this substrate rather
+ * than being the extension mechanism itself.
  */
 /** Per-plugin grants the registry needs to know at hook time (design §8). */
 export interface PluginGrants {

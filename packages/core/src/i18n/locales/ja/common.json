@@ -215,11 +215,6 @@
 			"global": "グローバル"
 		}
 	},
-	"marketplace": {
-		"mode": {
-			"rulesCleanupFailed": "モードは正常に削除されましたが、{{rulesFolderPath}} にあるルールフォルダの削除に失敗しました。手動で削除する必要がある場合があります。"
-		}
-	},
 	"mdm": {
 		"errors": {
 			"cloud_auth_required": "あなたの組織では Shofer Cloud 認証が必要です。続行するにはサインインしてください。",

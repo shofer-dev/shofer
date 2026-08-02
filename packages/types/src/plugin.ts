@@ -7,14 +7,15 @@ import { modeConfigObjectSchema } from "./mode.js"
 /**
  * Typed plugin API (v3 architecture §10).
  *
- * shofer's existing extensibility centers on the marketplace (data items) and the
- * custom-tool registry (tools only). A plugin generalizes that: a typed object
- * with optional **hooks** that can register tools, transform the system prompt,
- * and observe events — so third parties can extend *behavior*, not just add data.
+ * shofer's earlier extensibility was the custom-tool registry (tools only). A
+ * plugin generalizes that: a typed object with optional **hooks** that can
+ * register tools, transform the system prompt, and observe events — so third
+ * parties can extend *behavior*, not just add data.
  *
  * Hooks are all optional and host-agnostic (no `vscode` types), so plugins run in
- * any host (extension, CLI, future server). Distribution stays the marketplace's
- * job; this is the substrate it curates over.
+ * any host (extension, CLI, future server). Distribution is out of scope here:
+ * plugin code arrives as a local directory, a `.shofer-plugin` archive, or (in
+ * declarations) whatever sources the resolver supports; this is the substrate.
  *
  * This is the contract; `PluginRegistry` (in `@shofer/core`) collects plugins and
  * runs the hooks at the right points. Wiring the registry into the live

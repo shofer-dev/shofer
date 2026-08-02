@@ -2,7 +2,7 @@ import React, { useState } from "react"
 import { Trans } from "react-i18next"
 import { VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 
-import { MARKETPLACE_ENABLED, type McpServer } from "@shofer/types"
+import { type McpServer } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
@@ -196,28 +196,6 @@ const McpView = () => {
 								<span className="codicon codicon-refresh" style={{ marginRight: "6px" }}></span>
 								{t("mcp:refreshMCP")}
 							</Button>
-							{MARKETPLACE_ENABLED && (
-								<StandardTooltip content={t("mcp:marketplace")}>
-									<Button
-										variant="secondary"
-										style={{ width: "100%" }}
-										onClick={() => {
-											window.postMessage(
-												{
-													type: "action",
-													action: "marketplaceButtonClicked",
-													values: { marketplaceTab: "mcp" },
-												},
-												"*",
-											)
-										}}>
-										<span
-											className="codicon codicon-extensions"
-											style={{ marginRight: "6px" }}></span>
-										{t("mcp:marketplace")}
-									</Button>
-								</StandardTooltip>
-							)}
 						</div>
 						<div
 							style={{

@@ -215,11 +215,6 @@
 			"global": "global"
 		}
 	},
-	"marketplace": {
-		"mode": {
-			"rulesCleanupFailed": "Der Modus wurde erfolgreich entfernt, aber der Regelordner unter {{rulesFolderPath}} konnte nicht gelöscht werden. Möglicherweise musst du ihn manuell löschen."
-		}
-	},
 	"mdm": {
 		"errors": {
 			"cloud_auth_required": "Deine Organisation erfordert eine Shofer Cloud-Authentifizierung. Bitte melde dich an, um fortzufahren.",

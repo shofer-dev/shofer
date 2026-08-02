@@ -8,92 +8,74 @@
 import type { Resource } from "i18next"
 
 import ca_common from "./locales/ca/common.json" with { type: "json" }
-import ca_marketplace from "./locales/ca/marketplace.json" with { type: "json" }
 import ca_mcp from "./locales/ca/mcp.json" with { type: "json" }
 import ca_skills from "./locales/ca/skills.json" with { type: "json" }
 import ca_tools from "./locales/ca/tools.json" with { type: "json" }
 import de_common from "./locales/de/common.json" with { type: "json" }
-import de_marketplace from "./locales/de/marketplace.json" with { type: "json" }
 import de_mcp from "./locales/de/mcp.json" with { type: "json" }
 import de_skills from "./locales/de/skills.json" with { type: "json" }
 import de_tools from "./locales/de/tools.json" with { type: "json" }
 import en_common from "./locales/en/common.json" with { type: "json" }
-import en_marketplace from "./locales/en/marketplace.json" with { type: "json" }
 import en_mcp from "./locales/en/mcp.json" with { type: "json" }
 import en_skills from "./locales/en/skills.json" with { type: "json" }
 import en_tools from "./locales/en/tools.json" with { type: "json" }
 import es_common from "./locales/es/common.json" with { type: "json" }
-import es_marketplace from "./locales/es/marketplace.json" with { type: "json" }
 import es_mcp from "./locales/es/mcp.json" with { type: "json" }
 import es_skills from "./locales/es/skills.json" with { type: "json" }
 import es_tools from "./locales/es/tools.json" with { type: "json" }
 import fr_common from "./locales/fr/common.json" with { type: "json" }
-import fr_marketplace from "./locales/fr/marketplace.json" with { type: "json" }
 import fr_mcp from "./locales/fr/mcp.json" with { type: "json" }
 import fr_skills from "./locales/fr/skills.json" with { type: "json" }
 import fr_tools from "./locales/fr/tools.json" with { type: "json" }
 import hi_common from "./locales/hi/common.json" with { type: "json" }
-import hi_marketplace from "./locales/hi/marketplace.json" with { type: "json" }
 import hi_mcp from "./locales/hi/mcp.json" with { type: "json" }
 import hi_skills from "./locales/hi/skills.json" with { type: "json" }
 import hi_tools from "./locales/hi/tools.json" with { type: "json" }
 import id_common from "./locales/id/common.json" with { type: "json" }
-import id_marketplace from "./locales/id/marketplace.json" with { type: "json" }
 import id_mcp from "./locales/id/mcp.json" with { type: "json" }
 import id_skills from "./locales/id/skills.json" with { type: "json" }
 import id_tools from "./locales/id/tools.json" with { type: "json" }
 import it_common from "./locales/it/common.json" with { type: "json" }
-import it_marketplace from "./locales/it/marketplace.json" with { type: "json" }
 import it_mcp from "./locales/it/mcp.json" with { type: "json" }
 import it_skills from "./locales/it/skills.json" with { type: "json" }
 import it_tools from "./locales/it/tools.json" with { type: "json" }
 import ja_common from "./locales/ja/common.json" with { type: "json" }
-import ja_marketplace from "./locales/ja/marketplace.json" with { type: "json" }
 import ja_mcp from "./locales/ja/mcp.json" with { type: "json" }
 import ja_skills from "./locales/ja/skills.json" with { type: "json" }
 import ja_tools from "./locales/ja/tools.json" with { type: "json" }
 import ko_common from "./locales/ko/common.json" with { type: "json" }
-import ko_marketplace from "./locales/ko/marketplace.json" with { type: "json" }
 import ko_mcp from "./locales/ko/mcp.json" with { type: "json" }
 import ko_skills from "./locales/ko/skills.json" with { type: "json" }
 import ko_tools from "./locales/ko/tools.json" with { type: "json" }
 import nl_common from "./locales/nl/common.json" with { type: "json" }
-import nl_marketplace from "./locales/nl/marketplace.json" with { type: "json" }
 import nl_mcp from "./locales/nl/mcp.json" with { type: "json" }
 import nl_skills from "./locales/nl/skills.json" with { type: "json" }
 import nl_tools from "./locales/nl/tools.json" with { type: "json" }
 import pl_common from "./locales/pl/common.json" with { type: "json" }
-import pl_marketplace from "./locales/pl/marketplace.json" with { type: "json" }
 import pl_mcp from "./locales/pl/mcp.json" with { type: "json" }
 import pl_skills from "./locales/pl/skills.json" with { type: "json" }
 import pl_tools from "./locales/pl/tools.json" with { type: "json" }
 import pt_BR_common from "./locales/pt-BR/common.json" with { type: "json" }
-import pt_BR_marketplace from "./locales/pt-BR/marketplace.json" with { type: "json" }
 import pt_BR_mcp from "./locales/pt-BR/mcp.json" with { type: "json" }
 import pt_BR_skills from "./locales/pt-BR/skills.json" with { type: "json" }
 import pt_BR_tools from "./locales/pt-BR/tools.json" with { type: "json" }
 import ru_common from "./locales/ru/common.json" with { type: "json" }
-import ru_marketplace from "./locales/ru/marketplace.json" with { type: "json" }
 import ru_mcp from "./locales/ru/mcp.json" with { type: "json" }
 import ru_skills from "./locales/ru/skills.json" with { type: "json" }
 import ru_tools from "./locales/ru/tools.json" with { type: "json" }
 import tr_common from "./locales/tr/common.json" with { type: "json" }
-import tr_marketplace from "./locales/tr/marketplace.json" with { type: "json" }
 import tr_mcp from "./locales/tr/mcp.json" with { type: "json" }
 import tr_skills from "./locales/tr/skills.json" with { type: "json" }
 import tr_tools from "./locales/tr/tools.json" with { type: "json" }
 import vi_common from "./locales/vi/common.json" with { type: "json" }
-import vi_marketplace from "./locales/vi/marketplace.json" with { type: "json" }
 import vi_mcp from "./locales/vi/mcp.json" with { type: "json" }
 import vi_skills from "./locales/vi/skills.json" with { type: "json" }
 import vi_tools from "./locales/vi/tools.json" with { type: "json" }
 import zh_CN_common from "./locales/zh-CN/common.json" with { type: "json" }
-import zh_CN_marketplace from "./locales/zh-CN/marketplace.json" with { type: "json" }
 import zh_CN_mcp from "./locales/zh-CN/mcp.json" with { type: "json" }
 import zh_CN_skills from "./locales/zh-CN/skills.json" with { type: "json" }
 import zh_CN_tools from "./locales/zh-CN/tools.json" with { type: "json" }
 import zh_TW_common from "./locales/zh-TW/common.json" with { type: "json" }
-import zh_TW_marketplace from "./locales/zh-TW/marketplace.json" with { type: "json" }
 import zh_TW_mcp from "./locales/zh-TW/mcp.json" with { type: "json" }
 import zh_TW_skills from "./locales/zh-TW/skills.json" with { type: "json" }
 import zh_TW_tools from "./locales/zh-TW/tools.json" with { type: "json" }
@@ -101,126 +83,108 @@ import zh_TW_tools from "./locales/zh-TW/tools.json" with { type: "json" }
 export const translations: Resource = {
 	ca: {
 		common: ca_common,
-		marketplace: ca_marketplace,
 		mcp: ca_mcp,
 		skills: ca_skills,
 		tools: ca_tools,
 	},
 	de: {
 		common: de_common,
-		marketplace: de_marketplace,
 		mcp: de_mcp,
 		skills: de_skills,
 		tools: de_tools,
 	},
 	en: {
 		common: en_common,
-		marketplace: en_marketplace,
 		mcp: en_mcp,
 		skills: en_skills,
 		tools: en_tools,
 	},
 	es: {
 		common: es_common,
-		marketplace: es_marketplace,
 		mcp: es_mcp,
 		skills: es_skills,
 		tools: es_tools,
 	},
 	fr: {
 		common: fr_common,
-		marketplace: fr_marketplace,
 		mcp: fr_mcp,
 		skills: fr_skills,
 		tools: fr_tools,
 	},
 	hi: {
 		common: hi_common,
-		marketplace: hi_marketplace,
 		mcp: hi_mcp,
 		skills: hi_skills,
 		tools: hi_tools,
 	},
 	id: {
 		common: id_common,
-		marketplace: id_marketplace,
 		mcp: id_mcp,
 		skills: id_skills,
 		tools: id_tools,
 	},
 	it: {
 		common: it_common,
-		marketplace: it_marketplace,
 		mcp: it_mcp,
 		skills: it_skills,
 		tools: it_tools,
 	},
 	ja: {
 		common: ja_common,
-		marketplace: ja_marketplace,
 		mcp: ja_mcp,
 		skills: ja_skills,
 		tools: ja_tools,
 	},
 	ko: {
 		common: ko_common,
-		marketplace: ko_marketplace,
 		mcp: ko_mcp,
 		skills: ko_skills,
 		tools: ko_tools,
 	},
 	nl: {
 		common: nl_common,
-		marketplace: nl_marketplace,
 		mcp: nl_mcp,
 		skills: nl_skills,
 		tools: nl_tools,
 	},
 	pl: {
 		common: pl_common,
-		marketplace: pl_marketplace,
 		mcp: pl_mcp,
 		skills: pl_skills,
 		tools: pl_tools,
 	},
 	"pt-BR": {
 		common: pt_BR_common,
-		marketplace: pt_BR_marketplace,
 		mcp: pt_BR_mcp,
 		skills: pt_BR_skills,
 		tools: pt_BR_tools,
 	},
 	ru: {
 		common: ru_common,
-		marketplace: ru_marketplace,
 		mcp: ru_mcp,
 		skills: ru_skills,
 		tools: ru_tools,
 	},
 	tr: {
 		common: tr_common,
-		marketplace: tr_marketplace,
 		mcp: tr_mcp,
 		skills: tr_skills,
 		tools: tr_tools,
 	},
 	vi: {
 		common: vi_common,
-		marketplace: vi_marketplace,
 		mcp: vi_mcp,
 		skills: vi_skills,
 		tools: vi_tools,
 	},
 	"zh-CN": {
 		common: zh_CN_common,
-		marketplace: zh_CN_marketplace,
 		mcp: zh_CN_mcp,
 		skills: zh_CN_skills,
 		tools: zh_CN_tools,
 	},
 	"zh-TW": {
 		common: zh_TW_common,
-		marketplace: zh_TW_marketplace,
 		mcp: zh_TW_mcp,
 		skills: zh_TW_skills,
 		tools: zh_TW_tools,

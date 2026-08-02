@@ -159,7 +159,6 @@
 	"enhancePrompt": "Enhance prompt with additional context",
 	"modeSelector": {
 		"title": "Modes",
-		"marketplace": "Mode Marketplace",
 		"settings": "Mode Settings",
 		"description": "Specialized personas that tailor Shofer's behavior.",
 		"searchPlaceholder": "Search modes...",

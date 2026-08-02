@@ -1,3 +1,10 @@
+- The marketplace removal left the `plugin` channel's `installFromFile` /
+  `installFromUrl` / `uninstall` actions (and their host handlers) with no webview
+  caller — install/uninstall are CLI verbs (`shofer plugin install|remove`) and
+  `.shofer/plugins.json` declarations only. If a UI install surface is wanted
+  again, re-home those affordances into Settings → Plugins (`PluginsSettings`),
+  which already owns enable/disable, config, and AI consent.
+
 - Parallel Live Memory
 
 - "Global Settings (JSON-only, no settings UI)" expose these settings on the Settings UI. Move these out of settings.json:

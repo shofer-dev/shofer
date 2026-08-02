@@ -31,7 +31,7 @@ This document catalogues every **user-facing feature** and **opinionated change*
 17. [Submodule & Nested Git Support](#17-submodule--nested-git-support)
 18. [Code Indexer & Semantic Search](#18-code-indexer--semantic-search)
 19. [Cost Calculation & Limits](#19-cost-calculation--limits)
-20. [Cloud removal and marketplace/telemetry feature flags](#20-cloud-removal-and-marketplacetelemetry-feature-flags)
+20. [Cloud, marketplace and telemetry removal](#20-cloud-marketplace-and-telemetry-removal)
 21. [UI/UX Opinionated Changes](#21-uiux-opinionated-changes)
 22. [Live Memory](#22-live-memory)
 23. [LSP-Powered Symbol Refactoring](#23-lsp-powered-symbol-refactoring)
@@ -422,9 +422,9 @@ See [`cost-calculation-and-limits.md`](../cost-calculation-and-limits.md) for th
 
 ---
 
-## 20. Cloud removal and marketplace/telemetry feature flags
+## 20. Cloud, marketplace and telemetry removal
 
-Given that Shofer runs entirely locally with no server-side dependencies, other than your LLM provider, the extension was decoupled from all cloud-related features and dependencies. Additionally, marketplace and telemetry features were disabled.
+Given that Shofer runs entirely locally with no server-side dependencies, other than your LLM provider, the extension was decoupled from all cloud-related features and dependencies. The Roo Code marketplace (the in-IDE catalog of modes and MCP servers) was removed outright — configuration arrives as files under `.shofer/` — and telemetry is disabled.
 
 ---
 

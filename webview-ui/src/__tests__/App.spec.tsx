@@ -83,16 +83,6 @@ vi.mock("@src/components/modes/ModesView", () => ({
 	},
 }))
 
-vi.mock("@src/components/marketplace/MarketplaceView", () => ({
-	MarketplaceView: function MarketplaceView({ onDone }: { onDone: () => void }) {
-		return (
-			<div data-testid="marketplace-view" onClick={onDone}>
-				Marketplace View
-			</div>
-		)
-	},
-}))
-
 vi.mock("@src/components/cloud/CloudView", () => ({
 	CloudView: function CloudView() {
 		return <div data-testid="cloud-view">Cloud View</div>
@@ -291,34 +281,4 @@ describe("App", () => {
 		expect(screen.queryByTestId(`${view}-view`)).not.toBeInTheDocument()
 	})
 
-	it("switches to marketplace view when receiving marketplaceButtonClicked action", async () => {
-		// Marketplace is currently disabled (MARKETPLACE_ENABLED = false)
-		render(<AppWithProviders />)
-
-		act(() => {
-			triggerMessage("marketplaceButtonClicked")
-		})
-
-		// When marketplace is disabled, the marketplace view should NOT render,
-		// and the chat view should remain visible.
-		const chatView = screen.getByTestId("chat-view")
-		expect(chatView.getAttribute("data-hidden")).toBe("false")
-		expect(screen.queryByTestId("marketplace-view")).not.toBeInTheDocument()
-	})
-
-	it("returns to chat view when clicking done in marketplace view", async () => {
-		// Marketplace is currently disabled (MARKETPLACE_ENABLED = false).
-		// When re-enabled, this test should verify that clicking "done" in the
-		// marketplace view returns to chat view.
-		render(<AppWithProviders />)
-
-		act(() => {
-			triggerMessage("marketplaceButtonClicked")
-		})
-
-		// When disabled, marketplace view does not render and chat stays visible.
-		const chatView = screen.getByTestId("chat-view")
-		expect(chatView.getAttribute("data-hidden")).toBe("false")
-		expect(screen.queryByTestId("marketplace-view")).not.toBeInTheDocument()
-	})
 })

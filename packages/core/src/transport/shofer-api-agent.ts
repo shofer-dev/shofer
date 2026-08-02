@@ -1,6 +1,14 @@
 import { type ShoferAPI, ShoferEventName } from "@shofer/types"
 
-import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent } from "@shofer/types"
+import type {
+	AgentApi,
+	AskResponse,
+	CreateTaskInput,
+	OutstandingAsk,
+	ServerEvent,
+	ShoferMessage,
+	TaskSnapshot,
+} from "@shofer/types"
 
 /** Construction options for {@link ShoferApiAgent}. */
 export interface ShoferApiAgentOptions {
@@ -42,6 +50,23 @@ const FORWARDED_EVENTS = [
 	// authoritative token usage from the executor.
 	ShoferEventName.TaskTokenUsageUpdated,
 ] as const
+
+/**
+ * The ask a task is blocked on, or `undefined` when it is not blocked.
+ *
+ * The rule is the transcript's own: a task is waiting on an ask exactly when the LAST
+ * message is a complete (`partial !== true`) ask that was neither auto-approved nor
+ * already answered. Anything after it — a tool result, the next assistant turn — means
+ * the ask was resolved and the loop moved on. This is the same shape the chat view
+ * uses to decide whether to show approve/deny, which is what keeps an attached view's
+ * affordances identical to the owning host's.
+ */
+function findOutstandingAsk(messages: ShoferMessage[]): OutstandingAsk | undefined {
+	const last = messages[messages.length - 1]
+	if (!last || last.type !== "ask" || !last.ask) return undefined
+	if (last.partial === true || last.autoApproved === true || last.isAnswered === true) return undefined
+	return { ask: last.ask, askId: last.askId, text: last.text, ts: last.ts }
+}
 
 export class ShoferApiAgent implements AgentApi {
 	constructor(
@@ -85,6 +110,33 @@ export class ShoferApiAgent implements AgentApi {
 
 	async respondToAsk(taskId: string, response: AskResponse): Promise<void> {
 		await this.api.respondToAsk(taskId, response)
+	}
+
+	/**
+	 * Assemble the task's snapshot from this host's own records: the conversation and
+	 * live counters from {@link ShoferAPI.getTaskConversation}, the lifecycle and title
+	 * from the task-history entry, and the outstanding ask derived from the transcript
+	 * tail (see {@link findOutstandingAsk}).
+	 *
+	 * Deriving the ask here rather than reading it off a task instance is deliberate:
+	 * the same rule then applies to a live task and to one rehydrated from disk, and
+	 * the controller does not need a second wire method to learn it is blocked.
+	 */
+	async getTaskSnapshot(taskId: string): Promise<TaskSnapshot | undefined> {
+		const conversation = await this.api.getTaskConversation(taskId)
+		if (!conversation) return undefined
+
+		const item = this.api.getTaskHistoryItems().find((entry) => entry.id === taskId)
+		const messages = conversation.messages
+		return {
+			taskId,
+			summary: item?.task,
+			createdAt: item?.ts,
+			state: item?.taskState,
+			messages,
+			outstandingAsk: findOutstandingAsk(messages),
+			tokenUsage: conversation.tokenUsage,
+		}
 	}
 
 	// ── Reverse data channel — delegate to the in-process API ─────────────────────

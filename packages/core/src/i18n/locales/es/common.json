@@ -215,11 +215,6 @@
 			"global": "global"
 		}
 	},
-	"marketplace": {
-		"mode": {
-			"rulesCleanupFailed": "El modo se eliminó correctamente, pero no se pudo eliminar la carpeta de reglas en {{rulesFolderPath}}. Es posible que debas eliminarla manually."
-		}
-	},
 	"mdm": {
 		"errors": {
 			"cloud_auth_required": "Tu organización requiere autenticación de Shofer Cloud. Por favor, inicia sesión para continuar.",

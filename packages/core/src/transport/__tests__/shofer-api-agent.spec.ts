@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { EventEmitter } from "node:events"
 
-import { ShoferEventName, type ShoferAPI } from "@shofer/types"
+import { ShoferEventName, type HistoryItem, type ShoferAPI, type ShoferMessage } from "@shofer/types"
 
 import { ShoferApiAgent } from "../shofer-api-agent.js"
 
@@ -9,7 +9,7 @@ import { ShoferApiAgent } from "../shofer-api-agent.js"
  * §11 live adapter — maps the transport's AgentApi onto the in-process ShoferAPI.
  */
 describe("ShoferApiAgent (§11)", () => {
-	const makeApi = () => {
+	const makeApi = (overrides: Partial<Record<string, unknown>> = {}) => {
 		const emitter = new EventEmitter()
 		const api = Object.assign(emitter, {
 			startNewTask: vi.fn(async ({ text }: { text?: string }) => `task:${text}`),
@@ -18,9 +18,21 @@ describe("ShoferApiAgent (§11)", () => {
 			cancelCurrentTask: vi.fn(async () => {}),
 			respondToAsk: vi.fn(async () => {}),
 			pluginRequest: vi.fn(async () => ({ ok: true })),
+			getTaskConversation: vi.fn(async () => undefined),
+			getTaskHistoryItems: vi.fn(() => []),
+			...overrides,
 		}) as unknown as ShoferAPI & EventEmitter
 		return api
 	}
+
+	const askMessage = (over: Partial<ShoferMessage> = {}): ShoferMessage => ({
+		ts: 3,
+		type: "ask",
+		ask: "tool",
+		text: '{"tool":"editedExistingFile"}',
+		askId: "ask-1",
+		...over,
+	})
 
 	it("createTask delegates to startNewTask", async () => {
 		const api = makeApi()
@@ -96,6 +108,93 @@ describe("ShoferApiAgent (§11)", () => {
 
 		await agent.pluginRequest("t1", "checkpoints", "diff", { hash: "c1" })
 		expect(rec.pluginRequest).toHaveBeenCalledWith("t1", "checkpoints", "diff", { hash: "c1" })
+	})
+
+	describe("getTaskSnapshot (attach backfill)", () => {
+		const historyItem = {
+			id: "t1",
+			number: 1,
+			ts: 1700,
+			task: "do the thing",
+			tokensIn: 0,
+			tokensOut: 0,
+			totalCost: 0,
+			taskState: { lifecycle: "running" },
+		} as HistoryItem
+
+		it("assembles messages, title, lifecycle and usage from the host's own records", async () => {
+			const messages: ShoferMessage[] = [
+				{ ts: 1, type: "say", say: "text", text: "hello" },
+				{ ts: 2, type: "say", say: "text", text: "working" },
+			]
+			const tokenUsage = {
+				totalTokensIn: 10,
+				totalTokensOut: 5,
+				totalCost: 0.02,
+				contextTokens: 42,
+			}
+			const api = makeApi({
+				getTaskConversation: vi.fn(async () => ({ messages, tokenUsage })),
+				getTaskHistoryItems: vi.fn(() => [historyItem]),
+			})
+
+			const snapshot = await new ShoferApiAgent(api).getTaskSnapshot("t1")
+			expect(snapshot).toEqual({
+				taskId: "t1",
+				summary: "do the thing",
+				createdAt: 1700,
+				state: { lifecycle: "running" },
+				messages,
+				outstandingAsk: undefined,
+				tokenUsage,
+			})
+		})
+
+		it("reports the ask a task is blocked on — including one raised before the attach", async () => {
+			const api = makeApi({
+				getTaskConversation: vi.fn(async () => ({
+					messages: [{ ts: 1, type: "say", say: "text", text: "hello" }, askMessage()],
+				})),
+				getTaskHistoryItems: vi.fn(() => [historyItem]),
+			})
+
+			const snapshot = await new ShoferApiAgent(api).getTaskSnapshot("t1")
+			expect(snapshot?.outstandingAsk).toEqual({
+				ask: "tool",
+				askId: "ask-1",
+				text: '{"tool":"editedExistingFile"}',
+				ts: 3,
+			})
+		})
+
+		it("reports no outstanding ask for a partial, auto-approved or answered ask", async () => {
+			for (const over of [{ partial: true }, { autoApproved: true }, { isAnswered: true }]) {
+				const api = makeApi({
+					getTaskConversation: vi.fn(async () => ({ messages: [askMessage(over)] })),
+				})
+				expect((await new ShoferApiAgent(api).getTaskSnapshot("t1"))?.outstandingAsk).toBeUndefined()
+			}
+		})
+
+		it("reports no outstanding ask once the loop moved past it", async () => {
+			const api = makeApi({
+				getTaskConversation: vi.fn(async () => ({
+					messages: [askMessage(), { ts: 4, type: "say", say: "text", text: "after" }],
+				})),
+			})
+			expect((await new ShoferApiAgent(api).getTaskSnapshot("t1"))?.outstandingAsk).toBeUndefined()
+		})
+
+		it("is undefined for a task this host does not know", async () => {
+			const api = makeApi()
+			expect(await new ShoferApiAgent(api).getTaskSnapshot("nope")).toBeUndefined()
+		})
+
+		it("still assembles a snapshot for a task with no history entry", async () => {
+			const api = makeApi({ getTaskConversation: vi.fn(async () => ({ messages: [] })) })
+			const snapshot = await new ShoferApiAgent(api).getTaskSnapshot("t1")
+			expect(snapshot).toMatchObject({ taskId: "t1", messages: [], summary: undefined, state: undefined })
+		})
 	})
 
 	it("subscribe forwards ShoferAPI events and unsubscribes", () => {

@@ -24,7 +24,7 @@
  * Node-only (uses `node:fs`, `node:path`, and the portable `tar` library). It lives
  * in `@shofer/core` — never `@shofer/types` — so the browser-safe types package
  * never pulls in an archive lib. Callers: the `shofer plugin` CLI (step 5.2) and the
- * extension-side Marketplace "Plugins" tab handlers (step 5.3).
+ * extension-side plugin install/uninstall handlers (step 5.3).
  */
 
 import * as nodeFs from "fs/promises"

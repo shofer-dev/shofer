@@ -215,11 +215,6 @@
 			"global": "글로벌"
 		}
 	},
-	"marketplace": {
-		"mode": {
-			"rulesCleanupFailed": "모드가 성공적으로 제거되었지만 {{rulesFolderPath}}의 규칙 폴더를 삭제하지 못했습니다. 수동으로 삭제해야 할 수도 있습니다."
-		}
-	},
 	"mdm": {
 		"errors": {
 			"cloud_auth_required": "조직에서 Shofer Cloud 인증이 필요합니다. 계속하려면 로그인하세요.",

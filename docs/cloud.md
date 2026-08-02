@@ -10,7 +10,6 @@
 | [`packages/types/src/organization.ts`](../packages/types/src/organization.ts)                                 | `OrganizationAllowList` type only                                                                              |
 | [`packages/core/src/api/providers/router-provider.ts`](../packages/core/src/api/providers/router-provider.ts) | Generic `RouterProvider` base class (no Shofer-specific handler)                                               |
 | [`packages/core/src/api/providers/shofer.ts`](../packages/core/src/api/providers/shofer.ts)                   | `ShoferHandler` — thin `OpenRouterHandler` subclass for a **local llm-router** (see §"Shofer Router Provider") |
-| [`src/services/marketplace/RemoteConfigLoader.ts`](../src/services/marketplace/RemoteConfigLoader.ts)         | Fetches modes/MCPs from `{SHOFER_API_URL}/api/marketplace/`                                                    |
 | `website/`                                                                                                    | Astro marketing/product pages (accurate)                                                                       |
 
 This document provides a comprehensive overview of all cloud-related features in the Shofer extension, covering the cloud service architecture, authentication, settings synchronization, telemetry, task sharing, bridge connectivity, the Shofer Router provider, cloud profile management, image generation, MDM enforcement, and the web UI components.
@@ -56,10 +55,9 @@ This document provides a comprehensive overview of all cloud-related features in
     - [CloudUpsellDialog](#cloudupselldialog)
     - [OrganizationSwitcher](#organizationswitcher)
     - [ShoferBalanceDisplay](#shoferbalancedisplay)
-14. [Marketplace Integration](#marketplace-integration)
-15. [Web App Pages (shofer.dev)](#web-app-pages-shofercom)
-16. [Configuration & Environment Variables](#configuration--environment-variables)
-17. [Error Handling](#error-handling)
+14. [Web App Pages (shofer.dev)](#web-app-pages-shofercom)
+15. [Configuration & Environment Variables](#configuration--environment-variables)
+16. [Error Handling](#error-handling)
 
 ---
 
@@ -74,7 +72,6 @@ The cloud-related code that actually exists lives in:
 | `packages/telemetry/src/`                                                                                     | `BaseTelemetryClient`, `TelemetryService`, `PostHogTelemetryClient` |
 | [`packages/types/src/organization.ts`](../packages/types/src/organization.ts)                                 | `OrganizationAllowList` type                                        |
 | [`packages/core/src/api/providers/router-provider.ts`](../packages/core/src/api/providers/router-provider.ts) | Generic `RouterProvider` base class                                 |
-| [`src/services/marketplace/RemoteConfigLoader.ts`](../src/services/marketplace/RemoteConfigLoader.ts)         | Marketplace mode/MCP fetching from cloud                            |
 | `website/`                                                                                                    | Astro web app (marketing + product pages)                           |
 
 ---
@@ -186,8 +183,6 @@ The `organizationSettingsSchema` includes:
 | `allowList`           | `OrganizationAllowList`                  | Provider/model allow/deny lists           |
 | `features`            | `OrganizationFeatures`                   | Organization feature flags                |
 | `hiddenMcps`          | `string[]`                               | MCP servers hidden from members           |
-| `hideMarketplaceMcps` | `boolean`                                | Hide marketplace MCPs                     |
-| `mcps`                | `MCPMarketplaceItem[]`                   | Organization-provided MCP servers         |
 | `providerProfiles`    | `Record<string, ProviderSettingsWithId>` | Cloud-managed provider profiles           |
 
 **Cloud Settings (`OrganizationCloudSettings`):**
@@ -522,19 +517,6 @@ Shows the user's credit balance next to the Shofer Router provider in settings. 
 
 ---
 
-## Marketplace Integration
-
-The marketplace loads remote configurations from Shofer Cloud via [`RemoteConfigLoader`](../src/services/marketplace/RemoteConfigLoader.ts):
-
-- Fetches modes from `{SHOFER_API_URL}/api/marketplace/modes` (YAML, validated against `modeMarketplaceItemSchema`)
-- Fetches MCPs from `{SHOFER_API_URL}/api/marketplace/mcps` (YAML, validated against `mcpMarketplaceItemSchema`)
-- Results are cached for 5 minutes with exponential backoff retry (up to 3 attempts)
-- API base URL defaults to `https://app.shofer.dev` (overridable via `SHOFER_API_URL` env var)
-
-> **Note:** Organization-level MCP filtering (`hiddenMcps`, `hideMarketplaceMcps`) and organization-provided MCPs are referenced in type definitions (`packages/types/src/organization.ts`) but the runtime integration is not yet implemented.
-
----
-
 ## Web App Pages (shofer.dev)
 
 The Astro app at `website/` hosts marketing and product pages:
@@ -558,7 +540,6 @@ The Astro app at `website/` hosts marketing and product pages:
 
 | Variable                 | Default                        | Description                                            |
 | ------------------------ | ------------------------------ | ------------------------------------------------------ |
-| `SHOFER_API_URL`         | `https://app.shofer.dev`       | Shofer Cloud API base URL (used by marketplace loader) |
 | `SHOFER_PROVIDER_URL`    | `https://api.shofer.dev/proxy` | Shofer Router proxy base URL                           |
 | `TELEMETRY_ENABLED`      | `false`                        | Set to `"true"` to enable telemetry (PostHog/cloud)    |
 | `SHOFER_IPC_SOCKET_PATH` | _(empty)_                      | Unix socket path for IPC API                           |
@@ -567,7 +548,6 @@ The Astro app at `website/` hosts marketing and product pages:
 
 **Actual config sources:**
 
-- Marketplace: resolved in [`RemoteConfigLoader.ts`](../src/services/marketplace/RemoteConfigLoader.ts) (`SHOFER_API_URL` env var, line 12)
 - Telemetry: gated by `TELEMETRY_ENABLED` in [`TelemetryService.ts`](../packages/telemetry/src/TelemetryService.ts) (line 17)
 - IPC socket: `SHOFER_IPC_SOCKET_PATH` in [`extension.ts`](../src/extension.ts) (line 303)
 
@@ -597,4 +577,3 @@ The Astro app at `website/` hosts marketing and product pages:
 | [`packages/telemetry/src/TelemetryService.ts`](../packages/telemetry/src/TelemetryService.ts)                 | Telemetry orchestrator (PostHog)    |
 | [`packages/types/src/organization.ts`](../packages/types/src/organization.ts)                                 | `OrganizationAllowList` schema      |
 | [`packages/core/src/api/providers/router-provider.ts`](../packages/core/src/api/providers/router-provider.ts) | Generic `RouterProvider` base class |
-| [`src/services/marketplace/RemoteConfigLoader.ts`](../src/services/marketplace/RemoteConfigLoader.ts)         | Marketplace mode/MCP fetching       |

@@ -21,7 +21,7 @@
     - [Tool & Mode Events](#tool--mode-events)
     - [Context & Performance Events](#context--performance-events)
     - [UI & Interaction Events](#ui--interaction-events)
-    - [Cloud & Marketplace Events](#cloud--marketplace-events)
+    - [Cloud Events](#cloud-events)
     - [Error Events](#error-events)
 - [Privacy & Data Filtering](#privacy--data-filtering)
 - [Opt-Out Mechanism](#opt-out-mechanism)
@@ -137,8 +137,6 @@ The service provides typed convenience methods for every event type. Each method
 | [`captureTabShown`](../packages/telemetry/src/TelemetryService.ts)                 | `TAB_SHOWN`                  | `tab`                                                                             |
 | [`captureModeSettingChanged`](../packages/telemetry/src/TelemetryService.ts)       | `MODE_SETTINGS_CHANGED`      | `settingName`                                                                     |
 | [`captureCustomModeCreated`](../packages/telemetry/src/TelemetryService.ts)        | `CUSTOM_MODE_CREATED`        | `modeSlug`, `modeName`                                                            |
-| [`captureMarketplaceItemInstalled`](../packages/telemetry/src/TelemetryService.ts) | `MARKETPLACE_ITEM_INSTALLED` | `itemId`, `itemType`, `itemName`, `target`, `properties?`                         |
-| [`captureMarketplaceItemRemoved`](../packages/telemetry/src/TelemetryService.ts)   | `MARKETPLACE_ITEM_REMOVED`   | `itemId`, `itemType`, `itemName`, `target`                                        |
 | [`captureTitleButtonClicked`](../packages/telemetry/src/TelemetryService.ts)       | `TITLE_BUTTON_CLICKED`       | `button`                                                                          |
 | [`captureTelemetrySettingsChanged`](../packages/telemetry/src/TelemetryService.ts) | `TELEMETRY_SETTINGS_CHANGED` | `previousSetting`, `newSetting`                                                   |
 | [`capturePeerMessageSent`](../packages/telemetry/src/TelemetryService.ts)          | `TASK_PEER_MESSAGE_SENT`     | `taskId`, peer-message metadata                                                   |
@@ -279,11 +277,6 @@ enum TelemetryEventName {
 	// UI
 	TITLE_BUTTON_CLICKED = "Title Button Clicked",
 
-	// Marketplace
-	MARKETPLACE_ITEM_INSTALLED = "Marketplace Item Installed",
-	MARKETPLACE_ITEM_REMOVED = "Marketplace Item Removed",
-	MARKETPLACE_TAB_VIEWED = "Marketplace Tab Viewed",
-	MARKETPLACE_INSTALL_BUTTON_CLICKED = "Marketplace Install Button Clicked",
 
 	// Sharing
 	SHARE_BUTTON_CLICKED = "Share Button Clicked",
@@ -439,8 +432,6 @@ telemetryClient.updateTelemetryState(telemetrySetting, telemetryKey, machineId)
 | UI Component        | Event                                   | Source                                                                                                   |
 | ------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Mode Selector       | `MODE_SELECTOR_OPENED`                  | [`ModeSelector.tsx`](../webview-ui/src/components/chat/ModeSelector.tsx)                                 |
-| Marketplace Tab     | `MARKETPLACE_TAB_VIEWED`                | [`App.tsx`](../webview-ui/src/App.tsx)                                                                   |
-| Marketplace Install | `MARKETPLACE_INSTALL_BUTTON_CLICKED`    | [`MarketplaceItemCard.tsx`](../webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx) |
 | Error Boundary      | `error_boundary_caught_error`           | [`ErrorBoundary.tsx`](../webview-ui/src/components/ErrorBoundary.tsx)                                    |
 | UI Settings         | `ui_settings_collapse_thinking_changed` | [`UISettings.tsx`](../webview-ui/src/components/settings/UISettings.tsx)                                 |
 | UI Settings         | `ui_settings_enter_behavior_changed`    | [`UISettings.tsx`](../webview-ui/src/components/settings/UISettings.tsx)                                 |
@@ -545,14 +536,10 @@ flowchart TD
 | `ui_settings_collapse_thinking_changed` | Webview UI setting  | `enabled`  |
 | `ui_settings_enter_behavior_changed`    | Webview UI setting  | `behavior` |
 
-### Cloud & Marketplace Events
+### Cloud Events
 
 | Event                                | Where Emitted             | Properties                                                                              |
 | ------------------------------------ | ------------------------- | --------------------------------------------------------------------------------------- |
-| `MARKETPLACE_ITEM_INSTALLED`         | Installation success      | `itemId`, `itemType`, `itemName`, `target`, `hasParameters?`, `installationMethodName?` |
-| `MARKETPLACE_ITEM_REMOVED`           | Removal success           | `itemId`, `itemType`, `itemName`, `target`                                              |
-| `MARKETPLACE_TAB_VIEWED`             | Tab switch to marketplace | —                                                                                       |
-| `MARKETPLACE_INSTALL_BUTTON_CLICKED` | Install button click      | `itemId`, `itemType`, `itemName`                                                        |
 | `SHARE_BUTTON_CLICKED`               | Share button              | —                                                                                       |
 | `SHARE_ORGANIZATION_CLICKED`         | Share → org               | —                                                                                       |
 | `SHARE_PUBLIC_CLICKED`               | Share → public            | —                                                                                       |
@@ -797,7 +784,6 @@ Provider implementations capture errors via `TelemetryService.instance.captureEx
 | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | [`App.tsx`](../webview-ui/src/App.tsx)                                                                   | Initializes `telemetryClient` on state hydration |
 | [`ModeSelector.tsx`](../webview-ui/src/components/chat/ModeSelector.tsx)                                 | `MODE_SELECTOR_OPENED`                           |
-| [`MarketplaceItemCard.tsx`](../webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx) | Marketplace install events                       |
 | [`UISettings.tsx`](../webview-ui/src/components/settings/UISettings.tsx)                                 | UI preference changes                            |
 | [`ErrorBoundary.tsx`](../webview-ui/src/components/ErrorBoundary.tsx)                                    | React error boundary catches                     |
 

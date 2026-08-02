@@ -45,7 +45,6 @@ limited to one surface:
 | **MCP servers**                                            | Tools + resources    | Only callable functions and readable resources. No system prompt, UI, mode, or lifecycle reach. |
 | **Custom tools** (`.shofer/tools/`)                        | Tools only           | File-based TypeScript tools; no lifecycle hooks, no prompt access.                              |
 | **Private tool providers** (`shofer.privateToolProviders`) | Tools only           | VS Code extension-registered tools via command channel. No behavioral extension.                |
-| **Marketplace**                                            | Modes + MCP configs  | Distribution/curation layer only — installs data items, no runtime behavior.                    |
 | **Skills** (`.shofer/skills/`)                             | System prompt (lazy) | Markdown instructions loaded on demand. No code execution, no hooks.                            |
 
 A plugin unifies all of these into **one package format with one manifest** — a
@@ -68,7 +67,7 @@ server is one kind of plugin contribution).
 
 5. **Composable.** Multiple plugins coexist. Extension points have defined composition semantics — system-prompt transforms chain in order, tool contributions merge, UI contributions slot into named regions, and modes/skills/commands are namespaced so they cannot collide.
 
-6. **Distributable.** Plugins are packaged as `.shofer-plugin` archives. The marketplace is a plugin directory; installation is one click (or one CLI command).
+6. **Distributable.** Plugins are packaged as `.shofer-plugin` archives; installation is one CLI command (or a `.shofer/plugins.json` declaration).
 
 7. **Safe failure.** A crashing plugin is isolated. Its tools disappear, its prompt transforms are skipped, its UI unmounts, its services stop — the rest of Shofer keeps working.
 
@@ -851,21 +850,34 @@ caller is waiting on the answer, so a throw (or an unknown plugin / missing
 **Broadcast requests.** Core sometimes needs a fact that a _feature_ owns without knowing
 which plugin — if any — provides it. `pluginRegistry.requestAll(method, params)` asks
 every plugin the same question and returns the answers; a plugin that does not recognise
-the method throws, which counts as "no answer" rather than an error. The one convention
-in use is **`"task-stats"`** → `{ insertions, deletions }`, which the basics plugin's file-changes feature
-answers so a completed task gets its `+`/`−` badge; with no plugin answering there is
-simply no badge.
+the method throws, which counts as "no answer" rather than an error. Three conventions are
+in use:
 
-**Routing.** A UI request is answered by the plugin instance on the host that OWNS the
-focused task — a remote executor when a shadow task is focused — because that is where
-its per-task state lives. Three conventions shape that
-([`pluginUiRequestRouting.ts`](../src/core/webview/pluginUiRequestRouting.ts)):
+| Question                    | Answer                                          | Nobody answers                                             |
+| --------------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| `"task-stats"`              | `{ insertions, deletions }`                     | A completed task gets no `+`/`−` badge.                    |
+| `"resolve-task-cwd"`        | `{ cwd }` or `{ error }`                        | The task runs in the workspace.                            |
+| `"resolve-task-placement"`  | `{ dispatched: { taskId, address?, token? } }` or `{ error }` | The task runs in-process, exactly as before. |
 
-| Convention                 | Meaning                                                                                                                                 |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| method prefixed `local:`   | Always answered on **this** host: for things only it can do (opening an editor/viewer), which a headless executor would silently no-op. |
-| `{ mutates: true }`        | Refused rather than routed to an executor while a local task is running — both hosts share the workspace.                               |
-| result `{ rewound: true }` | The plugin rewound the task's conversation; the controller rebuilds its shadow so it renders what the executor now has.                 |
+The last two are the **placement seam**, and both share one rule: an `{ error }` answer
+aborts task creation, because a plugin that recognised the question and failed is not the
+same as one that stayed silent — running the task locally anyway would put the agent
+somewhere the user did not choose. A claimed task is created on another host; core does
+not create a local one and instead attaches to the returned reference
+([`host-boundary.md`](./host-boundary.md#remote-agents)).
+
+**Routing.** A UI request is answered by the plugin instance on **this** host
+(`ShoferProvider.resolvePluginUiRequest` → `pluginRegistry.request`), against the focused
+task. Reaching a plugin on a DIFFERENT host — the one running a task this view is
+attached to — is the separate, explicit `AgentApi.pluginRequest` call above; nothing
+routes there implicitly. Two request-shape conventions survive as plugin-side
+conventions, declared in [`plugin.ts`](../packages/types/src/plugin.ts) and interpreted by
+the plugin itself (see `basics`' `main.ts`):
+
+| Convention                                  | Meaning                                                                                                       |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| method prefixed `local:`                    | The UI is stating this must be answered where the UI runs — opening an editor/viewer, which a headless executor would silently no-op. |
+| `{ mutates: true }` on `api.request`        | The request changes state rather than reading it.                                                             |
 
 ### 5.14 Task control (`ctx.task`)
 
@@ -1179,20 +1191,12 @@ CLI commands (`shofer plugin install|list|remove`) are thin wrappers over this p
 `PluginManager`; the enabled allow-list is the same `shofer.plugins.enabledPlugins`
 the running agent reads.
 
-**Install-from-URL.** Both the CLI (`isPluginUrl` → `installPluginFromUrl`) and the
-Marketplace "Install from URL" download a direct `http(s)` `.shofer-plugin` and
-unpack it through the same validation/zip-slip pipeline as a local archive:
+**Install-from-URL.** The CLI (`isPluginUrl` → `installPluginFromUrl`) downloads a
+direct `http(s)` `.shofer-plugin` and unpacks it through the same
+validation/zip-slip pipeline as a local archive:
 **`https` required** (unless the host is loopback or `--allow-insecure-http` is
 passed), **size-capped** (`DEFAULT_MAX_PLUGIN_DOWNLOAD_BYTES` = 64 MiB), fail-closed
 on a bad manifest. This is a direct download, not a registry lookup.
-
-### Marketplace integration
-
-The marketplace ([`marketplace.md`](./marketplace.md)) is a **plugin directory**.
-A marketplace item can be a **plugin package** (`.shofer-plugin`), a **mode** (YAML,
-declarative), or an **MCP config** (JSON, declarative). The Marketplace → Plugins
-tab lists installed plugins and offers install-from-file, install-from-URL, and
-uninstall (see [§11](#11-ui-integration)).
 
 ---
 
@@ -1248,19 +1252,27 @@ optionally add a UI status badge — no MCP protocol changes needed.
 - **`SkillsManager`** gains plugin-contributed skills from `contributes.skills` (dirs supplied by `PluginManager`). Plugin skills are namespaced (`qualifiedSkillName`), not merged by precedence, so they can't shadow file skills; `private` skills are excluded from user-facing enumeration.
 - **`CustomModesManager`** — `getAllModes()` includes plugin modes from `contributes.modes`, emitted under the namespaced slug `<plugin>:<authoredSlug>` with `source: "plugin"`; `private` modes are agent-switchable but hidden from the picker.
 - **`McpHub`** reads MCP configs from plugin manifests (`contributes.mcpServers`), merged with `.shofer/mcp.json` and `mcp_settings.json`.
-- **Marketplace** installs plugins (`.shofer-plugin` archives) in addition to mode/MCP YAML items; a plugin can contain modes and MCP configs as declarative contributions, so a plugin install is a superset of the current mode/MCP install.
 - **Checkpoints** are no longer a core subsystem: per-task undo history is the bundled `basics` plugin's checkpoints feature, built on `beforeToolCall` + `ctx.task` + `onTimelineRewind` + `handleRequest` ([`plugins/basics/docs/checkpoints.md`](../plugins/basics/docs/checkpoints.md)). Core keeps only those generic seams — no shadow-git, no `enableCheckpoints` setting, no checkpoint-specific wire methods.
 
 ---
 
 ## 11. UI Integration
 
-### Settings → Plugins and Marketplace → Plugins
+### Settings → Plugins
 
-Two panels split the surface:
-
-- **Settings → Plugins** ([`PluginsSettings.tsx`](../webview-ui/src/components/settings/PluginsSettings.tsx)) — the discovered-plugin list with enable/disable toggles, the `settings-tab` UI region slot, and **schema-driven config editing**. When a plugin manifest declares `config`, `PluginView.configSchema`/`config` drive a form; edits issue a `{ action: "setConfig" }` `PluginRequest` and are committed via the shared Settings **Save** button, which calls `PluginManager.reloadPlugin(name)` so `ctx.config` reflects the change live.
-- **Marketplace → Plugins** ([`PluginsTab.tsx`](../webview-ui/src/components/marketplace/PluginsTab.tsx)) — the same list **plus** install affordances (**Install from file** = native picker for a local `.shofer-plugin`; **Install from URL** = a direct http(s) archive link), the **uninstall** action, and — for a plugin declaring `permissions.ai` — the **"uses AI (billed)" badge** plus the separate AI-consent allow/revoke control (`{ action: "setAiConsent" }`, which reloads the plugin so `ctx.ai` flips live/denied).
+One panel owns the surface: **Settings → Plugins**
+([`PluginsSettings.tsx`](../webview-ui/src/components/settings/PluginsSettings.tsx))
+— the discovered-plugin list with enable/disable toggles, the `settings-tab` UI
+region slot, **schema-driven config editing** (when a plugin manifest declares
+`config`, `PluginView.configSchema`/`config` drive a form; edits issue a
+`{ action: "setConfig" }` `PluginRequest` and are committed via the shared
+Settings **Save** button, which calls `PluginManager.reloadPlugin(name)` so
+`ctx.config` reflects the change live), and — for a plugin declaring
+`permissions.ai` — the **"uses AI (billed)" badge** plus the AI-consent
+allow/revoke control (`{ action: "setAiConsent" }`, which reloads the plugin so
+`ctx.ai` flips live/denied). Install/uninstall have no webview surface: they are
+CLI verbs (`shofer plugin install|remove`) and `.shofer/plugins.json`
+declarations.
 
 Each plugin row shows name, version, scope badge, a summary of contributions
 (N modes · N skills · N commands · N mcpServers · N rules), and — when
@@ -1472,7 +1484,6 @@ observe; `ctx.config` / `ctx.storage` back config + idempotency state. So a runn
 | [`agentapi.md`](./agentapi.md)                                                    | The programmatic agent API surface plugins run alongside.                        |
 | [`acp.md`](./acp.md)                                                              | Agent Client Protocol — an external control surface complementary to plugins.    |
 | [`host-boundary.md`](./host-boundary.md)                                          | The host-agnostic architecture the plugin substrate is built on.                 |
-| [`marketplace.md`](./marketplace.md)                                              | Marketplace is the plugin distribution/curation layer.                           |
 | [`mcp.md`](./mcp.md)                                                              | MCP servers are one kind of plugin contribution (`contributes.mcpServers`).      |
 | [`adding-new-tools.md`](./adding-new-tools.md)                                    | Plugin tools follow the `CustomToolDefinition` contract.                         |
 | [`skills.md`](./skills.md)                                                        | Plugin skills are discovered alongside `.shofer/skills/`.                        |

@@ -18,6 +18,7 @@ import {
 	type Command as SlashCommand,
 	type WebviewMessage,
 	type EditQueuedMessagePayload,
+	type DispatchedTaskRef,
 	TelemetryEventName,
 	ShoferSettings,
 	ExperimentId,
@@ -75,14 +76,14 @@ import { getCommand } from "@shofer/core"
 
 const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
-import { MarketplaceManager, MarketplaceItemType } from "../../services/marketplace"
 import { webviewLog, scrollLog } from "@shofer/core"
 import { resolveTaskCwd } from "./resolveTaskCwd"
+import { adoptDispatchedTask, resolveTaskPlacement } from "./resolveTaskPlacement"
+import { TaskAttachmentManager } from "../attach/TaskAttachmentManager"
 
 export const webviewMessageHandler = async (
 	provider: ShoferProvider,
 	message: WebviewMessage,
-	marketplaceManager?: MarketplaceManager,
 ) => {
 	// Utility functions provided for concise get/update of global state via contextProxy API.
 	const getGlobalState = <K extends keyof GlobalState>(key: K) => provider.contextProxy.getValue(key)
@@ -737,6 +738,37 @@ export const webviewMessageHandler = async (
 					return
 				}
 
+				// …and on WHICH MACHINE? Same shape of question, one level up: a
+				// dispatcher plugin may claim the task, create it elsewhere and hand
+				// back its reference, in which case no local task is created and this
+				// view attaches to the dispatched one instead. Nobody claiming it —
+				// the common case, and the only one when no plugin dispatches — falls
+				// through to the in-process path below, unchanged.
+				let dispatched: DispatchedTaskRef | undefined
+				try {
+					dispatched = await resolveTaskPlacement(provider, {
+						prompt: messageText,
+						mode: message.mode,
+						apiConfigName: message.apiConfigName,
+						cwd,
+					})
+				} catch (error) {
+					await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
+					getHost().notifier.error(error instanceof Error ? error.message : String(error))
+					return
+				}
+
+				if (dispatched) {
+					const attached = await adoptDispatchedTask(provider, dispatched)
+					if (!attached) {
+						getHost().notifier.info(
+							t("common:attach.dispatched_no_address", { taskId: dispatched.taskId }),
+						)
+					}
+					await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
+					break
+				}
+
 				// Pre-task mode / API-config seeds chosen in the chat dropdown.
 				// When absent, createTask falls back to the global Settings defaults.
 				await provider.createManagedTask(undefined, messageText, resolved.images, cwd, {
@@ -763,6 +795,21 @@ export const webviewMessageHandler = async (
 				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
 
 				const messageText = resolved.text
+
+				// An attached task's ask is answered on the host that RAISED it, over
+				// AgentApi — never through the in-process path, which has no such
+				// task. The webview posts the attached task's id (currentTaskItem.id),
+				// so this only fires for the view actually rendering it.
+				const attachments = TaskAttachmentManager.getInstance()
+				if (attachments.isAttachedTo(provider, message.taskId)) {
+					await attachments.respondToAsk(provider, {
+						askResponse: message.askResponse!,
+						text: messageText,
+						images: resolved.images,
+						askId: message.askId,
+					})
+					break
+				}
 
 				// Route to the correct task instance when the webview supplies a
 				// taskId — prevents task-switch races where a response meant for
@@ -1457,6 +1504,12 @@ export const webviewMessageHandler = async (
 			}
 			break
 		case "cancelTask":
+			// Stop applies to whatever THIS view is rendering: an attached remote
+			// task is cancelled on its own host, over AgentApi.
+			if (TaskAttachmentManager.getInstance().get(provider)) {
+				await TaskAttachmentManager.getInstance().cancelTask(provider)
+				break
+			}
 			await provider.cancelTask()
 			break
 		case "cancelAutoApproval":
@@ -2665,128 +2718,6 @@ export const webviewMessageHandler = async (
 			await vscode.commands.executeCommand(getCommand("focusPanel"))
 			break
 		}
-		case "filterMarketplaceItems": {
-			if (marketplaceManager && message.filters) {
-				try {
-					await marketplaceManager.updateWithFilteredItems({
-						type: message.filters.type as MarketplaceItemType | undefined,
-						search: message.filters.search,
-						tags: message.filters.tags,
-					})
-					await provider.postInitState()
-				} catch (error) {
-					webviewLog.error("Marketplace: Error filtering items:", error)
-					getHost().notifier.error("Failed to filter marketplace items")
-				}
-			}
-			break
-		}
-
-		case "fetchMarketplaceData": {
-			// Fetch marketplace data on demand
-			await provider.fetchMarketplaceData()
-			break
-		}
-
-		case "installMarketplaceItem": {
-			if (marketplaceManager && message.mpItem && message.mpInstallOptions) {
-				try {
-					const configFilePath = await marketplaceManager.installMarketplaceItem(
-						message.mpItem,
-						message.mpInstallOptions,
-					)
-					await provider.postInitState()
-					webviewLog.info(`Marketplace item installed and config file opened: ${configFilePath}`)
-
-					// Send success message to webview
-					provider.postMessageToWebview({
-						type: "marketplaceInstallResult",
-						success: true,
-						slug: message.mpItem.id,
-					})
-				} catch (error) {
-					webviewLog.error(`Error installing marketplace item: ${error}`)
-					// Send error message to webview
-					provider.postMessageToWebview({
-						type: "marketplaceInstallResult",
-						success: false,
-						error: error instanceof Error ? error.message : String(error),
-						slug: message.mpItem.id,
-					})
-				}
-			}
-			break
-		}
-
-		case "removeInstalledMarketplaceItem": {
-			if (marketplaceManager && message.mpItem && message.mpInstallOptions) {
-				try {
-					await marketplaceManager.removeInstalledMarketplaceItem(message.mpItem, message.mpInstallOptions)
-					await provider.postInitState()
-
-					// Send success message to webview
-					provider.postMessageToWebview({
-						type: "marketplaceRemoveResult",
-						success: true,
-						slug: message.mpItem.id,
-					})
-				} catch (error) {
-					webviewLog.error(`Error removing marketplace item: ${error}`)
-
-					// Show error message to user
-					getHost().notifier.error(
-						`Failed to remove marketplace item: ${error instanceof Error ? error.message : String(error)}`,
-					)
-
-					// Send error message to webview
-					provider.postMessageToWebview({
-						type: "marketplaceRemoveResult",
-						success: false,
-						error: error instanceof Error ? error.message : String(error),
-						slug: message.mpItem.id,
-					})
-				}
-			} else {
-				// MarketplaceManager not available or missing required parameters
-				const errorMessage = !marketplaceManager
-					? "Marketplace manager is not available"
-					: "Missing required parameters for marketplace item removal"
-				webviewLog.error(errorMessage)
-
-				getHost().notifier.error(errorMessage)
-
-				if (message.mpItem?.id) {
-					provider.postMessageToWebview({
-						type: "marketplaceRemoveResult",
-						success: false,
-						error: errorMessage,
-						slug: message.mpItem.id,
-					})
-				}
-			}
-			break
-		}
-
-		case "installMarketplaceItemWithParameters": {
-			if (marketplaceManager && message.payload && "item" in message.payload && "parameters" in message.payload) {
-				try {
-					const configFilePath = await marketplaceManager.installMarketplaceItem(message.payload.item, {
-						parameters: message.payload.parameters,
-					})
-					await provider.postInitState()
-					webviewLog.info(
-						`Marketplace item with parameters installed and config file opened: ${configFilePath}`,
-					)
-				} catch (error) {
-					webviewLog.error(`Error installing marketplace item with parameters: ${error}`)
-					getHost().notifier.error(
-						`Failed to install marketplace item: ${error instanceof Error ? error.message : String(error)}`,
-					)
-				}
-			}
-			break
-		}
-
 		case "switchTab": {
 			if (message.tab) {
 				// Capture tab shown event for all switchTab messages (which are user-initiated).
@@ -3032,6 +2963,15 @@ export const webviewMessageHandler = async (
 			const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
 
 			const messageText = resolved.text
+
+			// A follow-up typed while an attached task is rendered belongs to that
+			// task. There is no local queue to put it in — `sendMessage` hands it to
+			// the owning host, whose own task queues or consumes it exactly as it
+			// would a message typed on that machine.
+			if (TaskAttachmentManager.getInstance().get(provider)) {
+				await TaskAttachmentManager.getInstance().sendMessage(provider, messageText)
+				break
+			}
 
 			const currentTask = provider.getCurrentTask()
 			currentTask?.messageQueueService.addMessage(messageText, resolved.images)
@@ -3688,14 +3628,11 @@ export const webviewMessageHandler = async (
 			// "vsCodeSetting" |
 			// "indexingStatusUpdate" |
 			// "indexCleared" |
-			// "marketplaceInstallResult" |
 			// "shareTaskSuccess" |
 			// "playSound" |
 			// "draggedImages" |
 			// "setApiConfigPassword" |
 			// "setopenAiCustomModelInfo" |
-			// "marketplaceButtonClicked" |
-			// "cancelMarketplaceInstall" |
 			// "imageGenerationSettings"
 			break
 		}

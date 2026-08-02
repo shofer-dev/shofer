@@ -8,7 +8,7 @@ description: View or change the Live Memory plugin's configuration for this work
 The `live-memory` plugin reads its settings from the standard per-plugin config
 surface (`ctx.config`, default-merged from the manifest `config` schema). Values
 are stored under `pluginConfigs["live-memory"]` and edited in
-**Settings → Plugins → Live Memory** (or the Marketplace Plugins tab), the same
+**Settings → Plugins → Live Memory**, the same
 place the plugin is enabled and granted its billed-AI consent.
 
 ## Keys

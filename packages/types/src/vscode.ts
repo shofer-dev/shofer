@@ -32,7 +32,6 @@ export const commandIds = [
 	"plusButtonClicked",
 	"tasksButtonClicked",
 	"historyButtonClicked",
-	"marketplaceButtonClicked",
 	"popoutButtonClicked",
 	"settingsButtonClicked",
 	"aboutButtonClicked",
@@ -41,6 +40,10 @@ export const commandIds = [
 	"openInNewTab",
 
 	"newTask",
+
+	// Remote agents — attach this view to a task running on another host.
+	"attachRemoteTask",
+	"detachRemoteTask",
 
 	"setCustomStoragePath",
 	"importSettings",

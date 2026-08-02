@@ -215,11 +215,6 @@
 			"global": "global"
 		}
 	},
-	"marketplace": {
-		"mode": {
-			"rulesCleanupFailed": "Mode berhasil dihapus, tetapi gagal menghapus folder aturan di {{rulesFolderPath}}. Kamu mungkin perlu menghapusnya secara manual."
-		}
-	},
 	"mdm": {
 		"errors": {
 			"cloud_auth_required": "Organisasi kamu memerlukan autentikasi Shofer Cloud. Silakan masuk untuk melanjutkan.",

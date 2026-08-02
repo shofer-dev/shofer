@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "Shoferdev",
-	"version": "2.45.0",
+	"version": "2.46.0",
 	"icon": "assets/icons/icon128x128.png",
 	"galleryBanner": {
 		"color": "#1e293b",
@@ -110,11 +110,6 @@
 				"icon": "$(history)"
 			},
 			{
-				"command": "shofer.marketplaceButtonClicked",
-				"title": "%command.marketplace.title%",
-				"icon": "$(extensions)"
-			},
-			{
 				"command": "shofer.popoutButtonClicked",
 				"title": "%command.openInEditor.title%",
 				"icon": "$(link-external)"
@@ -187,6 +182,16 @@
 			{
 				"command": "shofer.importSettings",
 				"title": "%command.importSettings.title%",
+				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.attachRemoteTask",
+				"title": "%command.attachRemoteTask.title%",
+				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.detachRemoteTask",
+				"title": "%command.detachRemoteTask.title%",
 				"category": "%configuration.title%"
 			},
 			{
@@ -296,11 +301,6 @@
 					"when": "view == shofer.SidebarProvider"
 				},
 				{
-					"command": "shofer.marketplaceButtonClicked",
-					"group": "navigation@5",
-					"when": "view == shofer.SidebarProvider && shofer:marketplaceEnabled"
-				},
-				{
 					"command": "shofer.historyButtonClicked",
 					"group": "overflow@1",
 					"when": "view == shofer.SidebarProvider"
@@ -397,11 +397,6 @@
 					"command": "shofer.settingsButtonClicked",
 					"group": "navigation@3",
 					"when": "activeWebviewPanelId == shofer.TabPanelProvider"
-				},
-				{
-					"command": "shofer.marketplaceButtonClicked",
-					"group": "navigation@5",
-					"when": "activeWebviewPanelId == shofer.TabPanelProvider && shofer:marketplaceEnabled"
 				},
 				{
 					"command": "shofer.historyButtonClicked",

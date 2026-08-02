@@ -249,13 +249,29 @@ need no host setup at all.
 
 ## Remote agents
 
-Shofer has **no built-in multi-worker capability**: the former "Shofer Workers"
-fleet layer (a controller-side worker registry, pool, config replication and
-remote-task shadows) was removed in favor of dispatching work over an external
-scheduler and observing running tasks over AgentApi attach-on-demand. The end
-state and roadmap live in [`todos/remote_agents.md`](../todos/remote_agents.md);
-what core will grow for it is a **remote-task attachment primitive** (snapshot
-backfill + the existing task-scoped SSE), not another scheduler.
+Shofer has **no built-in multi-worker capability** and will not grow one: the
+former "Shofer Workers" fleet layer (a controller-side worker registry, pool,
+config replication and remote-task shadows) was removed in favor of dispatching
+work over an external scheduler and observing running tasks over AgentApi. Core
+keeps exactly two generic seams for it, and neither of them schedules anything:
+
+- **Attachment** — [`TaskAttachmentManager`](../src/core/attach/TaskAttachmentManager.ts)
+  attaches a view to a task running on another host, given `(address, taskId,
+  token)`: subscribe the task-scoped SSE, backfill
+  [`getTaskSnapshot`](./agentapi.md#task-snapshots--attaching-to-a-running-task),
+  and render the result in the chat view like any other task — asks, follow-up
+  messages and cancel all travel back over AgentApi. Focus is **per view**, so the
+  sidebar and an editor tab can watch different remote tasks; a connection exists
+  only while a view is attached, and detaching leaves the task untouched.
+  Invocable as `shofer.attachRemoteTask` / `shofer.detachRemoteTask`.
+- **Placement** — [`resolveTaskPlacement`](../src/core/webview/resolveTaskPlacement.ts)
+  broadcasts `"resolve-task-placement"` at task creation, the sibling of
+  `"resolve-task-cwd"` one level up: a plugin may CLAIM the task (it dispatched it
+  elsewhere; the answer names it), FAIL explicitly (`{ error }`, which aborts
+  creation), or say nothing — in which case the in-process path runs unchanged.
+
+Who dispatches, over what, and where a task should land is a **plugin's** business.
+The end state and roadmap live in [`todos/remote_agents.md`](../todos/remote_agents.md).
 
 ## What we deliberately keep
 

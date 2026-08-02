@@ -52,7 +52,6 @@ export const LoggingSettings = ({
 					"FS",
 					"Config",
 					"Skills",
-					"Marketplace",
 					"Metrics",
 					"Workflow",
 					"I18n",

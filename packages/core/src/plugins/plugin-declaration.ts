@@ -46,9 +46,8 @@ export const PLUGIN_DECLARATION_VERSION = 1
 
 /**
  * One plugin's declaration entry (Schema-First Persistence Rule). `source` is a
- * local directory path or a local `.shofer-plugin` archive path today (a
- * `marketplace:<id>@<ver>` ref or an http(s) URL is reserved for a later pass and
- * rejected by the resolver). `version` is the author-declared version the resolver
+ * local directory path or a local `.shofer-plugin` archive path today (an
+ * http(s) URL is reserved for a later pass and rejected by the resolver). `version` is the author-declared version the resolver
  * materializes under. `config` is the user's config overrides for the plugin
  * (merged with manifest defaults downstream); `enabled` defaults to `true`.
  */
@@ -192,11 +191,11 @@ export interface ResolvePluginsResult {
 }
 
 /**
- * Thrown for a source kind the resolver does not yet support — a `marketplace:<id>@<ver>`
- * ref or an http(s) URL (Part F reserves those for a later pass). A distinct class so a
- * caller can present it as "not yet supported" rather than a crash. This is a **hard**
- * failure (it rejects the whole batch) — deliberately loud, since the feature is an
- * explicit stub, unlike a per-plugin manifest mismatch which is skipped softly.
+ * Thrown for a source kind the resolver does not yet support — an http(s) URL
+ * (reserved for a later pass). A distinct class so a caller can present it as
+ * "not yet supported" rather than a crash. This is a **hard** failure (it rejects
+ * the whole batch) — deliberately loud, since the feature is an explicit stub,
+ * unlike a per-plugin manifest mismatch which is skipped softly.
  */
 export class PluginResolveError extends Error {
 	constructor(message: string) {
@@ -207,9 +206,9 @@ export class PluginResolveError extends Error {
 
 const MANIFEST_FILENAME = "plugin.json"
 
-/** Whether `source` is a source kind the resolver cannot materialize yet (marketplace/remote). */
+/** Whether `source` is a source kind the resolver cannot materialize yet (remote URL). */
 function isUnsupportedSource(source: string): boolean {
-	return source.startsWith("marketplace:") || isPluginUrl(source)
+	return isPluginUrl(source)
 }
 
 /** Whether a path exists on disk. */
@@ -263,9 +262,9 @@ async function materializeSource(source: string, cacheDir: string): Promise<void
  *     **idempotently**: if that dir already has a `plugin.json` it is reused as-is
  *     (no re-copy/re-unpack).
  *   - **Local directory** source → copied; **local `.shofer-plugin` archive** → unpacked.
- *   - A **`marketplace:<id>@<ver>` ref or an http(s) URL** → {@link PluginResolveError}
- *     ("marketplace/remote sources not yet supported") — a hard failure that rejects the
- *     whole batch, since that source kind is an explicit later-pass stub.
+ *   - An **http(s) URL** → {@link PluginResolveError} ("remote URL sources not
+ *     yet supported") — a hard failure that rejects the whole batch, since that
+ *     source kind is an explicit later-pass stub.
  *   - The materialized dir's `plugin.json` is validated against
  *     {@link pluginManifestSchema} and its `name` checked against the declaration key;
  *     a missing/invalid manifest or a name mismatch **skips that one plugin** with a
@@ -284,7 +283,7 @@ export async function resolvePluginDeclaration(
 	for (const [name, entry] of Object.entries(decl.plugins)) {
 		if (isUnsupportedSource(entry.source)) {
 			throw new PluginResolveError(
-				`Cannot resolve plugin "${name}" from "${entry.source}": marketplace/remote sources not yet supported.`,
+				`Cannot resolve plugin "${name}" from "${entry.source}": remote URL sources not yet supported.`,
 			)
 		}
 

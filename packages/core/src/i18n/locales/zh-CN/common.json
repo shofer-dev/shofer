@@ -220,11 +220,6 @@
 			"global": "全局"
 		}
 	},
-	"marketplace": {
-		"mode": {
-			"rulesCleanupFailed": "模式已成功移除，但无法删除位于 {{rulesFolderPath}} 的规则文件夹。您可能需要手动删除。"
-		}
-	},
 	"mdm": {
 		"errors": {
 			"cloud_auth_required": "您的组织需要 Shofer Cloud 身份验证。请登录以继续。",

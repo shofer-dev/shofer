@@ -7,12 +7,6 @@ import type { ModeConfig, PromptComponent } from "./mode.js"
 import type { TelemetrySetting } from "./telemetry.js"
 import type { Experiments } from "./experiment.js"
 import type { ShoferMessage, QueuedMessage, TaskInteractionPayload } from "./message.js"
-import {
-	type MarketplaceItem,
-	type MarketplaceInstalledMetadata,
-	type InstallMarketplaceItemOptions,
-	marketplaceItemSchema,
-} from "./marketplace.js"
 import type { TodoItem } from "./todo.js"
 import type { ToolGroup } from "./tool.js"
 import type { OrganizationAllowList } from "./organization.js"
@@ -165,9 +159,6 @@ export interface ExtensionMessage {
 		| "condenseTaskContextResponse"
 		| "singleRouterModelFetchResponse"
 		| "shoferCreditBalance"
-		| "marketplaceInstallResult"
-		| "marketplaceRemoveResult"
-		| "marketplaceData"
 		| "shareTaskSuccess"
 		| "showDeleteMessageDialog"
 		| "showEditMessageDialog"
@@ -222,7 +213,6 @@ export interface ExtensionMessage {
 		| "chatButtonClicked"
 		| "settingsButtonClicked"
 		| "historyButtonClicked"
-		| "marketplaceButtonClicked"
 		| "tasksButtonClicked"
 		| "launcherButtonClicked"
 		| "newMenuButtonClicked"
@@ -297,13 +287,9 @@ export interface ExtensionMessage {
 	setting?: string
 	value?: any // eslint-disable-line @typescript-eslint/no-explicit-any
 	hasContent?: boolean
-	items?: MarketplaceItem[]
 	userInfo?: CloudUserInfo
 	organizationAllowList?: OrganizationAllowList
 	tab?: string
-	marketplaceItems?: MarketplaceItem[]
-	organizationMcps?: MarketplaceItem[]
-	marketplaceInstalledMetadata?: MarketplaceInstalledMetadata
 	errors?: string[]
 	visibility?: ShareVisibility
 	rulesFolderPath?: string
@@ -528,9 +514,6 @@ export type ExtensionState = Pick<
 
 	autoCondenseContext: boolean
 	autoCondenseContextPercent: number
-	marketplaceItems?: MarketplaceItem[]
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	marketplaceInstalledMetadata?: { project: Record<string, any>; global: Record<string, any> }
 	profileThresholds: Record<string, number>
 	hasOpenedModeSelector: boolean
 	openRouterImageApiKey?: string
@@ -701,14 +684,6 @@ export interface WebviewMessage {
 		| "setAutoEnableDefault"
 		| "focusPanelRequest"
 		| "openExternal"
-		| "filterMarketplaceItems"
-		| "marketplaceButtonClicked"
-		| "installMarketplaceItem"
-		| "installMarketplaceItemWithParameters"
-		| "cancelMarketplaceInstall"
-		| "removeInstalledMarketplaceItem"
-		| "marketplaceInstallResult"
-		| "fetchMarketplaceData"
 		| "switchTab"
 		| "shareTaskSuccess"
 		| "exportMode"
@@ -811,7 +786,7 @@ export interface WebviewMessage {
 	/** §4.3: sha256 of a blob to fetch on `getBlobContent`. */
 	sha256?: string
 	editedMessageContent?: string
-	tab?: "settings" | "history" | "mcp" | "modes" | "chat" | "marketplace" | "cloud"
+	tab?: "settings" | "history" | "mcp" | "modes" | "chat" | "cloud"
 	disabled?: boolean
 	context?: string
 	dataUri?: string
@@ -894,8 +869,6 @@ export interface WebviewMessage {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	settings?: any
 	url?: string // For openExternal
-	mpItem?: MarketplaceItem
-	mpInstallOptions?: InstallMarketplaceItemOptions
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	config?: Record<string, any> // Add config to the payload
 	visibility?: ShareVisibility // For share visibility
@@ -939,19 +912,9 @@ export interface IndexClearedPayload {
 	error?: string
 }
 
-export const installMarketplaceItemWithParametersPayloadSchema = z.object({
-	item: marketplaceItemSchema,
-	parameters: z.record(z.string(), z.any()),
-})
-
-export type InstallMarketplaceItemWithParametersPayload = z.infer<
-	typeof installMarketplaceItemWithParametersPayloadSchema
->
-
 export type WebViewMessagePayload =
 	| IndexingStatusPayload
 	| IndexClearedPayload
-	| InstallMarketplaceItemWithParametersPayload
 	| UpdateTodoListPayload
 	| EditQueuedMessagePayload
 

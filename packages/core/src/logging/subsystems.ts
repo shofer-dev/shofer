@@ -42,8 +42,6 @@ export const configLog = getLogger().child({ ctx: "Config" })
 /** Skills subsystem */
 export const skillsLog = getLogger().child({ ctx: "Skills" })
 
-/** Marketplace / installer */
-export const marketplaceLog = getLogger().child({ ctx: "Marketplace" })
 
 /** Metrics / Prometheus */
 export const metricsLog = getLogger().child({ ctx: "Metrics" })

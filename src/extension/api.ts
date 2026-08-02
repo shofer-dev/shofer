@@ -15,6 +15,8 @@ import {
 	type TaskEvent,
 	type CreateTaskOptions,
 	type HistoryItem,
+	type ShoferMessage,
+	type TokenUsage,
 	ShoferEventName,
 	TaskCommandName,
 	isSecretStateKey,
@@ -474,6 +476,63 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 			response.images,
 			response.askId,
 		)
+	}
+
+	/**
+	 * The conversation and live counters for a task on THIS host — the executor side
+	 * of a controller's attach backfill.
+	 *
+	 * Two sources, in order: a live instance (its in-memory `shoferMessages` and
+	 * `getTokenUsage()` are the freshest, and include a partial message still being
+	 * streamed), else the persisted `ui_messages.jsonl` plus the counters recorded on
+	 * the history item. Reading from disk is what makes a task attachable after the
+	 * executor restarted or the task was backgrounded — the transcript outlives the
+	 * instance.
+	 *
+	 * Returns `undefined` only when this host has no record of the task at all.
+	 */
+	public async getTaskConversation(
+		taskId: string,
+	): Promise<{ messages: ShoferMessage[]; tokenUsage?: TokenUsage } | undefined> {
+		const current = this.sidebarProvider.getCurrentTask()
+		const live =
+			this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ??
+			(current?.taskId === taskId ? current : undefined)
+
+		if (live) {
+			return { messages: [...live.shoferMessages], tokenUsage: live.getTokenUsage() }
+		}
+
+		const historyItem = await this.sidebarProvider.taskHistoryStore.getOrLoad(taskId)
+		if (!historyItem) return undefined
+
+		const { readTaskMessages } = await import("@shofer/core")
+		const globalStoragePath = this.sidebarProvider.contextProxy.globalStorageUri.fsPath
+		let messages: ShoferMessage[] = []
+		try {
+			messages = await readTaskMessages({ taskId, globalStoragePath })
+		} catch (error) {
+			// A corrupt/missing transcript degrades to "nothing said yet" rather than
+			// failing the whole attach: the lifecycle and counters are still useful.
+			this.log(
+				`[API#getTaskConversation] could not read messages for ${taskId}: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			)
+		}
+		return {
+			messages,
+			tokenUsage: {
+				totalTokensIn: historyItem.tokensIn ?? 0,
+				totalTokensOut: historyItem.tokensOut ?? 0,
+				totalCacheWrites: historyItem.cacheWrites,
+				totalCacheReads: historyItem.cacheReads,
+				totalCost: historyItem.totalCost ?? 0,
+				// Only a live instance knows its context occupancy; a rehydrated
+				// transcript reports none rather than a fabricated number.
+				contextTokens: 0,
+			},
+		}
 	}
 
 	// ─── Reverse data channel ─────────────────────────────────────────

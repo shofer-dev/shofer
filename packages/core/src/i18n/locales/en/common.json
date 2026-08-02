@@ -261,5 +261,19 @@
 	},
 	"plugins": {
 		"blockedTaskRunning": "Cannot revert files while the task is still running. Stop the task first."
+	},
+	"attach": {
+		"input": {
+			"address_prompt": "Address of the host running the task (its AgentApi base URL)",
+			"address_placeholder": "http://127.0.0.1:30099",
+			"task_id_prompt": "Id of the task to attach to",
+			"token_prompt": "Bearer token for that host (leave empty if it requires none)"
+		},
+		"dispatched_no_address": "Task {{taskId}} was dispatched, but the dispatcher did not say where it runs — it cannot be watched from here.",
+		"errors": {
+			"no_such_task": "Host {{address}} has no task {{taskId}}.",
+			"unreachable": "Could not reach {{address}}: {{error}}",
+			"not_attached": "This view is not attached to a remote task."
+		}
 	}
 }
