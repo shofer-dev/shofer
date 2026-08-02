@@ -529,8 +529,8 @@ describe("ShoferConfigService", () => {
 	})
 
 	describe("getAgentsDirectoriesForCwd", () => {
-		it("should return root directory and parent directories of subfolder .shofer dirs", async () => {
-			mockRipgrepLines(["/project/path/package-a/.shofer/rules/rule.md"])
+		it("should return root plus directories carrying an AGENTS.md — no .shofer sibling required", async () => {
+			mockRipgrepLines(["/project/path/package-a/AGENTS.md"])
 
 			const result = await getAgentsDirectoriesForCwd("/project/path")
 
@@ -545,11 +545,13 @@ describe("ShoferConfigService", () => {
 			expect(result).toEqual(["/project/path"])
 		})
 
-		it("should include multiple subfolder parent directories", async () => {
+		it("should include and sort multiple directories, deduped and excluding the root's own file", async () => {
 			mockRipgrepLines([
-				"/project/path/package-a/.shofer/rules/rule.md",
-				"/project/path/package-b/.shofer/rules-code/rule.md",
-				"/project/path/packages/core/.shofer/rules/rule.md",
+				"/project/path/AGENTS.md",
+				"/project/path/packages/core/AGENTS.md",
+				"/project/path/package-b/AGENT.md",
+				"/project/path/package-a/AGENTS.md",
+				"/project/path/package-a/AGENTS.local.md",
 			])
 
 			const result = await getAgentsDirectoriesForCwd("/project/path")

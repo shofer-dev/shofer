@@ -885,7 +885,7 @@
 		},
 		"enableSubfolderRules": {
 			"label": "Enable subfolder rules",
-			"description": "Recursively discover and load .shofer/rules and AGENTS.md files from subdirectories. A subfolder is only considered when it contains a .shofer/ directory; its sibling AGENTS.md (and AGENTS.local.md) is then loaded too. A bare AGENTS.md with no .shofer/ sibling is ignored. Useful for monorepos with per-package rules."
+			"description": "Discover and load AGENTS.md files and .shofer/rules from subdirectories, on demand: a subdirectory's rules enter the system prompt only once the task touches a file under it. A lone AGENTS.md is enough for AGENTS-file loading; .shofer/rules still live in a .shofer/ directory. Enabled by default; disable to load only workspace-root rules."
 		},
 		"useAgentRules": {
 			"label": "Use Agent Rules",

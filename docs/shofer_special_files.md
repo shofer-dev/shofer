@@ -18,7 +18,10 @@ Shofer searches for rules and instructions in this order (project overrides glob
 
 1. **Global** `~/.shofer/` (or `%USERPROFILE%\.shofer\` on Windows)
 2. **Project-local** `<workspace>/.shofer/`
-3. **Subfolder** `<workspace>/<subdir>/.shofer/` (alphabetically, when `shofer.enableSubfolderRules` is on)
+3. **Subfolder** `<workspace>/<subdir>/.shofer/` and `<subdir>/AGENTS.md` (alphabetically) —
+   **on demand**: a subfolder's rules enter the prompt only once the task has
+   touched a file under that subfolder. Governed by
+   `shofer.enableSubfolderRules` (default: on).
 
 The `.agents/` directory (Agent Skills standard) is also discovered at both levels.
 
@@ -26,10 +29,10 @@ The `.agents/` directory (Agent Skills standard) is also discovered at both leve
 flowchart LR
     G["global — ~/.shofer/<br/>rules/, rules-mode/, commands/,<br/>skills/, custom-instructions.md"]
     P["project — workspace .shofer/"]
-    S["subfolders — subdir .shofer/, alphabetical<br/>when shofer.enableSubfolderRules is on"]
-    AG["AGENTS.md / AGENT.md<br/>flag: shofer.useAgentRules"]
+    S["subfolders — subdir .shofer/ + AGENTS.md<br/>on demand, when the task touches<br/>files under the subfolder"]
+    AG["root AGENTS.md / AGENT.md<br/>flag: shofer.useAgentRules"]
     AGD["~/.agents/skills/ — Agent Skills standard"]
-    SP["system prompt<br/>read at task start and on mode switch"]
+    SP["system prompt<br/>rebuilt when the task<br/>touches new files"]
 
     G -->|"loaded first"| SP
     P -->|"overrides global"| SP
@@ -106,21 +109,27 @@ configuration by [`CustomModesManager`](../src/core/config/CustomModesManager.ts
 
 ### `AGENTS.md` / `AGENT.md`
 
-| Property            | Details                                        |
-| ------------------- | ---------------------------------------------- |
-| **Format**          | Markdown                                       |
-| **Scope**           | Workspace root (and optionally subdirectories) |
-| **Watched**         | No — read on task start and mode switch        |
-| **Write-protected** | Yes                                            |
-| **Feature flag**    | `shofer.useAgentRules` (default: `true`)       |
+| Property            | Details                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Format**          | Markdown                                                                                                                       |
+| **Scope**           | Workspace root (always) and subdirectories (on demand)                                                                         |
+| **Watched**         | No — re-read when the prompt rebuilds (task start, mode switch, and whenever the task touches a file in a new location)        |
+| **Write-protected** | Yes                                                                                                                            |
+| **Feature flags**   | `shofer.useAgentRules` (default: `true`); subdirectories additionally gated by `shofer.enableSubfolderRules` (default: `true`) |
 
 Implements the [Agent Rules](https://agent-rules.org/) standard. Content is
 injected into the system prompt under the heading `# Agent Rules Standard (AGENTS.md):`.
 
 Shofer supports `AGENTS.md` in:
 
-- The workspace root
-- Subdirectories containing a `.shofer/` folder (when `enableSubfolderRules` is on)
+- **The workspace root** — always loaded.
+- **Any subdirectory** — the presence of the file itself is enough; no
+  `.shofer/` sibling is required. Discovery respects ignore files (an
+  AGENTS.md inside gitignored output is not a rules file) and skips hidden
+  directories. Subdirectory files load **on demand**: a subdirectory's
+  AGENTS.md enters the prompt only once the task has read, mentioned, or
+  edited a file under that subdirectory — so per-package rules cost context
+  only in tasks that actually work in that package.
 
 ---
 
@@ -201,15 +210,15 @@ approval to modify any file in this directory tree.
 
 ### `.shofer/rules/` — Mode-Agnostic Rules
 
-| Property       | Details                                                      |
-| -------------- | ------------------------------------------------------------ |
-| **Format**     | Any text files (read recursively up to 5 levels)             |
-| **Scope**      | Applies to ALL modes                                         |
-| **Loaded**     | At task start and mode switch                                |
-| **Load order** | Global rules first, then project rules, then subfolder rules |
+| Property       | Details                                                                     |
+| -------------- | --------------------------------------------------------------------------- |
+| **Format**     | Any text files (read recursively up to 5 levels), optional YAML frontmatter |
+| **Scope**      | Applies to ALL modes; optionally path-scoped via `paths:` frontmatter       |
+| **Loaded**     | When the prompt rebuilds (task start, mode switch, new files touched)       |
+| **Load order** | Global rules first, then project rules, then subfolder rules (on demand)    |
 
-All files in this directory are concatenated and injected into the system
-prompt as:
+All matching files in this directory are concatenated and injected into the
+system prompt as:
 
 ```
 # Rules from .shofer/rules/:
@@ -222,7 +231,34 @@ prompt as:
 ```
 
 Symlinks are followed. Files are sorted alphabetically. Cache files
-(matching `*.cache*`) are excluded.
+(matching `*.cache*`) are excluded. Subfolder `.shofer/rules/` load **on
+demand** — only once the task has touched a file under that subfolder.
+
+#### Path-scoped rules (`paths:` frontmatter)
+
+A rule file may open with YAML frontmatter carrying a `paths:` list. Such a
+rule is injected only when the task has touched a file matching one of the
+patterns; the frontmatter itself is stripped from what the model sees:
+
+```markdown
+---
+paths:
+    - "**/*.go"
+    - "src/api/**"
+---
+
+All API handlers must validate input before processing.
+```
+
+- Patterns use gitignore-style matching, evaluated against
+  workspace-relative paths of the files the task has read, mentioned, or
+  edited.
+- A file without frontmatter (or without a non-empty `paths` array of
+  strings) is unscoped and always loads. Frontmatter with other keys is
+  parsed and stripped, but does not scope the rule.
+- An unparsable pattern never hides a rule (fails open).
+- Callers without file-context tracking (e.g. the settings-view prompt
+  preview) see every rule, unscoped and scoped alike.
 
 ---
 
@@ -236,7 +272,8 @@ Symlinks are followed. Files are sorted alphabetically. Cache files
 
 Example: `.shofer/rules-code/` rules only load in Code mode. When a
 workspace `.shofer/rules-<mode>/` exists, it takes precedence over the
-corresponding global directory.
+corresponding global directory. On-demand subfolder loading and `paths:`
+frontmatter scoping work exactly as for `.shofer/rules/` above.
 
 **Legacy fallback (deprecated):**
 

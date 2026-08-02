@@ -199,19 +199,6 @@ export async function readFileIfExists(filePath: string): Promise<string | null>
  */
 export async function discoverSubfolderRooDirectories(cwd: string): Promise<string[]> {
 	try {
-		// We only need the ripgrep binary locator here, not executeRipgrep — the
-		// latter caps results at 500, which is wrong for `.shofer/` discovery
-		// in repos where the root .shofer/ holds large generated content
-		// (e.g. agent worktree snapshots). When the cap fires, every result is
-		// from the root .shofer/ (which we discard anyway via the
-		// rootShoferDir filter below) and no subfolder .shofer/ ever surfaces.
-		// The app root (for the bundled ripgrep binary) comes from the host seam
-		// so this module stays vscode-free and portable into @shofer/core.
-		const rgPath = await getBinPath(getHost().env.appRoot)
-		if (!rgPath) {
-			return []
-		}
-
 		// `-g '!/.shofer/**'` is anchored to the search root (cwd) and skips
 		// the root .shofer/ entirely so its file count cannot starve the
 		// subfolder hits. We still need `-g '**/.shofer/**'` to include any
@@ -233,35 +220,114 @@ export async function discoverSubfolderRooDirectories(cwd: string): Promise<stri
 
 		const shoferDirs = new Set<string>()
 
-		await new Promise<void>((resolve, reject) => {
-			const proc = childProcess.spawn(rgPath, args)
-			const rl = readline.createInterface({ input: proc.stdout, crlfDelay: Infinity })
-
-			rl.on("line", (line) => {
-				// Stream-dedupe into the directory set so memory stays O(#.shofer dirs)
-				// regardless of how many files live inside any one .shofer/ dir.
-				const rel = path.relative(cwd, line)
-				const match = rel.match(/^(.+?)[/\\]\.shofer(?:[/\\]|$)/)
-				if (match) {
-					shoferDirs.add(path.join(cwd, match[1]!, ".shofer"))
-				}
-			})
-
-			let errorOutput = ""
-			proc.stderr.on("data", (d) => {
-				errorOutput += d.toString()
-			})
-			rl.on("close", () => {
-				if (errorOutput && shoferDirs.size === 0) {
-					reject(new Error(`ripgrep process error: ${errorOutput}`))
-				} else {
-					resolve()
-				}
-			})
-			proc.on("error", (err) => reject(err))
+		await runRipgrepFileList(args, (line) => {
+			// Stream-dedupe into the directory set so memory stays O(#.shofer dirs)
+			// regardless of how many files live inside any one .shofer/ dir.
+			const rel = path.relative(cwd, line)
+			const match = rel.match(/^(.+?)[/\\]\.shofer(?:[/\\]|$)/)
+			if (match) {
+				shoferDirs.add(path.join(cwd, match[1]!, ".shofer"))
+			}
 		})
 
 		return Array.from(shoferDirs).sort()
+	} catch {
+		// If discovery fails (e.g., ripgrep not available), return empty array
+		return []
+	}
+}
+
+/**
+ * Runs ripgrep in `--files` mode and streams each emitted path to `onLine`.
+ *
+ * We only need the ripgrep binary locator here, not executeRipgrep — the
+ * latter caps results at 500, which is wrong for discovery in repos where a
+ * matched directory holds large generated content (e.g. the root .shofer/
+ * with agent worktree snapshots): when the cap fires, every result can come
+ * from one discarded location and the real hits never surface. The app root
+ * (for the bundled ripgrep binary) comes from the host seam so this module
+ * stays vscode-free and portable into @shofer/core.
+ *
+ * @throws when ripgrep is unavailable or exits with an error and no results
+ */
+async function runRipgrepFileList(args: string[], onLine: (line: string) => void): Promise<void> {
+	const rgPath = await getBinPath(getHost().env.appRoot)
+	if (!rgPath) {
+		throw new Error("ripgrep binary not available")
+	}
+
+	let sawLine = false
+	await new Promise<void>((resolve, reject) => {
+		const proc = childProcess.spawn(rgPath, args)
+		const rl = readline.createInterface({ input: proc.stdout, crlfDelay: Infinity })
+
+		rl.on("line", (line) => {
+			sawLine = true
+			onLine(line)
+		})
+
+		let errorOutput = ""
+		proc.stderr.on("data", (d) => {
+			errorOutput += d.toString()
+		})
+		rl.on("close", () => {
+			if (errorOutput && !sawLine) {
+				reject(new Error(`ripgrep process error: ${errorOutput}`))
+			} else {
+				resolve()
+			}
+		})
+		proc.on("error", (err) => reject(err))
+	})
+}
+
+/**
+ * Discovers subdirectories that carry an agent-rules file (`AGENTS.md`,
+ * `AGENT.md`, or `AGENTS.local.md`) — WITHOUT requiring a sibling `.shofer/`
+ * folder. A lone `packages/api/AGENTS.md` is enough for `packages/api` to
+ * participate in rules loading, matching the Agent Rules standard's "drop a
+ * file in the directory it governs" model.
+ *
+ * Ripgrep respects ignore files here (no `--no-ignore`), so a rules file
+ * inside gitignored build output is never picked up. Hidden directories are
+ * not searched — an AGENTS.md under `.cache/` or similar is not a rules file.
+ * The workspace root is NOT included (callers add it explicitly).
+ *
+ * @param cwd - Current working directory (workspace root)
+ * @returns Absolute paths of subdirectories containing an agent-rules file,
+ *          sorted alphabetically
+ */
+export async function discoverAgentRulesDirectories(cwd: string): Promise<string[]> {
+	try {
+		const args = [
+			"--files",
+			"--follow",
+			"-g",
+			"**/AGENTS.md",
+			"-g",
+			"**/AGENT.md",
+			"-g",
+			"**/AGENTS.local.md",
+			"-g",
+			"!node_modules/**",
+			"-g",
+			"!.git/**",
+			cwd,
+		]
+
+		const dirs = new Set<string>()
+
+		await runRipgrepFileList(args, (line) => {
+			const rel = path.relative(cwd, line)
+			const parentRel = path.dirname(rel)
+			// Skip the workspace root's own AGENTS.md (parentRel === ".") and
+			// anything that escaped the root.
+			if (parentRel && parentRel !== "." && !parentRel.startsWith("..")) {
+				dirs.add(path.join(cwd, parentRel))
+			}
+		})
+
+		return Array.from(dirs).sort()
 	} catch {
 		// If discovery fails (e.g., ripgrep not available), return empty array
 		return []
@@ -362,10 +428,15 @@ export async function getAllRooDirectoriesForCwd(cwd: string): Promise<string[]>
 }
 
 /**
- * Gets parent directories containing .shofer folders, in order from root to subfolders
+ * Gets the directories to check for agent-rules files (AGENTS.md / AGENT.md /
+ * AGENTS.local.md), in order from root to subfolders (alphabetically).
+ *
+ * The root is always included. Subdirectories are discovered by the presence
+ * of the rules file itself ({@link discoverAgentRulesDirectories}) — a
+ * sibling `.shofer/` folder is NOT required.
  *
  * @param cwd - Current working directory (project path)
- * @returns Array of parent directory paths (not .shofer paths) containing AGENTS.md or .shofer
+ * @returns Array of directory paths containing agent-rules files
  *
  * @example
  * ```typescript
@@ -379,14 +450,8 @@ export async function getAgentsDirectoriesForCwd(cwd: string): Promise<string[]>
 	// Always include the root directory
 	directories.push(cwd)
 
-	// Get all subfolder .shofer directories
-	const subfolderShoferDirs = await discoverSubfolderRooDirectories(cwd)
-
-	// Extract parent directories (remove .shofer from path)
-	for (const shoferDir of subfolderShoferDirs) {
-		const parentDir = path.dirname(shoferDir)
-		directories.push(parentDir)
-	}
+	// Subdirectories that carry an AGENTS.md / AGENT.md / AGENTS.local.md
+	directories.push(...(await discoverAgentRulesDirectories(cwd)))
 
 	return directories
 }

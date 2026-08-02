@@ -2,6 +2,9 @@ import fs from "fs/promises"
 import path from "path"
 import { Dirent } from "fs"
 
+import matter from "gray-matter"
+import ignore from "ignore"
+
 import { isLanguage } from "@shofer/types"
 
 import type { SystemPromptSettings } from "../types.js"
@@ -9,7 +12,7 @@ import type { SystemPromptSettings } from "../types.js"
 import { LANGUAGES } from "@shofer/types"
 import {
 	getRooDirectoriesForCwd,
-	getAllRooDirectoriesForCwd,
+	discoverSubfolderRooDirectories,
 	getAgentsDirectoriesForCwd,
 } from "../../services/shofer-config/index.js"
 
@@ -115,9 +118,109 @@ async function resolveSymLink(
 }
 
 /**
+ * A rule file's content plus its optional `paths:` frontmatter scope.
+ * `scopePaths` is set only when the file carries YAML frontmatter with a
+ * non-empty `paths` array of strings; such a rule applies only to tasks that
+ * have touched a matching file (see {@link ruleFileApplies}).
+ */
+interface RuleFile {
+	filename: string
+	content: string
+	scopePaths?: string[]
+}
+
+/**
+ * Parse optional YAML frontmatter from a rule file.
+ *
+ * - A non-empty `paths` array of strings becomes the file's scope.
+ * - When any valid frontmatter is present, the returned content is the body
+ *   (frontmatter stripped) — metadata is for the loader, not the model.
+ * - Invalid/absent frontmatter returns the raw content unscoped.
+ */
+function parseRuleFrontmatter(raw: string): { content: string; scopePaths?: string[] } {
+	if (!raw.startsWith("---")) {
+		return { content: raw }
+	}
+	try {
+		const parsed = matter(raw)
+		if (!parsed.data || Object.keys(parsed.data).length === 0) {
+			return { content: raw }
+		}
+		const paths = parsed.data.paths
+		const scopePaths =
+			Array.isArray(paths) && paths.length > 0 && paths.every((p: unknown) => typeof p === "string")
+				? (paths as string[])
+				: undefined
+		return { content: parsed.content.trim(), scopePaths }
+	} catch {
+		// Not valid frontmatter — treat the whole file as rule content.
+		return { content: raw }
+	}
+}
+
+/** Normalize a path to posix separators for glob matching / prefix checks. */
+function toPosix(p: string): string {
+	return p.replace(/\\/g, "/")
+}
+
+/**
+ * Whether a `paths:`-scoped rule file applies, given the workspace-relative
+ * paths the task has touched so far.
+ *
+ * - Unscoped files always apply.
+ * - `touchedPaths === undefined` means the caller does not track file context
+ *   (e.g. the settings-view prompt preview) — no gating, everything applies.
+ * - Patterns use gitignore-style matching (the `ignore` package): `**` and `*`
+ *   globs, evaluated against workspace-relative posix paths.
+ */
+function ruleFileApplies(scopePaths: string[] | undefined, touchedPaths: string[] | undefined): boolean {
+	if (!scopePaths || scopePaths.length === 0) {
+		return true
+	}
+	if (touchedPaths === undefined) {
+		return true
+	}
+	if (touchedPaths.length === 0) {
+		return false
+	}
+	try {
+		const matcher = ignore().add(scopePaths)
+		return touchedPaths.some((p) => {
+			const rel = toPosix(p)
+			// ignore() only accepts relative paths inside the root.
+			if (!rel || rel.startsWith("/") || rel.startsWith("../")) {
+				return false
+			}
+			return matcher.ignores(rel)
+		})
+	} catch {
+		// An unparsable pattern must not hide the rule.
+		return true
+	}
+}
+
+/**
+ * Whether a subfolder's rules are relevant to this task: true when the task
+ * has touched at least one file under that subfolder. `touchedPaths ===
+ * undefined` (caller without file-context tracking) means no gating.
+ */
+function isSubfolderRelevant(subfolderDir: string, cwd: string, touchedPaths: string[] | undefined): boolean {
+	if (touchedPaths === undefined) {
+		return true
+	}
+	const rel = toPosix(path.relative(cwd, subfolderDir))
+	if (!rel || rel === "." || rel.startsWith("../")) {
+		// The root (or anything outside it) is not a subfolder — never gated here.
+		return true
+	}
+	const prefix = rel.endsWith("/") ? rel : `${rel}/`
+	return touchedPaths.some((p) => toPosix(p).startsWith(prefix))
+}
+
+/**
  * Read all text files from a directory in alphabetical order
  */
-async function readTextFilesFromDirectory(dirPath: string): Promise<Array<{ filename: string; content: string }>> {
+async function readTextFilesFromDirectory(dirPath: string): Promise<RuleFile[]> {
 	try {
 		const entries = await fs.readdir(dirPath, {
 			withFileTypes: true,
@@ -147,9 +250,10 @@ async function readTextFilesFromDirectory(dirPath: string): Promise<Array<{ file
 						if (!shouldIncludeRuleFile(resolvedPath)) {
 							return null
 						}
-						const content = await safeReadFile(resolvedPath)
+						const raw = await safeReadFile(resolvedPath)
+						const { content, scopePaths } = parseRuleFrontmatter(raw)
 						// Use resolvedPath for display to maintain existing behavior
-						return { filename: resolvedPath, content, sortKey: originalPath }
+						return { filename: resolvedPath, content, scopePaths, sortKey: originalPath }
 					}
 					return null
 				} catch {
@@ -160,7 +264,7 @@ async function readTextFilesFromDirectory(dirPath: string): Promise<Array<{ file
 
 		// Filter out null values (directories, failed reads, or excluded files)
 		const filteredFiles = fileContents.filter(
-			(item): item is { filename: string; content: string; sortKey: string } => item !== null,
+			(item): item is NonNullable<(typeof fileContents)[number]> => item !== null,
 		)
 
 		// Sort files alphabetically by the original filename (case-insensitive) to ensure consistent order
@@ -171,7 +275,7 @@ async function readTextFilesFromDirectory(dirPath: string): Promise<Array<{ file
 				const filenameB = path.basename(b.sortKey).toLowerCase()
 				return filenameA.localeCompare(filenameB)
 			})
-			.map(({ filename, content }) => ({ filename, content }))
+			.map(({ filename, content, scopePaths }) => ({ filename, content, scopePaths }))
 	} catch {
 		return []
 	}
@@ -195,24 +299,58 @@ function formatDirectoryContent(files: Array<{ filename: string; content: string
 }
 
 /**
+ * Resolve the ordered list of .shofer directories to load a rules subfolder
+ * from: the base scopes (org, global, project) always participate; subfolder
+ * `.shofer/` directories participate only when `enableSubfolderRules` is on
+ * AND the task has touched a file under that subfolder (on-demand loading —
+ * see {@link isSubfolderRelevant}).
+ */
+async function getRelevantShoferDirectories(
+	cwd: string,
+	enableSubfolderRules: boolean,
+	touchedPaths: string[] | undefined,
+): Promise<string[]> {
+	const directories = [...getRooDirectoriesForCwd(cwd)]
+
+	if (enableSubfolderRules) {
+		const subfolderDirs = await discoverSubfolderRooDirectories(cwd)
+		directories.push(
+			...subfolderDirs.filter((shoferDir) => isSubfolderRelevant(path.dirname(shoferDir), cwd, touchedPaths)),
+		)
+	}
+
+	return directories
+}
+
+/**
  * Load rule files from global, project-local, and optionally subfolder directories
  * Rules are loaded in order: global first, then project-local, then subfolders (alphabetically)
  *
+ * Subfolder rules load ON DEMAND: a subfolder's rules are included only when
+ * the task has touched a file under that subfolder (no gating for callers
+ * that pass no `touchedPaths`). Individual rule files may additionally scope
+ * themselves with `paths:` frontmatter — see {@link ruleFileApplies}.
+ *
  * @param cwd - Current working directory (project root)
- * @param enableSubfolderRules - Whether to include rules from subdirectories (default: false)
+ * @param enableSubfolderRules - Whether to include rules from subdirectories (default: true)
+ * @param touchedPaths - Workspace-relative paths the task has touched, or
+ *                       undefined when the caller does not track file context
  */
-export async function loadRuleFiles(cwd: string, enableSubfolderRules: boolean = false): Promise<string> {
+export async function loadRuleFiles(
+	cwd: string,
+	enableSubfolderRules: boolean = true,
+	touchedPaths?: string[],
+): Promise<string> {
 	const rules: string[] = []
-	// Use recursive discovery only if enableSubfolderRules is true
-	const shoferDirectories = enableSubfolderRules
-		? await getAllRooDirectoriesForCwd(cwd)
-		: getRooDirectoriesForCwd(cwd)
+	const shoferDirectories = await getRelevantShoferDirectories(cwd, enableSubfolderRules, touchedPaths)
 
 	// Check for .shofer/rules/ directories in order (global, project-local, and optionally subfolders)
 	for (const shoferDir of shoferDirectories) {
 		const rulesDir = path.join(shoferDir, "rules")
 		if (await directoryExists(rulesDir)) {
-			const files = await readTextFilesFromDirectory(rulesDir)
+			const files = (await readTextFilesFromDirectory(rulesDir)).filter((file) =>
+				ruleFileApplies(file.scopePaths, touchedPaths),
+			)
 			if (files.length > 0) {
 				const content = formatDirectoryContent(files, cwd)
 				rules.push(content)
@@ -335,14 +473,25 @@ async function loadAgentRulesFileFromDirectory(
 }
 
 /**
- * Load all AGENTS.md files from project root and optionally subdirectories with .shofer folders
- * Returns combined content with clear path headers for each file
+ * Load AGENTS.md files from the project root and optionally subdirectories.
+ * Returns combined content with clear path headers for each file.
+ *
+ * Subdirectories are discovered by the presence of the rules file itself (no
+ * `.shofer/` marker needed), and load ON DEMAND: a subdirectory's AGENTS.md
+ * is included only when the task has touched a file under it. The root
+ * AGENTS.md always loads. Callers that pass no `touchedPaths` (no
+ * file-context tracking) get every discovered file.
  *
  * @param cwd - Current working directory (project root)
- * @param enableSubfolderRules - Whether to include AGENTS.md from subdirectories (default: false)
+ * @param enableSubfolderRules - Whether to include AGENTS.md from subdirectories (default: true)
+ * @param touchedPaths - Workspace-relative paths the task has touched
  * @returns Combined AGENTS.md content from all locations
  */
-async function loadAllAgentRulesFiles(cwd: string, enableSubfolderRules: boolean = false): Promise<string> {
+async function loadAllAgentRulesFiles(
+	cwd: string,
+	enableSubfolderRules: boolean = true,
+	touchedPaths?: string[],
+): Promise<string> {
 	const agentRules: string[] = []
 
 	// When subfolder rules are disabled, only load from root
@@ -354,10 +503,14 @@ async function loadAllAgentRulesFiles(cwd: string, enableSubfolderRules: boolean
 		return agentRules.join("\n\n")
 	}
 
-	// When enabled, load from root and all subdirectories with .shofer folders
+	// When enabled, load from root and every subdirectory carrying a rules
+	// file — gated on-demand by the task's touched paths.
 	const directories = await getAgentsDirectoriesForCwd(cwd)
 
 	for (const directory of directories) {
+		if (directory !== cwd && !isSubfolderRelevant(directory, cwd, touchedPaths)) {
+			continue
+		}
 		// Show path for all directories except the root
 		const showPath = directory !== cwd
 		const content = await loadAgentRulesFileFromDirectory(directory, showPath, cwd)
@@ -382,8 +535,13 @@ export async function addCustomInstructions(
 ): Promise<string> {
 	const sections = []
 
-	// Get the enableSubfolderRules setting (default: false)
-	const enableSubfolderRules = options.settings?.enableSubfolderRules ?? false
+	// Get the enableSubfolderRules setting (default: true)
+	const enableSubfolderRules = options.settings?.enableSubfolderRules ?? true
+
+	// Workspace-relative paths the task has touched so far. Undefined means the
+	// caller does not track file context (e.g. the prompt preview) — subfolder
+	// and `paths:`-scoped rules are then included without gating.
+	const touchedPaths = options.settings?.touchedPaths
 
 	// Per-agent `.slang` `context { ... }` overrides for custom-instruction
 	// sections. Default to enabled (true) when absent.
@@ -397,16 +555,15 @@ export async function addCustomInstructions(
 
 	if (includeModeRules !== false && mode) {
 		const modeRules: string[] = []
-		// Use recursive discovery only if enableSubfolderRules is true
-		const shoferDirectories = enableSubfolderRules
-			? await getAllRooDirectoriesForCwd(cwd)
-			: getRooDirectoriesForCwd(cwd)
+		const shoferDirectories = await getRelevantShoferDirectories(cwd, enableSubfolderRules, touchedPaths)
 
 		// Check for .shofer/rules-${mode}/ directories in order (global, project-local, and optionally subfolders)
 		for (const shoferDir of shoferDirectories) {
 			const modeRulesDir = path.join(shoferDir, `rules-${mode}`)
 			if (await directoryExists(modeRulesDir)) {
-				const files = await readTextFilesFromDirectory(modeRulesDir)
+				const files = (await readTextFilesFromDirectory(modeRulesDir)).filter((file) =>
+					ruleFileApplies(file.scopePaths, touchedPaths),
+				)
 				if (files.length > 0) {
 					const content = formatDirectoryContent(files, cwd)
 					modeRules.push(content)
@@ -469,9 +626,10 @@ export async function addCustomInstructions(
 	}
 
 	// Add AGENTS.md content if enabled (default: true)
-	// Load from root and optionally subdirectories with .shofer folders based on enableSubfolderRules setting
+	// Root always loads; subdirectory AGENTS.md files load on demand based on
+	// the task's touched paths (see loadAllAgentRulesFiles).
 	if (options.settings?.useAgentRules !== false) {
-		const agentRulesContent = await loadAllAgentRulesFiles(cwd, enableSubfolderRules)
+		const agentRulesContent = await loadAllAgentRulesFiles(cwd, enableSubfolderRules, touchedPaths)
 		if (agentRulesContent && agentRulesContent.trim()) {
 			rules.push(agentRulesContent.trim())
 		}
@@ -479,7 +637,7 @@ export async function addCustomInstructions(
 
 	// Add generic rules (gated by include_user_rules; default true)
 	if (includeUserRules !== false) {
-		const genericRuleContent = await loadRuleFiles(cwd, enableSubfolderRules)
+		const genericRuleContent = await loadRuleFiles(cwd, enableSubfolderRules, touchedPaths)
 		if (genericRuleContent && genericRuleContent.trim()) {
 			rules.push(genericRuleContent.trim())
 		}

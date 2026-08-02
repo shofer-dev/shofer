@@ -272,7 +272,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		cwd: "",
 		telemetrySetting: "unset",
 		showShoferIgnoredFiles: true, // Default to showing .shoferignore'd files with lock symbol (current behavior).
-		enableSubfolderRules: false, // Default to disabled - must be enabled to load rules from subdirectories
+		enableSubfolderRules: true, // Default to enabled - subdirectory rules load on demand (only when the task touches files under them)
 		renderContext: "sidebar",
 		maxReadFileLine: -1, // Default max line limit for read_file tool (-1 for default)
 		maxImageFileSize: 5, // Default max image file size in MB

@@ -239,6 +239,23 @@ export class FileContextTracker {
 	 * budget during folded context generation, the most relevant (recent) files
 	 * are prioritized.
 	 *
+	 * Unique workspace-relative paths of every file that has entered this
+	 * task's context — read, mentioned, or edited (any record source), active
+	 * or stale — sorted alphabetically. Used to scope on-demand rule loading
+	 * (subfolder AGENTS.md and `paths:`-scoped rules) to what the task has
+	 * actually touched; a stable sorted result keeps the system-prompt cache
+	 * key deterministic.
+	 */
+	async getTouchedFilePaths(): Promise<string[]> {
+		try {
+			const metadata = await this.getTaskMetadata(this.taskId)
+			return [...new Set(metadata.files_in_context.map((entry) => entry.path))].sort()
+		} catch {
+			return []
+		}
+	}
+
+	/**
 	 * @param sinceTimestamp - Optional timestamp to filter files read after this time
 	 * @returns Array of unique file paths that have been read, most recent first
 	 */

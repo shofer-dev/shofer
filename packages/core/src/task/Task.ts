@@ -6476,7 +6476,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// `context { ... }`; each absent key inherits the global default.
 		const ctx = this.agentContext
 		const effectiveUseAgentRules = ctx?.include_agents_md ?? useAgentRules ?? true
-		const effectiveEnableSubfolderRules = ctx?.include_subfolder_rules ?? enableSubfolderRules ?? false
+		const effectiveEnableSubfolderRules = ctx?.include_subfolder_rules ?? enableSubfolderRules ?? true
+
+		// Workspace-relative paths this task has touched (read/mentioned/edited).
+		// Subfolder AGENTS.md and `paths:`-scoped rules load on demand from this
+		// set, so it participates in the prompt cache key: touching a file in a
+		// new directory rebuilds the prompt and pulls that directory's rules in.
+		let touchedPaths: string[] = []
+		try {
+			touchedPaths = await this.fileContextTracker.getTouchedFilePaths()
+		} catch {
+			// Rule gating degrades to "nothing extra loaded"; never block the prompt.
+		}
 		const effectiveIncludeModeRules = ctx?.include_mode_rules ?? true
 		const effectiveIncludeUserRules = ctx?.include_user_rules ?? true
 		const effectiveIncludeSkills = ctx?.include_skills ?? true
@@ -6519,6 +6530,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this._mcpServerSetId ?? "",
 			// shoferIgnore instructions are derived from files; include as cache bust.
 			this.shoferIgnoreController?.getInstructions() ?? "",
+			// Touched paths gate on-demand rule loading; a newly-touched file must
+			// bust the cache so its directory's rules can enter the prompt.
+			touchedPaths.join(","),
 		].join("|")
 
 		let systemPrompt: string
@@ -6570,6 +6584,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// restricted workflow agent isn't told it can read/write/execute.
 					agentToolGroups: this.agentToolGroups,
 					enableSubfolderRules: effectiveEnableSubfolderRules,
+					touchedPaths,
 					newTaskRequireTodos: effectiveRequireTodos,
 					isStealthModel: modelInfo?.isStealthModel,
 					// Per-agent context overrides (workflow agents' `.slang` `context { ... }`).

@@ -7,8 +7,17 @@
 export interface SystemPromptSettings {
 	todoListEnabled: boolean
 	useAgentRules: boolean
-	/** When true, recursively discover and load .shofer/rules from subdirectories */
+	/** When true (default), recursively discover and load subdirectory rules (AGENTS.md and .shofer/rules), on demand */
 	enableSubfolderRules?: boolean
+	/**
+	 * Workspace-relative paths the task has touched so far (read, mentioned,
+	 * or edited — from FileContextTracker). Gates on-demand rule loading: a
+	 * subfolder's AGENTS.md/.shofer rules load only once a file under it is
+	 * touched, and a `paths:`-frontmatter rule loads only when a touched path
+	 * matches. Undefined ⇒ the caller has no file context (prompt preview) and
+	 * nothing is gated.
+	 */
+	touchedPaths?: string[]
 	newTaskRequireTodos: boolean
 	/** When true, model should hide vendor/company identity in responses */
 	isStealthModel?: boolean

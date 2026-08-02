@@ -617,7 +617,26 @@ excluded from prompt generation and rejected at execution time.
 ```
 
 Enable loading `AGENTS.md` files for agent-specific rules. See
-[agent-rules.org](https://agent-rules.org/). Defaults to `true`.
+[agent-rules.org](https://agent-rules.org/). Defaults to `true`. The root
+`AGENTS.md` always loads; subdirectory `AGENTS.md` files are additionally
+gated by [`enableSubfolderRules`](#enablesubfolderrules). Full semantics in
+[`shofer_special_files.md`](shofer_special_files.md).
+
+### `enableSubfolderRules`
+
+```jsonc
+{
+	"enableSubfolderRules": true,
+}
+```
+
+Discover and load subdirectory rules — `<subdir>/AGENTS.md` files (no
+`.shofer/` sibling required) and `<subdir>/.shofer/rules*` directories — **on
+demand**: a subdirectory's rules enter the system prompt only once the task
+has read, mentioned, or edited a file under that subdirectory. Defaults to
+`true`; set to `false` to load only workspace-root (and global) rules.
+Individual rule files can further scope themselves with `paths:` frontmatter —
+see [`shofer_special_files.md`](shofer_special_files.md).
 
 ---
 

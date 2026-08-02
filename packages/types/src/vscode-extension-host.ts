@@ -471,7 +471,7 @@ export type ExtensionState = Pick<
 	maxOpenTabsContext: number // Maximum number of VSCode open tabs to include in context (0-500)
 	maxWorkspaceFiles: number // Maximum number of files to include in current working directory details (0-500)
 	showShoferIgnoredFiles: boolean // Whether to show .shoferignore'd files in listings
-	enableSubfolderRules: boolean // Whether to load rules from subdirectories
+	enableSubfolderRules: boolean // Whether to load rules from subdirectories on demand (default: true)
 	useAgentRules: boolean // Whether to load AGENTS.md files for agent-specific rules
 	maxReadFileLine?: number // Maximum line limit for read_file tool (-1 for default)
 	maxImageFileSize: number // Maximum size of image files to process in MB

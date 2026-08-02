@@ -57,7 +57,7 @@ export const generateSystemPrompt = async (provider: ShoferProvider, message: We
 		{
 			todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
 			useAgentRules: useAgentRules ?? true,
-			enableSubfolderRules: enableSubfolderRules ?? false,
+			enableSubfolderRules: enableSubfolderRules ?? true,
 			newTaskRequireTodos: getHost().config.get<boolean>(Package.name, "newTaskRequireTodos", false),
 			isStealthModel: modelInfo?.isStealthModel,
 		},
