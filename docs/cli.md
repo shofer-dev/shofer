@@ -70,6 +70,21 @@ The extension bundle is output to [`src/dist/extension.js`](../src/dist/extensio
 
 ## Three Operating Modes
 
+> **How these relate to `ShoferApi`.** All three run the same extension bundle
+> and reach the agent through the same [`ShoferExtensionApi`](shofer-api.md#3-shoferextensionapi--the-host-only-surface)
+> (via `ExtensionHost`). What differs is **who drives the task**:
+>
+> | Mode                       | Who drives                                                            | The CLI is…                                         |
+> | -------------------------- | --------------------------------------------------------------------- | --------------------------------------------------- |
+> | Interactive TUI, `--print` | **the CLI itself** — it creates the task, runs it, renders the result | a self-driving agent runner; you consume its output |
+> | `--stdin-prompt-stream`    | **your program**, over NDJSON on stdio                                | a host; the command set is a `ShoferApi` binding    |
+>
+> So `--stdin-prompt-stream` belongs to the same family as `shofer serve`
+> (HTTP/SSE) and `shofer acp` (JSON-RPC): three transports over one contract,
+> catalogued in [`shofer-api.md` §2](shofer-api.md#2-transport-bindings). The
+> practical question is not "which API?" but "do I want to **run one task**, or
+> **drive many**?" — the first two modes answer the former, the third the latter.
+
 ### 1. Interactive TUI (default)
 
 Launches an Ink (React-for-terminals) interactive UI with auto-approval enabled
