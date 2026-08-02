@@ -51,7 +51,7 @@ export function parseStdinStreamCommand(line: string, lineNumber: number): Stdin
 
 	if (!VALID_STDIN_COMMANDS.has(commandRaw as StdinStreamCommandName)) {
 		throw new Error(
-			`stdin command line ${lineNumber}: unsupported command "${commandRaw}" (expected start|message|cancel|ping|shutdown)`,
+			`stdin command line ${lineNumber}: unsupported command "${commandRaw}" (expected start|message|cancel|ask|ping|shutdown)`,
 		)
 	}
 
@@ -62,6 +62,30 @@ export function parseStdinStreamCommand(line: string, lineNumber: number): Stdin
 	const command = commandRaw as StdinStreamCommandName
 	const requestId = requestIdRaw.trim()
 
+	// Optional on every addressed command: absent means "the stream's current
+	// task". The API call underneath is always task-addressed either way.
+	const readTaskId = (): string | undefined => {
+		const raw = parsed.taskId
+		if (raw === undefined) return undefined
+		if (typeof raw !== "string" || raw.trim().length === 0) {
+			throw new Error(`stdin command line ${lineNumber}: "${command}" taskId must be a non-empty string`)
+		}
+		const taskId = raw.trim()
+		if (!isValidSessionId(taskId)) {
+			throw new Error(`stdin command line ${lineNumber}: "${command}" taskId must be a valid UUID`)
+		}
+		return taskId
+	}
+
+	const readImages = (): string[] | undefined => {
+		const raw = parsed.images
+		if (raw === undefined) return undefined
+		if (!Array.isArray(raw) || !raw.every((image) => typeof image === "string")) {
+			throw new Error(`stdin command line ${lineNumber}: "${command}" images must be an array of strings`)
+		}
+		return raw
+	}
+
 	if (command === "start" || command === "message") {
 		const promptRaw = parsed.prompt
 
@@ -69,49 +93,17 @@ export function parseStdinStreamCommand(line: string, lineNumber: number): Stdin
 			throw new Error(`stdin command line ${lineNumber}: "${command}" requires non-empty string "prompt"`)
 		}
 
-		const imagesRaw = parsed.images
-		let images: string[] | undefined
+		const images = readImages()
+		const taskId = readTaskId()
 
-		if (imagesRaw !== undefined) {
-			if (!Array.isArray(imagesRaw) || !imagesRaw.every((image) => typeof image === "string")) {
-				throw new Error(`stdin command line ${lineNumber}: "${command}" images must be an array of strings`)
-			}
-
-			images = imagesRaw
-		}
-
-		if (command === "start") {
-			const taskIdRaw = parsed.taskId
-			let taskId: string | undefined
-
-			if (taskIdRaw !== undefined) {
-				if (typeof taskIdRaw !== "string" || taskIdRaw.trim().length === 0) {
-					throw new Error(`stdin command line ${lineNumber}: "start" taskId must be a non-empty string`)
-				}
-				taskId = taskIdRaw.trim()
-
-				if (!isValidSessionId(taskId)) {
-					throw new Error(`stdin command line ${lineNumber}: "start" taskId must be a valid UUID`)
-				}
-			}
-
-			if (isRecord(parsed.configuration)) {
-				return {
-					command,
-					requestId,
-					prompt: promptRaw,
-					...(taskId !== undefined ? { taskId } : {}),
-					...(images !== undefined ? { images } : {}),
-					configuration: parsed.configuration as ShoferCliStartCommand["configuration"],
-				}
-			}
-
+		if (command === "start" && isRecord(parsed.configuration)) {
 			return {
 				command,
 				requestId,
 				prompt: promptRaw,
 				...(taskId !== undefined ? { taskId } : {}),
 				...(images !== undefined ? { images } : {}),
+				configuration: parsed.configuration as ShoferCliStartCommand["configuration"],
 			}
 		}
 
@@ -119,8 +111,48 @@ export function parseStdinStreamCommand(line: string, lineNumber: number): Stdin
 			command,
 			requestId,
 			prompt: promptRaw,
+			...(taskId !== undefined ? { taskId } : {}),
 			...(images !== undefined ? { images } : {}),
 		}
+	}
+
+	if (command === "ask") {
+		const askResponseRaw = parsed.askResponse
+
+		if (typeof askResponseRaw !== "string" || askResponseRaw.trim().length === 0) {
+			throw new Error(`stdin command line ${lineNumber}: "ask" requires non-empty string "askResponse"`)
+		}
+
+		const readOptionalString = (key: "text" | "askId" | "mode"): string | undefined => {
+			const raw = parsed[key]
+			if (raw === undefined) return undefined
+			if (typeof raw !== "string") {
+				throw new Error(`stdin command line ${lineNumber}: "ask" ${key} must be a string`)
+			}
+			return raw
+		}
+
+		const images = readImages()
+		const taskId = readTaskId()
+		const text = readOptionalString("text")
+		const askId = readOptionalString("askId")
+		const mode = readOptionalString("mode")
+
+		return {
+			command,
+			requestId,
+			askResponse: askResponseRaw.trim(),
+			...(text !== undefined ? { text } : {}),
+			...(images !== undefined ? { images } : {}),
+			...(askId !== undefined ? { askId } : {}),
+			...(mode !== undefined ? { mode } : {}),
+			...(taskId !== undefined ? { taskId } : {}),
+		}
+	}
+
+	if (command === "cancel") {
+		const taskId = readTaskId()
+		return { command, requestId, ...(taskId !== undefined ? { taskId } : {}) }
 	}
 
 	return { command, requestId }
@@ -753,10 +785,9 @@ export async function runStdinStreamMode({ host, jsonEmitter, setStreamRequestId
 						success: true,
 					})
 
-					// Route through host.sendMessage() which delegates to the
-					// ShoferExtensionApi.sendMessage() — handles headless fallback and
-					// ask-response routing automatically.
-					host.sendMessage(stdinCommand.prompt, stdinCommand.images)
+					// `ShoferApi.sendMessage(taskId, message, images?)`. The command's
+					// own `taskId` wins; absent it, the stream's current task.
+					host.sendMessage(stdinCommand.prompt, stdinCommand.images, stdinCommand.taskId ?? latestTaskId)
 
 					if (host.isWaitingForInput()) {
 						setStreamRequestId(stdinCommand.requestId)
@@ -821,7 +852,8 @@ export async function runStdinStreamMode({ host, jsonEmitter, setStreamRequestId
 					})
 
 					try {
-						host.cancelTask()
+						// `ShoferApi.cancelTask(taskId)`.
+						host.cancelTask(stdinCommand.taskId ?? latestTaskId)
 
 						jsonEmitter.emitControl({
 							subtype: "done",
@@ -871,6 +903,61 @@ export async function runStdinStreamMode({ host, jsonEmitter, setStreamRequestId
 							})
 						}
 					}
+					break
+				}
+
+				case "ask": {
+					// `ShoferApi.respondToAsk(taskId, response)` — the reason this
+					// binding exists at all: without it a driving process cannot
+					// approve anything (the local AskDispatcher either auto-approves
+					// or prompts a human on readline, and a program can do neither).
+					const target = stdinCommand.taskId ?? latestTaskId
+
+					if (!target) {
+						jsonEmitter.emitControl({
+							subtype: "error",
+							requestId: stdinCommand.requestId,
+							command: "ask",
+							taskId: undefined,
+							content: "no active task; send a start command first",
+							code: "no_active_task",
+							success: false,
+						})
+
+						break
+					}
+
+					jsonEmitter.emitControl({
+						subtype: "ack",
+						requestId: stdinCommand.requestId,
+						command: "ask",
+						taskId: target,
+						content: "ask response accepted",
+						code: "accepted",
+						success: true,
+					})
+
+					await host.respondToAsk(
+						{
+							askResponse: stdinCommand.askResponse,
+							text: stdinCommand.text,
+							images: stdinCommand.images,
+							askId: stdinCommand.askId,
+							mode: stdinCommand.mode,
+						},
+						target,
+					)
+
+					jsonEmitter.emitControl({
+						subtype: "done",
+						requestId: stdinCommand.requestId,
+						command: "ask",
+						taskId: target,
+						content: "ask answered",
+						code: "accepted",
+						success: true,
+					})
+
 					break
 				}
 

@@ -225,7 +225,28 @@ shofer auth logout       # Clear credentials
 
 # Self-upgrade
 shofer upgrade           # Update to latest version
+
+# Plugins (see ../PLUGINS.md)
+shofer plugin install <source>
+shofer plugin list
+shofer plugin pack <dir> [out]
+shofer plugin remove <name>
 ```
+
+### Serving the agent instead of running it
+
+The three modes above **run** a task in this process. Two further subcommands
+turn the binary into a server that something else drives over
+[`ShoferApi`](shofer-api.md), and both are documented there rather than here:
+
+| Command        | What it is                                                                 | Reference                                                       |
+| -------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `shofer serve` | The HTTP/SSE binding — task control + an event stream, bearer-token authed | [`shofer-api.md` §2](shofer-api.md#2-transport-bindings)        |
+| `shofer acp`   | The Agent Client Protocol binding over stdio, for ACP editors              | [`shofer-api.md` §4](shofer-api.md#4-acp--the-external-adapter) |
+
+`--stdin-prompt-stream` (above) is the third such binding — the same control
+plane over newline-delimited JSON on stdio — and its command set is a projection
+of `ShoferApi` too.
 
 ## Environment Variables
 

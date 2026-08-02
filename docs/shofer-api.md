@@ -6,7 +6,7 @@ this doc is ordered the same way:
 | Layer                                                                         | What it is                                                                                  | Who binds it                               |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | **`ShoferApi`** ([§1](#1-shoferapi--the-root-contract))                       | The task-addressed control plane: create, message, cancel, answer asks, snapshot, subscribe | every transport                            |
-| **Transport bindings** ([§2](#2-transport-bindings--httpsse))                 | The HTTP/SSE projection of that contract, and `shofer serve`                                | a remote client (`ShoferHttpClient`)       |
+| **Transport bindings** ([§2](#2-transport-bindings))                          | The HTTP/SSE projection of that contract, and `shofer serve`                                | a remote client (`ShoferHttpClient`)       |
 | **`ShoferExtensionApi`** ([§3](#3-shoferextensionapi--the-host-only-surface)) | `ShoferApi` **plus** the host-only administration surface                                   | companion VS Code extensions, the CLI, IPC |
 | **ACP** ([§4](#4-acp--the-external-adapter))                                  | A lossy adapter onto an **external** standard                                               | ACP editors (Zed, …)                       |
 
@@ -185,7 +185,9 @@ behavior, not plugin UI, unless it implements its own plugin-UI host.
 
 ---
 
-## 2. Transport bindings — HTTP/SSE
+## 2. Transport bindings
+
+### HTTP/SSE
 
 Shofer's **native, full-fidelity** transport (`transport/http-server.ts`). All
 routes under `/api/v1` except `/health`; bearer-token auth + version handshake.
@@ -313,6 +315,38 @@ Everything dashed above is _proposed_. What exists today is the `--token` worker
 bearer, which this layers on top of and does not replace.
 
 Full model + rationale: `docs/authnz_arch.md` §11.2.
+
+### stdio NDJSON (`--stdin-prompt-stream`)
+
+The second binding of the same contract: newline-delimited JSON on stdin/stdout,
+for a **program** driving one CLI process (`shofer --print --output-format
+stream-json --stdin-prompt-stream`). The command set is a projection of
+`ShoferApi` (schemas in [`packages/types/src/cli.ts`](../packages/types/src/cli.ts)):
+
+| command    | `ShoferApi`                                       |
+| ---------- | ------------------------------------------------- |
+| `start`    | `createTask({ prompt, mode?, taskId?, images? })` |
+| `message`  | `sendMessage(taskId, prompt, images?)`            |
+| `cancel`   | `cancelTask(taskId)`                              |
+| `ask`      | `respondToAsk(taskId, response)`                  |
+| `ping`     | — process liveness, not the agent                 |
+| `shutdown` | — process lifecycle, not the agent                |
+
+`taskId` is optional on the addressed commands and defaults to the stream's
+current task: a driver may track ids or not, but the call underneath is always
+task-addressed — never current-task-centric, which raced concurrent tasks and
+dropped messages.
+
+**`ask` is why this is a binding and not a side channel.** Without it a driving
+process cannot approve anything: the local `AskDispatcher` either auto-approves
+(non-interactive) or prompts a human on readline, and a program can do neither.
+
+**The output side is deliberately not `ServerEvent`.** `stream-json` emits a
+flattened, self-describing projection for scripting consumers (`assistant`,
+`tool_use`, `tool_result`, `thinking`, `result` — see
+[`cli.md`](cli.md)) rather than the raw forwarded stream. That asymmetry is a
+choice: the same trade ACP makes onto its typed `session/update` variants, for
+the same reason — the consumer wants a shape it can switch on, not fidelity.
 
 ---
 

@@ -219,6 +219,83 @@ describe("parseStdinStreamCommand", () => {
 	})
 })
 
+describe("the ShoferApi projection", () => {
+	const uuid = "018f7fc8-1234-7abc-8def-0123456789ab"
+	const parse = (o: Record<string, unknown>) => parseStdinStreamCommand(JSON.stringify(o), 1)
+
+	it("carries an explicit taskId on message — sendMessage(taskId, …)", () => {
+		expect(parse({ command: "message", requestId: "r", prompt: "go", taskId: uuid })).toMatchObject({
+			command: "message",
+			prompt: "go",
+			taskId: uuid,
+		})
+	})
+
+	it("carries an explicit taskId on cancel — cancelTask(taskId)", () => {
+		expect(parse({ command: "cancel", requestId: "r", taskId: uuid })).toMatchObject({
+			command: "cancel",
+			taskId: uuid,
+		})
+	})
+
+	it("omits taskId when absent, so the stream's current task is addressed", () => {
+		expect(parse({ command: "cancel", requestId: "r" })).toEqual({ command: "cancel", requestId: "r" })
+	})
+
+	it.each(["message", "cancel"])("rejects a non-UUID taskId on %s", (command) => {
+		const payload: Record<string, unknown> = { command, requestId: "r", taskId: "not-a-uuid" }
+		if (command === "message") payload.prompt = "go"
+		expect(() => parse(payload)).toThrow(/taskId must be a valid UUID/)
+	})
+
+	// The reason this binding exists: without `ask`, a driving process could not
+	// approve anything — the local AskDispatcher either auto-approves or prompts
+	// a human on readline, and a program can do neither.
+	it("parses an ask command — respondToAsk(taskId, response)", () => {
+		expect(
+			parse({
+				command: "ask",
+				requestId: "r",
+				askResponse: "yesButtonClicked",
+				askId: "ask-1",
+				text: "go ahead",
+				mode: "code",
+				taskId: uuid,
+			}),
+		).toEqual({
+			command: "ask",
+			requestId: "r",
+			askResponse: "yesButtonClicked",
+			askId: "ask-1",
+			text: "go ahead",
+			mode: "code",
+			taskId: uuid,
+		})
+	})
+
+	it("parses a minimal ask command", () => {
+		expect(parse({ command: "ask", requestId: "r", askResponse: "noButtonClicked" })).toEqual({
+			command: "ask",
+			requestId: "r",
+			askResponse: "noButtonClicked",
+		})
+	})
+
+	it("rejects an ask with no askResponse", () => {
+		expect(() => parse({ command: "ask", requestId: "r" })).toThrow(/requires non-empty string "askResponse"/)
+	})
+
+	it("rejects a non-string ask field", () => {
+		expect(() => parse({ command: "ask", requestId: "r", askResponse: "yesButtonClicked", text: 7 })).toThrow(
+			/text must be a string/,
+		)
+	})
+
+	it("names ask in the unsupported-command error", () => {
+		expect(() => parse({ command: "nope", requestId: "r" })).toThrow(/start\|message\|cancel\|ask\|ping\|shutdown/)
+	})
+})
+
 describe("shouldSendMessageAsAskResponse", () => {
 	it("routes completion_result asks as ask responses", () => {
 		expect(shouldSendMessageAsAskResponse(true, "completion_result")).toBe(true)

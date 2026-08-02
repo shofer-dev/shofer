@@ -3,10 +3,32 @@ import { z } from "zod"
 import { shoferSettingsSchema } from "./global-settings.js"
 
 /**
- * Shofer CLI stdin commands
+ * Shofer CLI stdin commands — a **transport binding of `ShoferApi`** over
+ * newline-delimited JSON on stdio, alongside the HTTP/SSE and ACP bindings.
+ *
+ * The control commands are a 1:1 projection of the interface:
+ *
+ * | command    | `ShoferApi`                              |
+ * | ---------- | ---------------------------------------- |
+ * | `start`    | `createTask({ prompt, mode?, taskId? })` |
+ * | `message`  | `sendMessage(taskId, prompt, images?)`   |
+ * | `cancel`   | `cancelTask(taskId)`                     |
+ * | `ask`      | `respondToAsk(taskId, response)`         |
+ * | `ping`     | — process liveness, not the agent        |
+ * | `shutdown` | — process lifecycle, not the agent       |
+ *
+ * `taskId` is optional on the addressed commands and defaults to the stream's
+ * current task: the driver may track ids or not, but the API call underneath is
+ * always task-addressed, never current-task-centric (which raced concurrent
+ * tasks and dropped messages).
+ *
+ * The **output** side is deliberately NOT `ServerEvent`: `stream-json` is a
+ * flattened, self-describing projection for scripting consumers (`assistant`,
+ * `tool_use`, `tool_result`, …), the same way ACP maps onto its own typed
+ * updates. That asymmetry is a choice, not an oversight.
  */
 
-export const shoferCliCommandNames = ["start", "message", "cancel", "ping", "shutdown"] as const
+export const shoferCliCommandNames = ["start", "message", "cancel", "ask", "ping", "shutdown"] as const
 
 export const shoferCliCommandNameSchema = z.enum(shoferCliCommandNames)
 
@@ -38,15 +60,43 @@ export const shoferCliMessageCommandSchema = shoferCliCommandBaseSchema.extend({
 	command: z.literal("message"),
 	prompt: z.string(),
 	images: z.array(z.string()).optional(),
+	/** Defaults to the stream's current task. */
+	taskId: shoferCliSessionIdSchema.optional(),
 })
 
 export type ShoferCliMessageCommand = z.infer<typeof shoferCliMessageCommandSchema>
 
 export const shoferCliCancelCommandSchema = shoferCliCommandBaseSchema.extend({
 	command: z.literal("cancel"),
+	/** Defaults to the stream's current task. */
+	taskId: shoferCliSessionIdSchema.optional(),
 })
 
 export type ShoferCliCancelCommand = z.infer<typeof shoferCliCancelCommandSchema>
+
+/**
+ * Answer a task's outstanding `ask` — `ShoferApi.respondToAsk`.
+ *
+ * Without this a driving process could not approve anything: the local
+ * `AskDispatcher` either auto-approves (non-interactive) or prompts a human on
+ * readline, neither of which a program driving the stream can do.
+ */
+export const shoferCliAskCommandSchema = shoferCliCommandBaseSchema.extend({
+	command: z.literal("ask"),
+	/** The ask-response verb, e.g. `yesButtonClicked` / `noButtonClicked` / `messageResponse`. */
+	askResponse: z.string().min(1),
+	/** Free text accompanying the answer (the reply to a `followup`, say). */
+	text: z.string().optional(),
+	images: z.array(z.string()).optional(),
+	/** Routes the answer to a specific outstanding ask. */
+	askId: z.string().optional(),
+	/** Switch the task to this mode slug as part of the answer. */
+	mode: z.string().optional(),
+	/** Defaults to the stream's current task. */
+	taskId: shoferCliSessionIdSchema.optional(),
+})
+
+export type ShoferCliAskCommand = z.infer<typeof shoferCliAskCommandSchema>
 
 export const shoferCliPingCommandSchema = shoferCliCommandBaseSchema.extend({
 	command: z.literal("ping"),
@@ -64,6 +114,7 @@ export const shoferCliInputCommandSchema = z.discriminatedUnion("command", [
 	shoferCliStartCommandSchema,
 	shoferCliMessageCommandSchema,
 	shoferCliCancelCommandSchema,
+	shoferCliAskCommandSchema,
 	shoferCliPingCommandSchema,
 	shoferCliShutdownCommandSchema,
 ])

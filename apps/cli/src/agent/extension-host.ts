@@ -817,26 +817,26 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		return this.waitForTaskCompletion()
 	}
 
-	public async cancelTask(): Promise<void> {
-		const taskId = this.api.getCurrentTaskStack().at(-1)
-		if (!taskId) {
+	public async cancelTask(taskId?: string): Promise<void> {
+		const target = taskId ?? this.api.getCurrentTaskStack().at(-1)
+		if (!target) {
 			cliLogger.debug("cancelTask() dropped: no current task")
 			return
 		}
 		cliLogger.debug("cancelTask() calling api.cancelTask...")
-		await this.api.cancelTask(taskId)
+		await this.api.cancelTask(target)
 	}
 
-	public async sendMessage(text?: string, images?: string[]): Promise<void> {
-		// The CLI's own surface is current-task-shaped; ShoferExtensionApi is task-addressed,
-		// so resolve the current task here.
-		const taskId = this.api.getCurrentTaskStack().at(-1)
-		if (!taskId) {
+	public async sendMessage(text?: string, images?: string[], taskId?: string): Promise<void> {
+		// `taskId` defaults to the current task for callers that track no ids (the
+		// TUI); the API call underneath is always task-addressed.
+		const target = taskId ?? this.api.getCurrentTaskStack().at(-1)
+		if (!target) {
 			cliLogger.debug("sendMessage() dropped: no current task")
 			return
 		}
 		cliLogger.debug("sendMessage() calling api.sendMessage...")
-		await this.api.sendMessage(taskId, text ?? "", images)
+		await this.api.sendMessage(target, text ?? "", images)
 	}
 
 	/**
@@ -851,6 +851,24 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 
 	public async rejectAction(): Promise<void> {
 		await this.answerAsk("noButtonClicked")
+	}
+
+	/**
+	 * Answer a task's outstanding ask — `ShoferApi.respondToAsk`. `taskId`
+	 * defaults to the current task so a caller that tracks no ids (the TUI, a
+	 * stdin driver addressing its only task) still reaches the right one; the
+	 * API call underneath is always task-addressed.
+	 */
+	public async respondToAsk(
+		response: { askResponse: string; text?: string; images?: string[]; askId?: string; mode?: string },
+		taskId?: string,
+	): Promise<void> {
+		const target = taskId ?? this.api.getCurrentTaskStack().at(-1)
+		if (!target) {
+			cliLogger.debug(`respondToAsk(${response.askResponse}) dropped: no current task`)
+			return
+		}
+		await this.api.respondToAsk(target, response)
 	}
 
 	private async answerAsk(askResponse: "yesButtonClicked" | "noButtonClicked"): Promise<void> {
