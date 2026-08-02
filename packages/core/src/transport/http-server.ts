@@ -198,7 +198,7 @@ export function createRequestHandler(
 			if (action === "message") {
 				const body = await readJson(req)
 				if (typeof body.message !== "string") return send(res, 400, { error: "message is required" })
-				await api.sendMessage(taskId, body.message)
+				await api.sendMessage(taskId, body.message, body.images as string[] | undefined)
 				return send(res, 202, { taskId, accepted: true })
 			}
 			if (action === "ask") {

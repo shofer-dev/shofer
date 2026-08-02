@@ -800,9 +800,9 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		configuration?: ShoferSettings,
 		images?: string[],
 	): Promise<void> {
-		cliLogger.debug("runTask() calling api.startNewTask...")
-		await this.api.startNewTask({ configuration, text: prompt, images, taskId })
-		cliLogger.debug("startNewTask done, waiting for completion...")
+		cliLogger.debug("runTask() calling api.createTask...")
+		await this.api.createTask({ configuration, prompt, images, taskId })
+		cliLogger.debug("createTask done, waiting for completion...")
 		return this.waitForTaskCompletion()
 	}
 
@@ -818,23 +818,49 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	}
 
 	public async cancelTask(): Promise<void> {
-		cliLogger.debug("cancelTask() calling api.cancelCurrentTask...")
-		await this.api.cancelCurrentTask()
+		const taskId = this.api.getCurrentTaskStack().at(-1)
+		if (!taskId) {
+			cliLogger.debug("cancelTask() dropped: no current task")
+			return
+		}
+		cliLogger.debug("cancelTask() calling api.cancelTask...")
+		await this.api.cancelTask(taskId)
 	}
 
 	public async sendMessage(text?: string, images?: string[]): Promise<void> {
+		// The CLI's own surface is current-task-shaped; ShoferAPI is task-addressed,
+		// so resolve the current task here.
+		const taskId = this.api.getCurrentTaskStack().at(-1)
+		if (!taskId) {
+			cliLogger.debug("sendMessage() dropped: no current task")
+			return
+		}
 		cliLogger.debug("sendMessage() calling api.sendMessage...")
-		await this.api.sendMessage(text, images)
+		await this.api.sendMessage(taskId, text ?? "", images)
 	}
 
+	/**
+	 * Approve / reject the addressed task's outstanding ask. The old
+	 * `pressPrimaryButton`/`pressSecondaryButton` pair simulated a webview click on
+	 * whatever task happened to be current; answering the ask directly is the same
+	 * action without the current-task guess.
+	 */
 	public async approveAction(): Promise<void> {
-		cliLogger.debug("approveAction() calling api.pressPrimaryButton...")
-		await this.api.pressPrimaryButton()
+		await this.answerAsk("yesButtonClicked")
 	}
 
 	public async rejectAction(): Promise<void> {
-		cliLogger.debug("rejectAction() calling api.pressSecondaryButton...")
-		await this.api.pressSecondaryButton()
+		await this.answerAsk("noButtonClicked")
+	}
+
+	private async answerAsk(askResponse: "yesButtonClicked" | "noButtonClicked"): Promise<void> {
+		const taskId = this.api.getCurrentTaskStack().at(-1)
+		if (!taskId) {
+			cliLogger.debug(`${askResponse} dropped: no current task`)
+			return
+		}
+		cliLogger.debug(`answerAsk() calling api.respondToAsk(${askResponse})...`)
+		await this.api.respondToAsk(taskId, { askResponse })
 	}
 
 	// ==========================================================================

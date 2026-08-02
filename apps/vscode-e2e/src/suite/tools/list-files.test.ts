@@ -5,7 +5,7 @@ import * as vscode from "vscode"
 
 import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
-import { waitFor, sleep } from "../utils"
+import { waitFor, sleep, cancelCurrentTask } from "../utils"
 import { setDefaultSuiteTimeout } from "../test-utils"
 
 suite.skip("Shofer list_files Tool", function () {
@@ -130,7 +130,7 @@ This directory contains various files and subdirectories for testing the list_fi
 	suiteTeardown(async () => {
 		// Cancel any running tasks before cleanup
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -151,7 +151,7 @@ This directory contains various files and subdirectories for testing the list_fi
 	setup(async () => {
 		// Cancel any previous task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -164,7 +164,7 @@ This directory contains various files and subdirectories for testing the list_fi
 	teardown(async () => {
 		// Cancel the current task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -221,15 +221,15 @@ This directory contains various files and subdirectories for testing the list_fi
 		try {
 			// Start task to list files in test directory
 			const testDirName = path.basename(path.dirname(testFiles.rootFile1))
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `I have created a test directory structure in the workspace. Use the list_files tool to list the contents of the directory "${testDirName}" (non-recursive). The directory contains files like root-file-1.txt, root-file-2.js, config.yaml, README.md, and a nested subdirectory. The directory exists in the workspace.`,
-			})
+				prompt: `I have created a test directory structure in the workspace. Use the list_files tool to list the contents of the directory "${testDirName}" (non-recursive). The directory contains files like root-file-1.txt, root-file-2.js, config.yaml, README.md, and a nested subdirectory. The directory exists in the workspace.`,
+			}))
 
 			console.log("Task ID:", taskId)
 
@@ -324,15 +324,15 @@ This directory contains various files and subdirectories for testing the list_fi
 		try {
 			// Start task to list files recursively in test directory
 			const testDirName = path.basename(path.dirname(testFiles.rootFile1))
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `I have created a test directory structure in the workspace. Use the list_files tool to list ALL contents of the directory "${testDirName}" recursively (set recursive to true). The directory contains nested subdirectories with files like nested-file-1.md, nested-file-2.json, and deep-nested-file.ts. The directory exists in the workspace.`,
-			})
+				prompt: `I have created a test directory structure in the workspace. Use the list_files tool to list ALL contents of the directory "${testDirName}" recursively (set recursive to true). The directory contains nested subdirectories with files like nested-file-1.md, nested-file-2.json, and deep-nested-file.ts. The directory exists in the workspace.`,
+			}))
 
 			console.log("Task ID:", taskId)
 
@@ -459,15 +459,15 @@ This directory contains various files and subdirectories for testing the list_fi
 			}
 
 			// Start task to list files in symlink test directory
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `I have created a test directory with symlinks at "${testDirName}". Use the list_files tool to list the contents of this directory. It should show both the original files/directories and the symlinked ones. The directory contains symlinks to both a file and a directory.`,
-			})
+				prompt: `I have created a test directory with symlinks at "${testDirName}". Use the list_files tool to list the contents of this directory. It should show both the original files/directories and the symlinked ones. The directory contains symlinks to both a file and a directory.`,
+			}))
 
 			console.log("Symlink test Task ID:", taskId)
 
@@ -536,15 +536,15 @@ This directory contains various files and subdirectories for testing the list_fi
 		let taskId: string
 		try {
 			// Start task to list files in workspace root
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Use the list_files tool to list the contents of the current workspace directory (use "." as the path). This should show the top-level files and directories in the workspace.`,
-			})
+				prompt: `Use the list_files tool to list the contents of the current workspace directory (use "." as the path). This should show the top-level files and directories in the workspace.`,
+			}))
 
 			console.log("Task ID:", taskId)
 

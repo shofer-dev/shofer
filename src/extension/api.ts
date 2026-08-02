@@ -10,9 +10,12 @@ import {
 	type ShoferAPI,
 	type ShoferSettings,
 	type ShoferEvents,
+	type ExtensionCreateTaskInput,
 	type ProviderSettings,
 	type ProviderSettingsEntry,
+	type ServerEvent,
 	type TaskEvent,
+	type TaskSnapshot,
 	type CreateTaskOptions,
 	type HistoryItem,
 	type ShoferMessage,
@@ -23,6 +26,7 @@ import {
 	IpcOrigin,
 	IpcMessageType,
 } from "@shofer/types"
+import { FORWARDED_EVENTS, findOutstandingAsk } from "@shofer/core"
 import { IpcServer } from "@shofer/ipc"
 
 import { Package } from "@shofer/core"
@@ -91,12 +95,15 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 						this.log(
 							`[API] StartNewTask -> ${command.data.text}, ${JSON.stringify(command.data.configuration)}`,
 						)
-						await this.startNewTask(command.data)
+						await this.createTask({ ...command.data, prompt: command.data.text ?? "" })
 						break
-					case TaskCommandName.CancelTask:
+					case TaskCommandName.CancelTask: {
 						this.log(`[API] CancelTask`)
-						await this.cancelCurrentTask()
+						// The IPC command carries no task id — it means the current task.
+						const target = this.currentTaskId()
+						if (target) await this.cancelTask(target)
 						break
+					}
 					case TaskCommandName.CloseTask:
 						this.log(`[API] CloseTask`)
 						await vscode.commands.executeCommand("workbench.action.files.saveFiles")
@@ -113,10 +120,19 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 							// The error is logged for debugging purposes.
 						}
 						break
-					case TaskCommandName.SendMessage:
+					case TaskCommandName.SendMessage: {
 						this.log(`[API] SendMessage -> ${command.data.text}`)
-						await this.sendMessage(command.data.text, command.data.images)
+						// The IPC command carries no task id, so it addresses the
+						// current task — resolved here rather than in the API method,
+						// which is task-addressed by contract.
+						const target = this.currentTaskId()
+						if (target) {
+							await this.sendMessage(target, command.data.text ?? "", command.data.images)
+						} else {
+							this.log("[API] SendMessage dropped: no current task")
+						}
 						break
+					}
 					case TaskCommandName.GetCommands:
 						try {
 							const commands = await getCommands(this.sidebarProvider.cwd)
@@ -292,22 +308,20 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		return super.emit(eventName, ...args)
 	}
 
-	public async startNewTask({
+	public async createTask({
 		configuration,
-		text,
+		prompt,
 		images,
 		newTab,
 		taskId,
-		initialMode,
-	}: {
-		configuration?: ShoferSettings
-		text?: string
-		images?: string[]
-		newTab?: boolean
-		taskId?: string
-		initialMode?: string
-	}) {
-		const taskConfiguration = configuration ?? {}
+		mode: initialMode,
+		apiConfiguration,
+	}: ExtensionCreateTaskInput): Promise<{ taskId: string }> {
+		const text = prompt
+		// `configuration` is the host-only full-settings seed; `apiConfiguration` is
+		// the base contract's provider slice. Both land in the same per-task seed,
+		// with the explicit full settings winning where they overlap.
+		const taskConfiguration = { ...(apiConfiguration ?? {}), ...(configuration ?? {}) } as ShoferSettings
 		let provider: ShoferProvider
 
 		if (newTab) {
@@ -347,7 +361,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 			throw new Error("Failed to create task due to policy restrictions")
 		}
 
-		return task.taskId
+		return { taskId: task.taskId }
 	}
 
 	public async resumeTask(taskId: string): Promise<void> {
@@ -400,50 +414,48 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		await this.sidebarProvider.postInitState()
 	}
 
-	public async cancelCurrentTask() {
+	public async cancelTask(taskId: string) {
+		// The provider cancels the task it currently holds, so addressing a task
+		// that is not the current one is a no-op rather than a silent cancel of
+		// somebody else's work.
+		const current = this.sidebarProvider.getCurrentTask()
+		if (current && current.taskId !== taskId) {
+			this.log(`[API#cancelTask] ${taskId} is not the current task; ignoring`)
+			return
+		}
 		await this.sidebarProvider.cancelTask()
 	}
 
-	public async sendMessage(text?: string, images?: string[], taskId?: string) {
-		// Task-addressed delivery (the AgentApi transport path): resolve the managed
-		// instance and hand the message straight to its ask/message channel. This
-		// MUST NOT route through the webview: in the CLI host the mock webview
-		// reports viewLaunched=true, and an `invoke: sendMessage` posted to it is
-		// dropped (serve mode has no consumer for invokes), silently losing every
-		// follow-up message. Direct delivery also removes the current-task race —
-		// concurrent tasks on one executor no longer steal each other's messages.
-		if (taskId) {
-			// managedTasks only holds BACKGROUNDED instances (registerBackgroundTask);
-			// the foreground task lives on the stack, so fall back to the current
-			// task when — and only when — its id matches the addressed one.
-			const current = this.sidebarProvider.getCurrentTask()
-			const task =
-				this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ??
-				(current?.taskId === taskId ? current : undefined)
-			if (!task || task.abandoned || task.abort) {
-				this.log(`[API#sendMessage] no live task instance for ${taskId}; message dropped`)
-				return
-			}
-			await task.submitUserMessage(text ?? "", images)
+	public async sendMessage(taskId: string, message: string, images?: string[]) {
+		// Resolve the managed instance and hand the message straight to its
+		// ask/message channel. This MUST NOT route through the webview: in the CLI
+		// host the mock webview reports viewLaunched=true, and an
+		// `invoke: sendMessage` posted to it is dropped (serve mode has no consumer
+		// for invokes), silently losing every follow-up message. Addressing the task
+		// also removes the current-task race — concurrent tasks on one host no
+		// longer steal each other's messages.
+		//
+		// managedTasks only holds BACKGROUNDED instances (registerBackgroundTask);
+		// the foreground task lives on the stack, so fall back to the current task
+		// when — and only when — its id matches the addressed one.
+		const current = this.sidebarProvider.getCurrentTask()
+		const task =
+			this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ??
+			(current?.taskId === taskId ? current : undefined)
+		if (!task || task.abandoned || task.abort) {
+			this.log(`[API#sendMessage] no live task instance for ${taskId}; message dropped`)
 			return
 		}
+		await task.submitUserMessage(message, images)
+	}
 
-		const currentTask = this.sidebarProvider.getCurrentTask()
-
-		// In headless/sandbox flows the webview may not be launched, so routing
-		// through invoke=sendMessage drops the message. Deliver directly to the
-		// task ask-response channel instead.
-		if (!this.sidebarProvider.viewLaunched) {
-			if (!currentTask) {
-				this.log("[API#sendMessage] no current task in headless mode; message dropped")
-				return
-			}
-
-			await currentTask.submitUserMessage(text ?? "", images)
-			return
-		}
-
-		await this.sidebarProvider.postMessageToWebview({ type: "invoke", invoke: "sendMessage", text, images })
+	/**
+	 * The task a "current task" caller means — the top of the provider's task
+	 * stack. The API surface itself is task-addressed; this exists only for the
+	 * legacy entry points (the IPC command shape) that carry no task id.
+	 */
+	private currentTaskId(): string | undefined {
+		return this.sidebarProvider.getCurrentTaskStack().at(-1)
 	}
 
 	public async respondToAsk(
@@ -491,6 +503,50 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 	 *
 	 * Returns `undefined` only when this host has no record of the task at all.
 	 */
+	/**
+	 * Assemble a task's snapshot from this host's own records: the conversation and
+	 * counters from {@link getTaskConversation}, the title/lifecycle from the
+	 * task-history entry, and the outstanding ask derived from the transcript tail.
+	 *
+	 * Deriving the ask from the transcript rather than reading it off a live task is
+	 * deliberate: the same rule then holds for a running task and for one rehydrated
+	 * from disk, and a client needs no second call to learn the task is blocked.
+	 */
+	public async getTaskSnapshot(taskId: string): Promise<TaskSnapshot | undefined> {
+		const conversation = await this.getTaskConversation(taskId)
+		if (!conversation) return undefined
+
+		const item = this.getTaskHistoryItems().find((entry) => entry.id === taskId)
+		return {
+			taskId,
+			summary: item?.task,
+			createdAt: item?.ts,
+			state: item?.taskState,
+			messages: conversation.messages,
+			outstandingAsk: findOutstandingAsk(conversation.messages),
+			tokenUsage: conversation.tokenUsage,
+		}
+	}
+
+	/**
+	 * Subscribe to this host's agent event stream. Projects the typed
+	 * {@link ShoferEvents} emitter onto the transport-agnostic {@link ServerEvent}
+	 * shape, forwarding the {@link FORWARDED_EVENTS} set only — the events a client
+	 * needs to render a task, not this host's whole internal chatter.
+	 */
+	public subscribe(listener: (event: ServerEvent) => void): () => void {
+		const handlers = FORWARDED_EVENTS.map((name) => {
+			const handler = (...args: unknown[]) => listener({ type: name, args })
+			this.on(name as never, handler as never)
+			return { name, handler }
+		})
+		return () => {
+			for (const { name, handler } of handlers) {
+				this.off(name as never, handler as never)
+			}
+		}
+	}
+
 	public async getTaskConversation(
 		taskId: string,
 	): Promise<{ messages: ShoferMessage[]; tokenUsage?: TokenUsage } | undefined> {
@@ -574,14 +630,6 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		}
 
 		currentTask.messageQueueService.removeMessage(messageId)
-	}
-
-	public async pressPrimaryButton() {
-		await this.sidebarProvider.postMessageToWebview({ type: "invoke", invoke: "primaryButtonClick" })
-	}
-
-	public async pressSecondaryButton() {
-		await this.sidebarProvider.postMessageToWebview({ type: "invoke", invoke: "secondaryButtonClick" })
 	}
 
 	public isReady() {

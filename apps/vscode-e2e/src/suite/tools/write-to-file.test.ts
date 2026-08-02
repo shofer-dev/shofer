@@ -5,7 +5,7 @@ import * as os from "os"
 
 import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
-import { waitFor, sleep } from "../utils"
+import { waitFor, sleep, cancelCurrentTask } from "../utils"
 import { setDefaultSuiteTimeout } from "../test-utils"
 
 suite.skip("Shofer write_to_file Tool", function () {
@@ -23,7 +23,7 @@ suite.skip("Shofer write_to_file Tool", function () {
 	suiteTeardown(async () => {
 		// Cancel any running tasks before cleanup
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -34,7 +34,7 @@ suite.skip("Shofer write_to_file Tool", function () {
 	setup(async () => {
 		// Cancel any previous task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -50,7 +50,7 @@ suite.skip("Shofer write_to_file Tool", function () {
 	teardown(async () => {
 		// Cancel the current task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -133,7 +133,7 @@ suite.skip("Shofer write_to_file Tool", function () {
 		try {
 			// Start task with a very simple prompt
 			const baseFileName = path.basename(testFilePath)
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
@@ -141,8 +141,8 @@ suite.skip("Shofer write_to_file Tool", function () {
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Create a file named "${baseFileName}" with the following content:\n${fileContent}`,
-			})
+				prompt: `Create a file named "${baseFileName}" with the following content:\n${fileContent}`,
+			}))
 
 			console.log("Task ID:", taskId)
 			console.log("Base filename:", baseFileName)
@@ -324,7 +324,7 @@ suite.skip("Shofer write_to_file Tool", function () {
 		let taskId: string
 		try {
 			// Start task to create file in nested directory
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
@@ -332,8 +332,8 @@ suite.skip("Shofer write_to_file Tool", function () {
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Create a file named "${fileName}" in a nested directory structure "nested/deep/directory/" with the following content:\n${content}`,
-			})
+				prompt: `Create a file named "${fileName}" in a nested directory structure "nested/deep/directory/" with the following content:\n${content}`,
+			}))
 
 			console.log("Task ID:", taskId)
 			console.log("Expected nested path:", nestedPath)

@@ -1,6 +1,7 @@
 import type { EventEmitter } from "events"
 import type { Socket } from "net"
 
+import type { AgentApi, CreateTaskInput } from "./agent-api.js"
 import type { ShoferEvents } from "./events.js"
 import type { ShoferSettings } from "./global-settings.js"
 import type { HistoryItem } from "./history.js"
@@ -10,30 +11,39 @@ import type { IpcMessage, IpcServerEvents } from "./ipc.js"
 
 export type ShoferAPIEvents = ShoferEvents
 
-export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
+/**
+ * {@link CreateTaskInput}, widened with what only a VS Code host can honour.
+ *
+ * `mode` relaxes to optional because a host can fall back to its own configured
+ * default; the base keeps it required precisely because a remote caller cannot
+ * read that default and must state its choice.
+ */
+export interface ExtensionCreateTaskInput extends Omit<CreateTaskInput, "mode"> {
+	mode?: string
+	/** Open the task in a new editor tab instead of the sidebar. */
+	newTab?: boolean
+	/** Full settings seed for this task — the superset of `apiConfiguration`. */
+	configuration?: ShoferSettings
+}
+
+/**
+ * The Shofer extension's API: the agent control plane ({@link AgentApi}) plus the
+ * host-only administration surface — provider profiles, configuration
+ * import/export, task-history management, exports, logs and workflows.
+ *
+ * The `extends` is the contract: a method cannot exist on the wire surface
+ * without existing here, and — because transports bind {@link AgentApi}, not this
+ * interface — the administration surface cannot reach the wire by accident.
+ */
+export interface ShoferAPI extends AgentApi, EventEmitter<ShoferAPIEvents> {
 	/**
-	 * Starts a new task with an optional initial message and images.
-	 * @param task Optional initial task message.
-	 * @param images Optional array of image data URIs (e.g., "data:image/webp;base64,...").
-	 * @returns The ID of the new task.
+	 * Start a task. The host-only widening of {@link AgentApi.createTask}: `mode`
+	 * relaxes to optional (a host with no stated mode falls back to its configured
+	 * default, which a remote caller has no way to read), and two fields exist only
+	 * where there is a VS Code window — `newTab` and the full-settings `configuration`
+	 * seed. Everything else is the base contract.
 	 */
-	startNewTask({
-		configuration,
-		text,
-		images,
-		newTab,
-		taskId,
-		initialMode,
-	}: {
-		configuration?: ShoferSettings
-		text?: string
-		images?: string[]
-		newTab?: boolean
-		taskId?: string
-		/** Per-task mode slug seed (applied via `CreateTaskOptions.initialMode`), so the
-		 *  task runs in this mode without a global mode switch. */
-		initialMode?: string
-	}): Promise<string>
+	createTask(input: ExtensionCreateTaskInput): Promise<{ taskId: string }>
 	/**
 	 * Resumes a task with the given ID.
 	 * @param taskId The ID of the task to resume.
@@ -56,21 +66,20 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	 */
 	clearCurrentTask(lastMessage?: string): Promise<void>
 	/**
-	 * Cancels the current task.
+	 * Cancels the addressed task.
 	 */
-	cancelCurrentTask(): Promise<void>
+	cancelTask(taskId: string): Promise<void>
 	/**
-	 * Sends a message to the current task — or, when `taskId` is given, directly
-	 * to that managed task instance. The task-addressed form is the transport
-	 * (AgentApi) delivery path: it must reach the task's own ask/message channel
-	 * and never route through the webview, because in headless hosts the mock
-	 * webview reports itself launched and an `invoke: sendMessage` posted to it
-	 * is silently dropped (nothing consumes invokes in `shofer serve`).
-	 * @param message Optional message to send.
+	 * Sends a message to the addressed task, straight to its own ask/message
+	 * channel. Delivery is **task-addressed, never current-task-centric**: the
+	 * latter raced concurrent tasks on one host, and in headless hosts routed
+	 * through an `invoke: sendMessage` the mock webview silently drops (nothing
+	 * consumes invokes in `shofer serve`).
+	 * @param taskId The id of the task to deliver to.
+	 * @param message The message text.
 	 * @param images Optional array of image data URIs (e.g., "data:image/webp;base64,...").
-	 * @param taskId Optional id of the task to deliver to (defaults to the current task).
 	 */
-	sendMessage(message?: string, images?: string[], taskId?: string): Promise<void>
+	sendMessage(taskId: string, message: string, images?: string[]): Promise<void>
 	/**
 	 * Answers an outstanding `ask` (interactive tool approval / follow-up) on a task.
 	 * Resolves the managed task by id (or the current task when omitted) and drives
@@ -123,14 +132,6 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	 * @param messageId The ID of the queued message to remove.
 	 */
 	deleteQueuedMessage(messageId: string): void
-	/**
-	 * Simulates pressing the primary button in the chat interface.
-	 */
-	pressPrimaryButton(): Promise<void>
-	/**
-	 * Simulates pressing the secondary button in the chat interface.
-	 */
-	pressSecondaryButton(): Promise<void>
 	/**
 	 * Returns true if the API is ready to use.
 	 */

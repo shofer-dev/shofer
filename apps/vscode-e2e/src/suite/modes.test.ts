@@ -2,7 +2,7 @@ import * as assert from "assert"
 
 import { ShoferEventName } from "@shofer/types"
 
-import { waitUntilCompleted } from "./utils"
+import { waitUntilCompleted, cancelCurrentTask } from "./utils"
 import { setDefaultSuiteTimeout } from "./test-utils"
 
 suite("Shofer Modes", function () {
@@ -13,13 +13,13 @@ suite("Shofer Modes", function () {
 
 		globalThis.api.on(ShoferEventName.TaskModeSwitched, (_taskId, mode) => modes.push(mode))
 
-		const switchModesTaskId = await globalThis.api.startNewTask({
+		const { taskId: switchModesTaskId } = await globalThis.api.createTask({
 			configuration: { mode: "code", alwaysAllowModeSwitch: true, autoApprovalEnabled: true },
-			text: "Use the `switch_mode` tool to switch to ask mode.",
+			prompt: "Use the `switch_mode` tool to switch to ask mode.",
 		})
 
 		await waitUntilCompleted({ api: globalThis.api, taskId: switchModesTaskId })
-		await globalThis.api.cancelCurrentTask()
+		await cancelCurrentTask(globalThis.api)
 
 		assert.ok(modes.includes("ask"))
 		assert.ok(modes.length === 1)

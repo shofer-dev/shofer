@@ -2,7 +2,7 @@ import * as assert from "assert"
 
 import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
-import { sleep, waitFor, waitUntilCompleted } from "./utils"
+import { sleep, waitFor, waitUntilCompleted, cancelCurrentTask } from "./utils"
 
 suite.skip("Shofer Subtasks", () => {
 	test("Should handle subtask cancellation and resumption correctly", async () => {
@@ -20,14 +20,14 @@ suite.skip("Shofer Subtasks", () => {
 		const childPrompt = "You are a calculator. Respond only with numbers. What is the square root of 9?"
 
 		// Start a parent task that will create a subtask.
-		const parentTaskId = await api.startNewTask({
+		const { taskId: parentTaskId } = await api.createTask({
 			configuration: {
 				mode: "ask",
 				alwaysAllowModeSwitch: true,
 				alwaysAllowSubtasks: true,
 				autoApprovalEnabled: true,
 			},
-			text:
+			prompt:
 				"You are the parent task. " +
 				`Create a subtask by using the new_task tool with the message '${childPrompt}'.` +
 				"After creating the subtask, wait for it to complete and then respond 'Parent task resumed'.",
@@ -39,7 +39,7 @@ suite.skip("Shofer Subtasks", () => {
 		api.on(ShoferEventName.TaskSpawned, (_, childTaskId) => (spawnedTaskId = childTaskId))
 		await waitFor(() => !!spawnedTaskId)
 		await sleep(1_000) // Give the task a chance to start and populate the history.
-		await api.cancelCurrentTask()
+		await cancelCurrentTask(api)
 
 		// Wait a bit to ensure any task resumption would have happened.
 		await sleep(2_000)
@@ -53,7 +53,7 @@ suite.skip("Shofer Subtasks", () => {
 		)
 
 		// Start a new task with the same message as the subtask.
-		const anotherTaskId = await api.startNewTask({ text: childPrompt })
+		const { taskId: anotherTaskId } = await api.createTask({ prompt: childPrompt })
 		await waitUntilCompleted({ api, taskId: anotherTaskId })
 
 		// Wait a bit to ensure any task resumption would have happened.

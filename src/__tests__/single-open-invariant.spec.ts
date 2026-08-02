@@ -157,9 +157,9 @@ describe("Single-open-task invariant", () => {
 		const output = { appendLine: vi.fn() } as any
 		const api = new API(output, provider, undefined, false)
 
-		const taskId = await api.startNewTask({
+		const { taskId } = await api.createTask({
 			configuration: {},
-			text: "hello",
+			prompt: "hello",
 			images: undefined,
 			newTab: false,
 		})

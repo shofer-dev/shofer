@@ -206,7 +206,7 @@ describe("ShoferHttpClient (typed SDK)", () => {
 			await client.respondToAsk("t1", { askResponse: "yesButtonClicked", askId: "a1" })
 			await client.sendMessage("t1", "carry on")
 			expect(api.respondToAsk).toHaveBeenCalledWith("t1", expect.objectContaining({ askId: "a1" }))
-			expect(api.sendMessage).toHaveBeenCalledWith("t1", "carry on")
+			expect(api.sendMessage).toHaveBeenCalledWith("t1", "carry on", undefined)
 		})
 
 		it("reports an unknown task as undefined and a wrong token as an error", async () => {

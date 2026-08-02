@@ -27,21 +27,22 @@ vi.mock("@/lib/storage/index.js", () => ({
  */
 function createMockShoferAPI(): ShoferAPI {
 	const emitter = new EventEmitter() as ShoferAPI
-	const startNewTask = vi.fn().mockResolvedValue("test-task-id")
+	const createTask = vi.fn().mockResolvedValue({ taskId: "test-task-id" })
 	const resumeTask = vi.fn().mockResolvedValue(undefined)
 
 	return Object.assign(emitter, {
-		startNewTask,
+		createTask,
 		resumeTask,
-		cancelCurrentTask: vi.fn().mockResolvedValue(undefined),
+		cancelTask: vi.fn().mockResolvedValue(undefined),
 		clearCurrentTask: vi.fn().mockResolvedValue(undefined),
 		sendMessage: vi.fn().mockResolvedValue(undefined),
+		respondToAsk: vi.fn().mockResolvedValue(undefined),
 		deleteQueuedMessage: vi.fn(),
-		pressPrimaryButton: vi.fn().mockResolvedValue(undefined),
-		pressSecondaryButton: vi.fn().mockResolvedValue(undefined),
 		isReady: vi.fn().mockReturnValue(true),
 		isTaskInHistory: vi.fn().mockResolvedValue(false),
-		getCurrentTaskStack: vi.fn().mockReturnValue([]),
+		// The CLI surface is current-task-shaped and resolves the id from the stack
+		// before calling the task-addressed API.
+		getCurrentTaskStack: vi.fn().mockReturnValue(["test-task-id"]),
 		getConfiguration: vi.fn().mockReturnValue({}),
 		setConfiguration: vi.fn().mockResolvedValue(undefined),
 		getProfiles: vi.fn().mockReturnValue([]),
@@ -554,7 +555,7 @@ describe("ExtensionHost", () => {
 	})
 
 	describe("runTask", () => {
-		it("should call extensionAPI.startNewTask with prompt and configuration", async () => {
+		it("should call extensionAPI.createTask with prompt and configuration", async () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
@@ -580,14 +581,15 @@ describe("ExtensionHost", () => {
 
 			await taskPromise
 
-			expect(api.startNewTask).toHaveBeenCalledWith({
+			expect(api.createTask).toHaveBeenCalledWith({
 				configuration: undefined,
-				text: "test prompt",
+				prompt: "test prompt",
 				images: undefined,
+				taskId: undefined,
 			})
 		})
 
-		it("should pass configuration to extensionAPI.startNewTask", async () => {
+		it("should pass configuration to extensionAPI.createTask", async () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
@@ -612,10 +614,11 @@ describe("ExtensionHost", () => {
 
 			await taskPromise
 
-			expect(api.startNewTask).toHaveBeenCalledWith({
+			expect(api.createTask).toHaveBeenCalledWith({
 				configuration: config,
-				text: "test prompt",
+				prompt: "test prompt",
 				images: undefined,
+				taskId: undefined,
 			})
 		})
 
@@ -672,14 +675,14 @@ describe("ExtensionHost", () => {
 	})
 
 	describe("cancelTask", () => {
-		it("should call extensionAPI.cancelCurrentTask", async () => {
+		it("should call extensionAPI.cancelTask for the current task", async () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
 			const api = getPrivate(host, "extensionAPI") as ShoferAPI
 			await host.cancelTask()
 
-			expect(api.cancelCurrentTask).toHaveBeenCalled()
+			expect(api.cancelTask).toHaveBeenCalledWith("test-task-id")
 		})
 	})
 
@@ -691,7 +694,7 @@ describe("ExtensionHost", () => {
 			const api = getPrivate(host, "extensionAPI") as ShoferAPI
 			await host.sendMessage("hello", ["img1"])
 
-			expect(api.sendMessage).toHaveBeenCalledWith("hello", ["img1"])
+			expect(api.sendMessage).toHaveBeenCalledWith("test-task-id", "hello", ["img1"])
 		})
 
 		it("should call extensionAPI.sendMessage with just text", async () => {
@@ -701,29 +704,31 @@ describe("ExtensionHost", () => {
 			const api = getPrivate(host, "extensionAPI") as ShoferAPI
 			await host.sendMessage("hello")
 
-			expect(api.sendMessage).toHaveBeenCalledWith("hello", undefined)
+			expect(api.sendMessage).toHaveBeenCalledWith("test-task-id", "hello", undefined)
 		})
 	})
 
 	describe("approveAction / rejectAction", () => {
-		it("should call extensionAPI.pressPrimaryButton for approveAction", async () => {
+		// approve/reject answer the task's outstanding ask directly — the old
+		// press*Button pair simulated a webview click on whatever task was current.
+		it("should answer the ask affirmatively for approveAction", async () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
 			const api = getPrivate(host, "extensionAPI") as ShoferAPI
 			await host.approveAction()
 
-			expect(api.pressPrimaryButton).toHaveBeenCalled()
+			expect(api.respondToAsk).toHaveBeenCalledWith("test-task-id", { askResponse: "yesButtonClicked" })
 		})
 
-		it("should call extensionAPI.pressSecondaryButton for rejectAction", async () => {
+		it("should answer the ask negatively for rejectAction", async () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
 			const api = getPrivate(host, "extensionAPI") as ShoferAPI
 			await host.rejectAction()
 
-			expect(api.pressSecondaryButton).toHaveBeenCalled()
+			expect(api.respondToAsk).toHaveBeenCalledWith("test-task-id", { askResponse: "noButtonClicked" })
 		})
 	})
 

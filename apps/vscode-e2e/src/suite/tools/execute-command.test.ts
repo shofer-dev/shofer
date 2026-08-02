@@ -5,7 +5,7 @@ import * as vscode from "vscode"
 
 import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
-import { waitFor, sleep, waitUntilCompleted } from "../utils"
+import { waitFor, sleep, waitUntilCompleted, cancelCurrentTask } from "../utils"
 import { setDefaultSuiteTimeout } from "../test-utils"
 
 suite.skip("Shofer execute_command Tool", function () {
@@ -61,7 +61,7 @@ suite.skip("Shofer execute_command Tool", function () {
 	suiteTeardown(async () => {
 		// Cancel any running tasks before cleanup
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -90,7 +90,7 @@ suite.skip("Shofer execute_command Tool", function () {
 	setup(async () => {
 		// Cancel any previous task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -103,7 +103,7 @@ suite.skip("Shofer execute_command Tool", function () {
 	teardown(async () => {
 		// Cancel the current task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -167,7 +167,7 @@ suite.skip("Shofer execute_command Tool", function () {
 		let taskId: string
 		try {
 			// Start task with execute_command instruction
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
@@ -175,12 +175,12 @@ suite.skip("Shofer execute_command Tool", function () {
 					allowedCommands: ["*"],
 					terminalShellIntegrationDisabled: true,
 				},
-				text: `Use the execute_command tool to run this command: echo "Hello from test" > ${testFile.name}
+				prompt: `Use the execute_command tool to run this command: echo "Hello from test" > ${testFile.name}
 
 The file ${testFile.name} will be created in the current workspace directory. Assume you can execute this command directly.
 
 Then use the attempt_completion tool to complete the task. Do not suggest any commands in the attempt_completion.`,
-			})
+			}))
 
 			console.log("Task ID:", taskId)
 			console.log("Test file:", testFile.name)
@@ -273,7 +273,7 @@ Then use the attempt_completion tool to complete the task. Do not suggest any co
 		let taskId: string
 		try {
 			// Start task with execute_command instruction using cwd parameter
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
@@ -281,14 +281,14 @@ Then use the attempt_completion tool to complete the task. Do not suggest any co
 					allowedCommands: ["*"],
 					terminalShellIntegrationDisabled: true,
 				},
-				text: `Use the execute_command tool with these exact parameters:
+				prompt: `Use the execute_command tool with these exact parameters:
 - command: echo "Test in subdirectory" > output.txt
 - cwd: ${subDir}
 
 The subdirectory ${subDir} exists in the workspace. Assume you can execute this command directly with the specified working directory.
 
 Avoid at all costs suggesting a command when using the attempt_completion tool`,
-			})
+			}))
 
 			console.log("Task ID:", taskId)
 			console.log("Subdirectory:", subDir)
@@ -387,7 +387,7 @@ Avoid at all costs suggesting a command when using the attempt_completion tool`,
 		let taskId: string
 		try {
 			// Start task with multiple commands - simplified to just 2 commands
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
@@ -395,7 +395,7 @@ Avoid at all costs suggesting a command when using the attempt_completion tool`,
 					allowedCommands: ["*"],
 					terminalShellIntegrationDisabled: true,
 				},
-				text: `Use the execute_command tool to create a file with multiple lines. Execute these commands one by one:
+				prompt: `Use the execute_command tool to create a file with multiple lines. Execute these commands one by one:
 1. echo "Line 1" > ${testFile.name}
 2. echo "Line 2" >> ${testFile.name}
 
@@ -404,7 +404,7 @@ The file ${testFile.name} will be created in the current workspace directory. As
 Important: Use only the echo command which is available on all Unix platforms. Execute each command separately using the execute_command tool.
 
 After both commands are executed, use the attempt_completion tool to complete the task.`,
-			})
+			}))
 
 			console.log("Task ID:", taskId)
 			console.log("Test file:", testFile.name)
@@ -509,7 +509,7 @@ After both commands are executed, use the attempt_completion tool to complete th
 			const sleepCommand = process.platform === "win32" ? "timeout /t 3 /nobreak" : "sleep 3"
 
 			// Start task with long-running command
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
@@ -517,12 +517,12 @@ After both commands are executed, use the attempt_completion tool to complete th
 					allowedCommands: ["*"],
 					terminalShellIntegrationDisabled: true,
 				},
-				text: `Use the execute_command tool to run: ${sleepCommand} && echo "Command completed after delay"
+				prompt: `Use the execute_command tool to run: ${sleepCommand} && echo "Command completed after delay"
 
 Assume you can execute this command directly in the current workspace directory.
 
 Avoid at all costs suggesting a command when using the attempt_completion tool`,
-			})
+			}))
 
 			console.log("Task ID:", taskId)
 

@@ -144,7 +144,7 @@ describe("createRequestHandler (§11)", () => {
 		const m = mockRes()
 		await run(mockReq("POST", "/api/v1/task/t1/message", { message: "go" }), m as unknown as ServerResponse)
 		expect(m.statusCode).toBe(202)
-		expect(api.sendMessage).toHaveBeenCalledWith("t1", "go")
+		expect(api.sendMessage).toHaveBeenCalledWith("t1", "go", undefined)
 
 		const c = mockRes()
 		await run(mockReq("POST", "/api/v1/task/t1/cancel"), c as unknown as ServerResponse)

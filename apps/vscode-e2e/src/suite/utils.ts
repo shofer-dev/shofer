@@ -62,3 +62,17 @@ export const waitUntilCompleted = async ({ api, taskId, ...options }: WaitUntilC
 }
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * Cancel whatever task is currently focused, if any.
+ *
+ * `ShoferAPI.cancelTask` is task-addressed; suite setup/teardown means "cancel
+ * whatever is running" and has no id in hand, so it resolves the top of the task
+ * stack here. A no-op when nothing is running.
+ */
+export const cancelCurrentTask = async (api: ShoferAPI) => {
+	const taskId = api.getCurrentTaskStack().at(-1)
+	if (taskId) {
+		await api.cancelTask(taskId)
+	}
+}

@@ -37,8 +37,8 @@ export class ShoferHttpClient implements AgentApi {
 		return (await this.post("/task", input)) as { taskId: string }
 	}
 
-	async sendMessage(taskId: string, message: string): Promise<void> {
-		await this.post(`/task/${encodeURIComponent(taskId)}/message`, { message })
+	async sendMessage(taskId: string, message: string, images?: string[]): Promise<void> {
+		await this.post(`/task/${encodeURIComponent(taskId)}/message`, { message, images })
 	}
 
 	async cancelTask(taskId: string): Promise<void> {

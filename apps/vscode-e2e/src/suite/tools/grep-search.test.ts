@@ -5,7 +5,7 @@ import * as vscode from "vscode"
 
 import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
-import { waitFor, sleep } from "../utils"
+import { waitFor, sleep, cancelCurrentTask } from "../utils"
 import { setDefaultSuiteTimeout } from "../test-utils"
 
 suite.skip("Shofer grep_search Tool", function () {
@@ -237,7 +237,7 @@ The search should find matches across different file types and provide context f
 	suiteTeardown(async () => {
 		// Cancel any running tasks before cleanup
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -267,7 +267,7 @@ The search should find matches across different file types and provide context f
 	setup(async () => {
 		// Cancel any previous task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -280,7 +280,7 @@ The search should find matches across different file types and provide context f
 	teardown(async () => {
 		// Cancel the current task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -337,15 +337,15 @@ The search should find matches across different file types and provide context f
 		try {
 			// Start task to search for function definitions
 			const jsFileName = path.basename(testFiles.jsFile)
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `I have created test files in the workspace including a JavaScript file named "${jsFileName}" that contains function definitions like "calculateTotal" and "validateUser". Use the grep_search tool with the regex pattern "function\\s+\\w+" to find all function declarations in JavaScript files. The files exist in the workspace directory.`,
-			})
+				prompt: `I have created test files in the workspace including a JavaScript file named "${jsFileName}" that contains function definitions like "calculateTotal" and "validateUser". Use the grep_search tool with the regex pattern "function\\s+\\w+" to find all function declarations in JavaScript files. The files exist in the workspace directory.`,
+			}))
 
 			console.log("Task ID:", taskId)
 
@@ -434,15 +434,15 @@ The search should find matches across different file types and provide context f
 		let taskId: string
 		try {
 			// Start task to search for TODO comments
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `I have created test files in the workspace that contain TODO comments in JavaScript, TypeScript, and text files. Use the grep_search tool with the regex pattern "TODO.*" to find all TODO items across all file types. The files exist in the workspace directory.`,
-			})
+				prompt: `I have created test files in the workspace that contain TODO comments in JavaScript, TypeScript, and text files. Use the grep_search tool with the regex pattern "TODO.*" to find all TODO items across all file types. The files exist in the workspace directory.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
@@ -502,15 +502,15 @@ The search should find matches across different file types and provide context f
 		try {
 			// Start task to search for interfaces in TypeScript files only
 			const tsFileName = path.basename(testFiles.tsFile)
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `I have created test files in the workspace including a TypeScript file named "${tsFileName}" that contains interface definitions like "User" and "Product". Use the grep_search tool with the regex pattern "interface\\s+\\w+" and file pattern "*.ts" to find interfaces only in TypeScript files. The files exist in the workspace directory.`,
-			})
+				prompt: `I have created test files in the workspace including a TypeScript file named "${tsFileName}" that contains interface definitions like "User" and "Product". Use the grep_search tool with the regex pattern "interface\\s+\\w+" and file pattern "*.ts" to find interfaces only in TypeScript files. The files exist in the workspace directory.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
@@ -567,15 +567,15 @@ The search should find matches across different file types and provide context f
 		let taskId: string
 		try {
 			// Start task to search for configuration keys in JSON files
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Search for configuration keys in JSON files. Use the grep_search tool with the regex pattern '"\\w+":\\s*' and file pattern "*.json" to find all configuration keys in JSON files.`,
-			})
+				prompt: `Search for configuration keys in JSON files. Use the grep_search tool with the regex pattern '"\\w+":\\s*' and file pattern "*.json" to find all configuration keys in JSON files.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
@@ -635,15 +635,15 @@ The search should find matches across different file types and provide context f
 		let taskId: string
 		try {
 			// Start task to search in nested directories
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Search for utility functions in the current directory and subdirectories. Use the grep_search tool with the regex pattern "function\\s+(format|debounce)" to find utility functions like formatCurrency and debounce.`,
-			})
+				prompt: `Search for utility functions in the current directory and subdirectories. Use the grep_search tool with the regex pattern "function\\s+(format|debounce)" to find utility functions like formatCurrency and debounce.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
@@ -703,15 +703,15 @@ The search should find matches across different file types and provide context f
 		let taskId: string
 		try {
 			// Start task to search with complex regex
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Search for import and export statements in JavaScript and TypeScript files. Use the grep_search tool with the regex pattern "(import|export).*" and file pattern "*.{js,ts}" to find all import/export statements.`,
-			})
+				prompt: `Search for import and export statements in JavaScript and TypeScript files. Use the grep_search tool with the regex pattern "(import|export).*" and file pattern "*.{js,ts}" to find all import/export statements.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
@@ -788,15 +788,15 @@ The search should find matches across different file types and provide context f
 		let taskId: string
 		try {
 			// Start task to search for something that doesn't exist
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Search for a pattern that doesn't exist in any files. Use the grep_search tool with the regex pattern "nonExistentPattern12345" to search for something that won't be found.`,
-			})
+				prompt: `Search for a pattern that doesn't exist in any files. Use the grep_search tool with the regex pattern "nonExistentPattern12345" to search for something that won't be found.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
@@ -896,15 +896,15 @@ The search should find matches across different file types and provide context f
 		let taskId: string
 		try {
 			// Start task to search for class definitions and async methods
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Search for class definitions and async methods in TypeScript files. Use the grep_search tool with the regex pattern "(class\\s+\\w+|async\\s+\\w+)" and file pattern "*.ts" to find classes and async methods.`,
-			})
+				prompt: `Search for class definitions and async methods in TypeScript files. Use the grep_search tool with the regex pattern "(class\\s+\\w+|async\\s+\\w+)" and file pattern "*.ts" to find classes and async methods.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })

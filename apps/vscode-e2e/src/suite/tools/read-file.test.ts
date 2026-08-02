@@ -6,7 +6,7 @@ import * as vscode from "vscode"
 
 import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
-import { waitFor, sleep } from "../utils"
+import { waitFor, sleep, cancelCurrentTask } from "../utils"
 import { setDefaultSuiteTimeout } from "../test-utils"
 
 suite.skip("Shofer read_file Tool", function () {
@@ -69,7 +69,7 @@ suite.skip("Shofer read_file Tool", function () {
 	suiteTeardown(async () => {
 		// Cancel any running tasks before cleanup
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -98,7 +98,7 @@ suite.skip("Shofer read_file Tool", function () {
 	setup(async () => {
 		// Cancel any previous task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -111,7 +111,7 @@ suite.skip("Shofer read_file Tool", function () {
 	teardown(async () => {
 		// Cancel the current task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -204,15 +204,15 @@ suite.skip("Shofer read_file Tool", function () {
 			// Start task with a simple read file request
 			const fileName = path.basename(testFiles.simple)
 			// Use a very explicit prompt
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Please use the read_file tool to read the file named "${fileName}". This file contains the text "Hello, World!" and is located in the current workspace directory. Assume the file exists and you can read it directly. After reading it, tell me what the file contains.`,
-			})
+				prompt: `Please use the read_file tool to read the file named "${fileName}". This file contains the text "Hello, World!" and is located in the current workspace directory. Assume the file exists and you can read it directly. After reading it, tell me what the file contains.`,
+			}))
 
 			console.log("Task ID:", taskId)
 			console.log("Reading file:", fileName)
@@ -328,15 +328,15 @@ suite.skip("Shofer read_file Tool", function () {
 		try {
 			// Start task
 			const fileName = path.basename(testFiles.multiline)
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Use the read_file tool to read the file "${fileName}" which contains 5 lines of text (Line 1, Line 2, Line 3, Line 4, Line 5). Assume the file exists and you can read it directly. Count how many lines it has and tell me the result.`,
-			})
+				prompt: `Use the read_file tool to read the file "${fileName}" which contains 5 lines of text (Line 1, Line 2, Line 3, Line 4, Line 5). Assume the file exists and you can read it directly. Count how many lines it has and tell me the result.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
@@ -439,15 +439,15 @@ suite.skip("Shofer read_file Tool", function () {
 		try {
 			// Start task
 			const fileName = path.basename(testFiles.multiline)
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Use the read_file tool to read the file "${fileName}" using slice mode with offset=2 and limit=3 (1-based offset). The file contains lines like "Line 1", "Line 2", etc. After reading, show me the three lines you read.`,
-			})
+				prompt: `Use the read_file tool to read the file "${fileName}" using slice mode with offset=2 and limit=3 (1-based offset). The file contains lines like "Line 1", "Line 2", etc. After reading, show me the three lines you read.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
@@ -525,15 +525,15 @@ suite.skip("Shofer read_file Tool", function () {
 		try {
 			// Start task with non-existent file
 			const nonExistentFile = `non-existent-${Date.now()}.txt`
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Try to read the file "${nonExistentFile}" and tell me what happens. This file does not exist, so I expect you to handle the error appropriately.`,
-			})
+				prompt: `Try to read the file "${nonExistentFile}" and tell me what happens. This file does not exist, so I expect you to handle the error appropriately.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
@@ -598,15 +598,15 @@ suite.skip("Shofer read_file Tool", function () {
 		try {
 			// Start task
 			const fileName = path.basename(testFiles.xmlContent)
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Use the read_file tool to read the XML file "${fileName}". It contains XML elements including root, child, and data. Assume the file exists and you can read it directly. Tell me what elements you find.`,
-			})
+				prompt: `Use the read_file tool to read the XML file "${fileName}". It contains XML elements including root, child, and data. Assume the file exists and you can read it directly. Tell me what elements you find.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
@@ -665,18 +665,18 @@ suite.skip("Shofer read_file Tool", function () {
 			// Start task to read multiple files
 			const simpleFileName = path.basename(testFiles.simple)
 			const multilineFileName = path.basename(testFiles.multiline)
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Use the read_file tool to read these two files:
+				prompt: `Use the read_file tool to read these two files:
 1. "${simpleFileName}" - contains "Hello, World!"
 2. "${multilineFileName}" - contains 5 lines of text
 Assume both files exist and you can read them directly. Read each file and tell me what you found in each one.`,
-			})
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
@@ -742,15 +742,15 @@ Assume both files exist and you can read them directly. Read each file and tell 
 		try {
 			// Start task
 			const fileName = path.basename(testFiles.large)
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Use the read_file tool to read the file "${fileName}" which has 100 lines. Each line follows the pattern "Line N: This is a test line with some content". Assume the file exists and you can read it directly. Tell me about the pattern you see.`,
-			})
+				prompt: `Use the read_file tool to read the file "${fileName}" which has 100 lines. Each line follows the pattern "Line N: This is a test line with some content". Assume the file exists and you can read it directly. Tell me about the pattern you see.`,
+			}))
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })

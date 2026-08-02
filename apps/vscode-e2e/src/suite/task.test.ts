@@ -19,9 +19,9 @@ suite("Shofer Task", function () {
 			}
 		})
 
-		const taskId = await api.startNewTask({
+		const { taskId: taskId } = await api.createTask({
 			configuration: { mode: "ask", alwaysAllowModeSwitch: true, autoApprovalEnabled: true },
-			text: "Hello world, what is your name? Respond with 'My name is ...'",
+			prompt: "Hello world, what is your name? Respond with 'My name is ...'",
 		})
 
 		await waitUntilCompleted({ api, taskId })

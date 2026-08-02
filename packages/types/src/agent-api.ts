@@ -136,6 +136,8 @@ export interface CreateTaskInput {
 	mode: string
 	taskId?: string
 	apiConfiguration?: ProviderSettings
+	/** Image data URIs to seed the task with, same shape as {@link AskResponse.images}. */
+	images?: string[]
 }
 
 /** A reply to an outstanding `ask` (interactive tool approval / follow-up). */
@@ -160,7 +162,12 @@ export interface AskResponse {
 /** The agent control plane a transport drives. */
 export interface AgentApi {
 	createTask(input: CreateTaskInput): Promise<{ taskId: string }>
-	sendMessage(taskId: string, message: string): Promise<void>
+	/**
+	 * Send a follow-up message to a running task. `images` are data URIs, the same
+	 * shape {@link AskResponse.images} carries, so a client can attach them to a
+	 * follow-up exactly as it can to an approval.
+	 */
+	sendMessage(taskId: string, message: string, images?: string[]): Promise<void>
 	cancelTask(taskId: string): Promise<void>
 	/**
 	 * Answer a task's outstanding `ask` (interactive tool approval / follow-up).

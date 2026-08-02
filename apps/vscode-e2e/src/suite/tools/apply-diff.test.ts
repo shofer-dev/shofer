@@ -5,7 +5,7 @@ import * as vscode from "vscode"
 
 import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
-import { waitFor, sleep } from "../utils"
+import { waitFor, sleep, cancelCurrentTask } from "../utils"
 import { setDefaultSuiteTimeout } from "../test-utils"
 
 suite.skip("Shofer apply_diff Tool", function () {
@@ -107,7 +107,7 @@ function validateInput(input) {
 	suiteTeardown(async () => {
 		// Cancel any running tasks before cleanup
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -128,7 +128,7 @@ function validateInput(input) {
 	setup(async () => {
 		// Cancel any previous task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -141,7 +141,7 @@ function validateInput(input) {
 	teardown(async () => {
 		// Cancel the current task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -214,7 +214,7 @@ function validateInput(input) {
 		let taskId: string
 		try {
 			// Start task with apply_diff instruction - file already exists
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
@@ -222,9 +222,9 @@ function validateInput(input) {
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Use apply_diff on the file ${testFile.name} to change "Hello World" to "Hello Universe". The file already exists with this content:
+				prompt: `Use apply_diff on the file ${testFile.name} to change "Hello World" to "Hello Universe". The file already exists with this content:
 ${testFile.content}\nAssume the file exists and you can modify it directly.`,
-			}) //Temporary measure since list_files ignores all the files inside a tmp workspace
+			})) //Temporary measure since list_files ignores all the files inside a tmp workspace
 
 			console.log("Task ID:", taskId)
 			console.log("Test filename:", testFile.name)
@@ -327,7 +327,7 @@ ${testFile.content}\nAssume the file exists and you can modify it directly.`,
 		let taskId: string
 		try {
 			// Start task with multiple replacements - file already exists
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
@@ -335,7 +335,7 @@ ${testFile.content}\nAssume the file exists and you can modify it directly.`,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Use apply_diff on the file ${testFile.name} to make ALL of these changes:
+				prompt: `Use apply_diff on the file ${testFile.name} to make ALL of these changes:
 1. Rename function "calculate" to "compute"
 2. Rename parameters "x, y" to "a, b"
 3. Rename variable "sum" to "total" (including in the return statement)
@@ -344,7 +344,7 @@ ${testFile.content}\nAssume the file exists and you can modify it directly.`,
 
 The file already exists with this content:
 ${testFile.content}\nAssume the file exists and you can modify it directly.`,
-			})
+			}))
 
 			console.log("Task ID:", taskId)
 			console.log("Test filename:", testFile.name)
@@ -444,7 +444,7 @@ function keepThis() {
 		let taskId: string
 		try {
 			// Start task with line number context - file already exists
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
@@ -452,11 +452,11 @@ function keepThis() {
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Use apply_diff on the file ${testFile.name} to change "oldFunction" to "newFunction" and update its console.log to "New implementation". Keep the rest of the file unchanged.
+				prompt: `Use apply_diff on the file ${testFile.name} to change "oldFunction" to "newFunction" and update its console.log to "New implementation". Keep the rest of the file unchanged.
 
 The file already exists with this content:
 ${testFile.content}\nAssume the file exists and you can modify it directly.`,
-			})
+			}))
 
 			console.log("Task ID:", taskId)
 			console.log("Test filename:", testFile.name)
@@ -552,7 +552,7 @@ ${testFile.content}\nAssume the file exists and you can modify it directly.`,
 		let taskId: string
 		try {
 			// Start task with invalid search content - file already exists
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
@@ -560,7 +560,7 @@ ${testFile.content}\nAssume the file exists and you can modify it directly.`,
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Use apply_diff on the file ${testFile.name} to replace "This content does not exist" with "New content".
+				prompt: `Use apply_diff on the file ${testFile.name} to replace "This content does not exist" with "New content".
 
 The file already exists with this content:
 ${testFile.content}
@@ -568,7 +568,7 @@ ${testFile.content}
 IMPORTANT: The search pattern "This content does not exist" is NOT in the file. When apply_diff cannot find the search pattern, it should fail gracefully and the file content should remain unchanged. Do NOT try to use write_to_file or any other tool to modify the file. Only use apply_diff, and if the search pattern is not found, report that it could not be found.
 
 Assume the file exists and you can modify it directly.`,
-			})
+			}))
 
 			console.log("Task ID:", taskId)
 			console.log("Test filename:", testFile.name)
@@ -685,7 +685,7 @@ function checkInput(input) {
 		let taskId: string
 		try {
 			// Start task with instruction to edit two separate functions using multiple search/replace blocks
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
@@ -693,7 +693,7 @@ function checkInput(input) {
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Use apply_diff on the file ${testFile.name} to make these changes. You MUST use TWO SEPARATE search/replace blocks within a SINGLE apply_diff call:
+				prompt: `Use apply_diff on the file ${testFile.name} to make these changes. You MUST use TWO SEPARATE search/replace blocks within a SINGLE apply_diff call:
 
 FIRST search/replace block: Edit the processData function to rename it to "transformData" and change "Processing data" to "Transforming data"
 
@@ -705,7 +705,7 @@ The file already exists with this content:
 ${testFile.content}
 
 Assume the file exists and you can modify it directly.`,
-			})
+			}))
 
 			console.log("Task ID:", taskId)
 			console.log("Test filename:", testFile.name)

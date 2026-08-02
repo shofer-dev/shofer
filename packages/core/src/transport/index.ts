@@ -10,7 +10,7 @@ import { runAcpAgent } from "./run-acp-agent.js"
 
 export * from "./http-server.js"
 export * from "./http-client.js"
-export { ShoferApiAgent } from "./shofer-api-agent.js"
+export { ShoferApiAgent, FORWARDED_EVENTS, findOutstandingAsk } from "./shofer-api-agent.js"
 export * from "./acp-mapping.js"
 export * from "./acp-connection.js"
 export * from "./acp-agent-server.js"

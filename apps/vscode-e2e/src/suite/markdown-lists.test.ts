@@ -19,9 +19,9 @@ suite("Markdown List Rendering", function () {
 			}
 		})
 
-		const taskId = await api.startNewTask({
+		const { taskId: taskId } = await api.createTask({
 			configuration: { mode: "ask", alwaysAllowModeSwitch: true, autoApprovalEnabled: true },
-			text: "Please show me an example of an unordered list with the following items: Apple, Banana, Orange",
+			prompt: "Please show me an example of an unordered list with the following items: Apple, Banana, Orange",
 		})
 
 		await waitUntilCompleted({ api, taskId })
@@ -56,9 +56,9 @@ suite("Markdown List Rendering", function () {
 			}
 		})
 
-		const taskId = await api.startNewTask({
+		const { taskId: taskId } = await api.createTask({
 			configuration: { mode: "ask", alwaysAllowModeSwitch: true, autoApprovalEnabled: true },
-			text: "Please show me a numbered list with three steps: First step, Second step, Third step",
+			prompt: "Please show me a numbered list with three steps: First step, Second step, Third step",
 		})
 
 		await waitUntilCompleted({ api, taskId })
@@ -93,9 +93,9 @@ suite("Markdown List Rendering", function () {
 			}
 		})
 
-		const taskId = await api.startNewTask({
+		const { taskId: taskId } = await api.createTask({
 			configuration: { mode: "ask", alwaysAllowModeSwitch: true, autoApprovalEnabled: true },
-			text: "Please create a nested list with 'Main item' having two sub-items: 'Sub-item A' and 'Sub-item B'",
+			prompt: "Please create a nested list with 'Main item' having two sub-items: 'Sub-item A' and 'Sub-item B'",
 		})
 
 		await waitUntilCompleted({ api, taskId })
@@ -145,9 +145,9 @@ suite("Markdown List Rendering", function () {
 			}
 		})
 
-		const taskId = await api.startNewTask({
+		const { taskId: taskId } = await api.createTask({
 			configuration: { mode: "ask", alwaysAllowModeSwitch: true, autoApprovalEnabled: true },
-			text: "Please create a list that has both numbered items and bullet points, mixing ordered and unordered lists",
+			prompt: "Please create a list that has both numbered items and bullet points, mixing ordered and unordered lists",
 		})
 
 		await waitUntilCompleted({ api, taskId })

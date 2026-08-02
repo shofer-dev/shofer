@@ -6,7 +6,7 @@ import * as vscode from "vscode"
 
 import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
-import { waitFor, sleep } from "../utils"
+import { waitFor, sleep, cancelCurrentTask } from "../utils"
 import { setDefaultSuiteTimeout } from "../test-utils"
 
 suite.skip("Shofer use_mcp_tool Tool", function () {
@@ -59,7 +59,7 @@ suite.skip("Shofer use_mcp_tool Tool", function () {
 	suiteTeardown(async () => {
 		// Cancel any running tasks before cleanup
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -89,7 +89,7 @@ suite.skip("Shofer use_mcp_tool Tool", function () {
 	setup(async () => {
 		// Cancel any previous task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -102,7 +102,7 @@ suite.skip("Shofer use_mcp_tool Tool", function () {
 	teardown(async () => {
 		// Cancel the current task
 		try {
-			await globalThis.api.cancelCurrentTask()
+			await cancelCurrentTask(globalThis.api)
 		} catch {
 			// Task might not be running
 		}
@@ -222,15 +222,15 @@ suite.skip("Shofer use_mcp_tool Tool", function () {
 		try {
 			// Start task requesting to use MCP filesystem read_file tool
 			const fileName = path.basename(testFiles.simple)
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowMcp: true, // Enable MCP auto-approval
 					mcpEnabled: true,
 				},
-				text: `Use the MCP filesystem server's read_file tool to read the file "${fileName}". The file exists in the workspace and contains "Initial content for MCP test".`,
-			})
+				prompt: `Use the MCP filesystem server's read_file tool to read the file "${fileName}". The file exists in the workspace and contains "Initial content for MCP test".`,
+			}))
 
 			console.log("Task ID:", taskId)
 			console.log("Requesting MCP filesystem read_file for:", fileName)
@@ -357,15 +357,15 @@ suite.skip("Shofer use_mcp_tool Tool", function () {
 		try {
 			// Start task requesting to use MCP filesystem write_file tool
 			const newFileName = `mcp-write-test-${Date.now()}.txt`
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowMcp: true,
 					mcpEnabled: true,
 				},
-				text: `Use the MCP filesystem server's write_file tool to create a new file called "${newFileName}" with the content "Hello from MCP!".`,
-			})
+				prompt: `Use the MCP filesystem server's write_file tool to create a new file called "${newFileName}" with the content "Hello from MCP!".`,
+			}))
 
 			// Wait for attempt_completion to be called (indicating task finished)
 			await waitFor(() => attemptCompletionCalled, { timeout: 45_000 })
@@ -484,15 +484,15 @@ suite.skip("Shofer use_mcp_tool Tool", function () {
 		let taskId: string
 		try {
 			// Start task requesting MCP filesystem list_directory tool
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowMcp: true,
 					mcpEnabled: true,
 				},
-				text: `Use the MCP filesystem server's list_directory tool to list the contents of the current directory. I want to see the files in the workspace.`,
-			})
+				prompt: `Use the MCP filesystem server's list_directory tool to list the contents of the current directory. I want to see the files in the workspace.`,
+			}))
 
 			// Wait for attempt_completion to be called (indicating task finished)
 			await waitFor(() => attemptCompletionCalled, { timeout: 45_000 })
@@ -623,15 +623,15 @@ suite.skip("Shofer use_mcp_tool Tool", function () {
 		let taskId: string
 		try {
 			// Start task requesting MCP filesystem directory_tree tool
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowMcp: true,
 					mcpEnabled: true,
 				},
-				text: `Use the MCP filesystem server's directory_tree tool to show me the directory structure of the current workspace. I want to see the folder hierarchy.`,
-			})
+				prompt: `Use the MCP filesystem server's directory_tree tool to show me the directory structure of the current workspace. I want to see the folder hierarchy.`,
+			}))
 
 			// Wait for attempt_completion to be called (indicating task finished)
 			await waitFor(() => attemptCompletionCalled, { timeout: 45_000 })
@@ -742,15 +742,15 @@ suite.skip("Shofer use_mcp_tool Tool", function () {
 		let taskId: string
 		try {
 			// Start task requesting non-existent MCP server
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowMcp: true,
 					mcpEnabled: true,
 				},
-				text: `Use the MCP server "nonexistent-server" to perform some operation. This should trigger an error but the task should still complete gracefully.`,
-			})
+				prompt: `Use the MCP server "nonexistent-server" to perform some operation. This should trigger an error but the task should still complete gracefully.`,
+			}))
 
 			// Wait for attempt_completion to be called (indicating task finished)
 			await waitFor(() => attemptCompletionCalled, { timeout: 45_000 })
@@ -845,15 +845,15 @@ suite.skip("Shofer use_mcp_tool Tool", function () {
 		try {
 			// Start task requesting MCP filesystem get_file_info tool
 			const fileName = path.basename(testFiles.simple)
-			taskId = await api.startNewTask({
+			;({ taskId } = await api.createTask({
 				configuration: {
 					mode: "code",
 					autoApprovalEnabled: true,
 					alwaysAllowMcp: true,
 					mcpEnabled: true,
 				},
-				text: `Use the MCP filesystem server's get_file_info tool to get information about the file "${fileName}". This file exists in the workspace and will validate proper message formatting.`,
-			})
+				prompt: `Use the MCP filesystem server's get_file_info tool to get information about the file "${fileName}". This file exists in the workspace and will validate proper message formatting.`,
+			}))
 
 			// Wait for attempt_completion to be called (indicating task finished)
 			await waitFor(() => attemptCompletionCalled, { timeout: 45_000 })

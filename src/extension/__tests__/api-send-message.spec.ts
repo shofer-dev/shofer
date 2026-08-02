@@ -3,154 +3,115 @@ import * as vscode from "vscode"
 
 import { API } from "../api"
 import { ShoferProvider } from "../../core/webview/ShoferProvider"
-import { TaskCommandName } from "@shofer/types"
 
 vi.mock("vscode")
 vi.mock("../../core/webview/ShoferProvider")
 
-describe("API - SendMessage Command", () => {
+/**
+ * `ShoferAPI.sendMessage` is **task-addressed**: it resolves the named task and
+ * hands the message to that task's own channel. It must never route through the
+ * webview (`invoke: sendMessage`) — headless hosts report the mock webview as
+ * launched and drop invokes, which silently lost every follow-up — and never
+ * fall back to "the current task", which raced concurrent tasks on one host.
+ */
+describe("API - sendMessage (task-addressed)", () => {
 	let api: API
 	let mockOutputChannel: vscode.OutputChannel
 	let mockProvider: ShoferProvider
 	let mockPostMessageToWebview: ReturnType<typeof vi.fn>
 	let mockLog: ReturnType<typeof vi.fn>
+	let getManagedTaskInstance: ReturnType<typeof vi.fn>
+	let getCurrentTask: ReturnType<typeof vi.fn>
+
+	const liveTask = (taskId: string, over: Record<string, unknown> = {}) => ({
+		taskId,
+		abandoned: false,
+		abort: false,
+		submitUserMessage: vi.fn().mockResolvedValue(undefined),
+		...over,
+	})
 
 	beforeEach(() => {
-		// Setup mocks
-		mockOutputChannel = {
-			appendLine: vi.fn(),
-		} as unknown as vscode.OutputChannel
-
+		mockOutputChannel = { appendLine: vi.fn() } as unknown as vscode.OutputChannel
 		mockPostMessageToWebview = vi.fn().mockResolvedValue(undefined)
+		getManagedTaskInstance = vi.fn().mockReturnValue(undefined)
+		getCurrentTask = vi.fn().mockReturnValue(undefined)
 
 		mockProvider = {
 			context: {} as vscode.ExtensionContext,
 			postMessageToWebview: mockPostMessageToWebview,
 			on: vi.fn(),
 			getCurrentTaskStack: vi.fn().mockReturnValue([]),
-			getCurrentTask: vi.fn().mockReturnValue(undefined),
+			getCurrentTask,
+			taskManager: { getManagedTaskInstance },
 			viewLaunched: true,
 		} as unknown as ShoferProvider
 
 		mockLog = vi.fn()
-
-		// Create API instance with logging enabled for testing
 		api = new API(mockOutputChannel, mockProvider, undefined, true)
-		// Override the log method to use our mock
 		;(api as any).log = mockLog
 	})
 
-	it("should handle SendMessage command with text only", async () => {
-		// Arrange
-		const messageText = "Hello, this is a test message"
+	it("delivers to the addressed background task", async () => {
+		const task = liveTask("t1")
+		getManagedTaskInstance.mockReturnValue(task)
 
-		// Act
-		await api.sendMessage(messageText)
+		await api.sendMessage("t1", "hello")
 
-		// Assert
-		expect(mockPostMessageToWebview).toHaveBeenCalledWith({
-			type: "invoke",
-			invoke: "sendMessage",
-			text: messageText,
-			images: undefined,
-		})
+		expect(getManagedTaskInstance).toHaveBeenCalledWith("t1")
+		expect(task.submitUserMessage).toHaveBeenCalledWith("hello", undefined)
+		// Never the webview — see the contract note above.
+		expect(mockPostMessageToWebview).not.toHaveBeenCalled()
 	})
 
-	it("should handle SendMessage command with text and images", async () => {
-		// Arrange
-		const messageText = "Analyze this image"
-		const images = [
-			"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-		]
+	it("forwards images alongside the text", async () => {
+		const task = liveTask("t1")
+		getManagedTaskInstance.mockReturnValue(task)
+		const images = ["data:image/png;base64,image1data", "data:image/png;base64,image2data"]
 
-		// Act
-		await api.sendMessage(messageText, images)
+		await api.sendMessage("t1", "compare these", images)
 
-		// Assert
-		expect(mockPostMessageToWebview).toHaveBeenCalledWith({
-			type: "invoke",
-			invoke: "sendMessage",
-			text: messageText,
-			images,
-		})
+		expect(task.submitUserMessage).toHaveBeenCalledWith("compare these", images)
 	})
 
-	it("should handle SendMessage command with images only", async () => {
-		// Arrange
-		const images = [
-			"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-		]
+	it("falls back to the current task when its id matches the addressed one", async () => {
+		// managedTasks holds only BACKGROUNDED instances; the foreground task is on
+		// the stack, so the current task answers for its own id.
+		const task = liveTask("t-current")
+		getCurrentTask.mockReturnValue(task)
 
-		// Act
-		await api.sendMessage(undefined, images)
+		await api.sendMessage("t-current", "hello")
 
-		// Assert
-		expect(mockPostMessageToWebview).toHaveBeenCalledWith({
-			type: "invoke",
-			invoke: "sendMessage",
-			text: undefined,
-			images,
-		})
+		expect(task.submitUserMessage).toHaveBeenCalledWith("hello", undefined)
 	})
 
-	it("should handle SendMessage command with empty parameters", async () => {
-		// Act
-		await api.sendMessage()
+	it("does not deliver to the current task when the addressed id differs", async () => {
+		const task = liveTask("t-current")
+		getCurrentTask.mockReturnValue(task)
 
-		// Assert
-		expect(mockPostMessageToWebview).toHaveBeenCalledWith({
-			type: "invoke",
-			invoke: "sendMessage",
-			text: undefined,
-			images: undefined,
-		})
+		await api.sendMessage("t-other", "hello")
+
+		expect(task.submitUserMessage).not.toHaveBeenCalled()
+		expect(mockLog).toHaveBeenCalledWith(expect.stringContaining("no live task instance for t-other"))
 	})
 
-	it("should log SendMessage command when processed via IPC", async () => {
-		// This test verifies the logging behavior when the command comes through IPC
-		// We need to simulate the IPC handler directly since we can't easily test the full IPC flow
+	it("drops the message when the host knows no such task", async () => {
+		await api.sendMessage("nope", "hello")
 
-		const messageText = "Test message from IPC"
-		const commandData = {
-			text: messageText,
-			images: undefined,
-		}
-
-		// Simulate the IPC command handler calling sendMessage
-		mockLog(`[API] SendMessage -> ${commandData.text}`)
-		await api.sendMessage(commandData.text, commandData.images)
-
-		// Assert that logging occurred
-		expect(mockLog).toHaveBeenCalledWith(`[API] SendMessage -> ${messageText}`)
-
-		// Assert that the message was sent
-		expect(mockPostMessageToWebview).toHaveBeenCalledWith({
-			type: "invoke",
-			invoke: "sendMessage",
-			text: messageText,
-			images: undefined,
-		})
+		expect(mockLog).toHaveBeenCalledWith(expect.stringContaining("no live task instance for nope"))
+		expect(mockPostMessageToWebview).not.toHaveBeenCalled()
 	})
 
-	it("should handle SendMessage with multiple images", async () => {
-		// Arrange
-		const messageText = "Compare these images"
-		const images = [
-			"data:image/png;base64,image1data",
-			"data:image/png;base64,image2data",
-			"data:image/png;base64,image3data",
-		]
+	it.each([
+		["abandoned", { abandoned: true }],
+		["aborted", { abort: true }],
+	])("drops the message when the addressed task is %s", async (_label, over) => {
+		const task = liveTask("t1", over)
+		getManagedTaskInstance.mockReturnValue(task)
 
-		// Act
-		await api.sendMessage(messageText, images)
+		await api.sendMessage("t1", "hello")
 
-		// Assert
-		expect(mockPostMessageToWebview).toHaveBeenCalledWith({
-			type: "invoke",
-			invoke: "sendMessage",
-			text: messageText,
-			images,
-		})
-		expect(mockPostMessageToWebview).toHaveBeenCalledTimes(1)
+		expect(task.submitUserMessage).not.toHaveBeenCalled()
+		expect(mockLog).toHaveBeenCalledWith(expect.stringContaining("no live task instance for t1"))
 	})
 })

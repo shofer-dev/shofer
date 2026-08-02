@@ -49,14 +49,14 @@ describe("ShoferAPI.startNewTask — plugin task placement", () => {
 				method === "resolve-task-cwd" ? { cwd: "/test/workspace/.worktrees/shofer-ab12c" } : undefined,
 		})
 
-		await api.startNewTask({ text: "hello" })
+		await api.createTask({ prompt: "hello" })
 
 		expect(createTask).toHaveBeenCalledTimes(1)
 		expect(createTask.mock.calls[0]![5]).toBe("/test/workspace/.worktrees/shofer-ab12c")
 	})
 
 	it("runs it in the workspace when no plugin answers", async () => {
-		await api.startNewTask({ text: "hello" })
+		await api.createTask({ prompt: "hello" })
 
 		expect(createTask.mock.calls[0]![5]).toBeUndefined()
 	})
@@ -68,7 +68,7 @@ describe("ShoferAPI.startNewTask — plugin task placement", () => {
 				method === "resolve-task-cwd" ? { error: "worktree creation failed: disk full" } : undefined,
 		})
 
-		await expect(api.startNewTask({ text: "hello" })).rejects.toThrow(/disk full/)
+		await expect(api.createTask({ prompt: "hello" })).rejects.toThrow(/disk full/)
 		expect(createTask).not.toHaveBeenCalled()
 	})
 })

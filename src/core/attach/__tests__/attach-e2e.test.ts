@@ -2,7 +2,13 @@ import { EventEmitter } from "node:events"
 import type { IncomingMessage, ServerResponse } from "node:http"
 
 import { ShoferEventName, type HistoryItem, type ShoferAPI, type ShoferMessage } from "@shofer/types"
-import { ShoferApiAgent, ShoferHttpClient, createRequestHandler } from "@shofer/core"
+import {
+	FORWARDED_EVENTS,
+	ShoferApiAgent,
+	ShoferHttpClient,
+	createRequestHandler,
+	findOutstandingAsk,
+} from "@shofer/core"
 
 import { TaskAttachmentManager, type AttachViewHost } from "../TaskAttachmentManager"
 
@@ -112,17 +118,39 @@ function makeServedHost() {
 				taskState: { lifecycle: "running" },
 			},
 		],
+		// The host assembles its own snapshot (the real `API` does this against its
+		// task store); the outstanding-ask rule is the shipped helper, not a copy.
+		getTaskSnapshot: async (taskId: string) => {
+			if (taskId !== "t1") return undefined
+			return {
+				taskId,
+				summary: "rename the widget module",
+				createdAt: 1700,
+				state: { lifecycle: "running" as const },
+				messages: [...messages],
+				outstandingAsk: findOutstandingAsk(messages),
+				tokenUsage: { totalTokensIn: 120, totalTokensOut: 30, totalCost: 0.04, contextTokens: 900 },
+			}
+		},
+		subscribe: (listener: (event: { type: string; args: unknown[] }) => void) => {
+			const handlers = FORWARDED_EVENTS.map((name) => {
+				const handler = (...args: unknown[]) => listener({ type: name, args })
+				emitter.on(name, handler)
+				return { name, handler }
+			})
+			return () => handlers.forEach(({ name, handler }) => emitter.off(name, handler))
+		},
 		respondToAsk: async (taskId: string, response: unknown) => {
 			answered.push({ taskId, response })
 		},
-		sendMessage: async (text?: string) => {
-			sent.push(text ?? "")
+		sendMessage: async (_taskId: string, message: string) => {
+			sent.push(message)
 		},
 		resumeTask: async () => {},
-		cancelCurrentTask: async () => {
-			cancelled.push("t1")
+		cancelTask: async (taskId: string) => {
+			cancelled.push(taskId)
 		},
-		startNewTask: async () => "t1",
+		createTask: async () => ({ taskId: "t1" }),
 		pluginRequest: async () => null,
 	}) as unknown as ShoferAPI & EventEmitter
 
