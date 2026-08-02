@@ -785,7 +785,7 @@ Discovered during the 2026-05-20 review that verified every file path, line numb
 
 - **`serialized-embedder.ts` not documented** — the embedders directory contains a 9th file (`serialized-embedder.ts`) that wraps an `IEmbedder` in a concurrency lane (`embedder-lane.ts`). Neither file is mentioned in the embedder provider table (§8) or architecture diagram.
 
-- **`embeddingModels.ts` path is imprecise** — the doc says "resolved via `shared/embeddingModels.ts`" (§8). The file lives at [`src/shared/embeddingModels.ts`](../../packages/core/src/shared/embeddingModels.ts), not under `src/shared/`. The doc should use an absolute or workspace-relative link.
+- **`embeddingModels.ts` path is imprecise** — the doc says "resolved via `shared/embeddingModels.ts`" (§8). The file lives at [`packages/core/src/shared/embeddingModels.ts`](../../packages/core/src/shared/embeddingModels.ts), not under `src/shared/`. The doc should use an absolute or workspace-relative link.
 
 ### Interfaces
 

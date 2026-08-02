@@ -2,14 +2,13 @@
 
 > Design doc: [`plugins/live-memory/DESIGN.md`](../../plugins/live-memory/DESIGN.md)
 > User manual: [`docs/user-manual/live-memory.md`](../docs/user-manual/live-memory.md)
-> Implementation: [`src/services/live-memory/manager.ts`](../src/services/live-memory/manager.ts),
-> [`src/services/live-memory/conversation-store.ts`](../src/services/live-memory/conversation-store.ts),
-> [`src/services/live-memory/question-queue.ts`](../src/services/live-memory/question-queue.ts),
-> [`src/services/live-memory/context-window.ts`](../src/services/live-memory/context-window.ts),
-> [`src/services/live-memory/llm-client.ts`](../src/services/live-memory/llm-client.ts),
-> [`src/services/live-memory/tool-executor.ts`](../src/services/live-memory/tool-executor.ts),
-> [`packages/core/src/tools/AskLiveMemoryTool.ts`](../packages/core/src/tools/AskLiveMemoryTool.ts),
-> [`src/core/webview/LiveMemoryChatProvider.ts`](../src/core/webview/LiveMemoryChatProvider.ts)
+> Implementation: [`plugins/live-memory/main.ts`](../../plugins/live-memory/main.ts),
+> [`plugins/live-memory/memory-store.ts`](../../plugins/live-memory/memory-store.ts),
+> [`plugins/live-memory/question-queue.ts`](../../plugins/live-memory/question-queue.ts),
+> [`plugins/live-memory/context-window.ts`](../../plugins/live-memory/context-window.ts),
+> [`plugins/live-memory/memory-llm.ts`](../../plugins/live-memory/memory-llm.ts),
+> [`plugins/live-memory/tool-executor.ts`](../../plugins/live-memory/tool-executor.ts),
+> [`plugins/live-memory/ui/panel.tsx`](../../plugins/live-memory/ui/panel.tsx)
 
 ## Prerequisites
 

@@ -6,7 +6,7 @@
 > [`plugins/rag-indexing/src/orchestrator.ts`](../../plugins/rag-indexing/src/orchestrator.ts),
 > [`plugins/rag-indexing/src/indexing/scanner.ts`](../../plugins/rag-indexing/src/indexing/scanner.ts),
 > [`plugins/rag-indexing/src/indexing/file-watcher.ts`](../../plugins/rag-indexing/src/indexing/file-watcher.ts),
-> [`packages/core/src/tools/RagSearchTool.ts`](../packages/core/src/tools/RagSearchTool.ts)
+> [`plugins/rag-indexing/src/main.ts`](../../plugins/rag-indexing/src/main.ts)
 
 ## Prerequisites
 

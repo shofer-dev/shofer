@@ -281,16 +281,16 @@ This is the subject of [`todos/webview-ui-blank-page.md`](../todos/webview-ui-bl
 
 | File                                                                                                      | Role                                                            |
 | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [`src/extension.ts:264`](../src/extension.ts)                                                             | Registers ShoferProvider as WebviewViewProvider                 |
-| [`src/core/webview/ShoferProvider.ts:1230`](../src/core/webview/ShoferProvider.ts)                        | `resolveWebviewView` — host-side webview lifecycle              |
-| [`src/core/webview/ShoferProvider.ts:2020`](../src/core/webview/ShoferProvider.ts)                        | `getHtmlContent` — production HTML generation                   |
-| [`src/core/webview/ShoferProvider.ts:1907`](../src/core/webview/ShoferProvider.ts)                        | `getHMRHtmlContent` — dev/HMR HTML generation                   |
-| [`src/core/webview/ShoferProvider.ts:2848`](../src/core/webview/ShoferProvider.ts)                        | `postStateToWebview` — pushes full state to webview             |
-| [`src/core/webview/ShoferProvider.ts:1783`](../src/core/webview/ShoferProvider.ts)                        | `postMessageToWebview` — wrapped `view?.webview.postMessage()`  |
-| [`src/core/webview/ShoferProvider.ts:839`](../src/core/webview/ShoferProvider.ts)                         | `_startHeartbeat` — ping/pong liveness monitor                  |
-| [`src/core/webview/ShoferProvider.ts:906`](../src/core/webview/ShoferProvider.ts)                         | `_onFatalError` — crash report handler                          |
-| [`src/core/webview/ShoferProvider.ts:1018`](../src/core/webview/ShoferProvider.ts)                        | `_resetWebview` — webview reload                                |
-| [`src/core/webview/ShoferProvider.ts:2094`](../src/core/webview/ShoferProvider.ts)                        | `setWebviewMessageListener` — wires host message handler        |
+| [`src/extension.ts`](../src/extension.ts)                                                                 | Registers ShoferProvider as WebviewViewProvider                 |
+| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                             | `resolveWebviewView` — host-side webview lifecycle              |
+| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                             | `getHtmlContent` — production HTML generation                   |
+| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                             | `getHMRHtmlContent` — dev/HMR HTML generation                   |
+| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                             | `postStateToWebview` — pushes full state to webview             |
+| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                             | `postMessageToWebview` — wrapped `view?.webview.postMessage()`  |
+| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                             | `_startHeartbeat` — ping/pong liveness monitor                  |
+| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                             | `_onFatalError` — crash report handler                          |
+| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                             | `_resetWebview` — webview reload                                |
+| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                             | `setWebviewMessageListener` — wires host message handler        |
 | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)               | Routes all webview messages to handlers                         |
 | [`webview-ui/src/index.tsx`](../webview-ui/src/index.tsx)                                                 | Webview entry point — crash guard, heartbeat, React mount       |
 | [`webview-ui/src/utils/vscode.ts`](../webview-ui/src/utils/vscode.ts)                                     | `acquireVsCodeApi()` singleton wrapper                          |

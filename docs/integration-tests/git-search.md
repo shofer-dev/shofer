@@ -6,7 +6,7 @@
 > [`plugins/rag-indexing/src/git-index-service/git-history-orchestrator.ts`](../../plugins/rag-indexing/src/git-index-service/git-history-orchestrator.ts),
 > [`plugins/rag-indexing/src/git-index-service/processors/git-log-extractor.ts`](../../plugins/rag-indexing/src/git-index-service/processors/git-log-extractor.ts),
 > [`plugins/rag-indexing/src/git-index-service/processors/git-watcher.ts`](../../plugins/rag-indexing/src/git-index-service/processors/git-watcher.ts),
-> [`packages/core/src/tools/GitSearchTool.ts`](../packages/core/src/tools/GitSearchTool.ts)
+> [`plugins/rag-indexing/src/main.ts`](../../plugins/rag-indexing/src/main.ts)
 
 ## Prerequisites
 

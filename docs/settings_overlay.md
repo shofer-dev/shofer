@@ -1310,7 +1310,7 @@ around a **staged-save (buffered) pattern**:
   [`ShoferWorkersSettings`](../webview-ui/src/components/settings/ShoferWorkersSettings.tsx)
   (`commitNodeBuffers()` / `discardNodeBuffers()` — load-balancer policy and per-node
   enable/disable), and
-  [`RagIndexerSettings`](../webview-ui/src/components/settings/RagIndexerSettings.tsx)
+  [`RagIndexerSettings`](../plugins/rag-indexing/ui/settings.tsx)
   (`saveCodeIndexSecrets()`).
 - **Nothing in Settings applies before Save.** Every control either writes
   `cachedState` or stages into one of the buffers above; see the "Settings View

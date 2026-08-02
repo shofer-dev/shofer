@@ -36,13 +36,13 @@ Both bugs below have the same shape: the extension is advertised as supported in
 `case`, so the `default:` throws `"Unsupported language: <ext>"`. Impact depends
 on the call site:
 
-- **Indexing path** ([`processors/parser.ts::parseContent`](../extensions/shofer/src/services/code-index/processors/parser.ts:120)) catches the throw, emits `CODE_INDEX_ERROR` telemetry, and returns `[]` — so the file is silently dropped from the RAG index and every such file produces error spam.
+- **Indexing path** ([`processors/parser.ts::parseContent`](../plugins/rag-indexing/src/engine/processors/parser.ts)) catches the throw, emits `CODE_INDEX_ERROR` telemetry, and returns `[]` — so the file is silently dropped from the RAG index and every such file produces error spam.
 - **Definitions path** ([`tree-sitter/index.ts::parseSourceCodeDefinitionsForFile`](../packages/core/src/services/tree-sitter/index.ts), used by the `list_code_definition_names` tool) does NOT catch the throw → the tool call fails on the affected file.
 
 ### 1. ✅ `.elm` files are unindexable / crash `list_code_definition_names`
 
 - **Status:** FIXED
-- **Fix:** Added `.elm` to [`fallbackExtensions`](../extensions/shofer/src/services/code-index/shared/supported-extensions.ts:24) with comment "Elm — no WASM parser available".
+- **Fix:** Added `.elm` to [`fallbackExtensions`](../plugins/rag-indexing/src/engine/shared/supported-extensions.ts) with comment "Elm — no WASM parser available".
 - Option A chosen (no Elm WASM available).
 
 ### 2. ✅ `.htm` files are unindexable / crash `list_code_definition_names`
@@ -57,7 +57,7 @@ on the call site:
 ### 3. 🔴 `.swift` parser loaded but never used — NOT FIXED
 
 - **File**: [`languageParser.ts`](../packages/core/src/services/tree-sitter/languageParser.ts)
-- **File**: [`shared/supported-extensions.ts`](../extensions/shofer/src/services/code-index/shared/supported-extensions.ts:23)
+- **File**: [`shared/supported-extensions.ts`](../plugins/rag-indexing/src/engine/shared/supported-extensions.ts)
 - `.swift` is still in `fallbackExtensions` → `parseContent()` returns fallback-chunked blocks BEFORE reaching `loadRequiredLanguageParsers`. The switch case (loading swift WASM + `swiftQuery`) is never reached.
 - **Options**: either remove `.swift` from fallbackExtensions (to actually use the parser) or remove the dead switch case.
 

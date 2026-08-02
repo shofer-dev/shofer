@@ -387,7 +387,7 @@ no proxy model-loading in the actual implementation. To add a brand-new provider
 
 ## Cloud Profile Sync
 
-**File:** [`src/core/config/ProviderSettingsManager.ts:699`](../src/core/config/ProviderSettingsManager.ts)
+**File:** [`src/core/config/ProviderSettingsManager.ts`](../src/core/config/ProviderSettingsManager.ts)
 
 When organization settings include `providerProfiles`, the extension syncs them to the local provider profiles:
 

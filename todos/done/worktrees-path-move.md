@@ -4,7 +4,7 @@
 > top-level `<workspace>/.worktrees/` (not the "exempt from `PROTECTED_PATTERNS`"
 > alternative), and the old-path shim stays for one release. What remains is
 > removing that shim — tracked in
-> [`plugins/worktrees/TODO.md`](../../plugins/worktrees/TODO.md).
+> [`plugins/basics/TODO.md`](../../plugins/basics/TODO.md).
 
 ## The change
 
@@ -15,7 +15,7 @@ Embedded worktrees move from
 ```
 
 one level up, still inside the opened workspace folder. The embedded model
-([`plugins/worktrees/DESIGN.md`](../../plugins/worktrees/DESIGN.md) §3) is unchanged:
+([`plugins/basics/docs/worktrees.md`](../../plugins/basics/docs/worktrees.md) §3) is unchanged:
 worktrees stay in the window the user already has open, which is what makes
 parallel agents, in-window task switching and merge-back work without a second
 window.
@@ -53,7 +53,7 @@ consumers is a safety property:
 The first three matter most: they fail **silently and open**. A task in a
 worktree at the new path would simply not be recognised, so confinement and the
 sandbox would be absent with no error — the exact outcome
-[`plugins/worktrees/DESIGN.md`](../../plugins/worktrees/DESIGN.md) §5 keeps in core so
+[`plugins/basics/docs/worktrees.md`](../../plugins/basics/docs/worktrees.md) §5 keeps in core so
 that "a safety property a user can remove by disabling a plugin is not a safety
 property".
 

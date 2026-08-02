@@ -14,7 +14,7 @@
 > [`shellQuote()`](../packages/core/src/tools/ExecuteCommandTool.ts) +
 > sandbox prefix application at [`ExecuteCommandTool.ts:136`](../packages/core/src/tools/ExecuteCommandTool.ts),
 > the rename-boundary guard at [`RenameSymbolTool.ts:141`](../packages/core/src/tools/RenameSymbolTool.ts), and
-> the wrapper binary [`sandbox/main.go`](../src/sandbox/main.go) + [`sandbox/main_test.go`](../src/sandbox/main_test.go).
+> the wrapper binary [`src/sandbox/main.go`](../src/sandbox/main.go) + [`src/sandbox/main_test.go`](../src/sandbox/main_test.go).
 >
 > **Known gap:** the committed binary [`sandbox/shofer-sandbox`](extensions/shofer/sandbox/shofer-sandbox)
 > is x86-64 / not-stripped, with no Bazel target and no `go.work` entry — arm64 deploys fail with a

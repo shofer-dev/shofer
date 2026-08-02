@@ -8,7 +8,7 @@ exists in the codebase yet — verified by `grep -r syncWorktreeInclude` returni
 ## Priority
 
 **Medium-low.** The Shofer UI's "Create worktree" button already runs the copy via
-[`handleCreateWorktree`](../extensions/Shofer/src/core/webview/worktree/handlers.ts#L151),
+[`handleCreateWorktree`](../plugins/basics/src/worktrees/feature.ts#L151),
 so the **happy path is covered**. This feature is only needed for repair/refresh.
 
 ### When it actually breaks
@@ -77,7 +77,7 @@ once, at worktree-creation time.
 ### Root Cause
 
 The `.worktreeinclude` copy mechanism runs only inside
-[`handleCreateWorktree`](../extensions/Shofer/src/core/webview/worktree/handlers.ts#L151)
+[`handleCreateWorktree`](../plugins/basics/src/worktrees/feature.ts#L151)
 via `worktreeIncludeService.copyWorktreeIncludeFiles(...)`. After that point there is no
 re-sync, so:
 
@@ -99,7 +99,7 @@ Note for anyone updating this design: separate-window worktrees were dropped in 
   `task.cwd`. There is **no** `handleSwitchWorktree` and no per-worktree window activation
   hook to piggy-back on.
 - Worktree selection happens in
-  [`WorktreeIndicator`](../extensions/Shofer/webview-ui/src/components/chat/WorktreeIndicator.tsx)
+  [`WorktreeIndicator`](../plugins/basics/ui/indicator.tsx)
   before the first message; once a task starts, its `cwd` is locked.
 
 This means Phase 3's "auto-repair on switch/activation" needs different hooks than the doc
@@ -107,7 +107,7 @@ originally assumed — see Phase 3 below.
 
 ## Existing Building Block
 
-[`worktreeIncludeService.copyWorktreeIncludeFiles(sourceDir, targetDir, progressCallback?)`](../extensions/Shofer/packages/core/src/worktree/worktree-include.ts#L117)
+[`worktreeIncludeService.copyWorktreeIncludeFiles(sourceDir, targetDir, progressCallback?)`](../plugins/basics/src/worktrees/worktree-include.ts#L117)
 already implements the copy logic (intersection of `.worktreeinclude` ∩ `.gitignore`, recursive
 copy with size + progress reporting). The sync feature just needs to:
 
@@ -157,7 +157,7 @@ embedded model:
 
 ### Phase 4 — UI Integration
 
-The post-097b4d911 UX is the [`WorktreeIndicator`](../extensions/Shofer/webview-ui/src/components/chat/WorktreeIndicator.tsx)
+The post-097b4d911 UX is the [`WorktreeIndicator`](../plugins/basics/ui/indicator.tsx)
 chip in the chat input bar; there is no longer a `WorktreesView` panel. So:
 
 - In the indicator's popover, badge each worktree row with "N items missing" / "N stale"
@@ -168,15 +168,15 @@ chip in the chat input bar; there is no longer a `WorktreesView` panel. So:
 
 ## Files to Modify
 
-| File                                                                                                 | Change                                                                                                              |
-| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| [`worktree-include.ts`](../extensions/Shofer/packages/core/src/worktree/worktree-include.ts)         | Add `syncWorktreeIncludeFiles(sourceDir, targetDir, { force })` on top of existing `copyWorktreeIncludeFiles`       |
-| [`handlers.ts`](../extensions/Shofer/src/core/webview/worktree/handlers.ts)                          | Add `handleSyncWorktreeInclude(provider, worktreePath, force)`; resolve main via `worktreeService.detectBaseBranch` |
-| [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                         | Add `"syncWorktreeInclude"` to the `WebviewMessage` discriminator (message types live here, not in `worktree.ts`)   |
-| [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                           | Add `case "syncWorktreeInclude"` wiring                                                                             |
-| [`WorktreeIndicator.tsx`](../extensions/Shofer/webview-ui/src/components/chat/WorktreeIndicator.tsx) | Phase 4: stale/missing badges + sync action per row                                                                 |
-| [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                                     | Phase 3: pre-spawn missing-only sync when a task is created with `worktreeDir`                                      |
-| [`WorktreeTool.ts`](../extensions/Shofer/src/core/tools/WorktreeTool.ts)                             | Phase 3: `worktree sync` subcommand for the agent / CLI-rescue case                                                 |
+| File                                                                         | Change                                                                                                              |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [`worktree-include.ts`](../plugins/basics/src/worktrees/worktree-include.ts) | Add `syncWorktreeIncludeFiles(sourceDir, targetDir, { force })` on top of existing `copyWorktreeIncludeFiles`       |
+| [`handlers.ts`](../plugins/basics/src/worktrees/feature.ts)                  | Add `handleSyncWorktreeInclude(provider, worktreePath, force)`; resolve main via `worktreeService.detectBaseBranch` |
+| [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts) | Add `"syncWorktreeInclude"` to the `WebviewMessage` discriminator (message types live here, not in `worktree.ts`)   |
+| [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)   | Add `case "syncWorktreeInclude"` wiring                                                                             |
+| [`WorktreeIndicator.tsx`](../plugins/basics/ui/indicator.tsx)                | Phase 4: stale/missing badges + sync action per row                                                                 |
+| [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)             | Phase 3: pre-spawn missing-only sync when a task is created with `worktreeDir`                                      |
+| [`WorktreeTool.ts`](../plugins/basics/src/worktrees/feature.ts)              | Phase 3: `worktree sync` subcommand for the agent / CLI-rescue case                                                 |
 
 ## IPC Messages
 

@@ -279,7 +279,7 @@ instead of wasting a round-trip with `escalate @Human reason: "…"`. The
 param-collection form renders the `description` as markdown beneath the field label,
 guiding the user to fill it in before the flow starts.
 
-See [`src/media/workflows/debug.slang`](../src/media/workflows/debug.slang) for the canonical example.
+See [`plugins/builtin-config/workflows/debug.slang`](../plugins/builtin-config/workflows/debug.slang) for the canonical example.
 
 ---
 

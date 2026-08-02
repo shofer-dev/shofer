@@ -117,7 +117,7 @@ restarts the whole VS Code window behind a confirmation dialog.
 
 ## 3. Layer 1 — `installWebviewCrashGuard()` IIFE
 
-**File:** [`webview-ui/src/index.tsx:22-59`](../webview-ui/src/index.tsx)
+**File:** [`webview-ui/src/index.tsx`](../webview-ui/src/index.tsx)
 
 An immediately-invoked function expression runs **before** `createRoot().render()`,
 before React mounts. It installs three raw DOM event listeners on `window` and
@@ -247,7 +247,7 @@ short-circuits this by triggering `_resetWebview()` immediately (see §6).
 
 ## 5. Layer 3 — Heartbeat Timer
 
-**File:** [`src/core/webview/ShoferProvider.ts:202-855`](../src/core/webview/ShoferProvider.ts)
+**File:** [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)
 
 The extension host maintains a periodic heartbeat to detect **silent**
 renderer deaths (OOM kill, GPU process crash, IPC channel drop) where no
@@ -361,7 +361,7 @@ are separate modules.
 
 ## 6. Webview Message Handler Dispatching
 
-**File:** [`src/core/webview/webviewMessageHandler.ts:599-605, 4114-4131`](../src/core/webview/webviewMessageHandler.ts)
+**File:** [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)
 
 ### 6.1 `webviewDidLaunch`
 
