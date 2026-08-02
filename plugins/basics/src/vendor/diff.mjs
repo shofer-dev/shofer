@@ -1,4 +1,4 @@
-// ../../node_modules/.pnpm/diff@5.2.0/node_modules/diff/lib/index.mjs
+// ../../node_modules/.pnpm/diff@5.2.2/node_modules/diff/lib/index.mjs
 function Diff() {
 }
 Diff.prototype = {
@@ -387,9 +387,9 @@ function parsePatch(uniDiff) {
       if (/^(\-\-\-|\+\+\+|@@)\s/.test(line)) {
         break;
       }
-      var header = /^(?:Index:|diff(?: -r \w+)+)\s+(.+?)\s*$/.exec(line);
-      if (header) {
-        index.index = header[1];
+      var headerMatch = /^(?:Index:|diff(?: -r \w+)+)\s+/.exec(line);
+      if (headerMatch) {
+        index.index = line.substring(headerMatch[0].length).trim();
       }
       i++;
     }
@@ -410,12 +410,12 @@ function parsePatch(uniDiff) {
     }
   }
   function parseFileHeader(index) {
-    var fileHeader = /^(---|\+\+\+)\s+(.*)$/.exec(diffstr[i]);
-    if (fileHeader) {
-      var keyPrefix = fileHeader[1] === "---" ? "old" : "new";
-      var data = fileHeader[2].split("	", 2);
+    var fileHeaderMatch = /^(---|\+\+\+)\s+/.exec(diffstr[i]);
+    if (fileHeaderMatch) {
+      var keyPrefix = fileHeaderMatch[1] === "---" ? "old" : "new";
+      var data = diffstr[i].substring(3).trim().split("	", 2);
       var fileName = data[0].replace(/\\\\/g, "\\");
-      if (/^".*"$/.test(fileName)) {
+      if (fileName.startsWith('"') && fileName.endsWith('"')) {
         fileName = fileName.substr(1, fileName.length - 2);
       }
       index[keyPrefix + "FileName"] = fileName;
