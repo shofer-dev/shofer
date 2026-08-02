@@ -1153,6 +1153,11 @@ entirely empty effective mode list surfaces as an error when a prompt is built
 [`no-bundled-plugins.spec.ts`](../packages/core/src/plugins/__tests__/no-bundled-plugins.spec.ts).
 The default build is unchanged and ships all bundled plugins.
 
+The flag is part of the turbo cache key for the `bundle` task (`src/turbo.json` →
+`env`), so the two flavors never replay each other's cached `dist/**` — without that,
+alternating flavors on one working tree would silently package whichever flavor turbo
+cached last.
+
 ### Package format
 
 A plugin is distributed as a `.shofer-plugin` archive (gzip tarball) containing

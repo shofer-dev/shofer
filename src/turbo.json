@@ -4,6 +4,7 @@
 	"tasks": {
 		"bundle": {
 			"dependsOn": ["^build", "@shofer/vscode-webview#build"],
+			"env": ["SHOFER_NO_BUNDLED_PLUGINS"],
 			"inputs": [
 				"extension.ts",
 				"esbuild.mjs",
