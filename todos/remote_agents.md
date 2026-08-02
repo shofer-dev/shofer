@@ -320,11 +320,12 @@ reappear in the panel and re-attach with full history.
 
 The same reasoning eventually retires the in-process Slang workflow backend
 (`WorkflowTask.slangLoop()`): with dispatch and attachment in place, a
-workflow runs on an integrator's durable orchestrator — specs authored and
-started **by reference**, never handed inline to a trusted interpreter; stakes
-observed via the attachment primitive — and the second engine is removed
-rather than maintained. Tracked with the integrator's pipeline design, not in
-this doc.
+workflow runs as a **durable interpreter workflow on the same dispatch
+plane** — executed in the trust domain of whoever started it (a
+workspace-started flow runs on that project's own workers and queue, never
+inside a privileged interpreter) — with its stakes observed via the
+attachment primitive, and the second engine is removed rather than
+maintained. Tracked with the integrator's pipeline design, not in this doc.
 
 ### Ordering rationale
 
