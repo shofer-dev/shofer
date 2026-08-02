@@ -148,13 +148,13 @@ flowchart TD
 
 Condensation failures are surfaced via localized error strings:
 
-| Error Key                                                                              | Condition                                                                    |
-| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [`condense_not_enough_messages`](extensions/shofer/src/i18n/locales/en/common.json:62) | Fewer than 2 messages to summarize                                           |
-| [`condensed_recently`](extensions/shofer/src/i18n/locales/en/common.json:63)           | A recent summary already exists with too few new messages                    |
-| [`condense_handler_invalid`](extensions/shofer/src/i18n/locales/en/common.json:64)     | API handler is missing or lacks `createMessage`                              |
-| [`condense_api_failed`](../packages/core/src/condense/index.ts)                        | API call threw an exception (detailed error info captured in `errorDetails`) |
-| [`condense_failed`](../packages/core/src/condense/index.ts)                            | LLM returned an empty summary                                                |
+| Error Key                                                                          | Condition                                                                    |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [`condense_not_enough_messages`](../packages/core/src/i18n/locales/en/common.json) | Fewer than 2 messages to summarize                                           |
+| [`condensed_recently`](../packages/core/src/i18n/locales/en/common.json)           | A recent summary already exists with too few new messages                    |
+| [`condense_handler_invalid`](../packages/core/src/i18n/locales/en/common.json)     | API handler is missing or lacks `createMessage`                              |
+| [`condense_api_failed`](../packages/core/src/condense/index.ts)                    | API call threw an exception (detailed error info captured in `errorDetails`) |
+| [`condense_failed`](../packages/core/src/condense/index.ts)                        | LLM returned an empty summary                                                |
 
 ### Fallback to Sliding Window Truncation
 
@@ -228,7 +228,7 @@ flowchart LR
 - Tests: [`packages/core/src/condense/__tests__/condense.spec.ts`](../packages/core/src/condense/__tests__/condense.spec.ts), [`packages/core/src/context-management/__tests__/context-management.spec.ts`](../packages/core/src/context-management/__tests__/context-management.spec.ts)
 - Types: [`packages/types/src/message.ts`](../packages/types/src/message.ts) (ShoferMessage, ContextCondense, ContextTruncation), [`packages/types/src/context-management.ts`](../packages/types/src/context-management.ts) (event types)
 - Task integration: [`packages/core/src/task/Task.ts`](../packages/core/src/task/Task.ts) (attemptApiRequest, handleContextWindowExceededError, condenseContext)
-- i18n: [`src/i18n/locales/en/common.json`](extensions/shofer/src/i18n/locales/en/common.json) (condense error strings)
+- i18n: [`packages/core/src/i18n/locales/en/common.json`](../packages/core/src/i18n/locales/en/common.json) (condense error strings)
 
 ## Gaps & Areas for Improvement
 

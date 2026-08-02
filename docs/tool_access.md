@@ -127,7 +127,7 @@ A list of broad capability groups (e.g. `read`, `write`, `execute`, `mcp`,
 
 Group definitions are in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts) as
 `TOOL_GROUPS`, which maps each group name to the concrete tool IDs it grants,
-and are re-exported from [`src/shared/tools.ts`](../src/shared/tools.ts).
+and are re-exported from [`packages/types/src/tools.ts`](../packages/types/src/tools.ts).
 
 ### `tools_allowed`
 

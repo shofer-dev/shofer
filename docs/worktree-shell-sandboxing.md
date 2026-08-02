@@ -98,7 +98,7 @@ then created via `TerminalRegistry.getOrCreateTerminal(workingDir, taskId, "exec
 
 **Where the sandbox prefix is applied.** `ExecaTerminalProcess.run()` invokes the command with
 `` execa({ shell, cwd, … })`${command}` `` at
-[`ExecaTerminalProcess.ts:43`](extensions/shofer/src/integrations/terminal/ExecaTerminalProcess.ts:43).
+[`ExecaTerminalProcess.ts:43`](../packages/core/src/terminal/ExecaTerminalProcess.ts).
 The sandbox wrapper must be the **outermost** process so the shell itself (and any subprocess it
 spawns) inherits the Landlock ruleset. The cleanest options are (a) set the execa `shell` option to
 the wrapper binary so it `exec`s the real shell under restriction, or (b) rewrite `command` to
@@ -107,7 +107,7 @@ the wrapper binary so it `exec`s the real shell under restriction, or (b) rewrit
 only the wrapper's own child is sandboxed.
 
 Note: forcing execa loses VS Code shell-integration exit-code detection;
-[`ExecaTerminalProcess.run()`](extensions/shofer/src/integrations/terminal/ExecaTerminalProcess.ts:134)
+[`ExecaTerminalProcess.run()`](../packages/core/src/terminal/ExecaTerminalProcess.ts)
 emits `exitCode: 0` on success and only surfaces non-zero via `ExecaError`. A sandbox write denial
 (EACCES) will therefore surface correctly as a non-zero `ExecaError`, but commands that succeed
 despite a denied write will not.
@@ -277,12 +277,12 @@ if it needs cross-worktree refactoring. (Note: the API here is `WorkspaceEdit.en
 ### Restore a VS Code terminal tab (with its X/kill button) for sandboxed commands
 
 **Context.** Forcing the execa backend (Phase 2) means sandboxed worktree commands run as a headless
-[`execa()`](extensions/shofer/src/integrations/terminal/ExecaTerminalProcess.ts:43) child rather than
+[`execa()`](../packages/core/src/terminal/ExecaTerminalProcess.ts) child rather than
 in a `vscode.Terminal`. Command text and streamed output are **still fully visible** — both backends
 funnel through the same `onLine` → `task.say("command_output", …)` path, so output renders live in the
 Shofer chat panel. What's lost is specifically the **VS Code integrated-terminal tab** in the bottom
 panel: the kind with its own trash/X icon. (The chat **Stop** button remains the kill affordance for
-execa, routing to [`ExecaTerminalProcess.abort()`](extensions/shofer/src/integrations/terminal/ExecaTerminalProcess.ts:163)
+execa, routing to [`ExecaTerminalProcess.abort()`](../packages/core/src/terminal/ExecaTerminalProcess.ts)
 — SIGKILL + `psTree` child reaping.) The `vscode` backend creates a real terminal via
 [`Terminal.ts`](../src/integrations/terminal/Terminal.ts); the execa backend creates
 nothing.
@@ -300,7 +300,7 @@ code-server too, so this works in the deployed environment.
 
 1. Add a `Pseudoterminal`-backed `ShoferTerminal` variant (a third `ShoferTerminalProvider` alongside
    `vscode`/`execa`, or an `execa+pty` mode) in
-   [`TerminalRegistry.createTerminal()`](extensions/shofer/src/integrations/terminal/TerminalRegistry.ts:131).
+   [`TerminalRegistry.createTerminal()`](../packages/core/src/terminal/TerminalRegistry.ts).
 2. On `Pseudoterminal.open()`, spawn the sandboxed execa process (the current `ExecaTerminalProcess`
    logic, unchanged) and pipe its stdout/stderr into the pty's `onDidWrite` emitter so output appears
    in the tab. Keep the existing `onLine` chat streaming as-is — the LLM still needs the captured

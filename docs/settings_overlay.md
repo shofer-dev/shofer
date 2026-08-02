@@ -372,7 +372,7 @@ for (const mode of settingsModes) {
 
 ### Stage 2: Overlay `customModes` onto Built-in Modes → Final List
 
-From [`getAllModes(customModes)`](../src/shared/modes.ts:119):
+From [`getAllModes(customModes)`](../packages/types/src/modes.ts):
 
 ```
 ┌────────────────────────────────────────────────┐

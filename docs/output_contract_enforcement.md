@@ -33,10 +33,10 @@ treat them separately.
 The contract is injected as **prompt prose**, then validated **after** the model
 responds:
 
-| Stage                           | Location                                                                                                                                                                                |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Contract → prompt text          | [`WorkflowTask.buildStakePrompt()`](../extensions/shofer/packages/core/src/workflow/WorkflowTask.ts:702) emits the `OUTPUT CONTRACT:` block                                             |
-| Parse + field check + re-prompt | [`WorkflowTask.collectStakeResults()`](../extensions/shofer/packages/core/src/workflow/WorkflowTask.ts:1045) runs `tryParseJson` → field-presence check → retry up to `MAX_RETRIES = 3` |
+| Stage                           | Location                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contract → prompt text          | [`WorkflowTask.buildStakePrompt()`](../src/core/workflow/WorkflowTask.ts) emits the `OUTPUT CONTRACT:` block                                            |
+| Parse + field check + re-prompt | [`WorkflowTask.collectStakeResults()`](../src/core/workflow/WorkflowTask.ts) runs `tryParseJson` → field-presence check → retry up to `MAX_RETRIES = 3` |
 
 Key fact: the `attempt_completion` tool the model sees has a **generic schema** —
 `result: string`, a `rating` enum, optional `feedback`
@@ -142,7 +142,7 @@ interface OutputField {
 ```
 
 The workflow layer just _chooses_ to stringify this into prose at
-[`buildStakePrompt()`](../extensions/shofer/packages/core/src/workflow/WorkflowTask.ts:701)
+[`buildStakePrompt()`](../src/core/workflow/WorkflowTask.ts)
 (`for (const f of op.output.fields) prompt += ...`). The structured form is
 sitting right there in `op.output`. Because `fieldType` is a closed 3-value enum
 of flat scalars (no nesting, no recursion), the AST → JSON-Schema mapping is a
@@ -162,7 +162,7 @@ function contractToJsonSchema(o: OutputSchema) {
 ```
 
 This lines up with the current validator
-([`collectStakeResults()`](../extensions/shofer/packages/core/src/workflow/WorkflowTask.ts:1045):
+([`collectStakeResults()`](../src/core/workflow/WorkflowTask.ts):
 missing-field check = all-required; object check = `type: object`). It is called
 at the same per-stake point `buildStakePrompt` runs, producing a per-task object
 that lives only for that task's requests and is GC'd with the task. **No global
@@ -216,7 +216,7 @@ forcing may itself not be honored by the DeepSeek upstream.
 
 ### Lever 3 — `response_format` (not applicable)
 
-Not plumbed anywhere in [`packages/core/src/api/`](../extensions/shofer/src/api) (zero
+Not plumbed anywhere in [`packages/core/src/api/`](../packages/core/src/api/) (zero
 references). It constrains _assistant text content_, not tool-call args, and
 termination in this agent loop is a tool call. Wrong shape for the problem; skip.
 
@@ -460,9 +460,9 @@ flowchart LR
 | [`Task.ts`](../packages/core/src/task/Task.ts)                                    | Added `completionSchema` property; threaded through 4 `buildNativeToolsArrayWithRestrictions` call sites + cache key |
 | [`build-tools.ts`](../packages/core/src/task/build-tools.ts)                      | Added `completionSchema` to `BuildToolsOptions`                                                                      |
 | [`task.ts`](../packages/types/src/task.ts)                                        | Added `completionSchema` to `CreateTaskOptions`                                                                      |
-| [`WorkflowTask.ts`](packages/core/src/workflow/WorkflowTask.ts)                   | `spawnAgentTask()` passes contract schema to agent tasks                                                             |
+| [`WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)                         | `spawnAgentTask()` passes contract schema to agent tasks                                                             |
 | [`AttemptCompletionTool.ts`](../packages/core/src/tools/AttemptCompletionTool.ts) | `result` param widened to `string \| Record<string, unknown>`; objects JSON-stringified for display/storage          |
-| [`tools.ts`](src/shared/tools.ts)                                                 | `NativeToolArgs` widened for `attempt_completion`                                                                    |
+| [`tools.ts`](../packages/types/src/tools.ts)                                      | `NativeToolArgs` widened for `attempt_completion`                                                                    |
 
 ### Test coverage
 
@@ -493,7 +493,7 @@ Run with `scripts/smoke/harness.sh [mock|ds]`. `SKIP_PART2=1` to skip.
 
 | File                                                                                             | Role                                                                                                      |
 | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| [`WorkflowTask.ts`](packages/core/src/workflow/WorkflowTask.ts)                                  | `buildStakePrompt()` (contract → prose), `collectStakeResults()` (post-hoc parse + retry)                 |
+| [`WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)                                        | `buildStakePrompt()` (contract → prose), `collectStakeResults()` (post-hoc parse + retry)                 |
 | [`slang-ast.ts`](../packages/core/src/workflow/slang-ast.ts)                                     | `OutputSchema` / `OutputField` — the typed contract AST (flat scalar fields)                              |
 | [`attempt_completion.ts`](../packages/core/src/prompts/tools/native-tools/attempt_completion.ts) | generic completion tool schema (`result: string`, `strict: true`) — correct by design                     |
 | [`build-tools.ts`](../packages/core/src/task/build-tools.ts)                                     | `filterNativeToolsForMode` — per-mode tool assembly; the per-task injection hook would live here          |

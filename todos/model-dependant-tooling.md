@@ -17,7 +17,7 @@ Claude-lineage models reach for `Bash`/`Edit`/`Grep`/`Glob`, Codex-lineage for
 We know this empirically: we already maintain
 [`CROSS_ASSISTANT_ALIASES`](../packages/types/src/tool.ts)
 (`bash → execute_command`, `search_file → find_files`, …) and
-[`PATH_ARG_ALIASES`](../extensions/shofer/src/core/assistant-message/NativeToolCallParser.ts)
+[`PATH_ARG_ALIASES`](../packages/core/src/assistant-message/NativeToolCallParser.ts)
 (`file_path`/`directory` → `path`) precisely because priors leak through
 function-calling.
 
@@ -159,21 +159,21 @@ per lineage.
 
 ### 5.1 What already exists (reuse, don't rebuild)
 
-- [`applyModelToolCustomization()`](../extensions/shofer/src/core/prompts/tools/filter-tools-for-mode.ts)
+- [`applyModelToolCustomization()`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts)
   already takes `ModelInfo` and returns `{ allowedTools, aliasRenames }` — i.e.
   **per-model tool include/exclude and rename is already wired**, driven by
   `ModelInfo.includedTools` / `excludedTools`. Today it is manual (per model-id),
   name-only, and does not touch descriptions, param shapes, or the parser.
-- [`buildNativeToolsArray()`](../extensions/shofer/src/core/task/build-tools.ts)
+- [`buildNativeToolsArray()`](../packages/core/src/task/build-tools.ts)
   assembles the final `ChatCompletionTool[]` for the turn — the single
   presentation choke point.
-- [`filterNativeToolsForMode()` / `resolveToolAlias()`](../extensions/shofer/src/core/prompts/tools/filter-tools-for-mode.ts)
+- [`filterNativeToolsForMode()` / `resolveToolAlias()`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts)
   produce the per-mode list.
 - The system prompt + tool list is **already cached keyed by `getModel().id`**
   (see `getSystemPrompt` in
-  [`Task.ts`](../extensions/shofer/src/core/task/Task.ts)), so a per-lineage
+  [`Task.ts`](../packages/core/src/task/Task.ts)), so a per-lineage
   surface is cache-compatible with no new invalidation axis.
-- [`NativeToolCallParser`](../extensions/shofer/src/core/assistant-message/NativeToolCallParser.ts)
+- [`NativeToolCallParser`](../packages/core/src/assistant-message/NativeToolCallParser.ts)
   is the acceptance side: `CROSS_ASSISTANT_ALIASES`, `PATH_ARG_ALIASES`,
   `normalizeArgAliases()`, `composeFindFilesPattern()`, XML-leak recovery,
   `lastParseError`.
@@ -288,9 +288,9 @@ see [`native_tools.md`](../docs/native_tools.md).)
 ## 9. References
 
 - Tool registry / aliases: [`packages/types/src/tool.ts`](../packages/types/src/tool.ts) (`toolNames`, `TOOL_GROUPS`, `TOOL_ALIASES`, `CROSS_ASSISTANT_ALIASES`, `TOOL_DISPLAY_NAMES`)
-- Presentation choke point: [`build-tools.ts`](../extensions/shofer/src/core/task/build-tools.ts) (`buildNativeToolsArray`)
-- Per-mode + per-model customization: [`filter-tools-for-mode.ts`](../extensions/shofer/src/core/prompts/tools/filter-tools-for-mode.ts) (`resolveToolAlias`, `applyModelToolCustomization`, `filterNativeToolsForMode`)
-- Acceptance side: [`NativeToolCallParser.ts`](../extensions/shofer/src/core/assistant-message/NativeToolCallParser.ts)
+- Presentation choke point: [`build-tools.ts`](../packages/core/src/task/build-tools.ts) (`buildNativeToolsArray`)
+- Per-mode + per-model customization: [`filter-tools-for-mode.ts`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts) (`resolveToolAlias`, `applyModelToolCustomization`, `filterNativeToolsForMode`)
+- Acceptance side: [`NativeToolCallParser.ts`](../packages/core/src/assistant-message/NativeToolCallParser.ts)
 - Existing ad-hoc lineage checks to fold in: [`lite-llm.ts`](../packages/core/src/api/providers/lite-llm.ts), [`model-params.ts`](../packages/core/src/api/transform/model-params.ts)
-- Tool schemas presented to the model: [`src/core/prompts/tools/native-tools/`](../extensions/shofer/src/core/prompts/tools/native-tools/)
+- Tool schemas presented to the model: [`packages/core/src/prompts/tools/native-tools/`](../extensions/shofer/src/core/prompts/tools/native-tools/)
 - Tool docs: [`docs/native_tools.md`](../docs/native_tools.md), [`docs/adding-new-tools.md`](../docs/adding-new-tools.md)

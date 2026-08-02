@@ -69,7 +69,7 @@ flowchart TD
 
 ### 3.1 Preview Threshold
 
-Commands produce output that streams through an [`OutputInterceptor`](../src/integrations/terminal/OutputInterceptor.ts), which uses a **head/tail buffer** strategy:
+Commands produce output that streams through an [`OutputInterceptor`](../packages/core/src/terminal/OutputInterceptor.ts), which uses a **head/tail buffer** strategy:
 
 ```
 Preview budget (per terminalOutputPreviewSize setting)
@@ -220,12 +220,12 @@ When a command is running (`status === "started"`), the UI renders an **⏹ stop
 
 This flows through:
 
-| Step          | File                                                                                                                                                                           | Line              |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- |
-| UI click      | [`CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx)                                                                                               | 178-181           |
-| IPC handler   | [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                                                                                                     | 939-941           |
-| Task dispatch | [`Task.ts`](../packages/core/src/task/Task.ts)                                                                                                                                 | 2611-2616         |
-| Terminal kill | [`TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts) (VS Code) or [`ExecaTerminalProcess.ts`](../src/integrations/terminal/ExecaTerminalProcess.ts) (execa) | 259-263 / 163-219 |
+| Step          | File                                                                                                                                                                            | Line              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| UI click      | [`CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx)                                                                                                | 178-181           |
+| IPC handler   | [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                                                                                                      | 939-941           |
+| Task dispatch | [`Task.ts`](../packages/core/src/task/Task.ts)                                                                                                                                  | 2611-2616         |
+| Terminal kill | [`TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts) (VS Code) or [`ExecaTerminalProcess.ts`](../packages/core/src/terminal/ExecaTerminalProcess.ts) (execa) | 259-263 / 163-219 |
 
 **Kill mechanism:**
 
@@ -335,7 +335,7 @@ public override continue() {
 
 After `continue()`, `isListening` is `false`, so even if `task.terminalProcess` were preserved, `abort()` would silently return without doing anything.
 
-> **Note:** [`ExecaTerminalProcess.abort()`](../src/integrations/terminal/ExecaTerminalProcess.ts:163-219) does NOT have the `isListening` guard — it always kills the subprocess. This bug is specific to the VS Code shell-integration backend.
+> **Note:** [`ExecaTerminalProcess.abort()`](../packages/core/src/terminal/ExecaTerminalProcess.ts) does NOT have the `isListening` guard — it always kills the subprocess. This bug is specific to the VS Code shell-integration backend.
 
 **Bug 3: The OctagonX button disappears after backgrounding.**
 
@@ -541,12 +541,12 @@ Total matches: 42 | Showing first 42
 
 ### 6.4 Artifact Storage & Cleanup
 
-| Aspect            | Detail                                                                                                                                            |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Storage path      | `{globalStoragePath}/tasks/{taskId}/command-output/cmd-{executionId}.txt`                                                                         |
-| Created by        | [`OutputInterceptor.spillToDisk()`](../src/integrations/terminal/OutputInterceptor.ts:267)                                                        |
-| Cleaned by        | [`OutputInterceptor.cleanup()`](../src/integrations/terminal/OutputInterceptor.ts:388) — deletes all `cmd-*.txt` (called during `Task.dispose()`) |
-| Selective cleanup | [`OutputInterceptor.cleanupByIds()`](../src/integrations/terminal/OutputInterceptor.ts:417) — preserves specific execution IDs                    |
+| Aspect            | Detail                                                                                                                                         |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Storage path      | `{globalStoragePath}/tasks/{taskId}/command-output/cmd-{executionId}.txt`                                                                      |
+| Created by        | [`OutputInterceptor.spillToDisk()`](../packages/core/src/terminal/OutputInterceptor.ts)                                                        |
+| Cleaned by        | [`OutputInterceptor.cleanup()`](../packages/core/src/terminal/OutputInterceptor.ts) — deletes all `cmd-*.txt` (called during `Task.dispose()`) |
+| Selective cleanup | [`OutputInterceptor.cleanupByIds()`](../packages/core/src/terminal/OutputInterceptor.ts) — preserves specific execution IDs                    |
 
 ---
 
@@ -600,10 +600,10 @@ The sandbox wrapper is the **outermost** process: `shofer-sandbox <worktree-dir>
 | [`packages/core/src/tools/ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts)                                             | Tool handler: validation, approval, timeout, terminal orchestration |
 | [`packages/core/src/prompts/tools/native-tools/read_command_output.ts`](../packages/core/src/prompts/tools/native-tools/read_command_output.ts) | OpenAI function-calling schema for `read_command_output`            |
 | [`packages/core/src/tools/ReadCommandOutputTool.ts`](../packages/core/src/tools/ReadCommandOutputTool.ts)                                       | Tool handler: artifact reads, search, pagination                    |
-| [`src/integrations/terminal/OutputInterceptor.ts`](../src/integrations/terminal/OutputInterceptor.ts)                                           | Head/tail buffer, spill-to-disk, preview formatting                 |
+| [`packages/core/src/terminal/OutputInterceptor.ts`](../packages/core/src/terminal/OutputInterceptor.ts)                                         | Head/tail buffer, spill-to-disk, preview formatting                 |
 | [`src/integrations/terminal/TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts)                                               | VS Code shell-integration terminal process                          |
-| [`src/integrations/terminal/ExecaTerminalProcess.ts`](../src/integrations/terminal/ExecaTerminalProcess.ts)                                     | Execa fallback terminal process                                     |
-| [`src/integrations/terminal/TerminalRegistry.ts`](../src/integrations/terminal/TerminalRegistry.ts)                                             | Terminal lifecycle management                                       |
+| [`packages/core/src/terminal/ExecaTerminalProcess.ts`](../packages/core/src/terminal/ExecaTerminalProcess.ts)                                   | Execa fallback terminal process                                     |
+| [`packages/core/src/terminal/TerminalRegistry.ts`](../packages/core/src/terminal/TerminalRegistry.ts)                                           | Terminal lifecycle management                                       |
 | [`packages/core/src/utils/worktreePathGuard.ts`](../packages/core/src/utils/worktreePathGuard.ts)                                               | Worktree sandbox prefix resolution (`getWorktreeSandboxPrefix`)     |
 | [`src/sandbox/main.go`](../src/sandbox/main.go)                                                                                                 | Landlock/bwrap sandbox wrapper binary (Go, static-linked)           |
 | [`packages/core/src/task/Task.ts`](../packages/core/src/task/Task.ts)                                                                           | Task-level abort (Stop button → `terminalProcess.abort()`)          |

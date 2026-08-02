@@ -14,7 +14,7 @@ Where the two differ, this document wins.
 > - Static analysis: [`packages/core/src/workflow/slang-resolver.ts`](../packages/core/src/workflow/slang-resolver.ts)
 > - Interpreter VM (compiler + `advanceAgent` + `MAX_CONTROL_FLOW_STEPS`): [`packages/core/src/workflow/slang-interpreter.ts`](../packages/core/src/workflow/slang-interpreter.ts)
 > - Runtime types (`FlowState`, `AgentState`, `FlowStatus`): [`packages/core/src/workflow/slang-types.ts`](../packages/core/src/workflow/slang-types.ts)
-> - Round-based orchestrator: [`packages/core/src/workflow/WorkflowTask.ts`](../packages/core/src/workflow/WorkflowTask.ts)
+> - Round-based orchestrator: [`src/core/workflow/WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)
 > - Worked examples: `.shofer/workflows/` (`hello-world.slang`, `test-slang-basics.slang`)
 
 How those pieces chain from source text to a running flow:
@@ -318,7 +318,7 @@ agent <Name> {
 
 `tools:` narrows the spawned agent Task to the listed [ToolGroup](#10-tool-groups-categories)
 names. It is threaded from the AST through
-[`WorkflowTask.spawnAgentTask()`](../packages/core/src/workflow/WorkflowTask.ts) →
+[`WorkflowTask.spawnAgentTask()`](../src/core/workflow/WorkflowTask.ts) →
 `createTask({ agentToolGroups })` → `Task` →
 [`build-tools.ts`](../packages/core/src/task/build-tools.ts) `restrictToolsToDeclaredGroups()`,
 which is applied **after** the mode's own tool filtering. Semantics:
@@ -1142,7 +1142,7 @@ rationale and a couple of items that are observations rather than fixes.
 | Worked-examples path  | `../../../../.shofer/workflows/` (one `../` too many)                                         | `../../../.shofer/workflows/`                                                                                                                                                                                                          |
 | Worked-examples files | `feature-test.slang`, `implement-feature.slang` — neither exists in `.shofer/workflows/`      | the actual files are `hello-world.slang` and `test-slang-basics.slang`                                                                                                                                                                 |
 | Flow status union     | listed 6 values, omitting `aborted`                                                           | full `FlowStatus` is 7 values incl. `aborted` ([`slang-types.ts`](../packages/core/src/workflow/slang-types.ts))                                                                                                                       |
-| Runtime budget prose  | "Budgets (`rounds`, `tokens`) are enforced…" — omitted `time`, contradicting the budget table | all three (`tokens`, `rounds`, `time`) are enforced (round-loop condition + mid-round checks in [`WorkflowTask`](../packages/core/src/workflow/WorkflowTask.ts))                                                                       |
+| Runtime budget prose  | "Budgets (`rounds`, `tokens`) are enforced…" — omitted `time`, contradicting the budget table | all three (`tokens`, `rounds`, `time`) are enforced (round-loop condition + mid-round checks in [`WorkflowTask`](../src/core/workflow/WorkflowTask.ts))                                                                                |
 | Budget defaults prose | "both limits default to unlimited"                                                            | all **three** budget types default to unlimited (0)                                                                                                                                                                                    |
 | EBNF `agent_meta`     | omitted `peers:`                                                                              | added `peers : '[' agentref … ']'` (parsed at [`slang-parser-upstream.ts`](../packages/core/src/workflow/slang-parser-upstream.ts) lines 304–324)                                                                                      |
 | Agent meta ordering   | "must appear **before** the operations"                                                       | convention only — the parser accepts meta/operations interleaved                                                                                                                                                                       |

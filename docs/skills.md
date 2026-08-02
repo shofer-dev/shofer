@@ -306,7 +306,7 @@ The `SkillsManager` has a private `validateSkillName()` wrapper and a `getSkillN
 
 ### Deprecated `mode` Field
 
-The `SkillMetadata` type ([`skills.ts`](src/shared/skills.ts:11-14)) includes a **deprecated `mode?: string`** field alongside the current `modeSlugs?: string[]`. The frontmatter parser in `loadSkillMetadata()` handles both formats with priority: `modeSlugs` > `mode` > directory-based mode. The doc's frontmatter fields table only shows `modeSlugs`.
+The `SkillMetadata` type ([`skills.ts`](../packages/types/src/skills.ts)) includes a **deprecated `mode?: string`** field alongside the current `modeSlugs?: string[]`. The frontmatter parser in `loadSkillMetadata()` handles both formats with priority: `modeSlugs` > `mode` > directory-based mode. The doc's frontmatter fields table only shows `modeSlugs`.
 
 ### Mention-Loaded Skills
 
@@ -342,7 +342,7 @@ The validation flow after frontmatter parsing includes these steps (in order), b
 | [`SkillsTool.ts`](../packages/core/src/tools/SkillsTool.ts)                        | Handler: no-op check, tracking, approval                                                                                                                       |
 | [`SkillsManager.ts`](../src/services/skills/SkillsManager.ts)                      | Discovery (`discoverSkills`, `getSkillsMetadata`, `getSkillsForMode`, `getSkillContent`), lifecycle (`createSkill`, `deleteSkill`, `moveSkill`), file watching |
 | [`skillInvocation.ts`](../packages/core/src/services/skills/skillInvocation.ts)    | Content loading, result formatting                                                                                                                             |
-| [`skills.ts`](src/shared/skills.ts)                                                | Type definitions (`SkillMetadata`, `SkillContent`)                                                                                                             |
+| [`skills.ts`](../packages/types/src/skills.ts)                                     | Type definitions (`SkillMetadata`, `SkillContent`)                                                                                                             |
 | [`skills.ts` (prompt)](../packages/core/src/prompts/sections/skills.ts)            | System prompt section generation                                                                                                                               |
 | [`skills.ts`](../packages/core/src/prompts/tools/native-tools/skills.ts)           | Native tool schema                                                                                                                                             |
 | [`skillsMessageHandler.ts`](../src/core/webview/skillsMessageHandler.ts)           | IPC handlers (requestSkills, create, delete, move)                                                                                                             |

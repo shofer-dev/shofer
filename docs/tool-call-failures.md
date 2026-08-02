@@ -198,7 +198,7 @@ This is the literal string thrown by `parseToolCall()`. It reaches the chat as t
 
 When no `tool` is supplied the prefix is instead `This mode (\<mode\>) can only edit files matching pattern: …`. The `(\<description\>)` clause is omitted when `description` is unset.
 
-**Type:** `FileRestrictionError` (custom error class — message defined in [`modes.ts`](../src/shared/modes.ts) L180-188)
+**Type:** `FileRestrictionError` (custom error class — message defined in [`modes.ts`](../packages/types/src/modes.ts) L180-188)
 
 **Location:** [`validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts) — `doesFileMatchRegex` at L252-260, `FileRestrictionError` thrown at L402-409
 

@@ -13,7 +13,7 @@ implementation is [`src/extension/api.ts`](../src/extension/api.ts).
 > the extension host). §10 publishes it over a network boundary so any client —
 > TUI, web app, third-party tool — can drive the agent, and a generated SDK can't
 > drift from it. The transport itself is
-> [`src/server/http-server.ts`](../src/server/http-server.ts): a dependency-free
+> [`packages/core/src/transport/http-server.ts`](../packages/core/src/transport/http-server.ts): a dependency-free
 > `node:http` server exposing task control over HTTP and a one-way event stream
 > over SSE (`GET /api/v1/event`), driven by an injected `AgentApi`. Wiring
 > `AgentApi` to this `ShoferAPI` (or the headless CLI agent) and generating a

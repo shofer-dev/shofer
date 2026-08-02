@@ -1,8 +1,8 @@
 # Integration Tests: System Prompt Assembly
 
 > Feature doc: [`docs/system_prompt.md`](../system_prompt.md)
-> Implementation: [`src/core/prompts/system.ts`](../src/core/prompts/system.ts),
-> [`src/core/prompts/sections/`](../src/core/prompts/sections/)
+> Implementation: [`packages/core/src/prompts/system.ts`](../../packages/core/src/prompts/system.ts),
+> [`packages/core/src/prompts/sections/`](../src/core/prompts/sections/)
 
 ## Scenarios
 

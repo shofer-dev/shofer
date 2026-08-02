@@ -3,7 +3,7 @@
 The "Shofer is having trouble…" dialog appears when [`consecutiveMistakeCount`](../packages/core/src/task/Task.ts) reaches [`consecutiveMistakeLimit`](../packages/core/src/task/Task.ts) (default: 3, configurable per API profile; 0 disables). The guard fires at the top of every iteration of [`recursivelyMakeShoferRequests()`](../packages/core/src/task/Task.ts), **before** the next API request is sent. When the limit is hit:
 
 1. Telemetry is emitted (`captureConsecutiveMistakeError` + `captureException`)
-2. An `ask("mistake_limit_reached", …)` is posted with the guidance text from [`common:errors.mistake_limit_guidance`](src/i18n/locales/en/common.json:59)
+2. An `ask("mistake_limit_reached", …)` is posted with the guidance text from [`common:errors.mistake_limit_guidance`](../packages/core/src/i18n/locales/en/common.json)
 3. If the user responds with a message, it is forwarded to the LLM as `user_feedback`
 4. `consecutiveMistakeCount` is **reset to 0** after the user reacts
 
@@ -143,9 +143,9 @@ Set per API configuration profile. A value of `0` disables the "Shofer is having
 
 ### Experimental Flag: Disable All Mistake Limit Checks
 
-| Setting                     | Default | Constant                                                                      |
-| --------------------------- | ------- | ----------------------------------------------------------------------------- |
-| `disableMistakeLimitChecks` | `false` | [`EXPERIMENT_IDS.DISABLE_MISTAKE_LIMIT_CHECKS`](src/shared/experiments.ts:11) |
+| Setting                     | Default | Constant                                                                              |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------- |
+| `disableMistakeLimitChecks` | `false` | [`EXPERIMENT_IDS.DISABLE_MISTAKE_LIMIT_CHECKS`](../packages/types/src/experiments.ts) |
 
 Located in **Settings → Experimental → "Disable mistake limit checks"**. When enabled, **all** mistake limit gating is bypassed:
 

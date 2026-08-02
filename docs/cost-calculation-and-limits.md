@@ -41,15 +41,15 @@ flowchart TD
 
 ### Key Files
 
-| File                                                                                      | Role                                                                                                              |
-| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [`Task.ts`](../packages/core/src/task/Task.ts)                                            | Emits `api_req_started`, accumulates usage during streaming, calls `updateApiReqMsg()`                            |
-| [`consolidateTokenUsage.ts`](../packages/core/src/message-utils/consolidateTokenUsage.ts) | Aggregates all `api_req_started` and `condense_context` messages into a `TokenUsage` total                        |
-| [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx)                            | Renders (or hides) the per-request `api_req_started` row in the chat                                              |
-| [`TaskHeader.tsx`](../webview-ui/src/components/chat/TaskHeader.tsx)                      | Displays the aggregated total cost                                                                                |
-| [`cost.ts`](../src/shared/cost.ts)                                                        | Provider-specific pricing functions (`calculateApiCostAnthropic`, `calculateApiCostOpenAI`, `applyCustomPricing`) |
-| [`api/index.ts`](../packages/core/src/api/index.ts)                                       | `buildApiHandler` — wraps `getModel()` to apply `customPricing` overrides when set                                |
-| [`provider-settings.ts`](../packages/types/src/provider-settings.ts)                      | `customPricing` schema field on `baseProviderSettingsSchema`                                                      |
+| File                                                                                       | Role                                                                                                              |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| [`Task.ts`](../packages/core/src/task/Task.ts)                                             | Emits `api_req_started`, accumulates usage during streaming, calls `updateApiReqMsg()`                            |
+| [`consolidateTokenUsage.ts`](../packages/types/src/message-utils/consolidateTokenUsage.ts) | Aggregates all `api_req_started` and `condense_context` messages into a `TokenUsage` total                        |
+| [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx)                             | Renders (or hides) the per-request `api_req_started` row in the chat                                              |
+| [`TaskHeader.tsx`](../webview-ui/src/components/chat/TaskHeader.tsx)                       | Displays the aggregated total cost                                                                                |
+| [`cost.ts`](../packages/types/src/cost.ts)                                                 | Provider-specific pricing functions (`calculateApiCostAnthropic`, `calculateApiCostOpenAI`, `applyCustomPricing`) |
+| [`api/index.ts`](../packages/core/src/api/index.ts)                                        | `buildApiHandler` — wraps `getModel()` to apply `customPricing` overrides when set                                |
+| [`provider-settings.ts`](../packages/types/src/provider-settings.ts)                       | `customPricing` schema field on `baseProviderSettingsSchema`                                                      |
 
 ### Step-by-Step
 
@@ -98,8 +98,8 @@ this.shoferMessages[lastApiReqIndex].text = JSON.stringify({
 
 Cost is calculated using provider-specific functions:
 
-- **Anthropic protocol**: [`calculateApiCostAnthropic`](../src/shared/cost.ts)
-- **OpenAI protocol**: [`calculateApiCostOpenAI`](../src/shared/cost.ts)
+- **Anthropic protocol**: [`calculateApiCostAnthropic`](../packages/types/src/cost.ts)
+- **OpenAI protocol**: [`calculateApiCostOpenAI`](../packages/types/src/cost.ts)
 
 `updateApiReqMsg()` is called:
 
@@ -109,7 +109,7 @@ Cost is calculated using provider-specific functions:
 
 #### 4. Aggregation — Total Cost
 
-[`consolidateTokenUsage()`](../packages/core/src/message-utils/consolidateTokenUsage.ts:29) walks all messages and sums:
+[`consolidateTokenUsage()`](../packages/types/src/message-utils/consolidateTokenUsage.ts) walks all messages and sums:
 
 | Source                      | Fields aggregated                                            |
 | --------------------------- | ------------------------------------------------------------ |
@@ -162,7 +162,7 @@ and **Size** don't apply. The workflow surface therefore uses a dedicated
 - shows **API Cost** and **Tokens** aggregated across the **entire task tree**
   (the workflow + every agent it spawned, recursively).
 
-The aggregates come from [`aggregateTaskCostsRecursive`](../src/core/webview/aggregateTaskCosts.ts),
+The aggregates come from [`aggregateTaskCostsRecursive`](../packages/core/src/webview/aggregateTaskCosts.ts),
 which walks `HistoryItem.childIds` and now sums `tokensIn`/`tokensOut` alongside
 `totalCost`. They are requested via `getTaskWithAggregatedCosts` and delivered on
 the `taskWithAggregatedCosts` message (`aggregatedCosts: { totalCost, ownCost,
@@ -455,7 +455,7 @@ tokens…)` against its own registry, **not** from the upstream
 
 Shofer already surfaces a per-task `API Cost` and an `aggregatedCost`
 that rolls subtask spend into the root task (see
-[`aggregateTaskCosts.ts`](../src/core/webview/aggregateTaskCosts.ts) and
+[`aggregateTaskCosts.ts`](../packages/core/src/webview/aggregateTaskCosts.ts) and
 the `getTaskWithAggregatedCosts` IPC path in
 [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)).
 But there was no enforcement: a runaway agentic loop on a frontier

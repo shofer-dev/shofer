@@ -636,7 +636,7 @@ Resolved by the [Recipient delivery model](#recipient-delivery-model) at send ti
 
 ### Target task has no active instance
 
-When the target has no live `Task` instance but **resumable persisted history** (non-`error` lifecycle), the [`SendMessageToTaskTool`](../packages/core/src/tools/SendMessageToTaskTool.ts) handler **rehydrates** the target via [`provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })`](../src/core/webview/ShoferProvider.ts:1490) — the same pattern used by [`WorkflowTask.resumeAgentTask`](../packages/core/src/workflow/WorkflowTask.ts:859). The freshly rehydrated instance gets a live `MessageQueueService` and the message is enqueued/queued normally.
+When the target has no live `Task` instance but **resumable persisted history** (non-`error` lifecycle), the [`SendMessageToTaskTool`](../packages/core/src/tools/SendMessageToTaskTool.ts) handler **rehydrates** the target via [`provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })`](../src/core/webview/ShoferProvider.ts:1490) — the same pattern used by [`WorkflowTask.resumeAgentTask`](../src/core/workflow/WorkflowTask.ts). The freshly rehydrated instance gets a live `MessageQueueService` and the message is enqueued/queued normally.
 
 - **Sync** — always delivered as Form B (annotated user-turn + `cancelAndProcessQueuedMessages` wake). The sender blocks until the recipient's `attempt_completion` or timeout.
 - **Async to a non-busy peer** (`completed`/`idle`/`paused`) — delivered as Form B (annotated user-turn + wake).

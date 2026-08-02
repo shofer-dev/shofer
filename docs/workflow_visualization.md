@@ -122,7 +122,7 @@ The **default view** — a directed graph showing agent relationships and data r
 
 #### Inline topology in Events (WorkflowView)
 
-WorkflowView has no Topology tab. Instead, each round's headline line in the **Events** feed is followed by a compact **Mermaid** snapshot of that round's topology, emitted by [`topologyToMermaid()`](../packages/core/src/workflow/slang-types.ts) and rendered by the existing `MarkdownBlock` → `MermaidBlock` pipeline. It mirrors the live edge logic of [`topologyCurrentEdges()`](../src/core/webview/slang-render.js): a `running` agent draws a solid **"sends to"** edge to each `sendingTo` target (`A -->|sends to| B`), a `blocked` agent draws a dashed **"waiting for"** edge to each `waitingFor` source (`B -.->|waiting for| A` — the arrow points from the waiter to what it waits on, so each edge reads as a sentence), and node colors match [`agentStatusColor()`](../src/core/webview/slang-render.js) (running green, blocked purple, committed gray, error red, idle blue). It is emitted **after** `dispatchStakes()` (in [`WorkflowTask.ts`](../packages/core/src/workflow/WorkflowTask.ts)) so `status="running"`/`sendingTo` are already set — the same live state the old Topology tab showed.
+WorkflowView has no Topology tab. Instead, each round's headline line in the **Events** feed is followed by a compact **Mermaid** snapshot of that round's topology, emitted by [`topologyToMermaid()`](../packages/core/src/workflow/slang-types.ts) and rendered by the existing `MarkdownBlock` → `MermaidBlock` pipeline. It mirrors the live edge logic of [`topologyCurrentEdges()`](../src/core/webview/slang-render.js): a `running` agent draws a solid **"sends to"** edge to each `sendingTo` target (`A -->|sends to| B`), a `blocked` agent draws a dashed **"waiting for"** edge to each `waitingFor` source (`B -.->|waiting for| A` — the arrow points from the waiter to what it waits on, so each edge reads as a sentence), and node colors match [`agentStatusColor()`](../src/core/webview/slang-render.js) (running green, blocked purple, committed gray, error red, idle blue). It is emitted **after** `dispatchStakes()` (in [`WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)) so `status="running"`/`sendingTo` are already set — the same live state the old Topology tab showed.
 
 | Feature            | Implementation                                                                                              |
 | ------------------ | ----------------------------------------------------------------------------------------------------------- |
@@ -205,7 +205,7 @@ flowchart LR
 - **Pending sends**: Agents with `sendingTo` set whose result hasn't been routed yet get dashed pending arrows (`.sequence-pending`) for the current round.
 - **No static plan**: the static AST extraction is **not** used — before the first message the view is empty, not a render of the whole plan. The standalone editor has no Sequence tab at all.
 
-> **Runtime field population.** `waitingFor` is set by the interpreter ([`slang-interpreter.ts`](../packages/core/src/workflow/slang-interpreter.ts)) when an agent blocks on an `await`; `sendingTo` is set by [`WorkflowTask.dispatchStakes()`](../packages/core/src/workflow/WorkflowTask.ts) to the staking agent's recipient list and cleared once the result is routed (or the agent errors). Both are serialized on `AgentState` and drive the runtime edge/pending overlays above.
+> **Runtime field population.** `waitingFor` is set by the interpreter ([`slang-interpreter.ts`](../packages/core/src/workflow/slang-interpreter.ts)) when an agent blocks on an `await`; `sendingTo` is set by [`WorkflowTask.dispatchStakes()`](../src/core/workflow/WorkflowTask.ts) to the staking agent's recipient list and cleared once the result is routed (or the agent errors). Both are serialized on `AgentState` and drive the runtime edge/pending overlays above.
 
 ### Swimlane
 
@@ -269,7 +269,7 @@ Each [`MailboxEntry`](../packages/core/src/workflow/slang-types.ts) carries:
 
 ### Metadata enrichment
 
-In [`collectStakeResults()`](../packages/core/src/workflow/WorkflowTask.ts), after a child agent task completes its stake, the agent's `HistoryItem` is read for `tokensIn/Out`, `totalCost`, and `activeTimeMs`. After `routeOutput()` pushes entries into `mailboxHistory`, the new entries are stamped with these values plus the child task's mode from `TaskManager`.
+In [`collectStakeResults()`](../src/core/workflow/WorkflowTask.ts), after a child agent task completes its stake, the agent's `HistoryItem` is read for `tokensIn/Out`, `totalCost`, and `activeTimeMs`. After `routeOutput()` pushes entries into `mailboxHistory`, the new entries are stamped with these values plus the child task's mode from `TaskManager`.
 
 ### Persistence chain
 
@@ -286,7 +286,7 @@ In [`collectStakeResults()`](../packages/core/src/workflow/WorkflowTask.ts), aft
 
 ### Flow metadata in TaskHeader
 
-[`buildWorkflowVizMeta(slangSource)`](../packages/core/src/workflow/WorkflowTask.ts) extracts flow metadata from the parsed AST into a typed [`WorkflowVizMeta`](../packages/types/src/vscode-extension-host.ts) object:
+[`buildWorkflowVizMeta(slangSource)`](../src/core/workflow/WorkflowTask.ts) extracts flow metadata from the parsed AST into a typed [`WorkflowVizMeta`](../packages/types/src/vscode-extension-host.ts) object:
 
 ```
 WorkflowVizMeta {
@@ -311,7 +311,7 @@ This is pushed once via `postConfigUpdate("workflowVizMeta", …)` and rendered 
 
 ### Diagram-only iframe
 
-[`buildWorkflowVizHtml()`](../packages/core/src/workflow/WorkflowTask.ts) builds the srcdoc HTML with `context: "workflowView"` in the payload. The iframe contains only:
+[`buildWorkflowVizHtml()`](../src/core/workflow/WorkflowTask.ts) builds the srcdoc HTML with `context: "workflowView"` in the payload. The iframe contains only:
 
 - The diagram SVG
 - Zoom controls (+, −, fit buttons)
@@ -372,7 +372,7 @@ The visualization adapts to VS Code themes via CSS variables. In the standalone 
 
 | File                                                                         | Purpose                                                                              |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [`WorkflowTask.ts`](../packages/core/src/workflow/WorkflowTask.ts)           | `buildWorkflowVizMeta()`, `buildWorkflowVizHtml()`, `notifySlangEditor()`            |
+| [`WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)                    | `buildWorkflowVizMeta()`, `buildWorkflowVizHtml()`, `notifySlangEditor()`            |
 | [`SlangViz.tsx`](../webview-ui/src/components/chat/SlangViz.tsx)             | React component — srcdoc iframe, CSP nonce stamping, theme injection, view switching |
 | [`TaskHeader.tsx`](../webview-ui/src/components/chat/TaskHeader.tsx)         | Renders `WorkflowVizMeta` natively in expanded state                                 |
 | [`WorkflowView.tsx`](../webview-ui/src/components/chat/WorkflowView.tsx)     | Tab bar, passes `workflowVizMeta`/`workflowVizRunState` to children                  |
@@ -478,7 +478,7 @@ The workflow launcher ([`LauncherView.tsx`](../webview-ui/src/components/launche
 Decoupled the flow header metadata from the srcdoc iframe:
 
 - [`WorkflowVizMeta`](../packages/types/src/vscode-extension-host.ts) interface carries flow metadata separate from diagram HTML.
-- [`buildWorkflowVizMeta()`](../packages/core/src/workflow/WorkflowTask.ts) extracts metadata from parsed AST.
+- [`buildWorkflowVizMeta()`](../src/core/workflow/WorkflowTask.ts) extracts metadata from parsed AST.
 - [`TaskHeader`](../webview-ui/src/components/chat/TaskHeader.tsx) renders metadata natively alongside token/cost/context info.
 - Iframe is diagram-only; view switches use `postMessage("switchView")` instead of srcdoc rebuilds.
 - Theme CSS variables injected from parent document into srcdoc.

@@ -58,7 +58,7 @@ flowchart TB
 
 ### 1. `roleDefinition` (Mode Persona)
 
-**Source:** Mode configuration from [`src/shared/modes.ts`](../src/shared/modes.ts) (built-in) or `.shofer/shofermodes` (custom).
+**Source:** Mode configuration from [`packages/types/src/modes.ts`](../packages/types/src/modes.ts) (built-in) or `.shofer/shofermodes` (custom).
 
 - Defines the LLM's identity: e.g., `"You are Shofer, a highly skilled software engineer with extensive knowledge in many programming languages, frameworks, design patterns, and best practices."`
 - Sets the tone and expertise level for the entire conversation.

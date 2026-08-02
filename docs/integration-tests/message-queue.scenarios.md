@@ -2,7 +2,7 @@
 
 > Feature docs: [`docs/message_queue.md`](../message_queue.md),
 > [`docs/user-manual/message-queue.md`](../docs/user-manual/message-queue.md)
-> Implementation: [`MessageQueueService.ts`](../src/core/message-queue/MessageQueueService.ts),
+> Implementation: [`MessageQueueService.ts`](../../packages/core/src/message-queue/MessageQueueService.ts),
 > [`Task.ts`](../../packages/core/src/task/Task.ts),
 > [`ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx),
 > [`webviewMessageHandler.ts`](../../src/core/webview/webviewMessageHandler.ts)

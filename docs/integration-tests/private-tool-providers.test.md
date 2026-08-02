@@ -108,7 +108,7 @@ a `group` field, and `settings.json` has:
 **Given** a tool assigned to group `"write"`, and the current mode
 (e.g., Reviewer) does not include `"write"` in its allowed groups
 
-**When** Shofer builds the tool set via [`filterPrivateToolsForMode`](../src/core/prompts/tools/filter-tools-for-mode.ts)
+**When** Shofer builds the tool set via [`filterPrivateToolsForMode`](../../packages/core/src/prompts/tools/filter-tools-for-mode.ts)
 
 **Then**:
 

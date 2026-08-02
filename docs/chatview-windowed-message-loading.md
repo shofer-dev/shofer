@@ -169,16 +169,16 @@ reads `ExtensionState.tokenUsage` and overrides the incremental processor's
 
 ## Files changed
 
-| File                                                                                                 | Change                                                                                                                                          |
-| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                         | `olderMessagesLoaded`/`loadOlderMessages` variants; `hasMoreMessages`, `oldestLoadedTs`, `lastPrependedCount`, `tokenUsage` on `ExtensionState` |
-| [`taskMessages.ts`](../packages/core/src/task-persistence/taskMessages.ts)                           | `DEFAULT_WINDOW_LIMIT` constant (100)                                                                                                           |
-| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                         | windowed state push; `loadOlderMessages` handler; imports `DEFAULT_WINDOW_LIMIT`                                                                |
-| [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                           | `case "loadOlderMessages"` handler                                                                                                              |
-| [`ExtensionStateContext.tsx`](../webview-ui/src/context/ExtensionStateContext.tsx)                   | `olderMessagesLoaded` reducer (prepend + dedupe + `lastPrependedCount`); merge guard for windowing metadata                                     |
-| [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                                     | top sentinel; `startReached` handler; `firstItemIndex` scroll anchoring; host `tokenUsage` override; `H2_WINDOW_LIMIT` / `H2_PREPEND_BASE`      |
-| [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx)                                       | removed unrelated `promptTokens`/`completionTokens`/`costUsd` scope creep                                                                       |
-| [`ExtensionStateContext.spec.ts`](../webview-ui/src/context/__tests__/ExtensionStateContext.spec.ts) | 12 new H2 tests (prepend, dedupe, seq guard)                                                                                                    |
+| File                                                                                                  | Change                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                          | `olderMessagesLoaded`/`loadOlderMessages` variants; `hasMoreMessages`, `oldestLoadedTs`, `lastPrependedCount`, `tokenUsage` on `ExtensionState` |
+| [`taskMessages.ts`](../packages/core/src/task-persistence/taskMessages.ts)                            | `DEFAULT_WINDOW_LIMIT` constant (100)                                                                                                           |
+| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                          | windowed state push; `loadOlderMessages` handler; imports `DEFAULT_WINDOW_LIMIT`                                                                |
+| [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                            | `case "loadOlderMessages"` handler                                                                                                              |
+| [`ExtensionStateContext.tsx`](../webview-ui/src/context/ExtensionStateContext.tsx)                    | `olderMessagesLoaded` reducer (prepend + dedupe + `lastPrependedCount`); merge guard for windowing metadata                                     |
+| [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                                      | top sentinel; `startReached` handler; `firstItemIndex` scroll anchoring; host `tokenUsage` override; `H2_WINDOW_LIMIT` / `H2_PREPEND_BASE`      |
+| [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx)                                        | removed unrelated `promptTokens`/`completionTokens`/`costUsd` scope creep                                                                       |
+| [`ExtensionStateContext.spec.ts`](../webview-ui/src/context/__tests__/ExtensionStateContext.spec.tsx) | 12 new H2 tests (prepend, dedupe, seq guard)                                                                                                    |
 
 ## Testing
 

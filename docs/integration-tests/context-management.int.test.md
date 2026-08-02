@@ -2,9 +2,9 @@
 
 > Feature docs: [`docs/summarization.md`](../summarization.md),
 > [`docs/user-manual/context-management.md`](../docs/user-manual/context-management.md)
-> Implementation: [`context-management/index.ts`](../src/core/context-management/index.ts),
-> [`condense/index.ts`](../src/core/condense/index.ts),
-> [`condense/foldedFileContext.ts`](../src/core/condense/foldedFileContext.ts),
+> Implementation: [`context-management/index.ts`](../../packages/core/src/context-management/index.ts),
+> [`condense/index.ts`](../../packages/core/src/condense/index.ts),
+> [`condense/foldedFileContext.ts`](../../packages/core/src/condense/foldedFileContext.ts),
 > [`Task.ts`](../../packages/core/src/task/Task.ts)
 
 ## Scenarios

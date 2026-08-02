@@ -188,7 +188,7 @@ from `package.json` `contributes.configuration.properties`.
 
 ### A3. `preventCompletionWithOpenTodos`
 
-- **Status:** In `globalSettingsSchema`. Consumer: [`AttemptCompletionTool.ts:96-97`](extensions/shofer/src/core/tools/AttemptCompletionTool.ts:96)
+- **Status:** In `globalSettingsSchema`. Consumer: [`AttemptCompletionTool.ts:96-97`](../../packages/core/src/tools/AttemptCompletionTool.ts)
   reads from vscode config.
 - **Action:** Change consumer to `ContextProxy.getValue("preventCompletionWithOpenTodos")`.
   Remove `package.json` registration.
@@ -212,7 +212,7 @@ from `package.json` `contributes.configuration.properties`.
 
 ### A6. `maximumIndexedFilesForFileSearch`
 
-- **Status:** Number (5000–500000). NOT in `globalSettingsSchema`. Consumer: [`file-search.ts:121`](extensions/shofer/src/services/search/file-search.ts:121).
+- **Status:** Number (5000–500000). NOT in `globalSettingsSchema`. Consumer: [`file-search.ts:121`](../../packages/core/src/search/file-search.ts).
 - **Action:** Add to `globalSettingsSchema`. Update consumer. Remove `package.json`.
 - **Settings UI:** Needs new row in Code Index settings tab.
 
@@ -226,8 +226,8 @@ from `package.json` `contributes.configuration.properties`.
 
 ### A8. `newTaskRequireTodos`
 
-- **Status:** Boolean. NOT in `globalSettingsSchema`. Consumers: [`NewTaskTool.ts:99-100`](extensions/shofer/src/core/tools/NewTaskTool.ts:99),
-  [`Task.ts:4961-4962`](extensions/shofer/src/core/task/Task.ts:4961),
+- **Status:** Boolean. NOT in `globalSettingsSchema`. Consumers: [`NewTaskTool.ts:99-100`](../../packages/core/src/tools/NewTaskTool.ts),
+  [`Task.ts:4961-4962`](../../packages/core/src/task/Task.ts),
   [`generateSystemPrompt.ts:62-63`](../../src/core/webview/generateSystemPrompt.ts).
 - **Action:** Add to `globalSettingsSchema`. Update consumers. Remove `package.json`.
 - **Settings UI:** Needs new toggle in Task Behaviour section.
