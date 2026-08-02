@@ -1,11 +1,11 @@
 /**
  * The transport-agnostic agent surface (v3 architecture §11).
  *
- * `AgentApi` is the minimal control plane a front-end/transport drives: create a
+ * `ShoferApi` is the minimal control plane a front-end/transport drives: create a
  * task, send follow-up messages, cancel, and subscribe to the event stream. Every
  * transport (HTTP/SSE, ACP over stdio, the controller↔executor session protocol)
  * is implemented over this one interface, and the live in-process implementation
- * (`ShoferApiAgent`) backs it with the extension's `ShoferAPI`.
+ * (`ShoferApiAgent`) backs it with the extension's `ShoferExtensionApi`.
  *
  * Lives in `@shofer/types` (vscode-free) so both the core-side implementations and
  * the wire-protocol modules can share it.
@@ -29,7 +29,7 @@ export interface ServerEvent {
  * A task that raised an ask BEFORE a controller attached is still blocked on it —
  * nothing on the executor resolves an interactive ask locally — so the snapshot has
  * to name it explicitly rather than leaving the controller to re-derive it from the
- * transcript. The fields are exactly what {@link AgentApi.respondToAsk} needs to
+ * transcript. The fields are exactly what {@link ShoferApi.respondToAsk} needs to
  * answer it (`askId` routes the answer to the outstanding ask).
  */
 export const outstandingAskSchema = z.object({
@@ -76,7 +76,7 @@ export type TaskSnapshot = z.infer<typeof taskSnapshotSchema>
  * A reference to a task that has ALREADY been created somewhere else — the answer a
  * plugin gives when it claims a task at the placement seam.
  *
- * `address` is the base URL of the owning host's AgentApi (e.g.
+ * `address` is the base URL of the owning host's ShoferApi (e.g.
  * `http://worker-3:30099`); with it the controller attaches and renders the task
  * like a local one. Without it the dispatch is recorded but not observable — a
  * dispatcher that cannot (yet) say where the task landed.
@@ -114,7 +114,7 @@ export interface TaskPlacementQuestion {
 }
 
 /**
- * Parameters for {@link AgentApi.createTask}.
+ * Parameters for {@link ShoferApi.createTask}.
  *
  * `mode` is **required**: every task runs in a specific mode (its slug, e.g.
  * `"code"`), so the controller must always state which one. It is applied
@@ -160,7 +160,7 @@ export interface AskResponse {
 }
 
 /** The agent control plane a transport drives. */
-export interface AgentApi {
+export interface ShoferApi {
 	createTask(input: CreateTaskInput): Promise<{ taskId: string }>
 	/**
 	 * Send a follow-up message to a running task. `images` are data URIs, the same

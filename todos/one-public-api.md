@@ -10,25 +10,25 @@
 There is **one root control contract**, and the plain name belongs to it:
 
 ```ts
-// packages/types/src/shofer-api.ts   (was agent-api.ts / `AgentApi`)
+// packages/types/src/shofer-api.ts   (was shofer-api.ts / `ShoferApi`)
 export interface ShoferApi { … }               // task-addressed, DTO-only, what transports bind
 
-// packages/types/src/api.ts          (was `ShoferAPI`)
+// packages/types/src/api.ts          (was `ShoferExtensionApi`)
 export interface ShoferExtensionApi extends ShoferApi, EventEmitter<ShoferEvents> { … }
 ```
 
 Two renames and one `extends`:
 
-| Today       | Becomes              | Why                                                                                                                 |
-| ----------- | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `AgentApi`  | `ShoferApi`          | The primary contract — every transport binds it, most consumers want it — gets the plainest, most discoverable name |
-| `ShoferAPI` | `ShoferExtensionApi` | The VS Code-host-only superset is the qualified, narrower thing; its name should say so                             |
+| Today                | Becomes              | Why                                                                                                                 |
+| -------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `ShoferApi`          | `ShoferApi`          | The primary contract — every transport binds it, most consumers want it — gets the plainest, most discoverable name |
+| `ShoferExtensionApi` | `ShoferExtensionApi` | The VS Code-host-only superset is the qualified, narrower thing; its name should say so                             |
 
 **Why the `extends` at all.** Today the two interfaces are unrelated
 declarations that overlap by hand, and the overlap is where the bugs live.
-`ShoferAPI` is _current-task-oriented_ (`cancelCurrentTask()`,
+`ShoferExtensionApi` is _current-task-oriented_ (`cancelCurrentTask()`,
 `pressPrimaryButton()`, `sendMessage(message?, images?, taskId?)`) — a shape
-inherited from the webview, which has exactly one focused task. `AgentApi` is
+inherited from the webview, which has exactly one focused task. `ShoferApi` is
 _task-addressed_: every method leads with `taskId`, because a client
 multiplexes concurrent tasks and has no "current". The task-addressed model
 already won on evidence — the current-task delivery path raced concurrent tasks
@@ -40,11 +40,11 @@ by prose, and "what is safe to expose remotely" stays answered structurally: a
 transport binds the **base** interface, so the host-only surface cannot leak
 onto the wire by accident.
 
-> **Do both renames in ONE change.** `ShoferAPI` and `ShoferApi` differ only in
+> **Do both renames in ONE change.** `ShoferExtensionApi` and `ShoferApi` differ only in
 > case; a tree where both exist is a trap for greps, imports and reviewers.
 > There must be no intermediate commit in which both names are live.
 
-## The two halves of today's `ShoferAPI`
+## The two halves of today's `ShoferExtensionApi`
 
 | Half                    | Members                                                                                                                                         | Fate                                                        |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -56,7 +56,7 @@ provisioned, never pushed ([`remote_agents.md`](remote_agents.md) §1).
 
 ## Member-by-member
 
-| `ShoferApi` member                  | Today in `ShoferAPI`                        | Action                                                                        |
+| `ShoferApi` member                  | Today in `ShoferExtensionApi`               | Action                                                                        |
 | ----------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
 | `createTask({prompt, mode, …})`     | `startNewTask({text, initialMode, …})`      | Adopt `createTask`; delete `startNewTask`                                     |
 | `cancelTask(taskId)`                | `cancelCurrentTask()`                       | Adopt `cancelTask`; delete `cancelCurrentTask`                                |
@@ -76,14 +76,14 @@ everything else in the table is additive or already compatible.
 
 ## Call sites
 
-**Rename `AgentApi` → `ShoferApi`:** `packages/types/src/agent-api.ts` (rename
+**Rename `ShoferApi` → `ShoferApi`:** `packages/types/src/shofer-api.ts` (rename
 the file to `shofer-api.ts`) and its `index.ts` export, plus every implementer
 and type reference — `ShoferApiAgent`, `ShoferHttpClient`, `createHttpServer` /
 `createRequestHandler`, `AcpAgentServer` and the ACP entry points, the
 attachment primitive from Phase 2, and their specs. Mechanical; the compiler
 finds all of it.
 
-**Rename `ShoferAPI` → `ShoferExtensionApi`:** `packages/types/src/api.ts`,
+**Rename `ShoferExtensionApi` → `ShoferExtensionApi`:** `packages/types/src/api.ts`,
 `src/extension/api.ts`, the CLI's `ExtensionHost` (`host.api`), the IPC layer,
 and `docs/public_api.md`. Note this renames the type companion extensions
 consume (the `activate()` export object itself is unchanged).
@@ -142,7 +142,7 @@ interleaved with the root contract.
    `pressPrimaryButton`/`pressSecondaryButton`; delete them (no compatibility
    aliases — the repo's no-back-compat rule). Tree green.
 3. Declare the `extends`; strip what `ShoferApiAgent` no longer translates.
-4. **Both renames in one commit** (`AgentApi` → `ShoferApi`, `ShoferAPI` →
-   `ShoferExtensionApi`), including the `agent-api.ts` → `shofer-api.ts` file
+4. **Both renames in one commit** (`ShoferApi` → `ShoferApi`, `ShoferExtensionApi` →
+   `ShoferExtensionApi`), including the `shofer-api.ts` → `shofer-api.ts` file
    move.
 5. Merge the two docs; bump the minor version.

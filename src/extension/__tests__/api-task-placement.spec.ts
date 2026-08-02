@@ -12,13 +12,13 @@ vi.mock("../../core/webview/ShoferProvider")
 /**
  * Task **placement** on the non-webview entry point.
  *
- * `ShoferAPI.startNewTask` is what a controller's AgentApi call, the CLI and the public
+ * `ShoferExtensionApi.startNewTask` is what a controller's ShoferApi call, the CLI and the public
  * API all come through — including on a headless `shofer serve` executor, which has no
  * chat input to have asked the question in. A task created there must get the same
  * placement as one typed into the sidebar, or the bundled `worktrees` plugin would be a
  * webview-only feature: every remote agent would land on the executor's current branch.
  */
-describe("ShoferAPI.startNewTask — plugin task placement", () => {
+describe("ShoferExtensionApi.startNewTask — plugin task placement", () => {
 	let api: API
 	let provider: ShoferProvider
 	let createTask: ReturnType<typeof vi.fn>

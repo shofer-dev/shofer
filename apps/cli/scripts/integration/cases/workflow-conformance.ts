@@ -2,7 +2,7 @@
  * Workflow conformance integration test (test_workflows.md scenarios).
  *
  * Discovers every `_`-prefixed `.slang` workflow, runs each one against the
- * configured provider via ShoferAPI/ExtensionHost, auto-answers human
+ * configured provider via ShoferExtensionApi/ExtensionHost, auto-answers human
  * escalations / `ask_followup_question` asks from a per-flow canned-reply
  * queue, and asserts the expected `flowState.status` persisted in history.
  *

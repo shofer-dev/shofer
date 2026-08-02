@@ -38,7 +38,7 @@ import {
 	type ExtensionMessage,
 	type ExtensionState,
 	type OrgLockedResources,
-	type ShoferAPI,
+	type ShoferExtensionApi,
 	ShoferEventName,
 	requestyDefaultModelId,
 	openRouterDefaultModelId,
@@ -223,7 +223,7 @@ export class ShoferProvider
 	 * `new WorkflowTask(...)` rather than {@link createTask}) must pass this as
 	 * their `onCreated` option so they receive the same provider-level event
 	 * forwarding (`TaskCreated` announcement + per-task lifecycle listeners that
-	 * the public ShoferAPI re-emits). Without it, a WorkflowTask's own
+	 * the public ShoferExtensionApi re-emits). Without it, a WorkflowTask's own
 	 * `TaskCompleted` emission is never forwarded to the API and consumers that
 	 * await completion (integration harness, eval runner) hang forever.
 	 */
@@ -547,7 +547,6 @@ export class ShoferProvider
 		this.skillsManager.initialize().catch((error) => {
 			this.log(`Failed to initialize Skills Manager: ${error}`)
 		})
-
 
 		// Forward <most> task events to the provider.
 		// We do something fairly similar for the IPC-based API.
@@ -3414,8 +3413,7 @@ export class ShoferProvider
 	 * @param webview A reference to the extension webview
 	 */
 	private setWebviewMessageListener(webview: vscode.Webview) {
-		const onReceiveMessage = async (message: WebviewMessage) =>
-			webviewMessageHandler(this, message)
+		const onReceiveMessage = async (message: WebviewMessage) => webviewMessageHandler(this, message)
 
 		const messageDisposable = webview.onDidReceiveMessage(onReceiveMessage)
 		this.webviewDisposables.push(messageDisposable)

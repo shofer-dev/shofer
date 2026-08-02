@@ -1,7 +1,7 @@
 /**
  * ACP agent server (v3 architecture §12).
  *
- * Binds the ACP agent-side methods to shofer's transport-agnostic {@link AgentApi}
+ * Binds the ACP agent-side methods to shofer's transport-agnostic {@link ShoferApi}
  * using the pure mapping in `acp-mapping.ts`. An ACP client (Zed, etc.) drives it
  * over the {@link JsonRpcPeer} connection: `initialize` → `session/new` →
  * `session/prompt` (streaming `session/update` notifications) → `session/cancel`.
@@ -12,7 +12,7 @@
  * events and reconciled with the real event stream in one place.
  */
 
-import type { AgentApi, ServerEvent } from "@shofer/types"
+import type { ShoferApi, ServerEvent } from "@shofer/types"
 
 import { type JsonRpcPeer } from "./acp-connection.js"
 import {
@@ -43,7 +43,7 @@ interface AcpContentBlock {
 }
 
 export interface AcpAgentServerOptions {
-	api: AgentApi
+	api: ShoferApi
 	peer: JsonRpcPeer
 	agentVersion?: string
 	/** Extract the owning task id from a raw event (default: `taskId` field or first string arg). */
@@ -68,7 +68,7 @@ function defaultToStreamEvent(event: ServerEvent): ShoferStreamEvent | null {
 
 /** The ACP agent: an object handling the agent-side ACP method set. */
 export class AcpAgentServer {
-	private readonly api: AgentApi
+	private readonly api: ShoferApi
 	private readonly peer: JsonRpcPeer
 	private readonly agentVersion: string
 	private readonly getEventTaskId: (event: ServerEvent) => string | undefined
@@ -146,7 +146,7 @@ export class AcpAgentServer {
 		const { sessionId, modeId } = (params ?? {}) as { sessionId?: string; modeId?: string }
 		// 1:1 mode mapping. Store it per session so the task created on the next
 		// prompt runs in this mode; for an already-created task, switching mid-task
-		// still needs ShoferAPI mode switching (not yet wired — see agentapi.md).
+		// still needs ShoferExtensionApi mode switching (not yet wired — see agentapi.md).
 		const shoferMode = acpSessionModeToShoferMode(modeId ?? "")
 		if (sessionId && this.sessionMode.has(sessionId)) this.sessionMode.set(sessionId, shoferMode)
 		return { modeId: shoferModeToAcpSessionMode(shoferMode) }

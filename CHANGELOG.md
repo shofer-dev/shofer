@@ -113,7 +113,7 @@
 
 #### CLI, headless & public API
 
-- **Public ShoferAPI**: A full programmatic surface (task management, send/cancel/approve/reject, export, logging, config, and workflow methods) exposed through `ExtensionHost`, with `ExtensionClient` importable as a reusable library via `@shofer/cli/client`. See [`docs/public_api.md`](docs/public_api.md) and [`docs/headless.md`](docs/headless.md).
+- **Public ShoferExtensionApi**: A full programmatic surface (task management, send/cancel/approve/reject, export, logging, config, and workflow methods) exposed through `ExtensionHost`, with `ExtensionClient` importable as a reusable library via `@shofer/cli/client`. See [`docs/public_api.md`](docs/public_api.md) and [`docs/headless.md`](docs/headless.md).
 - **Headless runs**: Non-interactive task auto-resume with a `--retry` budget; a hermetic mock provider for functional testing ([`docs/mocks.md`](docs/mocks.md)); a conformance test harness ([`docs/test_harness.md`](docs/test_harness.md)).
 - **llm-router provider**: `ShoferHandler` with `--base-url` and auto `conversation_id` derived from the task id; LLM cost + token Prometheus counters.
 - **Multi-threaded worker architecture**: Phase 0/1 bootstrap and IPC forwarding hooks. See [`docs/multi_threaded.md`](docs/multi_threaded.md).

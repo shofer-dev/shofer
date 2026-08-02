@@ -8,7 +8,7 @@ vi.mock("vscode")
 vi.mock("../../core/webview/ShoferProvider")
 
 /**
- * `ShoferAPI.sendMessage` is **task-addressed**: it resolves the named task and
+ * `ShoferExtensionApi.sendMessage` is **task-addressed**: it resolves the named task and
  * hands the message to that task's own channel. It must never route through the
  * webview (`invoke: sendMessage`) — headless hosts report the mock webview as
  * launched and drop invokes, which silently lost every follow-up — and never

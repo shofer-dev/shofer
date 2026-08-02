@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import type { IncomingMessage, ServerResponse } from "node:http"
 
-import { createRequestHandler, type AgentApi, type ServerEvent } from "../http-server.js"
+import { createRequestHandler, type ShoferApi, type ServerEvent } from "../http-server.js"
 
 /**
  * §11 HTTP/SSE transport. Drives the request handler with mock req/res (no
@@ -56,7 +56,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0))
 describe("createRequestHandler (§11)", () => {
 	let events: Array<(e: ServerEvent) => void>
 	let handler: ReturnType<typeof createRequestHandler>
-	let api: AgentApi
+	let api: ShoferApi
 
 	beforeEach(() => {
 		events = []

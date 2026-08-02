@@ -1,11 +1,11 @@
 import { taskSnapshotSchema } from "@shofer/types"
 
-import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent, TaskSnapshot } from "@shofer/types"
+import type { ShoferApi, AskResponse, CreateTaskInput, ServerEvent, TaskSnapshot } from "@shofer/types"
 
 /**
  * Typed HTTP/SSE client SDK for the shofer server (v3 architecture §11).
  *
- * It **implements `AgentApi`** — the exact contract the server exposes — so client
+ * It **implements `ShoferApi`** — the exact contract the server exposes — so client
  * and server share one source of truth and cannot drift: any change to the agent
  * surface is a compile error on both sides. `createTask`/`sendMessage`/`cancelTask`
  * are POSTs; `subscribe` reads the SSE event stream. `fetch` is injectable for tests.
@@ -19,7 +19,7 @@ export interface ShoferHttpClientOptions {
 	fetch?: typeof fetch
 }
 
-export class ShoferHttpClient implements AgentApi {
+export class ShoferHttpClient implements ShoferApi {
 	private readonly base: string
 	private readonly doFetch: typeof fetch
 	private readonly authHeaders: Record<string, string>
@@ -87,7 +87,7 @@ export class ShoferHttpClient implements AgentApi {
 
 	/**
 	 * Subscribe to ONE task's events (`GET /api/v1/task/:id/event`); returns an
-	 * unsubscribe fn. Not part of {@link AgentApi} — that interface's `subscribe`
+	 * unsubscribe fn. Not part of {@link ShoferApi} — that interface's `subscribe`
 	 * is the whole-host firehose — but it is what an attached view wants: a
 	 * connection that exists only while something is watching that task, carrying
 	 * only that task's content.

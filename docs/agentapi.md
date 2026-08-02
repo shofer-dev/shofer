@@ -1,11 +1,11 @@
-# AgentApi — the transport-agnostic agent surface
+# ShoferApi — the transport-agnostic agent surface
 
-`AgentApi` is the **one control-plane interface** every front-end and transport drives.
+`ShoferApi` is the **one control-plane interface** every front-end and transport drives.
 It decouples the core agent (loop, tools, MCP, plugins, changed-files) from _how_ a
 UI reaches it, so arbitrary front-ends (VS Code, an editor over [ACP](./acp.md), a CLI, a
 remote controller) can drive the same core without touching it.
 
-- **Definition:** [`packages/types/src/agent-api.ts`](../packages/types/src/agent-api.ts)
+- **Definition:** [`packages/types/src/shofer-api.ts`](../packages/types/src/shofer-api.ts)
   (in `@shofer/types`, vscode-free, so both the core implementations and the wire-protocol
   modules share it).
 - **Strategic context:** [`host-boundary.md`](./host-boundary.md) (host boundary,
@@ -13,24 +13,24 @@ remote controller) can drive the same core without touching it.
 
 ## Why it exists
 
-The decoupling seam is `AgentApi`, **not** any single wire protocol. Everything else is a
+The decoupling seam is `ShoferApi`, **not** any single wire protocol. Everything else is a
 _transport_ that binds to it:
 
-| Binding        | Implementer                                                                                            | Role                                                                                                                                                                                 |
-| -------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **In-process** | `ShoferApiAgent implements AgentApi` (`transport/shofer-api-agent.ts`)                                 | The live core agent, backed by the extension's `ShoferAPI`.                                                                                                                          |
-| **HTTP/SSE**   | `createHttpServer(api)` + `ShoferHttpClient implements AgentApi` (`transport/http-{server,client}.ts`) | A **1:1 projection of the full surface** (see [routes](#httpsse-binding)). The native transport for driving a served executor (`shofer serve`) from any client (`ShoferHttpClient`). |
-| **ACP**        | `AcpAgentServer` over `AgentApi` (`transport/acp-*.ts`)                                                | A **lossy adapter** onto the external [Agent Client Protocol](./acp.md) so ACP editors (Zed, …) can drive shofer. Narrower than `AgentApi` — see [acp.md](./acp.md).                 |
+| Binding        | Implementer                                                                                             | Role                                                                                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **In-process** | `ShoferApiAgent implements ShoferApi` (`transport/shofer-api-agent.ts`)                                 | The live core agent, backed by the extension's `ShoferExtensionApi`.                                                                                                                 |
+| **HTTP/SSE**   | `createHttpServer(api)` + `ShoferHttpClient implements ShoferApi` (`transport/http-{server,client}.ts`) | A **1:1 projection of the full surface** (see [routes](#httpsse-binding)). The native transport for driving a served executor (`shofer serve`) from any client (`ShoferHttpClient`). |
+| **ACP**        | `AcpAgentServer` over `ShoferApi` (`transport/acp-*.ts`)                                                | A **lossy adapter** onto the external [Agent Client Protocol](./acp.md) so ACP editors (Zed, …) can drive shofer. Narrower than `ShoferApi` — see [acp.md](./acp.md).                |
 
 ```mermaid
 flowchart LR
     VS["VS Code extension"]
-    CTRLR["remote controller<br/>ShoferHttpClient implements AgentApi"]
+    CTRLR["remote controller<br/>ShoferHttpClient implements ShoferApi"]
     ED["ACP editor — Zed, …"]
 
     HS["createHttpServer(api)<br/>full 1:1 projection of the surface"]
     ACP["AcpAgentServer<br/>lossy adapter onto ACP"]
-    IMPL["an AgentApi implementation<br/>ShoferApiAgent in 'shofer serve'"]
+    IMPL["a ShoferApi implementation<br/>ShoferApiAgent in 'shofer serve'"]
     CORE["core agent<br/>loop · tools · MCP · plugins · changed-files"]
 
     VS -->|"in-process"| IMPL
@@ -41,7 +41,7 @@ flowchart LR
     IMPL --> CORE
 ```
 
-Because `ShoferHttpClient` _implements_ `AgentApi`, client and server can't drift: the same
+Because `ShoferHttpClient` _implements_ `ShoferApi`, client and server can't drift: the same
 interface is the wire contract.
 
 ## The surface
@@ -116,7 +116,7 @@ needs what came before, so the surface has one read method: `getTaskSnapshot(tas
 served over `GET /api/v1/task/:id/snapshot` (bearer-authed like every other `/api/v1`
 route; `404` when the host owns no such task).
 
-[`taskSnapshotSchema`](../packages/types/src/agent-api.ts) is the wire shape:
+[`taskSnapshotSchema`](../packages/types/src/shofer-api.ts) is the wire shape:
 
 | Field            | Meaning                                                                                             |
 | ---------------- | --------------------------------------------------------------------------------------------------- |
@@ -162,21 +162,21 @@ connects with `ShoferHttpClient`. Every option is a CLI flag (defined in
 [`apps/cli/src/index.ts`](../apps/cli/src/index.ts), handled in
 [`commands/cli/serve.ts`](../apps/cli/src/commands/cli/serve.ts)):
 
-| Flag                     | Default                                          | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-p, --port <port>`      | `30099`                                          | Port to listen on.                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `--host <host>`          | `127.0.0.1`                                      | Bind address. **Use `0.0.0.0` to accept traffic from outside the process** (e.g. in a container).                                                                                                                                                                                                                                                                                                                                       |
-| `-w, --workspace <path>` | cwd                                              | Workspace directory. Custom modes are read from `<workspace>/.shofer/shofermodes`.                                                                                                                                                                                                                                                                                                                                                      |
-| `-e, --extension <path>` | auto (`ROO_EXTENSION_PATH` → sibling `src/dist`) | Path to the built extension bundle (`extension.js`).                                                                                                                                                                                                                                                                                                                                                                                    |
-| `--provider <provider>`  | `openrouter`                                     | LLM provider. Any of `--provider/--model/--api-key/--base-url` **pins** the worker to that config (per-task `apiConfiguration` from the controller is then ignored).                                                                                                                                                                                                                                                                    |
-| `-m, --model <model>`    | provider default                                 | Model id. The `shofer` provider has **no** default model — pass one or task creation errors.                                                                                                                                                                                                                                                                                                                                            |
-| `-k, --api-key <key>`    | –                                                | Provider API key.                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `--base-url <url>`       | –                                                | Provider base URL (e.g. `http://llm-router:3000/v1`).                                                                                                                                                                                                                                                                                                                                                                                   |
-| `-t, --token <token>`    | `$SHOFER_NODE_TOKEN`                             | Bearer token required on every `/api/v1/*` call. Omit for an open (dev) worker. **Machine trust** (authenticates the controller, not the end user).                                                                                                                                                                                                                                                                                     |
-| `--require-user-auth`    | off _(proposed)_                                 | **User-identity enforcement (launch-time only).** When on, the worker trusts a **validated end-user identity** injected upstream (Istio `RequestAuthentication` → header — see _User-identity enforcement_) and **blocks** any AgentApi call whose user is not the task's owner. Operator-set at launch like `--provider`; **no in-session user or agent can change it.** The `--token` worker bearer is unaffected and still required. |
-| `--interactive`          | off                                              | **Approval mode.** Off = non-interactive: the worker **auto-approves every tool** (no local user to ask). On = the worker surfaces approvals — `autoApprovalEnabled` is off, so a dangerous tool raises an `ask` over AgentApi that the controller brokers to its user via `respondToAsk`.                                                                                                                                              |
-| `-q, --quiet`            | off                                              | Suppress the per-task activity log on stderr.                                                                                                                                                                                                                                                                                                                                                                                           |
-| `-d, --debug`            | off                                              | Debug logging to `~/.shofer/cli-debug.log`.                                                                                                                                                                                                                                                                                                                                                                                             |
+| Flag                     | Default                                          | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-p, --port <port>`      | `30099`                                          | Port to listen on.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `--host <host>`          | `127.0.0.1`                                      | Bind address. **Use `0.0.0.0` to accept traffic from outside the process** (e.g. in a container).                                                                                                                                                                                                                                                                                                                                        |
+| `-w, --workspace <path>` | cwd                                              | Workspace directory. Custom modes are read from `<workspace>/.shofer/shofermodes`.                                                                                                                                                                                                                                                                                                                                                       |
+| `-e, --extension <path>` | auto (`ROO_EXTENSION_PATH` → sibling `src/dist`) | Path to the built extension bundle (`extension.js`).                                                                                                                                                                                                                                                                                                                                                                                     |
+| `--provider <provider>`  | `openrouter`                                     | LLM provider. Any of `--provider/--model/--api-key/--base-url` **pins** the worker to that config (per-task `apiConfiguration` from the controller is then ignored).                                                                                                                                                                                                                                                                     |
+| `-m, --model <model>`    | provider default                                 | Model id. The `shofer` provider has **no** default model — pass one or task creation errors.                                                                                                                                                                                                                                                                                                                                             |
+| `-k, --api-key <key>`    | –                                                | Provider API key.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `--base-url <url>`       | –                                                | Provider base URL (e.g. `http://llm-router:3000/v1`).                                                                                                                                                                                                                                                                                                                                                                                    |
+| `-t, --token <token>`    | `$SHOFER_NODE_TOKEN`                             | Bearer token required on every `/api/v1/*` call. Omit for an open (dev) worker. **Machine trust** (authenticates the controller, not the end user).                                                                                                                                                                                                                                                                                      |
+| `--require-user-auth`    | off _(proposed)_                                 | **User-identity enforcement (launch-time only).** When on, the worker trusts a **validated end-user identity** injected upstream (Istio `RequestAuthentication` → header — see _User-identity enforcement_) and **blocks** any ShoferApi call whose user is not the task's owner. Operator-set at launch like `--provider`; **no in-session user or agent can change it.** The `--token` worker bearer is unaffected and still required. |
+| `--interactive`          | off                                              | **Approval mode.** Off = non-interactive: the worker **auto-approves every tool** (no local user to ask). On = the worker surfaces approvals — `autoApprovalEnabled` is off, so a dangerous tool raises an `ask` over ShoferApi that the controller brokers to its user via `respondToAsk`.                                                                                                                                              |
+| `-q, --quiet`            | off                                              | Suppress the per-task activity log on stderr.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `-d, --debug`            | off                                              | Debug logging to `~/.shofer/cli-debug.log`.                                                                                                                                                                                                                                                                                                                                                                                              |
 
 **Ask brokering (contract).** A served worker has no local stdin user, so it **never
 resolves interactive asks locally** — tool/command/MCP approvals _and_ `followup`
@@ -223,7 +223,7 @@ controller-only guarantee, the worker is fronted by the **Istio ambient mesh** a
 end-user identity — the worker token is **kept**, this layers on top:
 
 - **Connection authN** — ztunnel **mTLS + SPIFFE** identifies the _caller workload_; an
-  `AuthorizationPolicy` can restrict the AgentApi to the controller's identity.
+  `AuthorizationPolicy` can restrict the ShoferApi to the controller's identity.
 - **End-user identity** — the controller forwards the caller's **validated JWT**; Istio
   `RequestAuthentication` verifies it at the worker's waypoint and **injects the identity
   downstream as a header** (`outputClaimToHeaders`, e.g. `X-User-ID`), so the worker reads a
@@ -240,7 +240,7 @@ flowchart LR
     WP["waypoint — RequestAuthentication<br/>verifies the forwarded user JWT"]
     NODE["Worker — 'shofer serve' --require-user-auth"]
     OWNER{"injected user ==<br/>the task's owner,<br/>recorded at createTask?"}
-    OK["serve the AgentApi call"]
+    OK["serve the ShoferApi call"]
     NO["block"]
 
     CTRL -.->|"worker bearer token (machine trust)<br/>+ the caller's validated JWT"| ZT
@@ -279,14 +279,14 @@ adapter never receives a remote config (it reads the provider's live config dire
 
 The [plugin system](../PLUGINS.md) runs **inside** the core agent, so plugin _behavior_
 (contributed tools, `transformSystemPrompt`, lifecycle hooks) is baked into what the core
-emits over `AgentApi` — it rides **any** binding transparently (given the executor host
+emits over `ShoferApi` — it rides **any** binding transparently (given the executor host
 wired the plugin `ctx` seams). Plugin **UI** (badge, panel, settings, `ctx.ui`) is a
 VS-Code-webview concern wired in `ShoferProvider` over `postMessage`; it is **not** part of
-`AgentApi` and does not cross any of these transports. A non-VS-Code front-end gets plugin
+`ShoferApi` and does not cross any of these transports. A non-VS-Code front-end gets plugin
 behavior, not plugin UI, unless it implements its own plugin-UI host.
 
 ## See also
 
 - [acp.md](./acp.md) — the ACP adapter and how it differs from this surface.
 - [host-boundary.md](./host-boundary.md) — the architecture this transport plugs into.
-- [public_api.md](./public_api.md) / [cli.md](./cli.md) — the `ShoferAPI` / CLI surface `ShoferApiAgent` is built on.
+- [public_api.md](./public_api.md) / [cli.md](./cli.md) — the `ShoferExtensionApi` / CLI surface `ShoferApiAgent` is built on.

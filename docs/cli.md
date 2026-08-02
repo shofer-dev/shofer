@@ -22,7 +22,7 @@ flowchart TD
     EH["ExtensionHost — agent/extension-host.ts<br/>creates the vscode-shim mock<br/>writes an on-disk vscode-mock.js<br/>hooks Module._resolveFilename"]
     SHIM["@shofer/vscode-shim<br/>fs · state · secrets · webview bridge · commands"]
     BUNDLE["extension bundle<br/>require('./dist/extension.js')<br/>activate(vscode.context)"]
-    API["ShoferAPI — the control plane<br/>reached as host.api"]
+    API["ShoferExtensionApi — the control plane<br/>reached as host.api"]
 
     CLI --> EH
     EH --> SHIM
@@ -159,7 +159,7 @@ sequenceDiagram
     autonumber
     participant P as Driving process
     participant CLI as CLI (stdin-stream + ExtensionHost)
-    participant API as ShoferAPI
+    participant API as ShoferExtensionApi
 
     P->>CLI: start — requestId, prompt, taskId?
     CLI-->>P: control ack
@@ -323,29 +323,29 @@ pnpm --filter @shofer/cli dev:local-router -w . --print "Hello"
 
 ## Architecture Details
 
-### CLI Uses `ShoferAPI` as the Control Plane
+### CLI Uses `ShoferExtensionApi` as the Control Plane
 
 The CLI's [`ExtensionHost`](../apps/cli/src/agent/extension-host.ts) calls `activate()`
-which returns a `ShoferAPI` instance. This is the **same `ShoferAPI`** used by companion
+which returns a `ShoferExtensionApi` instance. This is the **same `ShoferExtensionApi`** used by companion
 extensions (see [`public_api.md`](public_api.md)). All task management, configuration,
 profile operations, and events route through it.
 
 `ExtensionHost` keeps a small set of dedicated methods only where it adds
 CLI-specific behaviour on top of the API; everything else is reached directly
-through the `host.api` accessor (the activated `ShoferAPI`), so the CLI never
+through the `host.api` accessor (the activated `ShoferExtensionApi`), so the CLI never
 drifts behind the interface:
 
-| CLI Method             | Behaviour                                                               |
-| ---------------------- | ----------------------------------------------------------------------- |
-| `runTask(prompt, …)`   | `api.startNewTask(...)` then blocks on task completion                  |
-| `resumeTask(taskId)`   | `api.resumeTask(taskId)` then blocks on task completion                 |
-| `cancelTask()`         | `api.cancelCurrentTask()`                                               |
-| `sendMessage(text, …)` | `api.sendMessage(text, images)`                                         |
-| `approveAction()`      | `api.pressPrimaryButton()`                                              |
-| `rejectAction()`       | `api.pressSecondaryButton()`                                            |
-| `host.api.<method>()`  | Full `ShoferAPI` surface (config, profiles, history, export, workflows) |
+| CLI Method             | Behaviour                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| `runTask(prompt, …)`   | `api.startNewTask(...)` then blocks on task completion                           |
+| `resumeTask(taskId)`   | `api.resumeTask(taskId)` then blocks on task completion                          |
+| `cancelTask()`         | `api.cancelCurrentTask()`                                                        |
+| `sendMessage(text, …)` | `api.sendMessage(text, images)`                                                  |
+| `approveAction()`      | `api.pressPrimaryButton()`                                                       |
+| `rejectAction()`       | `api.pressSecondaryButton()`                                                     |
+| `host.api.<method>()`  | Full `ShoferExtensionApi` surface (config, profiles, history, export, workflows) |
 
-Events from `ShoferAPI` (`taskStarted`, `taskCompleted`, `message`, `modeChanged`,
+Events from `ShoferExtensionApi` (`taskStarted`, `taskCompleted`, `message`, `modeChanged`,
 etc.) are bridged into the CLI's `ExtensionClient` event system via `forwardShoferEvents()`.
 
 ### VSCode Shim Layer
@@ -401,13 +401,13 @@ instead of VSCode Terminal. File edits go through the real filesystem via
 | [`packages/vscode-shim/src/api/create-vscode-api-mock.ts`](../packages/vscode-shim/src/api/create-vscode-api-mock.ts) | vscode mock factory                                       |
 | [`packages/core/src/tools/ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts)                   | Command execution (fallback to execa in CLI)              |
 
-## CLI via ShoferAPI — Extended Capabilities
+## CLI via ShoferExtensionApi — Extended Capabilities
 
-The CLI accesses the full [`ShoferAPI`](public_api.md) surface through the
+The CLI accesses the full [`ShoferExtensionApi`](public_api.md) surface through the
 `host.api` accessor on [`ExtensionHost`](../apps/cli/src/agent/extension-host.ts).
 Beyond the core task lifecycle (`startNewTask`, `sendMessage`, `cancelCurrentTask`),
 the following capabilities are available to CLI consumers. In the examples below,
-`api` is `host.api` (the activated `ShoferAPI`).
+`api` is `host.api` (the activated `ShoferExtensionApi`).
 
 ```typescript
 const api = host.api // throws if accessed before activation

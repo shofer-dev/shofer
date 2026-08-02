@@ -41,11 +41,11 @@ flowchart TD
 ## L1 — CLI harness
 
 The L1 harness has **three parts**, all sharing the same `ExtensionHost` /
-`ShoferAPI` infrastructure:
+`ShoferExtensionApi` infrastructure:
 
 | Part                                     | What                                                                                      | Driver                                         | Default provider   |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------ |
-| **1 — CLI smoke tests** (scenarios 1–25) | CLI surface + `ShoferAPI`-as-library behaviour                                            | shell (`harness.sh`) + `api_test_runner.ts`    | mock               |
+| **1 — CLI smoke tests** (scenarios 1–25) | CLI surface + `ShoferExtensionApi`-as-library behaviour                                   | shell (`harness.sh`) + `api_test_runner.ts`    | mock               |
 | **2 — Integration protocol cases**       | stdin NDJSON stream protocol: cancellation, follow-ups, queue ordering, process lifecycle | `cases/*.ts` via `stream-harness.ts`           | real provider only |
 | **3 — Workflow conformance**             | Slang interpreter — `_`-prefixed `.slang` fixtures                                        | `workflow-conformance.ts` via `api-harness.ts` | mock               |
 
@@ -172,7 +172,7 @@ driven:
   `harness.sh` Part 1 runs exactly these, sequentially. Each snippet below is
   also copy-pasteable standalone via the `shofer-local` alias from
   [Setup](#setup).
-- **`ShoferAPI`-library scenarios (15–19, 23, 24, 25)** use `ExtensionHost`
+- **`ShoferExtensionApi`-library scenarios (15–19, 23, 24, 25)** use `ExtensionHost`
   in-process. Scenarios **15–19** are automated by
   [`scripts/api_test_runner.ts`](../apps/cli/scripts/api_test_runner.ts), which
   emits one `Test NN: PASS|FAIL` line per scenario against the hermetic mock:
@@ -367,9 +367,9 @@ echo "exit: $?"
 # expect: exit non-zero (connection refused → API error → immediate exit, no retry loop)
 ```
 
-### 15. ShoferAPI library — task lifecycle via ExtensionHost
+### 15. ShoferExtensionApi library — task lifecycle via ExtensionHost
 
-Verifies: using `ExtensionHost` and `ShoferAPI` programmatically.
+Verifies: using `ExtensionHost` and `ShoferExtensionApi` programmatically.
 
 ```typescript
 // Save as /tmp/test_api.ts and run:
@@ -412,7 +412,7 @@ await host.dispose()
 console.log("[test] DONE")
 ```
 
-### 16. ShoferAPI library — multi-task and task history query
+### 16. ShoferExtensionApi library — multi-task and task history query
 
 Verifies: `getTaskHistoryItems`, `isTaskInHistory`, `deleteTask`.
 
@@ -433,7 +433,7 @@ await api.deleteTask(id2)
 console.log("id1 still in history:", await api.isTaskInHistory(id1)) // false
 ```
 
-### 17. ShoferAPI library — task export
+### 17. ShoferExtensionApi library — task export
 
 Verifies: `getTaskMarkdownExport` and `getTaskJsonExport` return non-empty content.
 
@@ -449,7 +449,7 @@ console.log("json keys:", Object.keys(jsonExport))
 // expect markdown > 0, json has keys like messages/cost/tokenUsage
 ```
 
-### 18. ShoferAPI library — configuration round-trip
+### 18. ShoferExtensionApi library — configuration round-trip
 
 Verifies: `getConfiguration`, `setConfiguration`, `exportConfiguration`, `importConfiguration`.
 
@@ -465,7 +465,7 @@ const restored = api.getConfiguration()
 console.log("round-trip provider matches:", original.apiProvider === restored.apiProvider)
 ```
 
-### 19. ShoferAPI library — provider profile management
+### 19. ShoferExtensionApi library — provider profile management
 
 Verifies: create, activate, read, and delete a profile.
 
@@ -519,7 +519,7 @@ $CLI $PROVIDER $MODEL $WS list sessions | head -5
 # expect: at least one session entry listed, exit 0
 ```
 
-### 23. ShoferAPI library — TaskSelector parity (rename / pin / archive)
+### 23. ShoferExtensionApi library — TaskSelector parity (rename / pin / archive)
 
 Verifies: `showTaskWithId`, `renameTask`, `pinTask` / `unpinTask`, `archiveTask` / `unarchiveTask`.
 
@@ -549,7 +549,7 @@ await api.deleteTask(taskId)
 console.log("deleted:", !(await api.isTaskInHistory(taskId))) // true
 ```
 
-### 24. ShoferAPI library — logging: config + output retrieval
+### 24. ShoferExtensionApi library — logging: config + output retrieval
 
 Verifies log-level / log-category configuration round-trips and `getOutputLogs`.
 
@@ -573,7 +573,7 @@ await api.setConfiguration(cfg)
 console.log("logLevel restored:", api.getConfiguration().logLevel === cfg.logLevel) // true
 ```
 
-### 25. ShoferAPI library — workflows: discover + start + monitor
+### 25. ShoferExtensionApi library — workflows: discover + start + monitor
 
 Verifies `discoverWorkflows` enumerates available `.slang` flows and `createWorkflow` starts one as a monitored task.
 
@@ -675,7 +675,7 @@ Automated conformance tests for the Slang interpreter. Each `_`-prefixed
 fixture in [`apps/cli/scripts/integration/fixtures/`](../apps/cli/scripts/integration/fixtures/)
 exercises one language or runtime feature. The runner
 ([`workflow-conformance.ts`](../apps/cli/scripts/integration/cases/workflow-conformance.ts))
-discovers all fixtures locally, runs each via `ShoferAPI` through the shared
+discovers all fixtures locally, runs each via `ShoferExtensionApi` through the shared
 [`api-harness.ts`](../apps/cli/scripts/integration/lib/api-harness.ts) driver,
 auto-answers human escalations, and asserts the expected terminal
 `flowState.status`. A fresh `ExtensionHost` is created per fixture to isolate

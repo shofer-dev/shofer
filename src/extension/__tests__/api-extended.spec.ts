@@ -13,7 +13,7 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	getLogKnownCategories: vi.fn(() => ["Task", "Webview"]),
 }))
 
-describe("API — new ShoferAPI methods", () => {
+describe("API — new ShoferExtensionApi methods", () => {
 	let api: API
 	let mockOutputChannel: vscode.OutputChannel
 	let mockProvider: ShoferProvider

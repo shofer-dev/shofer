@@ -9,7 +9,7 @@ import {
 import { TaskAttachmentManager, type AttachClient, type AttachViewHost } from "../TaskAttachmentManager"
 
 /**
- * The attachment primitive, against a mocked AgentApi client + event stream. What is
+ * The attachment primitive, against a mocked ShoferApi client + event stream. What is
  * being pinned here is the contract a real `shofer serve` host satisfies: backfill
  * the transcript (including an ask raised BEFORE the attach), stream what comes next,
  * round-trip the answer, and leave nothing behind on detach.

@@ -1,7 +1,7 @@
 import type { EventEmitter } from "events"
 import type { Socket } from "net"
 
-import type { AgentApi, CreateTaskInput } from "./agent-api.js"
+import type { ShoferApi, CreateTaskInput } from "./shofer-api.js"
 import type { ShoferEvents } from "./events.js"
 import type { ShoferSettings } from "./global-settings.js"
 import type { HistoryItem } from "./history.js"
@@ -9,7 +9,7 @@ import type { ShoferMessage, TokenUsage } from "./message.js"
 import type { ProviderSettingsEntry, ProviderSettings } from "./provider-settings.js"
 import type { IpcMessage, IpcServerEvents } from "./ipc.js"
 
-export type ShoferAPIEvents = ShoferEvents
+export type ShoferExtensionApiEvents = ShoferEvents
 
 /**
  * {@link CreateTaskInput}, widened with what only a VS Code host can honour.
@@ -27,17 +27,17 @@ export interface ExtensionCreateTaskInput extends Omit<CreateTaskInput, "mode"> 
 }
 
 /**
- * The Shofer extension's API: the agent control plane ({@link AgentApi}) plus the
+ * The Shofer extension's API: the agent control plane ({@link ShoferApi}) plus the
  * host-only administration surface — provider profiles, configuration
  * import/export, task-history management, exports, logs and workflows.
  *
  * The `extends` is the contract: a method cannot exist on the wire surface
- * without existing here, and — because transports bind {@link AgentApi}, not this
+ * without existing here, and — because transports bind {@link ShoferApi}, not this
  * interface — the administration surface cannot reach the wire by accident.
  */
-export interface ShoferAPI extends AgentApi, EventEmitter<ShoferAPIEvents> {
+export interface ShoferExtensionApi extends ShoferApi, EventEmitter<ShoferExtensionApiEvents> {
 	/**
-	 * Start a task. The host-only widening of {@link AgentApi.createTask}: `mode`
+	 * Start a task. The host-only widening of {@link ShoferApi.createTask}: `mode`
 	 * relaxes to optional (a host with no stated mode falls back to its configured
 	 * default, which a remote caller has no way to read), and two fields exist only
 	 * where there is a VS Code window — `newTab` and the full-settings `configuration`

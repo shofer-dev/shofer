@@ -43,7 +43,7 @@
 - Give `ask` messages a **typed per-category payload** instead of overloading
   `ShoferMessage.text`. Today an `ask`'s data is category-specific and untyped:
   `command` → raw shell string in `text`; `followup` → question/suggestions;
-  `tool` → JSON-ish; `command_output` → empty. Every non-webview AgentApi consumer
+  `tool` → JSON-ish; `command_output` → empty. Every non-webview ShoferApi consumer
   (user-console, ACP clients) re-parses this per category with ad-hoc heuristics
   that drift. Keep the `ask` discriminant but replace the free-text payload with a
   typed field per category in `@shofer/types` (a discriminated union —

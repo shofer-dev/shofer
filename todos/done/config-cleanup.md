@@ -298,7 +298,7 @@ from `package.json` `contributes.configuration.properties`.
 >   `codebaseIndex{OpenAiCompatible,Gemini,Mistral,VercelAiGateway,OpenRouter}ApiKey` —
 >   exactly `SYNCED_SECRET_KEYS`) are written/read as **global, cross-profile** creds:
 >   `saveCodeIndexSettings` (`webviewMessageHandler.ts`) and controller→node
->   `ShoferAPI.applySyncedSecrets` (`api.ts`) call `storeSecret` directly (never the active
+>   `ShoferExtensionApi.applySyncedSecrets` (`api.ts`) call `storeSecret` directly (never the active
 >   profile), and they are versioned globally (`computeConfigVersion`). Routing their reads
 >   to `activeProfile[key]` returns `undefined` → **silent RAG/Qdrant credential loss**;
 >   routing writes into the profile breaks the `SYNCED_SECRET_KEYS` global-replication

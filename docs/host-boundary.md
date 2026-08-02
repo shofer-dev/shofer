@@ -125,7 +125,7 @@ The same core runs unchanged on any of:
   execution. See [`cli.md`](cli.md).
 - **Headless server** (`shofer serve`, `shofer acp`) — the same extension
   bundle loaded under the vscode-shim, exposing the agent over
-  [`AgentApi`](agentapi.md) (HTTP/SSE) or [ACP](acp.md). Dialogs are left as
+  [`ShoferApi`](agentapi.md) (HTTP/SSE) or [ACP](acp.md). Dialogs are left as
   outstanding asks for a client to answer; watchers and editor surfaces are
   inert.
 
@@ -177,7 +177,7 @@ through Category I (`getHost()` + the registries above):
   consumed by the `rag-indexing` plugin.
 - **The transport layer** (`packages/core/src/transport/`) — the HTTP/SSE
   server + typed client and the ACP stack, all over the transport-agnostic
-  [`AgentApi`](agentapi.md).
+  [`ShoferApi`](agentapi.md).
 - **`slang`/workflow interpreter**, **`apply-patch`**, **`auto-approval`**,
   **`glob`**, the **`McpHub`**, **`shofer-config`**, **`extract-text`**, the
   **`diff`** strategies, tiktoken/token-counter, `safeWriteJson`, storage,
@@ -252,7 +252,7 @@ need no host setup at all.
 Shofer has **no built-in multi-worker capability** and will not grow one: the
 former "Shofer Workers" fleet layer (a controller-side worker registry, pool,
 config replication and remote-task shadows) was removed in favor of dispatching
-work over an external scheduler and observing running tasks over AgentApi. Core
+work over an external scheduler and observing running tasks over ShoferApi. Core
 keeps exactly two generic seams for it, and neither of them schedules anything:
 
 - **Attachment** — [`TaskAttachmentManager`](../src/core/attach/TaskAttachmentManager.ts)
@@ -260,7 +260,7 @@ keeps exactly two generic seams for it, and neither of them schedules anything:
   `(address, taskId, token)`: subscribe the task-scoped SSE, backfill
   [`getTaskSnapshot`](./agentapi.md#task-snapshots--attaching-to-a-running-task),
   and render the result in the chat view like any other task — asks, follow-up
-  messages and cancel all travel back over AgentApi. Focus is **per view**, so the
+  messages and cancel all travel back over ShoferApi. Focus is **per view**, so the
   sidebar and an editor tab can watch different remote tasks; a connection exists
   only while a view is attached, and detaching leaves the task untouched.
   Invocable as `shofer.attachRemoteTask` / `shofer.detachRemoteTask`.

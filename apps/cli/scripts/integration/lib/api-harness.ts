@@ -82,25 +82,25 @@ export interface TaskTrace {
 
 	/**
 	 * Fetches the markdown transcript for the root task (post-completion).
-	 * Delegates to `ShoferAPI.getTaskMarkdownExport`.
+	 * Delegates to `ShoferExtensionApi.getTaskMarkdownExport`.
 	 */
 	getMarkdown(): Promise<string>
 
 	/**
 	 * Fetches the markdown transcript for a direct child task (post-completion).
-	 * Delegates to `ShoferAPI.getTaskMarkdownExport`.
+	 * Delegates to `ShoferExtensionApi.getTaskMarkdownExport`.
 	 */
 	getChildMarkdown(childId: string): Promise<string>
 
 	/**
 	 * Fetches the JSON summary for the root task (post-completion).
-	 * Delegates to `ShoferAPI.getTaskJsonExport`.
+	 * Delegates to `ShoferExtensionApi.getTaskJsonExport`.
 	 */
 	getJsonExport(): Promise<Record<string, unknown>>
 
 	/**
 	 * Fetches the JSON summary for a direct child task (post-completion).
-	 * Delegates to `ShoferAPI.getTaskJsonExport`.
+	 * Delegates to `ShoferExtensionApi.getTaskJsonExport`.
 	 */
 	getChildJsonExport(childId: string): Promise<Record<string, unknown>>
 

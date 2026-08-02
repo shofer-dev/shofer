@@ -14,9 +14,9 @@ import type { HistoryItem, ShoferMessage, TaskSnapshot, TaskState, TokenUsage } 
  * persistent connection to a host nobody is watching.
  */
 export class AttachedTask {
-	/** The task's id ON THE OWNING HOST — the id every AgentApi call addresses. */
+	/** The task's id ON THE OWNING HOST — the id every ShoferApi call addresses. */
 	readonly taskId: string
-	/** Base URL of the owning host's AgentApi (`http://host:port`). */
+	/** Base URL of the owning host's ShoferApi (`http://host:port`). */
 	readonly address: string
 	/** When this attachment was opened, used as the header timestamp fallback. */
 	readonly attachedAt = Date.now()

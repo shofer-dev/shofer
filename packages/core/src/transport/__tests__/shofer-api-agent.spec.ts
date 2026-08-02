@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest"
 import { EventEmitter } from "node:events"
 
-import type { ShoferAPI, ShoferMessage } from "@shofer/types"
+import type { ShoferExtensionApi, ShoferMessage } from "@shofer/types"
 
 import { ShoferApiAgent, findOutstandingAsk } from "../shofer-api-agent.js"
 
 /**
- * `ShoferAPI` is itself an `AgentApi`, so this adapter carries only what the
- * interface cannot express: the `allowClientConfig` gate on a client-supplied
+ * `ShoferExtensionApi` is itself a `ShoferApi`, so this adapter carries only what
+ * the interface cannot express: the `allowClientConfig` gate on a client-supplied
  * per-task provider config, and rehydrating an addressed task before delivering
  * a message to it. Everything else must pass straight through — a translation
  * layer here would be a second place for the two surfaces to drift.
@@ -25,9 +25,9 @@ describe("ShoferApiAgent", () => {
 			pluginRequest: vi.fn(async () => ({ ok: true })),
 			subscribe: vi.fn(() => () => {}),
 			...overrides,
-		}) as unknown as ShoferAPI & EventEmitter
+		}) as unknown as ShoferExtensionApi & EventEmitter
 	}
-	const spies = (api: ShoferAPI) => api as unknown as Record<string, ReturnType<typeof vi.fn>>
+	const spies = (api: ShoferExtensionApi) => api as unknown as Record<string, ReturnType<typeof vi.fn>>
 
 	it("createTask delegates, keeping mode and prompt", async () => {
 		const api = makeApi()

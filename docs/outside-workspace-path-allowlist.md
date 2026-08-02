@@ -335,7 +335,7 @@ above and the settings architecture rejects it on two further counts:
   copy the anti-pattern.
 
 So the design uses **globalState/`globalSettingsSchema` as the store** and the **portable
-import channel** (auto-import file / `ShoferAPI.importConfiguration`) as the
+import channel** (auto-import file / `ShoferExtensionApi.importConfiguration`) as the
 external-service / cross-executor seeding path — the same pair the settings architecture
 recommends for automated deployments ([`settings_overlay.md` §10d, §11](settings_overlay.md)).
 
@@ -411,10 +411,10 @@ so it inherits, for free, whatever already carries that state to each executor. 
 new distribution mechanism** — we only insist the fields live in the portable state, not a
 front-end-only backend.
 
-| Executor                            | How the auto-approval state (incl. these fields) is present                                                                                                                                                                                                                                                                                                                                                       |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **VS Code (local)**                 | Controller == executor; `provider.getState()` reads globalState directly. ([§8a](#8a-store-contextproxy-globalstate-globalsettingsschema--source-of-truth))                                                                                                                                                                                                                                                       |
-| **CLI / headless (`shofer serve`)** | The core runs against the `vscode-shim` (globalState → `~/.vscode-mock/` JSON; config overlay in `WorkspaceConfiguration`). Pre-seed via `ShoferAPI.importConfiguration(json)` / auto-import, or the layered `.shofer/settings.json` files the host was provisioned with — the same `globalSettings` block ([`cli.md`](cli.md) "Configuration Import/Export", which explicitly covers **auto-approval toggles**). |
+| Executor                            | How the auto-approval state (incl. these fields) is present                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **VS Code (local)**                 | Controller == executor; `provider.getState()` reads globalState directly. ([§8a](#8a-store-contextproxy-globalstate-globalsettingsschema--source-of-truth))                                                                                                                                                                                                                                                                |
+| **CLI / headless (`shofer serve`)** | The core runs against the `vscode-shim` (globalState → `~/.vscode-mock/` JSON; config overlay in `WorkspaceConfiguration`). Pre-seed via `ShoferExtensionApi.importConfiguration(json)` / auto-import, or the layered `.shofer/settings.json` files the host was provisioned with — the same `globalSettings` block ([`cli.md`](cli.md) "Configuration Import/Export", which explicitly covers **auto-approval toggles**). |
 
 Because this feature only _adds fields_ to the portable auto-approval state, it imposes just
 one hard requirement of its own: the fields must live in the serializable
@@ -434,7 +434,7 @@ flowchart TB
     STORE["controller globalState — globalSettingsSchema<br/>allowedReadPaths / allowedWritePaths<br/>the source of truth"]
 
     VS["VS Code host — controller is the executor<br/>reads globalState directly"]
-    CLI["CLI / headless — 'shofer serve'<br/>vscode-shim; pre-seeded via<br/>ShoferAPI.importConfiguration, auto-import,<br/>or provisioned .shofer/ files"]
+    CLI["CLI / headless — 'shofer serve'<br/>vscode-shim; pre-seeded via<br/>ShoferExtensionApi.importConfiguration, auto-import,<br/>or provisioned .shofer/ files"]
 
     STATE["provider.getState() on that executor — a curated copy;<br/>the keys must also be in getStateToPostToWebview()"]
     GATE["checkAutoApproval in @shofer/core"]

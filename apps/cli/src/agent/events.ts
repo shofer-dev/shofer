@@ -81,52 +81,52 @@ export interface ClientEventMap {
 	 */
 	error: Error
 
-	// ─── ShoferAPI-bridged events (forwarded from public API) ───────
+	// ─── ShoferExtensionApi-bridged events (forwarded from public API) ───────
 
 	/**
-	 * Emitted when a new task is created (bridged from ShoferAPI).
+	 * Emitted when a new task is created (bridged from ShoferExtensionApi).
 	 */
 	taskCreated: string
 
 	/**
-	 * Emitted when a task starts executing (bridged from ShoferAPI).
+	 * Emitted when a task starts executing (bridged from ShoferExtensionApi).
 	 */
 	taskStarted: string
 
 	/**
-	 * Emitted when a task is aborted (bridged from ShoferAPI).
+	 * Emitted when a task is aborted (bridged from ShoferExtensionApi).
 	 */
 	taskAborted: string
 
 	/**
 	 * Emitted when a task is paused (e.g., parent waiting for subtask).
-	 * Bridged from ShoferAPI.
+	 * Bridged from ShoferExtensionApi.
 	 */
 	taskPaused: string
 
 	/**
-	 * Emitted when a paused task resumes (bridged from ShoferAPI).
+	 * Emitted when a paused task resumes (bridged from ShoferExtensionApi).
 	 */
 	taskUnpaused: string
 
 	/**
-	 * Emitted when a subtask is spawned (bridged from ShoferAPI).
+	 * Emitted when a subtask is spawned (bridged from ShoferExtensionApi).
 	 * Payload is the child task ID.
 	 */
 	taskSpawned: string
 
 	/**
-	 * Emitted when a tool fails in a task (bridged from ShoferAPI).
+	 * Emitted when a tool fails in a task (bridged from ShoferExtensionApi).
 	 */
 	toolFailed: { taskId: string; tool: string; error: string }
 
 	/**
-	 * Emitted when token usage is updated (bridged from ShoferAPI).
+	 * Emitted when token usage is updated (bridged from ShoferExtensionApi).
 	 */
 	tokenUsageUpdated: { taskId: string }
 
 	/**
-	 * Emitted when queued messages are updated (bridged from ShoferAPI).
+	 * Emitted when queued messages are updated (bridged from ShoferExtensionApi).
 	 * Carries the full current queue so consumers (stream-json `queue` events,
 	 * TUI queue view) can render its contents, not just react to the change.
 	 */

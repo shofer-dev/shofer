@@ -461,7 +461,7 @@ mock provider across 25 scenarios including:
 - Tool execution: `read_file`, `execute_command`, `write_to_file`
 - Subtask spawning (`new_task` tool)
 - Mode switching (`--mode architect`)
-- ShoferAPI library (programmatic API via ExtensionHost)
+- ShoferExtensionApi library (programmatic API via ExtensionHost)
 
 Run the full suite:
 

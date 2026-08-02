@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest"
 
-import type { AgentApi, ServerEvent } from "@shofer/types"
+import type { ShoferApi, ServerEvent } from "@shofer/types"
 import { JsonRpcPeer, type JsonRpcMessage } from "../acp-connection.js"
 import { AcpAgentServer } from "../acp-agent-server.js"
 
-/** A mock AgentApi whose event stream the test drives directly. */
+/** A mock ShoferApi whose event stream the test drives directly. */
 function makeApi() {
 	let emit: (e: ServerEvent) => void = () => {}
-	const api: AgentApi = {
+	const api: ShoferApi = {
 		createTask: vi.fn(async () => ({ taskId: "t1" })),
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),

@@ -7,7 +7,7 @@ import * as vscode from "vscode"
 import pWaitFor from "p-wait-for"
 
 import {
-	type ShoferAPI,
+	type ShoferExtensionApi,
 	type ShoferSettings,
 	type ShoferEvents,
 	type ExtensionCreateTaskInput,
@@ -42,7 +42,7 @@ import { buildJsonTrace } from "../integrations/misc/export-json"
 import { formatContentBlockToMarkdown, getTaskFileName } from "../integrations/misc/export-markdown"
 import { createWorkflowTask, discoverWorkflows } from "../core/workflow/index"
 
-export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
+export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionApi {
 	private readonly outputChannel: vscode.OutputChannel
 	private readonly sidebarProvider: ShoferProvider
 	private readonly context: vscode.ExtensionContext
@@ -348,7 +348,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		}
 
 		// Where does this task run? The same question the chat input asks, asked here too:
-		// this is the entry point every NON-webview caller comes through — the AgentApi a
+		// this is the entry point every NON-webview caller comes through — the ShoferApi a
 		// controller drives a headless executor with, the CLI, the public API — and a task
 		// created that way deserves the same isolation as one typed into the sidebar. A
 		// plugin that recognised the question and failed throws, aborting creation, rather

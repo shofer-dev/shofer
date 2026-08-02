@@ -1,22 +1,22 @@
 import http from "node:http"
 
-import type { AgentApi, ProviderSettings, ServerEvent } from "@shofer/types"
+import type { ShoferApi, ProviderSettings, ServerEvent } from "@shofer/types"
 
 /**
  * HTTP + SSE transport boundary (v3 architecture §11).
  *
- * shofer already has an in-process `ShoferAPI` and a headless NDJSON protocol;
+ * shofer already has an in-process `ShoferExtensionApi` and a headless NDJSON protocol;
  * §11 publishes that as a versioned, network-accessible surface so a TUI, web
  * client, or third-party tool can drive the agent — and a generated SDK can't
  * drift from it. This module is the transport itself: a small `node:http` server
  * (no framework dependency) exposing task control over HTTP and a one-way event
  * stream over SSE (`GET /api/event`).
  *
- * It is driven by an injected {@link AgentApi} (now defined in `@shofer/types` and
+ * It is driven by an injected {@link ShoferApi} (now defined in `@shofer/types` and
  * re-exported here), so the transport is testable in isolation.
  */
 
-export type { AgentApi, ServerEvent } from "@shofer/types"
+export type { ShoferApi, ServerEvent } from "@shofer/types"
 
 const API_VERSION = "v1"
 
@@ -94,7 +94,7 @@ export interface HttpServerOptions {
  *   POST /api/v1/task/:id/ask        → { askResponse, text?, images?, askId?, mode? } (interactive approval)
  *   POST /api/v1/task/:id/plugin-request → { plugin, method, params } → 200 { result }
  */
-export function createHttpServer(api: AgentApi, opts: HttpServerOptions = {}): http.Server {
+export function createHttpServer(api: ShoferApi, opts: HttpServerOptions = {}): http.Server {
 	return http.createServer(createRequestHandler(api, opts))
 }
 
@@ -102,7 +102,7 @@ export function createHttpServer(api: AgentApi, opts: HttpServerOptions = {}): h
  * The request handler (exported for testing without a real socket).
  */
 export function createRequestHandler(
-	api: AgentApi,
+	api: ShoferApi,
 	opts: HttpServerOptions = {},
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
 	const base = `/api/${API_VERSION}`

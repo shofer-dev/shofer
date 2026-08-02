@@ -1,4 +1,4 @@
-import { ShoferEventName, type ShoferAPI } from "@shofer/types"
+import { ShoferEventName, type ShoferExtensionApi } from "@shofer/types"
 
 type WaitForOptions = {
 	timeout?: number
@@ -40,7 +40,7 @@ export const waitFor = (
 }
 
 type WaitUntilAbortedOptions = WaitForOptions & {
-	api: ShoferAPI
+	api: ShoferExtensionApi
 	taskId: string
 }
 
@@ -51,7 +51,7 @@ export const waitUntilAborted = async ({ api, taskId, ...options }: WaitUntilAbo
 }
 
 type WaitUntilCompletedOptions = WaitForOptions & {
-	api: ShoferAPI
+	api: ShoferExtensionApi
 	taskId: string
 }
 
@@ -66,11 +66,11 @@ export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve
 /**
  * Cancel whatever task is currently focused, if any.
  *
- * `ShoferAPI.cancelTask` is task-addressed; suite setup/teardown means "cancel
+ * `ShoferExtensionApi.cancelTask` is task-addressed; suite setup/teardown means "cancel
  * whatever is running" and has no id in hand, so it resolves the top of the task
  * stack here. A no-op when nothing is running.
  */
-export const cancelCurrentTask = async (api: ShoferAPI) => {
+export const cancelCurrentTask = async (api: ShoferExtensionApi) => {
 	const taskId = api.getCurrentTaskStack().at(-1)
 	if (taskId) {
 		await api.cancelTask(taskId)

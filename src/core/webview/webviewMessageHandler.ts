@@ -81,10 +81,7 @@ import { resolveTaskCwd } from "./resolveTaskCwd"
 import { adoptDispatchedTask, resolveTaskPlacement } from "./resolveTaskPlacement"
 import { TaskAttachmentManager } from "../attach/TaskAttachmentManager"
 
-export const webviewMessageHandler = async (
-	provider: ShoferProvider,
-	message: WebviewMessage,
-) => {
+export const webviewMessageHandler = async (provider: ShoferProvider, message: WebviewMessage) => {
 	// Utility functions provided for concise get/update of global state via contextProxy API.
 	const getGlobalState = <K extends keyof GlobalState>(key: K) => provider.contextProxy.getValue(key)
 	const updateGlobalState = async <K extends keyof GlobalState>(key: K, value: GlobalState[K]) =>
@@ -761,9 +758,7 @@ export const webviewMessageHandler = async (
 				if (dispatched) {
 					const attached = await adoptDispatchedTask(provider, dispatched)
 					if (!attached) {
-						getHost().notifier.info(
-							t("common:attach.dispatched_no_address", { taskId: dispatched.taskId }),
-						)
+						getHost().notifier.info(t("common:attach.dispatched_no_address", { taskId: dispatched.taskId }))
 					}
 					await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 					break
@@ -797,7 +792,7 @@ export const webviewMessageHandler = async (
 				const messageText = resolved.text
 
 				// An attached task's ask is answered on the host that RAISED it, over
-				// AgentApi — never through the in-process path, which has no such
+				// ShoferApi — never through the in-process path, which has no such
 				// task. The webview posts the attached task's id (currentTaskItem.id),
 				// so this only fires for the view actually rendering it.
 				const attachments = TaskAttachmentManager.getInstance()
@@ -1505,7 +1500,7 @@ export const webviewMessageHandler = async (
 			break
 		case "cancelTask":
 			// Stop applies to whatever THIS view is rendering: an attached remote
-			// task is cancelled on its own host, over AgentApi.
+			// task is cancelled on its own host, over ShoferApi.
 			if (TaskAttachmentManager.getInstance().get(provider)) {
 				await TaskAttachmentManager.getInstance().cancelTask(provider)
 				break

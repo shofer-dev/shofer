@@ -101,7 +101,7 @@ export class SetTaskTitleTool extends BaseTool<"set_task_title"> {
 				provider.renameManagedTask(task.taskId, cleanTitle, "agent")
 
 				// Surface the new title to any controller driving this task over the
-				// AgentApi (a headless `shofer serve` node — the persisted name lives
+				// ShoferApi (a headless `shofer serve` node — the persisted name lives
 				// in the executor's task store otherwise, invisible to the caller).
 				// The API bridges this task event onto its own emitter, which the
 				// transport forwards (mirrors TaskModeSwitched).

@@ -71,7 +71,7 @@ export interface ShoferPlugin {
 	 *
 	 * - a plugin UI component asking its extension side for data to render;
 	 * - the controller reaching a plugin running on a **remote executor** over the
-	 *   `AgentApi` (`pluginRequest`), which is how per-task plugin state that lives on
+	 *   `ShoferApi` (`pluginRequest`), which is how per-task plugin state that lives on
 	 *   the owning executor stays reachable.
 	 *
 	 * `method` is plugin-defined; unknown methods should throw. Throwing is safe — the
@@ -618,7 +618,7 @@ export interface PluginAgent {
 	 * Unlike {@link notify} (fire-and-forget), this is the **job-oriented** path a
 	 * workflow/runner plugin uses: `await handle.result()` for the structured outcome,
 	 * `handle.cancel()` to abort. Scoped, gated (`permissions.agent`); the plugin never
-	 * touches the task stack or `ShoferAPI`.
+	 * touches the task stack or `ShoferExtensionApi`.
 	 */
 	spawn(prompt: string, opts?: PluginAgentSpawnOptions): Promise<PluginTaskHandle>
 

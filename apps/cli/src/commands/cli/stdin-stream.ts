@@ -754,7 +754,7 @@ export async function runStdinStreamMode({ host, jsonEmitter, setStreamRequestId
 					})
 
 					// Route through host.sendMessage() which delegates to the
-					// ShoferAPI.sendMessage() — handles headless fallback and
+					// ShoferExtensionApi.sendMessage() — handles headless fallback and
 					// ask-response routing automatically.
 					host.sendMessage(stdinCommand.prompt, stdinCommand.images)
 

@@ -1,7 +1,7 @@
-import { type ShoferAPI, ShoferEventName } from "@shofer/types"
+import { type ShoferExtensionApi, ShoferEventName } from "@shofer/types"
 
 import type {
-	AgentApi,
+	ShoferApi,
 	AskResponse,
 	CreateTaskInput,
 	OutstandingAsk,
@@ -14,7 +14,7 @@ import type {
 export interface ShoferApiAgentOptions {
 	/**
 	 * Whether to honor the per-task `apiConfiguration` a controller ships with
-	 * {@link AgentApi.createTask}. `true` on a `shofer serve` node started WITHOUT
+	 * {@link ShoferApi.createTask}. `true` on a `shofer serve` node started WITHOUT
 	 * explicit CLI provider/model/api-key/base-url overrides, so the front-end's
 	 * API Configuration drives each task (and can differ per task). `false` when
 	 * the node has a manual CLI override — the node's own config always wins and
@@ -25,7 +25,7 @@ export interface ShoferApiAgentOptions {
 }
 
 /**
- * Live {@link AgentApi} backed by the in-process {@link ShoferAPI} (§11).
+ * Live {@link ShoferApi} backed by the in-process {@link ShoferExtensionApi} (§11).
  *
  * This is the adapter that connects the HTTP/SSE transport to the real agent: the
  * HTTP server (`createHttpServer`) becomes drivable by instantiating it with
@@ -33,7 +33,7 @@ export interface ShoferApiAgentOptions {
  * `server.listen(...)` (a `shofer serve` command / extension command); running it
  * fully headless is gated on §9.
  *
- * `ShoferAPI` is itself an `AgentApi` now, so this class carries only what the
+ * `ShoferExtensionApi` is itself a `ShoferApi` now, so this class carries only what the
  * interface cannot: the `allowClientConfig` gate on a client-supplied per-task
  * provider config, and rehydrating an addressed task before delivering to it.
  * Everything else delegates straight through.
@@ -71,9 +71,9 @@ export function findOutstandingAsk(messages: ShoferMessage[]): OutstandingAsk | 
 	return { ask: last.ask, askId: last.askId, text: last.text, ts: last.ts }
 }
 
-export class ShoferApiAgent implements AgentApi {
+export class ShoferApiAgent implements ShoferApi {
 	constructor(
-		private readonly api: ShoferAPI,
+		private readonly api: ShoferExtensionApi,
 		private readonly options: ShoferApiAgentOptions = {},
 	) {}
 

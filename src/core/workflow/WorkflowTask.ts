@@ -1972,7 +1972,7 @@ export class WorkflowTask extends Task {
 			// Emit the canonical Task lifecycle event — the same contract every
 			// Task uses to signal terminal state (cf. AttemptCompletionTool.
 			// emitTaskCompleted). This is what TaskManager.onComplete listens on
-			// to write `taskState`, what the public ShoferAPI re-emits to external
+			// to write `taskState`, what the public ShoferExtensionApi re-emits to external
 			// consumers (e.g. integration harness `waitForCompletion`), and what
 			// the webview observes to leave the running state. The WorkflowTask
 			// root has no parentTaskId, so `isSubtask` is false.
@@ -2046,7 +2046,7 @@ export async function createWorkflowTask(
 		// via spawnAgentTask.
 		cwd,
 		// Wire the same provider-level event forwarding that createTask() gets,
-		// so the workflow root's TaskCompleted reaches the public ShoferAPI.
+		// so the workflow root's TaskCompleted reaches the public ShoferExtensionApi.
 		onCreated: provider.onTaskCreated,
 	})
 	seedWorkflowCostLimit(provider, task)
@@ -2112,7 +2112,7 @@ export async function createWorkflowTaskFromHistory(
 		flowState,
 		historyItem,
 		// Wire the same provider-level event forwarding that createTask() gets,
-		// so the workflow root's TaskCompleted reaches the public ShoferAPI.
+		// so the workflow root's TaskCompleted reaches the public ShoferExtensionApi.
 		onCreated: provider.onTaskCreated,
 	})
 	// The constructor already restored historyItem.costLimit (if any); seed the

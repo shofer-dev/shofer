@@ -1,7 +1,7 @@
 /**
- * ShoferAPI library functional tests (test_cli.md scenarios 15-19).
+ * ShoferExtensionApi library functional tests (test_cli.md scenarios 15-19).
  *
- * Exercises the in-process ShoferAPI surface against the hermetic `mock`
+ * Exercises the in-process ShoferExtensionApi surface against the hermetic `mock`
  * provider — no real LLM, no network. Each scenario relies on the mock's
  * built-in substring matches (API_OK, TASK_ONE, EXPORT_TEST, …) so the agent
  * loop runs to a real `attempt_completion`.
@@ -58,7 +58,7 @@ async function main() {
 	// persists `HistoryItem.taskState` through a fire-and-forget async chain
 	// that is silently dropped when the history item is not yet on disk (the
 	// case for ultra-fast mock tasks), so the persisted lifecycle is lossy. The
-	// ShoferAPI `TaskCompleted` event — the same signal `waitForTaskCompletion`
+	// ShoferExtensionApi `TaskCompleted` event — the same signal `waitForTaskCompletion`
 	// resolves on — is the reliable indicator that a top-level task completed.
 	const completedTaskIds = new Set<string>()
 	api.on(

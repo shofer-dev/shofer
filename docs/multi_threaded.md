@@ -801,16 +801,16 @@ notifies the main thread, which can trigger `_resetWebview()`.
 
 ### Existing Precedent
 
-| File                                                                                                                  | Role                                                                             |
-| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [`apps/cli/src/agent/extension-host.ts`](../apps/cli/src/agent/extension-host.ts)                                     | CLI's `IExtensionHost` implementation (loads extension bundle, bridges to TUI)   |
-| [`packages/vscode-shim/src/api/WindowAPI.ts`](../packages/vscode-shim/src/api/WindowAPI.ts)                           | Mock `window.*` API — `registerWebviewViewProvider`, `createTerminal`, etc.      |
-| [`packages/vscode-shim/src/api/FileSystemAPI.ts`](../packages/vscode-shim/src/api/FileSystemAPI.ts)                   | Direct `fs.*` operations (works unchanged in workers)                            |
-| [`packages/vscode-shim/src/interfaces/extension-host.ts`](../packages/vscode-shim/src/interfaces/extension-host.ts)   | `IExtensionHost` interface — the extension point                                 |
-| [`packages/vscode-shim/src/api/create-vscode-api-mock.ts`](../packages/vscode-shim/src/api/create-vscode-api-mock.ts) | Factory that assembles the full vscode mock object                               |
-| [`webview-ui/src/context/ExtensionStateContext.tsx`](../webview-ui/src/context/ExtensionStateContext.tsx)             | Webview state management                                                         |
-| [`docs/cli.md`](cli.md)                                                                                               | CLI headless runtime documentation                                               |
-| [`docs/public_api.md`](public_api.md)                                                                                 | `ShoferAPI` documentation — the control plane used by both CLI and Agent Workers |
+| File                                                                                                                  | Role                                                                                      |
+| --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [`apps/cli/src/agent/extension-host.ts`](../apps/cli/src/agent/extension-host.ts)                                     | CLI's `IExtensionHost` implementation (loads extension bundle, bridges to TUI)            |
+| [`packages/vscode-shim/src/api/WindowAPI.ts`](../packages/vscode-shim/src/api/WindowAPI.ts)                           | Mock `window.*` API — `registerWebviewViewProvider`, `createTerminal`, etc.               |
+| [`packages/vscode-shim/src/api/FileSystemAPI.ts`](../packages/vscode-shim/src/api/FileSystemAPI.ts)                   | Direct `fs.*` operations (works unchanged in workers)                                     |
+| [`packages/vscode-shim/src/interfaces/extension-host.ts`](../packages/vscode-shim/src/interfaces/extension-host.ts)   | `IExtensionHost` interface — the extension point                                          |
+| [`packages/vscode-shim/src/api/create-vscode-api-mock.ts`](../packages/vscode-shim/src/api/create-vscode-api-mock.ts) | Factory that assembles the full vscode mock object                                        |
+| [`webview-ui/src/context/ExtensionStateContext.tsx`](../webview-ui/src/context/ExtensionStateContext.tsx)             | Webview state management                                                                  |
+| [`docs/cli.md`](cli.md)                                                                                               | CLI headless runtime documentation                                                        |
+| [`docs/public_api.md`](public_api.md)                                                                                 | `ShoferExtensionApi` documentation — the control plane used by both CLI and Agent Workers |
 
 ## 9. Gaps & Open Questions
 

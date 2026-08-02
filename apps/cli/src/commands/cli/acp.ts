@@ -22,7 +22,7 @@ export interface AcpOptions {
  * `shofer acp` — run Shofer as an Agent Client Protocol (ACP) agent over stdio.
  *
  * Boots a headless extension host (same as the non-interactive CLI), then hands
- * its `ShoferAPI` to the bundle's ACP server (`runAcpAgentOverShoferApi`), which
+ * its `ShoferExtensionApi` to the bundle's ACP server (`runAcpAgentOverShoferApi`), which
  * speaks JSON-RPC 2.0 (one object per line) on stdin/stdout. An ACP client (Zed,
  * etc.) drives the agent through it. `disableOutput` keeps ordinary logging off
  * stdout so it doesn't corrupt the protocol stream.

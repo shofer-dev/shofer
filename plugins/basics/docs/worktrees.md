@@ -254,7 +254,7 @@ picker rather than being swallowed.
 
 `shofer serve` loads this plugin like any other host, so placement must not be a webview
 feature — and is not: the question is asked on **every** task-creation path.
-`ShoferAPI.startNewTask` (which the AgentApi, the CLI and ACP all funnel through)
+`ShoferExtensionApi.startNewTask` (which the ShoferApi, the CLI and ACP all funnel through)
 resolves it too. So a controller driving a headless executor gets the same isolation a
 user typing in the sidebar does: each remote task in its own checkout of the executor's
 workspace, rather than every agent on one branch.

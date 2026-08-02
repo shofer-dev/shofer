@@ -1,8 +1,8 @@
-import type { ShoferAPI } from "@shofer/types"
+import type { ShoferExtensionApi } from "@shofer/types"
 
 declare global {
 	// eslint-disable-next-line no-var
-	var api: ShoferAPI
+	var api: ShoferExtensionApi
 }
 
 export {}

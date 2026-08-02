@@ -46,7 +46,7 @@ export interface AgentWorkerData {
 export interface AgentWorkerBootstrapResult {
 	/** The task ID from `workerData`. */
 	taskId: string
-	/** The `activate()` return value (the `ShoferAPI` control plane). */
+	/** The `activate()` return value (the `ShoferExtensionApi` control plane). */
 	api: unknown
 }
 
@@ -56,7 +56,7 @@ export interface AgentWorkerBootstrapResult {
  * In a real worker, `workerData` comes from the spawning thread. In tests,
  * it can be injected directly.
  *
- * @returns the task ID and the activated ShoferAPI.
+ * @returns the task ID and the activated ShoferExtensionApi.
  */
 export async function bootstrapAgentWorker(data: AgentWorkerData): Promise<AgentWorkerBootstrapResult> {
 	// ── Step 1: Wire the WorkerExtensionHost ──────────────────────────

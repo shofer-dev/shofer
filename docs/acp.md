@@ -17,7 +17,7 @@ flowchart LR
     RPC["JsonRpcPeer<br/>transport/acp-connection.ts"]
     SRV["AcpAgentServer<br/>transport/acp-agent-server.ts"]
     MAP["acp-mapping.ts — pure, unit-tested<br/>ACP_METHOD_MAP · toAcpSessionUpdate<br/>toAcpPermissionOutcome · shoferModeToAcpSessionMode"]
-    API["AgentApi — shofer's own, richer surface"]
+    API["ShoferApi — shofer's own, richer surface"]
     CORE["core agent"]
 
     ED -->|"newline-delimited JSON-RPC 2.0 over stdio"| RPC
@@ -47,7 +47,7 @@ So ACP defines both _how_ messages are exchanged and _what_ they mean. The point
 
 - **MCP** — tools shofer _calls_ (outbound). ACP is inbound: clients drive shofer.
 - **shofer's multi-agent orchestration** (`new_task`, peer messaging) — internal, not a wire protocol.
-- **[AgentApi](./agentapi.md)** — shofer's own richer surface. ACP is a _lossy adapter_ over it (see [below](#how-acp-differs-from-agentapi)).
+- **[ShoferApi](./agentapi.md)** — shofer's own richer surface. ACP is a _lossy adapter_ over it (see [below](#how-acp-differs-from-agentapi)).
 
 ACP here is **agent-side** (clients drive shofer). Acting as an ACP _client_ (shofer driving
 external ACP agents) is a separate, lower-priority direction.
@@ -85,7 +85,7 @@ sequenceDiagram
     autonumber
     participant E as ACP client (editor)
     participant S as AcpAgentServer
-    participant A as AgentApi
+    participant A as ShoferApi
 
     E->>S: initialize
     S-->>E: ACP_PROTOCOL_VERSION 1 + agentCapabilities
@@ -137,12 +137,12 @@ An interactive tool approval maps a shofer auto-approval decision onto an ACP
 Modes map **1:1** — the shofer mode slug _is_ the ACP session-mode id (a named passthrough,
 `shoferModeToAcpSessionMode` / `acpSessionModeToShoferMode`, so there's one place to diverge).
 
-## How ACP differs from AgentApi
+## How ACP differs from ShoferApi
 
 Both let arbitrary front-ends drive the core, but they are **different contracts**, not two
 pipes for one contract:
 
-|                    | ACP                                                                                                   | [AgentApi](./agentapi.md) (HTTP/SSE)        |
+|                    | ACP                                                                                                   | [ShoferApi](./agentapi.md) (HTTP/SSE)       |
 | ------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | Owner              | External standard (Zed-originated)                                                                    | Shofer's own                                |
 | Schema             | **Fixed, narrow** ACP method set                                                                      | **Full, faithful** shofer surface           |
@@ -150,7 +150,7 @@ pipes for one contract:
 | Wire               | JSON-RPC 2.0 over stdio (subprocess)                                                                  | REST + SSE, bearer auth + version handshake |
 | Purpose            | Interop with ACP editors                                                                              | Driving a served executor remotely          |
 
-Key point: `AgentApi` is **richer than ACP**. ACP is a lowest-common-denominator adapter;
+Key point: `ShoferApi` is **richer than ACP**. ACP is a lowest-common-denominator adapter;
 HTTP/SSE is the full-fidelity binding. Even running ACP JSON-RPC over a socket would still
 be the narrow ACP surface — the difference is the **schema**, not the pipe.
 
@@ -176,7 +176,7 @@ core (no VS Code needed). Deferred:
 1. Swap the direct JSON-RPC framing for the upstream `@agentclientprotocol/sdk` once it's in
    the registry (drop-in — `JsonRpcPeer` mirrors its connection).
 2. Wire `requestPermission` (agent→client) onto the auto-approval flow — the mapping exists;
-   it needs an approval hook on `AgentApi`.
+   it needs an approval hook on `ShoferApi`.
 3. `loadSession`/`listSessions`, `setSessionModel`, and end-to-end validation against a live
    ACP client (Zed), reconciling raw-event → `ShoferStreamEvent` normalization with real payloads.
 

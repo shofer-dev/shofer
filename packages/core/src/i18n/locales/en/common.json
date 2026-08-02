@@ -264,7 +264,7 @@
 	},
 	"attach": {
 		"input": {
-			"address_prompt": "Address of the host running the task (its AgentApi base URL)",
+			"address_prompt": "Address of the host running the task (its ShoferApi base URL)",
 			"address_placeholder": "http://127.0.0.1:30099",
 			"task_id_prompt": "Id of the task to attach to",
 			"token_prompt": "Bearer token for that host (leave empty if it requires none)"

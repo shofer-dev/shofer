@@ -221,11 +221,11 @@ Two guards live on this side of the seam:
 - `afterFileEdit` schedules a debounced push (500 ms) over the plugin's UI
   channel, serialized so a burst of accepts cannot deliver a stale list last.
 
-## Served tasks (AgentApi)
+## Served tasks (ShoferApi)
 
-For a task driven over AgentApi, per-task plugin state is reachable through the
+For a task driven over ShoferApi, per-task plugin state is reachable through the
 generic `pluginRequest(taskId, plugin, method, params)` wire method — there are
-no changed-files methods on `AgentApi` itself.
+no changed-files methods on `ShoferApi` itself.
 
 ## What lives where
 

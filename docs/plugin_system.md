@@ -840,7 +840,7 @@ implements `handleRequest(method, params, ctx)` and the caller awaits its result
   ([`PluginUIApi`](../packages/types/src/plugin.ts)) — the same scoped, name-tagged
   channel as `postMessage`, with correlation handled by the transport;
 - from the controller to a plugin running on a **remote executor**, via
-  **`AgentApi.pluginRequest(taskId, plugin, method, params)`**
+  **`ShoferApi.pluginRequest(taskId, plugin, method, params)`**
   ([`agentapi.md`](./agentapi.md)).
 
 Unlike the observer hooks, a request is **not** timeout-guarded or error-isolated: a
@@ -869,7 +869,7 @@ not create a local one and instead attaches to the returned reference
 **Routing.** A UI request is answered by the plugin instance on **this** host
 (`ShoferProvider.resolvePluginUiRequest` → `pluginRegistry.request`), against the focused
 task. Reaching a plugin on a DIFFERENT host — the one running a task this view is
-attached to — is the separate, explicit `AgentApi.pluginRequest` call above; nothing
+attached to — is the separate, explicit `ShoferApi.pluginRequest` call above; nothing
 routes there implicitly. Two request-shape conventions survive as plugin-side
 conventions, declared in [`plugin.ts`](../packages/types/src/plugin.ts) and interpreted by
 the plugin itself (see `basics`' `main.ts`):
@@ -1354,7 +1354,7 @@ model).
 > small, additive changes that let a plugin **drive** the agent as a durable unit of work —
 > workflow, integration, and **runner** plugins (e.g. a Temporal activity
 > worker). The additions ride the seams §5.11/§7 already
-> define and expose a **scoped** capability, never the raw `ShoferAPI`.
+> define and expose a **scoped** capability, never the raw `ShoferExtensionApi`.
 
 ### 14.1 Motivation
 
@@ -1362,7 +1362,7 @@ model).
 spawn/queue/interrupt — but it is **fire-and-forget**: no handle, no completion, no result, no
 cancel. A runner/workflow plugin needs to treat an agent run as a **job**: start it, **await its
 structured result**, and **cancel** it (e.g. when an external orchestrator cancels, or a kill
-switch fires). The full `ShoferAPI` ([`public_api.md`](./public_api.md)) already has exactly this
+switch fires). The full `ShoferExtensionApi` ([`public_api.md`](./public_api.md)) already has exactly this
 (`startNewTask → taskId`, `cancelCurrentTask`, the event stream) — but it is a **companion-extension**
 surface, not available to sandboxed plugins, and dumping it into `ctx` would break the
 restricted-context model ([§7](#7-security-model)). So the additions expose a **scoped, gated** slice
@@ -1411,7 +1411,7 @@ interface TaskResult {
 ```
 
 - **Scoped, not raw.** Mirrors how `ctx.ai` hands out a scoped `ApiHandler` (never raw keys): the
-  plugin gets task _control_, not the task stack or `ShoferAPI`. This is what keeps it a proper
+  plugin gets task _control_, not the task stack or `ShoferExtensionApi`. This is what keeps it a proper
   sandboxed capability rather than a hole.
 - **Gated + host-agnostic.** Same gate as steering (`permissions.agent`), wired via the existing
   `PluginAgentProvider` seam so `@shofer/core` stays host-agnostic (the host binds the concrete task

@@ -3,12 +3,12 @@ import Mocha from "mocha"
 import { glob } from "glob"
 import * as vscode from "vscode"
 
-import type { ShoferAPI } from "@shofer/types"
+import type { ShoferExtensionApi } from "@shofer/types"
 
 import { waitFor } from "./utils"
 
 export async function run() {
-	const extension = vscode.extensions.getExtension<ShoferAPI>("Shofer.dev")
+	const extension = vscode.extensions.getExtension<ShoferExtensionApi>("Shofer.dev")
 
 	if (!extension) {
 		throw new Error("Extension not found")

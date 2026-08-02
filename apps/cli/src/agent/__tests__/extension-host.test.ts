@@ -3,7 +3,7 @@
 import { EventEmitter } from "events"
 import fs from "fs"
 
-import type { ExtensionMessage, WebviewMessage, ShoferAPI } from "@shofer/types"
+import type { ExtensionMessage, WebviewMessage, ShoferExtensionApi } from "@shofer/types"
 
 import { DEFAULT_FLAGS } from "@/types/index.js"
 
@@ -23,10 +23,10 @@ vi.mock("@/lib/storage/index.js", () => ({
 }))
 
 /**
- * Create a mock ShoferAPI for testing.
+ * Create a mock ShoferExtensionApi for testing.
  */
-function createMockShoferAPI(): ShoferAPI {
-	const emitter = new EventEmitter() as ShoferAPI
+function createMockShoferAPI(): ShoferExtensionApi {
+	const emitter = new EventEmitter() as ShoferExtensionApi
 	const createTask = vi.fn().mockResolvedValue({ taskId: "test-task-id" })
 	const resumeTask = vi.fn().mockResolvedValue(undefined)
 
@@ -59,7 +59,7 @@ function createMockShoferAPI(): ShoferAPI {
 /**
  * Set the private extensionAPI field on an ExtensionHost.
  */
-function setExtensionAPI(host: ExtensionHost, api: ShoferAPI): void {
+function setExtensionAPI(host: ExtensionHost, api: ShoferExtensionApi): void {
 	;(host as unknown as Record<string, unknown>)["extensionAPI"] = api
 }
 
@@ -84,7 +84,7 @@ function createTestHost({
 		exitOnComplete: false,
 		...options,
 	})
-	// Inject a mock ShoferAPI so runTask/resumeTask don't throw.
+	// Inject a mock ShoferExtensionApi so runTask/resumeTask don't throw.
 	setExtensionAPI(host, createMockShoferAPI())
 	return host
 }
@@ -559,7 +559,7 @@ describe("ExtensionHost", () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
-			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			const api = getPrivate(host, "extensionAPI") as ShoferExtensionApi
 			const client = getPrivate(host, "client") as ExtensionClient
 
 			// Start the task (will hang waiting for completion)
@@ -593,7 +593,7 @@ describe("ExtensionHost", () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
-			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			const api = getPrivate(host, "extensionAPI") as ShoferExtensionApi
 			const client = getPrivate(host, "client") as ExtensionClient
 
 			const config = { customInstructions: "test instructions" }
@@ -650,7 +650,7 @@ describe("ExtensionHost", () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
-			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			const api = getPrivate(host, "extensionAPI") as ShoferExtensionApi
 			const client = getPrivate(host, "client") as ExtensionClient
 
 			const taskPromise = host.resumeTask("task-abc")
@@ -679,7 +679,7 @@ describe("ExtensionHost", () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
-			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			const api = getPrivate(host, "extensionAPI") as ShoferExtensionApi
 			await host.cancelTask()
 
 			expect(api.cancelTask).toHaveBeenCalledWith("test-task-id")
@@ -691,7 +691,7 @@ describe("ExtensionHost", () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
-			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			const api = getPrivate(host, "extensionAPI") as ShoferExtensionApi
 			await host.sendMessage("hello", ["img1"])
 
 			expect(api.sendMessage).toHaveBeenCalledWith("test-task-id", "hello", ["img1"])
@@ -701,7 +701,7 @@ describe("ExtensionHost", () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
-			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			const api = getPrivate(host, "extensionAPI") as ShoferExtensionApi
 			await host.sendMessage("hello")
 
 			expect(api.sendMessage).toHaveBeenCalledWith("test-task-id", "hello", undefined)
@@ -715,7 +715,7 @@ describe("ExtensionHost", () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
-			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			const api = getPrivate(host, "extensionAPI") as ShoferExtensionApi
 			await host.approveAction()
 
 			expect(api.respondToAsk).toHaveBeenCalledWith("test-task-id", { askResponse: "yesButtonClicked" })
@@ -725,7 +725,7 @@ describe("ExtensionHost", () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
-			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			const api = getPrivate(host, "extensionAPI") as ShoferExtensionApi
 			await host.rejectAction()
 
 			expect(api.respondToAsk).toHaveBeenCalledWith("test-task-id", { askResponse: "noButtonClicked" })

@@ -1,9 +1,9 @@
-# Remote agents — Temporal dispatch, AgentApi observation
+# Remote agents — Temporal dispatch, ShoferApi observation
 
 > **Status: Phases 1–2 EXECUTED.** The bespoke "Shofer Workers" fleet layer,
 > the config-sync channel and the split-host substrate are gone (Phase 1), and
 > core now carries the two generic seams that replace them (Phase 2): the
-> AgentApi **task-snapshot** route with the **attachment primitive** built on
+> ShoferApi **task-snapshot** route with the **attachment primitive** built on
 > it, and the **task-placement** broadcast a dispatcher plugin claims. The docs
 > the removed layer anchored (`v3_architecture.md`, `config_sync.md`,
 > `headless.md`) are consolidated into
@@ -25,10 +25,10 @@ protocol built for it:
   activity: queued durably, matched to whoever polls, retried/observed/cancelled
   with Temporal's own semantics, against a **vanilla upstream Temporal server**
   (a standalone user runs `temporal server start-dev`, one binary).
-- **Session plane — AgentApi.** Watching and steering a _running_ task —
+- **Session plane — ShoferApi.** Watching and steering a _running_ task —
   streamed transcript, interactive asks, `sendMessage`, `pluginRequest` — stays
-  on AgentApi, exactly as today, attached **on demand** to the worker that owns
-  the task. Temporal never carries transcript data; AgentApi never schedules.
+  on ShoferApi, exactly as today, attached **on demand** to the worker that owns
+  the task. Temporal never carries transcript data; ShoferApi never schedules.
 
 Both ends are **plugins**, not core features — integrator-private initially,
 openable later; the contract here is the generic design any dispatcher can
@@ -47,7 +47,7 @@ flowchart LR
     T{{"Temporal server<br/>durable queues + matching"}}
     subgraph WK["worker — 'shofer serve'"]
         TW["temporal-worker plugin<br/>polls queue · runs the task"]
-        API["AgentApi HTTP/SSE<br/>task-scoped event stream"]
+        API["ShoferApi HTTP/SSE<br/>task-scoped event stream"]
     end
 
     TC -->|"1 · start shoferTask workflow<br/>on a QUEUE, never a host"| T
@@ -89,12 +89,12 @@ flowchart LR
   exist, any worker can host the workflow leg.
 - Polls its configured task queue(s) in its configured namespace.
 - **Advertises ownership** by setting its Temporal worker _identity_ to its
-  resolvable AgentApi address — Temporal surfaces it in pending-activity info
+  resolvable ShoferApi address — Temporal surfaces it in pending-activity info
   (`DescribeWorkflowExecution`) and poller lists, so ownership discovery needs
   zero extra machinery. (Fallback if identity proves unreliable: signal the
   wrapper workflow with the address on pickup.)
 - Runs the task like any served task: asks are left outstanding for a
-  controller to answer over AgentApi; an unattached task **blocks durably** on
+  controller to answer over ShoferApi; an unattached task **blocks durably** on
   its ask — nothing is lost, and Temporal's visibility shows it pending.
 - **Fully parameterized — nothing about the Temporal deployment is hardwired.**
   Connection and pickup are plugin config: `temporalAddress`, `namespace`,
@@ -180,7 +180,7 @@ work is better off never leaving the process.
 
 Today the fleet layer hands a task to a worker directly (`createTask` over a
 pool connection). Under this design the hand-off is the Temporal payload, and
-everything after pickup is AgentApi:
+everything after pickup is ShoferApi:
 
 1. **Dispatch (Temporal).** The controller mints the `taskId` (uuidv7) and
    starts a `shoferTask` workflow with **`workflowId = taskId`**; the workflow
@@ -192,17 +192,17 @@ everything after pickup is AgentApi:
    the task on its local Shofer from that input — the agent starts running
    immediately, attached controller or not — and advertises ownership
    (identity-as-address).
-3. **Attach (AgentApi).** The controller reads the owner from Temporal, dials
-   its AgentApi, backfills the snapshot, subscribes the task-scoped SSE. From
-   here **everything interactive is AgentApi**: rendering, `sendMessage`
-   follow-ups, `respondToAsk`, `pluginRequest`. (Cancel prefers AgentApi when
+3. **Attach (ShoferApi).** The controller reads the owner from Temporal, dials
+   its ShoferApi, backfills the snapshot, subscribes the task-scoped SSE. From
+   here **everything interactive is ShoferApi**: rendering, `sendMessage`
+   follow-ups, `respondToAsk`, `pluginRequest`. (Cancel prefers ShoferApi when
    attached; Temporal workflow cancellation is the durable fallback.)
 4. **Completion (Temporal).** The final result returns as the activity result
    and closes the workflow — the durable record. The transcript stays in the
    worker's task store, retrievable any time via attach/backfill; Temporal
    history holds only input and outcome.
 
-Temporal carries a task's **birth and death**; AgentApi carries its **life**.
+Temporal carries a task's **birth and death**; ShoferApi carries its **life**.
 An unattached task runs to completion on its own configuration, or blocks
 durably on an ask until a controller attaches to answer it.
 
@@ -212,7 +212,7 @@ One generic capability, usable by _any_ dispatcher (the temporal-controller
 plugin is merely its first consumer): given `(address, taskId, token)`,
 
 1. **Backfill** — fetch the task's state so far: messages, outstanding asks,
-   status, token usage (new AgentApi snapshot route; the worker already
+   status, token usage (new ShoferApi snapshot route; the worker already
    persists all of it in its SQLite task store).
 2. **Subscribe** — the existing task-scoped SSE
    (`GET /api/v1/task/:id/event`).
@@ -255,11 +255,11 @@ Delete, in one coordinated change (with the doc updates in the same change):
   workers-collection sections of `configuration.md` and `settings_overlay.md`,
   the drain-on-withdrawal item in `TODO.md`, and
   `todos/layered-config-single-sot.md`.
-- **Config sync, entirely**: `AgentApi.applyConfig` + the `POST /api/v1/config`
+- **Config sync, entirely**: `ShoferApi.applyConfig` + the `POST /api/v1/config`
   route, `SyncedSettings`/`SyncedSecrets`/`SyncedPluginState`,
   `SETTING_SYNC_SCOPE`/`SYNCED_SETTINGS_KEYS`/`SYNCED_SECRET_KEYS`,
   `computeConfigVersion`, the `configVersion` echo on `/health`, the
-  `applySynced*` methods on `ShoferAPI`, and the rag-indexing plugin's
+  `applySynced*` methods on `ShoferExtensionApi`, and the rag-indexing plugin's
   `"node-config"` outbound shaping (search-only pinning becomes ordinary
   worker-side file config, provisioned offline like everything else).
 - **Scheduling residue**: the load-balancer policies, the `loadavg`/`cpus`
@@ -292,7 +292,7 @@ the fleet layer is gone — the removal collapses them rather than patching each
   v3-era architecture preamble ("as call sites migrate the shim shrinks" — the
   migration is done). The shim/adapter narrative that duplicates
   `v3_architecture.md` dies with it; the genuinely unique content — operating
-  modes, flags, the stdin NDJSON protocol, `ShoferAPI` recipes, the shim file
+  modes, flags, the stdin NDJSON protocol, `ShoferExtensionApi` recipes, the shim file
   reference — moves to a trimmed **`cli.md`**.
 - **`agentapi.md` — stays** the transport source of truth: drop
   `applyConfig`/the config route and the Workers framing (Phase 2 later adds
@@ -311,7 +311,7 @@ packages build and test green; the docs above are coherent with the code.
 
 ### Phase 2 — the core seams: attachment + placement — ✅ DONE (shofer 2.46.0)
 
-- AgentApi **task snapshot** — `getTaskSnapshot(taskId)` over
+- ShoferApi **task snapshot** — `getTaskSnapshot(taskId)` over
   `GET /api/v1/task/:id/snapshot`: the whole transcript, the ask the task is
   blocked on, lifecycle and token usage, assembled in `ShoferApiAgent` from the
   worker's live task or its persisted `ui_messages.jsonl`
@@ -382,7 +382,7 @@ Removal is first, deliberately: the current fleet layer is unusable for real
 multi-user work anyway (its config-push echo corrupts shared settings — the
 reason its own docs forbid enabling pools), so keeping it alive during the
 build would mean maintaining two systems and their interference for zero
-shipped value. Deleting first clears the wire surface (`AgentApi` shrinks
+shipped value. Deleting first clears the wire surface (`ShoferApi` shrinks
 before the snapshot route grows it), and Phases 2–4 build on a clean floor.
 The cost — no fan-out between Phase 1 and Phase 3 — is real but small: nothing
 depends on the fleet layer today, and the Local + 1:1 served paths are
@@ -390,7 +390,7 @@ untouched.
 
 ## 4. Security notes
 
-- The AgentApi bearer stays **machine trust**: a controller holding a worker's
+- The ShoferApi bearer stays **machine trust**: a controller holding a worker's
   token can do anything on that worker. Fine for the single-operator case; a
   multi-tenant integrator either scopes network reachability (mesh/network
   policy) or extends the transport with per-user identity (the

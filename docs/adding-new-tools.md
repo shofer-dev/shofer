@@ -384,7 +384,7 @@ where the tool logic already lives.
 ### Option A — `registerTools` (in-process native tools)
 
 The plugin returns tool definitions from its `registerTools(ctx)` hook, built with the
-`defineCustomTool` helper. These are **not MCP and not AgentApi** — they are registered directly into
+`defineCustomTool` helper. These are **not MCP and not ShoferApi** — they are registered directly into
 the core custom-tool registry (`source: "plugin"`), serialized to native function schemas, advertised
 to the model unconditionally (no `customTools` experiment flag needed), and **dispatched in-process
 inside the core Task tool loop**. This is the same execution path a native tool takes, minus the

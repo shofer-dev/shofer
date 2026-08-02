@@ -96,7 +96,7 @@ let extensionContext: vscode.ExtensionContext
 export { getOutputChannel } from "@shofer/core"
 
 // §11/§12: exported from the bundle so a headless front-end (the `shofer serve` /
-// `shofer acp` CLI commands) can drive the activated ShoferAPI over HTTP or ACP.
+// `shofer acp` CLI commands) can drive the activated ShoferExtensionApi over HTTP or ACP.
 export { runAcpAgentOverShoferApi, serveHttpOverShoferApi } from "@shofer/core"
 
 // This method is called when your extension is activated.
@@ -412,7 +412,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Allows other extensions to activate once Shofer is ready.
 	vscode.commands.executeCommand(`${Package.name}.activationCompleted`)
 
-	// Implements the `ShoferAPI` interface.
+	// Implements the `ShoferExtensionApi` interface.
 	const socketPath = process.env.SHOFER_IPC_SOCKET_PATH
 	const enableLogging = typeof socketPath === "string"
 

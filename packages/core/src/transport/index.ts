@@ -1,7 +1,7 @@
 import type { Server } from "node:http"
 import type { Readable, Writable } from "node:stream"
 
-import type { ShoferAPI } from "@shofer/types"
+import type { ShoferExtensionApi } from "@shofer/types"
 
 import { Package } from "../shared/package.js"
 import { ShoferApiAgent } from "./shofer-api-agent.js"
@@ -17,14 +17,14 @@ export * from "./acp-agent-server.js"
 export { runAcpAgent } from "./run-acp-agent.js"
 
 /**
- * Start the HTTP/SSE server over a live {@link ShoferAPI} and begin listening. The
+ * Start the HTTP/SSE server over a live {@link ShoferExtensionApi} and begin listening. The
  * single entrypoint the `shofer serve` command calls. Returns the listening server.
  *
  * `allowClientConfig` lets the controller's per-task API Configuration drive each
  * task (set when the node was started without CLI provider/model/key/url overrides).
  */
 export function serveHttpOverShoferApi(
-	api: ShoferAPI,
+	api: ShoferExtensionApi,
 	opts: { port: number; host?: string; token?: string; version?: string; allowClientConfig?: boolean },
 ): Server {
 	const agent = new ShoferApiAgent(api, { allowClientConfig: opts.allowClientConfig })
@@ -37,13 +37,13 @@ export function serveHttpOverShoferApi(
 }
 
 /**
- * Run the ACP agent over a live {@link ShoferAPI} (the extension's control plane),
+ * Run the ACP agent over a live {@link ShoferExtensionApi} (the extension's control plane),
  * bridged through {@link ShoferApiAgent}. This is the single entrypoint a headless
- * front-end (the `shofer acp` CLI command) calls: give it the activated ShoferAPI
+ * front-end (the `shofer acp` CLI command) calls: give it the activated ShoferExtensionApi
  * and the stdio streams, and an ACP client can drive the agent.
  */
 export function runAcpAgentOverShoferApi(
-	api: ShoferAPI,
+	api: ShoferExtensionApi,
 	streams: { input: Readable; output: Writable; agentVersion?: string },
 ): Promise<void> {
 	return runAcpAgent(new ShoferApiAgent(api), streams)

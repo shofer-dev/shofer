@@ -4,13 +4,13 @@ The Shofer extension exposes an API that can be used by other extensions.
 To use this API in your extension:
 
 1. Install `@shofer/types` with npm, pnpm, or yarn.
-2. Import the `ShoferAPI` type.
+2. Import the `ShoferExtensionApi` type.
 3. Load the extension API.
 
 ```typescript
-import { ShoferAPI } from "@shofer/types"
+import { ShoferExtensionApi } from "@shofer/types"
 
-const extension = vscode.extensions.getExtension<ShoferAPI>("Shofer.dev")
+const extension = vscode.extensions.getExtension<ShoferExtensionApi>("Shofer.dev")
 
 if (!extension?.isActive) {
 	throw new Error("Extension is not activated")

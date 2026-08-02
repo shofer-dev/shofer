@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events"
 import type { IncomingMessage, ServerResponse } from "node:http"
 
-import { ShoferEventName, type HistoryItem, type ShoferAPI, type ShoferMessage } from "@shofer/types"
+import { ShoferEventName, type HistoryItem, type ShoferExtensionApi, type ShoferMessage } from "@shofer/types"
 import {
 	FORWARDED_EVENTS,
 	ShoferApiAgent,
@@ -17,7 +17,7 @@ import { TaskAttachmentManager, type AttachViewHost } from "../TaskAttachmentMan
  * mid-task to a task on a served host, renders the full transcript INCLUDING an ask
  * raised before it attached, answers it, sends a follow-up, detaches and re-attaches.
  *
- * Everything below the fake `ShoferAPI` is production code — `ShoferApiAgent`, the
+ * Everything below the fake `ShoferExtensionApi` is production code — `ShoferApiAgent`, the
  * HTTP request handler, `ShoferHttpClient`, `TaskAttachmentManager`. Only the socket
  * is replaced (the test sandbox blocks loopback), by a `fetch` that drives the
  * request handler directly and supports SSE the way the real one does: headers flush
@@ -152,7 +152,7 @@ function makeServedHost() {
 		},
 		createTask: async () => ({ taskId: "t1" }),
 		pluginRequest: async () => null,
-	}) as unknown as ShoferAPI & EventEmitter
+	}) as unknown as ShoferExtensionApi & EventEmitter
 
 	/** What the task says next, as the served host would emit it. */
 	const say = (message: ShoferMessage, action: "created" | "updated" = "created") => {

@@ -34,7 +34,7 @@ export interface ServeOptions {
 	 * Interactive approvals. Default (false) is **non-interactive**: the node
 	 * auto-approves every tool (there is no local user to ask). With `--interactive`
 	 * the node instead surfaces approvals — `autoApprovalEnabled` is off, so
-	 * dangerous tools raise an `ask` over AgentApi that the driving controller
+	 * dangerous tools raise an `ask` over ShoferApi that the driving controller
 	 * brokers to its user and answers via `respondToAsk`.
 	 */
 	interactive?: boolean
@@ -57,7 +57,7 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 	// — it serves many tasks (and, in SaaS, many users). Log and keep serving
 	// instead of letting an unhandled rejection/exception exit the process (e.g. a
 	// misconfigured task throwing deep in the agent loop). The owning task still
-	// fails and surfaces its error over AgentApi; the server stays up.
+	// fails and surfaces its error over ShoferApi; the server stays up.
 	process.on("unhandledRejection", (reason) => {
 		const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
 		console.error(`[shofer] unhandledRejection (task error; node stays up): ${detail}`)

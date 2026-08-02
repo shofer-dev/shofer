@@ -152,7 +152,7 @@ separately as `local:checkpoints:show-diff` — an executor has no viewer to ope
 ### Remote (executor-hosted) tasks
 
 A remote task's shadow repo lives on the executor that runs it. The UI's `diff` and
-`restore` requests are routed there over `AgentApi.pluginRequest`; `local:checkpoints:show-diff`
+`restore` requests are routed there over `ShoferApi.pluginRequest`; `local:checkpoints:show-diff`
 stays on the controller. A mutating request is refused while a local task is running,
 because both hosts share the workspace and a `git reset --hard` would collide.
 

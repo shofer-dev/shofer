@@ -22,7 +22,7 @@ import type {
 	ReasoningEffortExtended,
 	ShoferSettings,
 	WebviewMessage,
-	ShoferAPI,
+	ShoferExtensionApi,
 	QueuedMessage,
 } from "@shofer/types"
 import { ShoferEventName } from "@shofer/types"
@@ -128,12 +128,12 @@ export interface ExtensionHostOptions {
 interface ExtensionModule {
 	activate: (context: unknown) => Promise<unknown>
 	deactivate?: () => Promise<void>
-	/** §12 ACP — drive the activated ShoferAPI over the Agent Client Protocol on stdio. */
+	/** §12 ACP — drive the activated ShoferExtensionApi over the Agent Client Protocol on stdio. */
 	runAcpAgentOverShoferApi?: (
 		api: unknown,
 		streams: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream; agentVersion?: string },
 	) => Promise<void>
-	/** §11 — start the HTTP/SSE server over the activated ShoferAPI. Returns the node
+	/** §11 — start the HTTP/SSE server over the activated ShoferExtensionApi. Returns the node
 	 *  `http.Server` so the caller can await `listening`/`error` before reporting success. */
 	serveHttpOverShoferApi?: (
 		api: unknown,
@@ -161,7 +161,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	// Extension lifecycle.
 	private vscode: ReturnType<typeof createVSCodeAPI> | null = null
 	private extensionModule: ExtensionModule | null = null
-	private extensionAPI: ShoferAPI | null = null
+	private extensionAPI: ShoferExtensionApi | null = null
 	private options: ExtensionHostOptions
 	private _isReady = false
 	private messageListener: ((message: ExtensionMessage) => void) | null = null
@@ -496,7 +496,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 
 		try {
 			cliLogger.debug("activating extension...")
-			this.extensionAPI = (await this.extensionModule.activate(this.vscode.context)) as ShoferAPI
+			this.extensionAPI = (await this.extensionModule.activate(this.vscode.context)) as ShoferExtensionApi
 			cliLogger.debug("extension activated")
 		} catch (error) {
 			throw new Error(`Failed to activate extension: ${error instanceof Error ? error.message : String(error)}`)
@@ -506,7 +506,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		this.messageListener = (message: ExtensionMessage) => this.client.handleMessage(message)
 		this.on("extensionWebviewMessage", this.messageListener)
 
-		// Forward ShoferAPI events to complement the webview-message-based event stream.
+		// Forward ShoferExtensionApi events to complement the webview-message-based event stream.
 		this.forwardShoferEvents()
 
 		cliLogger.debug("waiting for isReady...")
@@ -538,7 +538,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	}
 
 	/**
-	 * The activated `ShoferAPI` control plane.
+	 * The activated `ShoferExtensionApi` control plane.
 	 *
 	 * This is the single, drift-free surface for all task / configuration /
 	 * profile / history / workflow operations — the exact same object companion
@@ -550,9 +550,9 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	 *
 	 * @throws Error if accessed before {@link activate} has resolved.
 	 */
-	public get api(): ShoferAPI {
+	public get api(): ShoferExtensionApi {
 		if (!this.extensionAPI) {
-			throw new Error("ExtensionHost: ShoferAPI accessed before activation")
+			throw new Error("ExtensionHost: ShoferExtensionApi accessed before activation")
 		}
 
 		return this.extensionAPI
@@ -560,7 +560,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 
 	/**
 	 * §12 ACP — run the Agent Client Protocol server over the given streams,
-	 * driving the activated `ShoferAPI`. Resolves when the input stream closes.
+	 * driving the activated `ShoferExtensionApi`. Resolves when the input stream closes.
 	 */
 	public runAcp(streams: {
 		input: NodeJS.ReadableStream
@@ -575,7 +575,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	}
 
 	/**
-	 * §11 — start the HTTP/SSE server over the activated `ShoferAPI`. Returns a
+	 * §11 — start the HTTP/SSE server over the activated `ShoferExtensionApi`. Returns a
 	 * handle whose `close()` stops the server.
 	 */
 	public serve(opts: {
@@ -607,11 +607,11 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	}
 
 	// ==========================================================================
-	// ShoferAPI Event Forwarding
+	// ShoferExtensionApi Event Forwarding
 	// ==========================================================================
 
 	/**
-	 * Subscribe to ShoferAPI events and forward them into the CLI event system.
+	 * Subscribe to ShoferExtensionApi events and forward them into the CLI event system.
 	 * This provides richer event data (token usage, tool usage, subtask lifecycle)
 	 * than the raw ExtensionMessage protocol alone.
 	 *
@@ -651,7 +651,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 				// `ask:completion_result` (see the Self-Declared Terminal State
 				// Rule in AGENTS.md). The ExtensionMessage-protocol `taskCompleted`
 				// guard in message-processor.ts only fires on that ask, so it never
-				// fires for a fresh top-level completion. This ShoferAPI event is
+				// fires for a fresh top-level completion. This ShoferExtensionApi event is
 				// therefore the authoritative signal that resolves
 				// waitForTaskCompletion(). Subtask completions are ignored here:
 				// only the root task ending should end the CLI run.
@@ -718,7 +718,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 
 		api.on(ShoferEventName.ProviderProfileChanged, (_payload: { name: string; provider: string }) => {
 			// Profile changes are informational; consumers can attach directly to
-			// the ShoferAPI instance if they need this level of detail.
+			// the ShoferExtensionApi instance if they need this level of detail.
 		})
 
 		// ── Task analytics ────────────────────────────────────────
@@ -731,7 +731,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			emitter.emit("toolFailed", { taskId, tool, error })
 		})
 
-		cliLogger.debug("ShoferAPI event forwarding wired up")
+		cliLogger.debug("ShoferExtensionApi event forwarding wired up")
 	}
 
 	// ==========================================================================
@@ -828,7 +828,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	}
 
 	public async sendMessage(text?: string, images?: string[]): Promise<void> {
-		// The CLI's own surface is current-task-shaped; ShoferAPI is task-addressed,
+		// The CLI's own surface is current-task-shaped; ShoferExtensionApi is task-addressed,
 		// so resolve the current task here.
 		const taskId = this.api.getCurrentTaskStack().at(-1)
 		if (!taskId) {

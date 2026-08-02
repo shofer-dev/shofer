@@ -72,7 +72,7 @@ export interface AskDispatcherOptions {
 
 	/**
 	 * Whether a driving controller brokers interactive asks (approval + followup)
-	 * to a remote user over the transport. On a headless node driven over AgentApi
+	 * to a remote user over the transport. On a headless node driven over ShoferApi
 	 * (`shofer serve`) there is no local stdin user, so the dispatcher must NOT try
 	 * to prompt for or auto-answer these asks — it leaves them outstanding for the
 	 * controller to answer via `respondToAsk`. Idle / flow-control asks

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import type { IncomingMessage, ServerResponse } from "node:http"
 
-import type { AgentApi, ServerEvent, ShoferMessage } from "@shofer/types"
+import type { ShoferApi, ServerEvent, ShoferMessage } from "@shofer/types"
 
 import { ShoferHttpClient } from "../http-client.js"
 import { createRequestHandler, type HttpServerOptions } from "../http-server.js"
@@ -14,7 +14,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve))
  * client↔server contract check rather than two mirrors of the same assumption.
  * Streaming routes (SSE) are out of scope here — they never call `end()`.
  */
-function handlerFetch(api: AgentApi, opts: HttpServerOptions = {}): typeof fetch {
+function handlerFetch(api: ShoferApi, opts: HttpServerOptions = {}): typeof fetch {
 	const handler = createRequestHandler(api, opts)
 	return (async (url: string, init?: RequestInit) => {
 		const target = new URL(url)
@@ -187,7 +187,7 @@ describe("ShoferHttpClient (typed SDK)", () => {
 				),
 				pluginRequest: vi.fn(async () => null),
 				subscribe: vi.fn(() => () => {}),
-			}) satisfies AgentApi
+			}) satisfies ShoferApi
 
 		it("backfills the transcript and the ask raised before the client existed", async () => {
 			const api = makeApi()

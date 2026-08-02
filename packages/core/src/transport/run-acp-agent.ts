@@ -1,7 +1,7 @@
 import * as readline from "node:readline"
 import type { Readable, Writable } from "node:stream"
 
-import type { AgentApi } from "@shofer/types"
+import type { ShoferApi } from "@shofer/types"
 
 import { JsonRpcPeer, type JsonRpcMessage } from "./acp-connection.js"
 import { AcpAgentServer } from "./acp-agent-server.js"
@@ -12,7 +12,7 @@ import { AcpAgentServer } from "./acp-agent-server.js"
  * writes one per line to `output`. Resolves when `input` closes.
  */
 export function runAcpAgent(
-	api: AgentApi,
+	api: ShoferApi,
 	{ input, output, agentVersion }: { input: Readable; output: Writable; agentVersion?: string },
 ): Promise<void> {
 	const peer = new JsonRpcPeer((frame) => output.write(frame + "\n"))

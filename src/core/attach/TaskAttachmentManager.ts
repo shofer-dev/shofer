@@ -12,7 +12,7 @@ import { AttachedTask } from "./AttachedTask"
  * Given `(address, taskId, token)` it does three things and nothing else:
  * **backfill** the task's snapshot, **subscribe** that task's event stream, and
  * **render** the result into the chat view of the attaching view, with asks,
- * follow-up messages and cancel travelling back over the same AgentApi. Detaching
+ * follow-up messages and cancel travelling back over the same ShoferApi. Detaching
  * closes the connection; the task is unaffected, and a re-attach starts from a fresh
  * snapshot.
  *
@@ -27,7 +27,7 @@ import { AttachedTask } from "./AttachedTask"
 
 /** Where a remote task lives and what it takes to talk to it. */
 export interface AttachTarget {
-	/** Base URL of the owning host's AgentApi, e.g. `http://worker-3:30099`. */
+	/** Base URL of the owning host's ShoferApi, e.g. `http://worker-3:30099`. */
 	address: string
 	/** The task's id on that host. */
 	taskId: string
@@ -40,7 +40,7 @@ export interface AttachTarget {
 }
 
 /**
- * The subset of the AgentApi client an attachment drives. Structural, so
+ * The subset of the ShoferApi client an attachment drives. Structural, so
  * {@link ShoferHttpClient} satisfies it and a test can supply a fake without a
  * server.
  */

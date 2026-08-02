@@ -30,7 +30,7 @@ export type ServerFrame =
 	| { dir: "ready"; protocolVersion: number; agentVersion?: string; workspaceId: string; reconnected: boolean }
 	/** Relay an extension message to the webview verbatim. */
 	| { dir: "ext->vw"; msg: ExtensionMessage }
-	/** Forwarded ShoferAPI event (richer state tracking; optional). */
+	/** Forwarded ShoferExtensionApi event (richer state tracking; optional). */
 	| { dir: "apiEvent"; event: string; args: unknown[] }
 	/** Transport / handshake error. */
 	| { dir: "error"; message: string }
