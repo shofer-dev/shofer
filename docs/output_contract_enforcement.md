@@ -201,7 +201,7 @@ No form of structured output makes a model _choose_ to terminate rather than cal
 ([`api/index.ts`](../packages/core/src/api/index.ts)) and used in
 [`Task.ts`](../packages/core/src/task/Task.ts) — but **hardcoded to
 `"auto"`** in all four spots, and **never set by the workflow layer** (zero
-references under [`packages/core/src/workflow/`](../extensions/shofer/packages/core/src/workflow/)).
+references under [`packages/core/src/workflow/`](../packages/core/src/workflow/)).
 
 - `tool_choice: "required"` — forces _some_ tool call, killing the content-only
   markdown-table response.
@@ -248,14 +248,14 @@ OpenAI-compatible family:
 
 **Router side (verified).** The llm-router does **not** strip the schema or the
 flag. `strict` is a passthrough `*bool` on both tool structs
-([`tools.go:10,183`](../llm-router/internal/types/tools.go:10)), `response_format`
+(`tools.go:10,183`), `response_format`
 is accepted as `oneof=text json_object json_schema`
-([`requests.go:51`](../llm-router/internal/types/requests.go:51)), and the
+(`requests.go:51`), and the
 provider service POSTs the request with tools intact
-([`provider.go:162-169`](../llm-router/internal/services/provider.go:162)).
+(`provider.go:162-169`).
 
 **Upstream identity (verified, load-bearing).** `DEEPSEEK_API_BASE` defaults to
-`https://api.deepseek.com` ([`config.go:91`](../llm-router/internal/types/config.go:91))
+`https://api.deepseek.com` (`config.go:91`)
 and the dev inventory does **not** override it (only sets the API key). So the
 `ds` preset hits **DeepSeek Cloud**, which is _semantic-mode only_ — no
 token-level constrained decoding. (Self-hosting the same open weights on
@@ -355,7 +355,7 @@ flowchart TD
 1. **Keep the post-hoc validator as the source of truth.** It is
    provider-agnostic and is the only mechanism that holds on semantic-mode
    upstreams (DeepSeek Cloud, Anthropic). The existing stance in
-   [`fixing_tests.md`](fixing_tests.md) — mock authoritative for gating, DS
+   `fixing_tests.md` — mock authoritative for gating, DS
    best-effort — stays correct.
 
 2. **Add Lever 1 (per-stake strict tool schema) as a safe-to-send best-effort
@@ -380,13 +380,13 @@ flowchart TD
 
 - [x] **Does `llm-router` forward `strict` / `json_schema` to the upstream, or
       strip it?** — _Resolved: forwards._ `strict` is a passthrough `*bool`
-      ([`tools.go:10,183`](../llm-router/internal/types/tools.go:10)),
+      (`tools.go:10,183`),
       `response_format` accepted as `oneof=text json_object json_schema`
-      ([`requests.go:51`](../llm-router/internal/types/requests.go:51)), request
+      (`requests.go:51`), request
       POSTed with tools intact
-      ([`provider.go:162-169`](../llm-router/internal/services/provider.go:162)).
+      (`provider.go:162-169`).
 - [x] **What is the `ds` upstream?** — _Resolved: DeepSeek Cloud_
-      (`https://api.deepseek.com`, [`config.go:91`](../llm-router/internal/types/config.go:91)),
+      (`https://api.deepseek.com`, `config.go:91`),
       not self-hosted vLLM/SGLang. Hence semantic-mode only — no constrained decoding.
 - [ ] **Empirically confirm DeepSeek Cloud honors strict function-calling only
       semantically** — synthesize a strict-schema tool and observe whether

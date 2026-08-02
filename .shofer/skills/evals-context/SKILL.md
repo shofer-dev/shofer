@@ -128,25 +128,25 @@ The evals system is a distributed evaluation platform that runs AI coding tasks 
 
 ### Modifying Eval CLI Behavior
 
-Edit files in [`packages/evals/src/cli/`](packages/evals/src/cli/):
+Edit files in [`packages/evals/src/cli/`](../../../packages/evals/src/cli/):
 
 - [`runEvals.ts`](../../../packages/evals/src/cli/runEvals.ts) - Run orchestration
-- [`runTask.ts`](packages/evals/src/cli/runTask.ts) - Task execution
+- `runTask.ts` - Task execution
 - [`runUnitTest.ts`](../../../packages/evals/src/cli/runUnitTest.ts) - Test validation
 
 ### Modifying the Evals Web Interface
 
-Edit files in [`apps/web-evals/src/`](apps/web-evals/src/):
+Edit files in [`apps/web-evals/src/`](../../../apps/web-evals/src/):
 
 - [`app/runs/new/new-run.tsx`](../../../apps/web-evals/src/app/runs/new/new-run.tsx) - New run form
 - [`actions/runs.ts`](../../../apps/web-evals/src/actions/runs.ts) - Run server actions
 
 ### Modifying the Public Evals Display Page
 
-Edit files in [`apps/web-shofer-code/src/app/evals/`](apps/web-shofer-code/src/app/evals/):
+Edit files in `apps/web-shofer-code/src/app/evals/`:
 
-- [`evals.tsx`](apps/web-shofer-code/src/app/evals/evals.tsx) - Display component
-- [`plot.tsx`](apps/web-shofer-code/src/app/evals/plot.tsx) - Charts
+- `evals.tsx` - Display component
+- `plot.tsx` - Charts
 
 ### Database Schema Changes
 

@@ -1,7 +1,7 @@
 # Integration Tests: Tool Preparation Progress Indicator
 
 > Feature doc: [`docs/tool-preparing-progress.md`](../tool-preparing-progress.md)
-> Implementation: [`llm-provider/src/language-model-provider.ts`](../../extensions/llm-provider/src/language-model-provider.ts),
+> Implementation: `llm-provider/src/language-model-provider.ts`,
 > [`vscode-lm.ts`](../../src/api/providers/vscode-lm.ts),
 > [`stream.ts`](../../packages/core/src/api/transform/stream.ts),
 > [`Task.ts`](../../packages/core/src/task/Task.ts),

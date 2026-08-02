@@ -16,7 +16,7 @@
 > the rename-boundary guard at [`RenameSymbolTool.ts:141`](../packages/core/src/tools/RenameSymbolTool.ts), and
 > the wrapper binary [`src/sandbox/main.go`](../src/sandbox/main.go) + [`src/sandbox/main_test.go`](../src/sandbox/main_test.go).
 >
-> **Known gap:** the committed binary [`sandbox/shofer-sandbox`](extensions/shofer/sandbox/shofer-sandbox)
+> **Known gap:** the committed binary `sandbox/shofer-sandbox`
 > is x86-64 / not-stripped, with no Bazel target and no `go.work` entry — arm64 deploys fail with a
 > loud `ENOEXEC` (not silent degradation). Deferred to a build-system follow-up (Med 5 below).
 

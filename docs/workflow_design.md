@@ -1348,15 +1348,15 @@ All under [`packages/core/src/workflow/`](../packages/core/src/workflow/):
 
 ### Extension Host Integration
 
-| File                                                                                 | Purpose                                                                             |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| [`registerCommands.ts`](../src/activate/registerCommands.ts)                         | `+` button → QuickPick (New Task / New Workflow), `slangVisualization.show` command |
-| [`extension.ts`](../src/extension.ts)                                                | Auto-open Slang visualization on `.slang` file open                                 |
-| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                         | `createTask()` — spawns agent Tasks with `initialMode`                              |
-| [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)           | `listWorkflows` / `createWorkflow` IPC handlers                                     |
-| [`SlangVisualizationProvider.ts`](../src/core/webview/SlangVisualizationProvider.ts) | `.slang` file visualizer webview panel (agent cards, flow arrows, diagnostics)      |
-| [`history.ts`](../packages/types/src/history.ts)                                     | `HistoryItem` extensions: `isWorkflow`, `slangSource`, `flowState`                  |
-| [`package.json`](../package.json)                                                    | Command + menu contributions for `slangVisualization.show`                          |
+| File                                                                       | Purpose                                                                             |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| [`registerCommands.ts`](../src/activate/registerCommands.ts)               | `+` button → QuickPick (New Task / New Workflow), `slangVisualization.show` command |
+| [`extension.ts`](../src/extension.ts)                                      | Auto-open Slang visualization on `.slang` file open                                 |
+| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)               | `createTask()` — spawns agent Tasks with `initialMode`                              |
+| [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts) | `listWorkflows` / `createWorkflow` IPC handlers                                     |
+| `SlangVisualizationProvider.ts`                                            | `.slang` file visualizer webview panel (agent cards, flow arrows, diagnostics)      |
+| [`history.ts`](../packages/types/src/history.ts)                           | `HistoryItem` extensions: `isWorkflow`, `slangSource`, `flowState`                  |
+| [`package.json`](../package.json)                                          | Command + menu contributions for `slangVisualization.show`                          |
 
 ### Webview UI
 

@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-  <!-- /TOC -->
+    <!-- /TOC -->
 
 ---
 
@@ -83,7 +83,7 @@ shofer advantage; Part E #6).
 
 ## Package: `@shofer/telemetry`
 
-**Location:** [`packages/telemetry/`](packages/telemetry/)
+**Location:** [`packages/telemetry/`](../packages/telemetry/)
 
 **Dependencies:** `posthog-node@^5.0.0`, `zod@^3.25.61`, `@shofer/types`
 
@@ -157,11 +157,11 @@ The primary Node.js-side telemetry client, backed by [`posthog-node`](https://ww
 
 #### Configuration
 
-| Setting          | Value                                                      |
-| ---------------- | ---------------------------------------------------------- |
-| **PostHog host** | `https://ph.shofer.dev`                                    |
-| **Distinct ID**  | `vscode.env.machineId`                                     |
-| **API key**      | `process.env.POSTHOG_API_KEY` from [`.env`](.env.sample:1) |
+| Setting          | Value                                                       |
+| ---------------- | ----------------------------------------------------------- |
+| **PostHog host** | `https://ph.shofer.dev`                                     |
+| **Distinct ID**  | `vscode.env.machineId`                                      |
+| **API key**      | `process.env.POSTHOG_API_KEY` from [`.env`](../.env.sample) |
 
 #### Event Subscription
 

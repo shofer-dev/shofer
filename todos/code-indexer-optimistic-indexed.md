@@ -2,7 +2,7 @@
 
 Layered on top of the Phase 1 (mtime+size fast-path) and Phase 2
 (git-aware narrowing) work shipped under
-[`extensions/shofer/docs/rag_indexing.md`](../extensions/shofer/docs/rag_indexing.md).
+`extensions/shofer/docs/rag_indexing.md`.
 See `todos/done/code_indexer_speedup.md` for the full historical plan
 and the layering rationale.
 
@@ -55,6 +55,6 @@ size.
 
 - Per **No Backward Compatibility Unless Asked**, no migration code
   for state shape. Bump the extension **minor** version.
-- Update [`rag_indexing.md`](../extensions/shofer/docs/rag_indexing.md)
+- Update `rag_indexing.md`
   "State Machine" section to reflect the `reconciling` sub-flag when
   this ships.

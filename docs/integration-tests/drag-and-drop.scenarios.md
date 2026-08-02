@@ -1,7 +1,6 @@
 # Integration Tests: Drag & Drop Context Files
 
-> Feature docs: [`docs/drag_n_drop.md`](../drag_n_drop.md),
-> [`docs/user-manual/drag-and-drop.md`](../docs/user-manual/drag-and-drop.md)
+> Feature docs: [`docs/drag_n_drop.md`](../drag_n_drop.md)
 > Implementation: [`ContextDropZoneProvider.ts`](../../src/core/webview/ContextDropZoneProvider.ts),
 > [`ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx),
 > [`ChatTextArea.tsx`](../../webview-ui/src/components/chat/ChatTextArea.tsx),

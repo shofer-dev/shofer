@@ -10,7 +10,7 @@ filtering captures to test-fixture strings only (e.g., `"test-keyframe-definitio
 which blocked ALL real-world CSS from being indexed. This audit checks whether similar
 issues exist in other language queries, and identifies missing parser/query coverage.
 
-**Related**: [`extensions/shofer/docs/rag_indexing.md`](../extensions/shofer/docs/rag_indexing.md)
+**Related**: `extensions/shofer/docs/rag_indexing.md`
 
 ---
 

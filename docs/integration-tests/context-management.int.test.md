@@ -1,7 +1,6 @@
 # Integration Tests: Context Management & Condensation
 
-> Feature docs: [`docs/summarization.md`](../summarization.md),
-> [`docs/user-manual/context-management.md`](../docs/user-manual/context-management.md)
+> Feature docs: [`docs/summarization.md`](../summarization.md)
 > Implementation: [`context-management/index.ts`](../../packages/core/src/context-management/index.ts),
 > [`condense/index.ts`](../../packages/core/src/condense/index.ts),
 > [`condense/foldedFileContext.ts`](../../packages/core/src/condense/foldedFileContext.ts),

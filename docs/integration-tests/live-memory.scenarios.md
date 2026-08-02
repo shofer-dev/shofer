@@ -1,7 +1,6 @@
 # Live Memory — Integration Test Scenarios
 
 > Design doc: [`plugins/live-memory/DESIGN.md`](../../plugins/live-memory/DESIGN.md)
-> User manual: [`docs/user-manual/live-memory.md`](../docs/user-manual/live-memory.md)
 > Implementation: [`plugins/live-memory/main.ts`](../../plugins/live-memory/main.ts),
 > [`plugins/live-memory/memory-store.ts`](../../plugins/live-memory/memory-store.ts),
 > [`plugins/live-memory/question-queue.ts`](../../plugins/live-memory/question-queue.ts),

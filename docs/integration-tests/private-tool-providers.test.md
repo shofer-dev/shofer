@@ -165,8 +165,7 @@ crashes, unhandled error)
 
 **Then**:
 
-- The error is caught at the [`invokeTool` wrapper](../vscode-tools/src/main.ts:99-102)
-  (returns `{ content: "Error: ...", is_error: true }`)
+- The error is caught at the ``invokeTool` wrapper`(returns`{ content: "Error: ...", is_error: true }`)
 - If the invoke command itself is unreachable (extension deactivated), the
   `vscode.commands.executeCommand` call throws — this should be caught in
   `presentAssistantMessage.ts` and surfaced as a visible error row

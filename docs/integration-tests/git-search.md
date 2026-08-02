@@ -1,7 +1,6 @@
 # Git Commit History Search — Integration Test Scenarios
 
-> Feature docs: [`plugins/rag-indexing/docs/git-history.md`](../../plugins/rag-indexing/docs/git-history.md),
-> [`docs/user-manual/git-search.md`](../docs/user-manual/git-search.md)
+> Feature docs: [`plugins/rag-indexing/docs/git-history.md`](../../plugins/rag-indexing/docs/git-history.md)
 > Implementation: [`plugins/rag-indexing/src/git-index-service/git-index-manager.ts`](../../plugins/rag-indexing/src/git-index-service/git-index-manager.ts),
 > [`plugins/rag-indexing/src/git-index-service/git-history-orchestrator.ts`](../../plugins/rag-indexing/src/git-index-service/git-history-orchestrator.ts),
 > [`plugins/rag-indexing/src/git-index-service/processors/git-log-extractor.ts`](../../plugins/rag-indexing/src/git-index-service/processors/git-log-extractor.ts),

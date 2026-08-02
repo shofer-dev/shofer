@@ -6,12 +6,12 @@
 
 | Location                                                                                                      | Purpose                                                                                                        |
 | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| [`packages/telemetry/src/`](packages/telemetry/src/)                                                          | Base telemetry client + PostHog client                                                                         |
+| `packages/telemetry/src/`                                                                                     | Base telemetry client + PostHog client                                                                         |
 | [`packages/types/src/organization.ts`](../packages/types/src/organization.ts)                                 | `OrganizationAllowList` type only                                                                              |
 | [`packages/core/src/api/providers/router-provider.ts`](../packages/core/src/api/providers/router-provider.ts) | Generic `RouterProvider` base class (no Shofer-specific handler)                                               |
 | [`packages/core/src/api/providers/shofer.ts`](../packages/core/src/api/providers/shofer.ts)                   | `ShoferHandler` — thin `OpenRouterHandler` subclass for a **local llm-router** (see §"Shofer Router Provider") |
 | [`src/services/marketplace/RemoteConfigLoader.ts`](../src/services/marketplace/RemoteConfigLoader.ts)         | Fetches modes/MCPs from `{SHOFER_API_URL}/api/marketplace/`                                                    |
-| [`website/`](website/)                                                                                        | Astro marketing/product pages (accurate)                                                                       |
+| `website/`                                                                                                    | Astro marketing/product pages (accurate)                                                                       |
 
 This document provides a comprehensive overview of all cloud-related features in the Shofer extension, covering the cloud service architecture, authentication, settings synchronization, telemetry, task sharing, bridge connectivity, the Shofer Router provider, cloud profile management, image generation, MDM enforcement, and the web UI components.
 
@@ -71,11 +71,11 @@ The cloud-related code that actually exists lives in:
 
 | Location                                                                                                      | Purpose                                                             |
 | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [`packages/telemetry/src/`](packages/telemetry/src/)                                                          | `BaseTelemetryClient`, `TelemetryService`, `PostHogTelemetryClient` |
+| `packages/telemetry/src/`                                                                                     | `BaseTelemetryClient`, `TelemetryService`, `PostHogTelemetryClient` |
 | [`packages/types/src/organization.ts`](../packages/types/src/organization.ts)                                 | `OrganizationAllowList` type                                        |
 | [`packages/core/src/api/providers/router-provider.ts`](../packages/core/src/api/providers/router-provider.ts) | Generic `RouterProvider` base class                                 |
 | [`src/services/marketplace/RemoteConfigLoader.ts`](../src/services/marketplace/RemoteConfigLoader.ts)         | Marketplace mode/MCP fetching from cloud                            |
-| [`website/`](website/)                                                                                        | Astro web app (marketing + product pages)                           |
+| `website/`                                                                                                    | Astro web app (marketing + product pages)                           |
 
 ---
 
@@ -103,17 +103,17 @@ Provider", which covers code that does exist.
 
 ### WebAuthService (User-Facing)
 
-**File:** [`packages/cloud/src/WebAuthService.ts`](packages/cloud/src/WebAuthService.ts)
+**File:** `packages/cloud/src/WebAuthService.ts`
 
-The [`WebAuthService`](packages/cloud/src/WebAuthService.ts:89) handles Clerk-based OAuth authentication for VS Code extension users.
+The `WebAuthService` handles Clerk-based OAuth authentication for VS Code extension users.
 
 **Flow:**
 
 1. `login()` generates a CSRF state token, stores it in `globalState`, and opens the browser to `{SHOFER_API_URL}/extension/sign-in` (or `/extension/provider-sign-up` for the provider signup flow). Landing page slugs can route to `/l/{slug}`.
 2. The browser redirects back to the extension via a `vscode://` URI.
 3. `handleCallback()` validates the CSRF state, calls Clerk's `/v1/client/sign_ins` with the ticket, extracts the client token and session ID, and stores credentials in VS Code's `secrets` storage.
-4. A [`RefreshTimer`](packages/cloud/src/RefreshTimer.ts) (50s interval, exponential backoff up to 5 min) periodically calls `refreshSession()`, which exchanges the client token for a JWT session token via Clerk's `/v1/client/sessions/{id}/tokens`.
-5. After the first successful refresh, `fetchUserInfo()` calls Clerk's `/v1/me` and `/v1/me/organization_memberships` to populate [`CloudUserInfo`](packages/types/src/cloud.ts:35) including organization context.
+4. A `RefreshTimer` (50s interval, exponential backoff up to 5 min) periodically calls `refreshSession()`, which exchanges the client token for a JWT session token via Clerk's `/v1/client/sessions/{id}/tokens`.
+5. After the first successful refresh, `fetchUserInfo()` calls Clerk's `/v1/me` and `/v1/me/organization_memberships` to populate `CloudUserInfo` including organization context.
 
 **Credential Storage:**
 
@@ -128,13 +128,13 @@ The [`WebAuthService`](packages/cloud/src/WebAuthService.ts:89) handles Clerk-ba
 
 ### StaticTokenAuthService (Cloud Agent)
 
-**File:** [`packages/cloud/src/StaticTokenAuthService.ts`](packages/cloud/src/StaticTokenAuthService.ts)
+**File:** `packages/cloud/src/StaticTokenAuthService.ts`
 
 Used when `SHOFER_CLOUD_TOKEN` is set (cloud agent / headless environments). The JWT is decoded to extract `userId` and `organizationId`. All interactive auth methods throw errors — this service is read-only and always reports `active-session`.
 
 ### Auth States
 
-**Defined in:** [`packages/types/src/cloud.ts:237`](packages/types/src/cloud.ts:237)
+**Defined in:** `packages/types/src/cloud.ts:237`
 
 ```
 "initializing" → "logged-out" | "attempting-session"
@@ -143,7 +143,7 @@ Used when `SHOFER_CLOUD_TOKEN` is set (cloud agent / headless environments). The
 "inactive-session" → "active-session" | "logged-out"
 ```
 
-The [`CloudService`](packages/cloud/src/CloudService.ts) wires auth state transitions to retry queue behavior:
+The `CloudService` wires auth state transitions to retry queue behavior:
 
 - `active-session` → resume queue (clear if user changed)
 - `logged-out` → clear and pause queue
@@ -155,11 +155,11 @@ The [`CloudService`](packages/cloud/src/CloudService.ts) wires auth state transi
 
 ### CloudSettingsService
 
-**File:** [`packages/cloud/src/CloudSettingsService.ts`](packages/cloud/src/CloudSettingsService.ts)
+**File:** `packages/cloud/src/CloudSettingsService.ts`
 
 Fetches organization and user settings from `{SHOFER_API_URL}/api/extension-settings` using the session token. Features:
 
-- **Polling:** Uses [`RefreshTimer`](packages/cloud/src/RefreshTimer.ts) with a **1-hour success interval** (3,600,000ms) and exponential backoff (1s → 1h max).
+- **Polling:** Uses `RefreshTimer` with a **1-hour success interval** (3,600,000ms) and exponential backoff (1s → 1h max).
 - **Caching:** Settings are cached in VS Code `globalState` under `organization-settings` and `user-settings` keys.
 - **Version-based change detection:** Each settings blob has a `version` number; changes are detected by comparing versions.
 - **Event emission:** Emits `settings-updated` when org or user settings change.
@@ -168,15 +168,15 @@ Fetches organization and user settings from `{SHOFER_API_URL}/api/extension-sett
 
 ### StaticSettingsService
 
-**File:** [`packages/cloud/src/StaticSettingsService.ts`](packages/cloud/src/StaticSettingsService.ts)
+**File:** `packages/cloud/src/StaticSettingsService.ts`
 
-Used when `SHOFER_CLOUD_ORG_SETTINGS` is set. Parses a base64-encoded JSON string into [`OrganizationSettings`](packages/types/src/cloud.ts:165). Always enables task sync.
+Used when `SHOFER_CLOUD_ORG_SETTINGS` is set. Parses a base64-encoded JSON string into `OrganizationSettings`. Always enables task sync.
 
 ### Organization Settings
 
-**Defined in:** [`packages/types/src/cloud.ts:153-165`](packages/types/src/cloud.ts:153)
+**Defined in:** `packages/types/src/cloud.ts:153-165`
 
-The [`organizationSettingsSchema`](packages/types/src/cloud.ts:153) includes:
+The `organizationSettingsSchema` includes:
 
 | Field                 | Type                                     | Description                               |
 | --------------------- | ---------------------------------------- | ----------------------------------------- |
@@ -215,7 +215,7 @@ Used in the provider selection UI to restrict which providers and models organiz
 
 ### User Settings
 
-**Defined in:** [`packages/types/src/cloud.ts:175-188`](packages/types/src/cloud.ts:175)
+**Defined in:** `packages/types/src/cloud.ts:175-188`
 
 | Field                        | Type       | Description                                    |
 | ---------------------------- | ---------- | ---------------------------------------------- |
@@ -230,23 +230,23 @@ Settings precedence: **Organization settings override user settings** for `recor
 
 ### CloudTelemetryClient
 
-**File:** [`packages/cloud/src/TelemetryClient.ts`](packages/cloud/src/TelemetryClient.ts)
+**File:** `packages/cloud/src/TelemetryClient.ts`
 
-The [`CloudTelemetryClient`](packages/cloud/src/TelemetryClient.ts:87) extends [`BaseTelemetryClient`](packages/cloud/src/TelemetryClient.ts:16) and sends telemetry events to `{SHOFER_API_URL}/api/events`.
+The `CloudTelemetryClient` extends `BaseTelemetryClient` and sends telemetry events to `{SHOFER_API_URL}/api/events`.
 
 **Key behaviors:**
 
 - **Event subscription:** Excludes `TASK_CONVERSATION_MESSAGE` by default (only sends aggregate `TASK_MESSAGE` events).
 - **Task message gating:** Only sends `TASK_MESSAGE` events when `isTaskSyncEnabled()` returns true.
 - **Authentication check:** Events are only sent when the user is authenticated with a valid session token.
-- **Retry on failure:** Server errors (5xx) and rate limits (429) are automatically queued to the [`RetryQueue`](packages/cloud/src/retry-queue/RetryQueue.ts).
+- **Retry on failure:** Server errors (5xx) and rate limits (429) are automatically queued to the `RetryQueue`.
 - **Can be disabled** via `SHOFER_DISABLE_TELEMETRY=1` environment variable.
 
 ### Retry Queue
 
-**File:** [`packages/cloud/src/retry-queue/RetryQueue.ts`](packages/cloud/src/retry-queue/RetryQueue.ts)
+**File:** `packages/cloud/src/retry-queue/RetryQueue.ts`
 
-The [`RetryQueue`](packages/cloud/src/retry-queue/RetryQueue.ts:7) provides resilient delivery for telemetry events:
+The `RetryQueue` provides resilient delivery for telemetry events:
 
 - **Persistence:** Queue is persisted to VS Code `workspaceState` and restored on initialization.
 - **Configurable:** `maxRetries` (default 0 = unlimited), `retryDelay` (60s), `maxQueueSize` (100), `requestTimeout` (30s).
@@ -258,7 +258,7 @@ The [`RetryQueue`](packages/cloud/src/retry-queue/RetryQueue.ts:7) provides resi
 
 ### Message Backfill
 
-The [`CloudTelemetryClient.backfillMessages()`](packages/cloud/src/TelemetryClient.ts:196) method uploads full conversation history as a JSON file to `{SHOFER_API_URL}/api/events/backfill`. This is used when sharing a task that hasn't had its messages synced yet.
+The `CloudTelemetryClient.backfillMessages()` method uploads full conversation history as a JSON file to `{SHOFER_API_URL}/api/events/backfill`. This is used when sharing a task that hasn't had its messages synced yet.
 
 ---
 
@@ -266,13 +266,13 @@ The [`CloudTelemetryClient.backfillMessages()`](packages/cloud/src/TelemetryClie
 
 ### CloudShareService
 
-**File:** [`packages/cloud/src/CloudShareService.ts`](packages/cloud/src/CloudShareService.ts)
+**File:** `packages/cloud/src/CloudShareService.ts`
 
 Enables sharing task conversations via the Shofer Cloud web app:
 
-1. `shareTask(taskId, visibility)` calls [`CloudAPI.shareTask()`](packages/cloud/src/CloudAPI.ts:111) (POST `/api/extension/share`).
+1. `shareTask(taskId, visibility)` calls `CloudAPI.shareTask()` (POST `/api/extension/share`).
 2. On success, the returned `shareUrl` is automatically copied to the clipboard.
-3. If the task wasn't synced (throws `TaskNotFoundError`), messages are backfilled via [`TelemetryClient.backfillMessages()`](packages/cloud/src/TelemetryClient.ts:196) and the share is retried.
+3. If the task wasn't synced (throws `TaskNotFoundError`), messages are backfilled via `TelemetryClient.backfillMessages()` and the share is retried.
 
 **Permissions are controlled by org settings:**
 
@@ -281,7 +281,7 @@ Enables sharing task conversations via the Shofer Cloud web app:
 
 ### Sharing Visibility
 
-**Defined in:** [`packages/types/src/cloud.ts:217`](packages/types/src/cloud.ts:217)
+**Defined in:** `packages/types/src/cloud.ts:217`
 
 ```typescript
 type ShareVisibility = "organization" | "public"
@@ -298,8 +298,8 @@ Task sync is the mechanism that records conversation messages to the Shofer Clou
 
 **How it works:**
 
-1. Each non-partial assistant message added to the conversation triggers a check: [`CloudService.isEnabled()`](packages/cloud/src/CloudService.ts:424).
-2. If enabled, [`CloudService.instance.captureEvent()`](packages/cloud/src/CloudService.ts:308) is called with a `TASK_MESSAGE` telemetry event containing the message and task metadata.
+1. Each non-partial assistant message added to the conversation triggers a check: `CloudService.isEnabled()`.
+2. If enabled, `CloudService.instance.captureEvent()` is called with a `TASK_MESSAGE` telemetry event containing the message and task metadata.
 3. A [`cloudSyncedMessageTimestamps`](../packages/core/src/task/Task.ts) Set prevents duplicate syncing.
 4. On task resume, the Set is repopulated from existing messages to avoid re-syncing.
 
@@ -313,9 +313,9 @@ Task sync is the mechanism that records conversation messages to the Shofer Clou
 
 ## Cloud API (`CloudAPI`)
 
-**File:** [`packages/cloud/src/CloudAPI.ts`](packages/cloud/src/CloudAPI.ts)
+**File:** `packages/cloud/src/CloudAPI.ts`
 
-The [`CloudAPI`](packages/cloud/src/CloudAPI.ts:14) class is a typed HTTP client for Shofer Cloud backend APIs. All requests require a Bearer token session.
+The `CloudAPI` class is a typed HTTP client for Shofer Cloud backend APIs. All requests require a Bearer token session.
 
 ### Endpoints
 
@@ -331,7 +331,7 @@ The [`CloudAPI`](packages/cloud/src/CloudAPI.ts:14) class is a typed HTTP client
 
 ### Credit Balance
 
-The `creditBalance()` method (GET `/api/extension/credit-balance`) returns a number representing the user's credit balance in dollars. This is displayed in the [`ShoferBalanceDisplay`](webview-ui/src/components/settings/providers/ShoferBalanceDisplay.tsx) component next to the Shofer Router provider selector.
+The `creditBalance()` method (GET `/api/extension/credit-balance`) returns a number representing the user's credit balance in dollars. This is displayed in the `ShoferBalanceDisplay` component next to the Shofer Router provider selector.
 
 ---
 
@@ -406,7 +406,7 @@ This allows organizations to centrally manage API provider configurations and pu
 
 ### Socket Bridge
 
-The [`CloudAPI.bridgeConfig()`](packages/cloud/src/CloudAPI.ts:124) method retrieves WebSocket connection details from `GET /api/extension/bridge/config`:
+The `CloudAPI.bridgeConfig()` method retrieves WebSocket connection details from `GET /api/extension/bridge/config`:
 
 ```typescript
 {
@@ -424,7 +424,7 @@ This enables real-time connectivity between the VS Code extension and the Shofer
 
 ### Task Bridge Events & Commands
 
-**Defined in:** [`packages/types/src/cloud.ts:427-533`](packages/types/src/cloud.ts:427)
+**Defined in:** `packages/types/src/cloud.ts:427-533`
 
 The bridge supports bidirectional communication:
 
@@ -446,9 +446,9 @@ The extension registers itself via `ExtensionSocketEvents.REGISTER` and sends pe
 
 ## MDM (Mobile Device Management) Enforcement
 
-**File:** [`src/services/mdm/MdmService.ts`](src/services/mdm/MdmService.ts)
+**File:** `src/services/mdm/MdmService.ts`
 
-The [`MdmService`](src/services/mdm/MdmService.ts:20) enables enterprise IT administrators to enforce cloud authentication policies:
+The `MdmService` enables enterprise IT administrators to enforce cloud authentication policies:
 
 **Configuration file** (JSON):
 
@@ -477,7 +477,7 @@ The [`MdmService`](src/services/mdm/MdmService.ts:20) enables enterprise IT admi
 
 ### CloudView
 
-**File:** [`webview-ui/src/components/cloud/CloudView.tsx`](webview-ui/src/components/cloud/CloudView.tsx)
+**File:** `webview-ui/src/components/cloud/CloudView.tsx`
 
 The main Cloud tab in the extension. Two states:
 
@@ -498,27 +498,27 @@ The main Cloud tab in the extension. Two states:
 
 ### CloudAccountSwitcher
 
-**File:** [`webview-ui/src/components/cloud/CloudAccountSwitcher.tsx`](webview-ui/src/components/cloud/CloudAccountSwitcher.tsx)
+**File:** `webview-ui/src/components/cloud/CloudAccountSwitcher.tsx`
 
 A compact dropdown in the chat text area showing the current account context. Supports switching between personal account and organization accounts. Shows user avatar or initials.
 
 ### CloudUpsellDialog
 
-**File:** [`webview-ui/src/components/cloud/CloudUpsellDialog.tsx`](webview-ui/src/components/cloud/CloudUpsellDialog.tsx)
+**File:** `webview-ui/src/components/cloud/CloudUpsellDialog.tsx`
 
 Modal dialog promoting Shofer Cloud with six key benefits: provider access, cloud agents, triggers/integrations, walkaway control, usage metrics, and task history. Shown in the chat view after 6+ tasks for unauthenticated users, and accessible from the Share button.
 
 ### OrganizationSwitcher
 
-**File:** [`webview-ui/src/components/cloud/OrganizationSwitcher.tsx`](webview-ui/src/components/cloud/OrganizationSwitcher.tsx)
+**File:** `webview-ui/src/components/cloud/OrganizationSwitcher.tsx`
 
 A more detailed organization switcher used in the CloudView. Displays all organizations with their avatars, roles, and a "Create Team Account" option linking to the billing page.
 
 ### ShoferBalanceDisplay
 
-**File:** [`webview-ui/src/components/settings/providers/ShoferBalanceDisplay.tsx`](webview-ui/src/components/settings/providers/ShoferBalanceDisplay.tsx)
+**File:** `webview-ui/src/components/settings/providers/ShoferBalanceDisplay.tsx`
 
-Shows the user's credit balance next to the Shofer Router provider in settings. Uses the [`useShoferCreditBalance`](webview-ui/src/components/ui/hooks/useShoferCreditBalance.ts) hook to fetch balance from the cloud API.
+Shows the user's credit balance next to the Shofer Router provider in settings. Uses the `useShoferCreditBalance` hook to fetch balance from the cloud API.
 
 ---
 
@@ -537,7 +537,7 @@ The marketplace loads remote configurations from Shofer Cloud via [`RemoteConfig
 
 ## Web App Pages (shofer.dev)
 
-The Astro app at [`website/`](website/) hosts marketing and product pages:
+The Astro app at `website/` hosts marketing and product pages:
 
 | Route         | Description                                                   |
 | ------------- | ------------------------------------------------------------- |

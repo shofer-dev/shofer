@@ -2,7 +2,7 @@
 
 > Feature doc: [`docs/system_prompt.md`](../system_prompt.md)
 > Implementation: [`packages/core/src/prompts/system.ts`](../../packages/core/src/prompts/system.ts),
-> [`packages/core/src/prompts/sections/`](../src/core/prompts/sections/)
+> [`packages/core/src/prompts/sections/`](../../packages/core/src/prompts/sections/)
 
 ## Scenarios
 

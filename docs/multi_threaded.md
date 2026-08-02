@@ -885,7 +885,7 @@ notifies the main thread, which can trigger `_resetWebview()`.
 
 - **Prometheus / operational metrics**: The `prom-client`-backed metrics
   registry ([`packages/core/src/metrics/registry.ts`](../packages/core/src/metrics/registry.ts)) and HTTP
-  server ([`src/metrics/server.ts`](../src/metrics/server.ts)) run on the main
+  server (`src/metrics/server.ts`) run on the main
   thread. **Correction:** although `worker_threads` live in the same OS
   process, each is a **separate V8 isolate with its own `prom-client` module
   instance** (§1.2) — a worker **cannot** write to the main-thread registry

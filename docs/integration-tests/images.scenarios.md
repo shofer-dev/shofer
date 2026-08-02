@@ -1,7 +1,6 @@
 # Integration Tests: Image Support
 
-> Feature docs: [`docs/images.md`](../images.md),
-> [`docs/user-manual/images.md`](../docs/user-manual/images.md)
+> Feature docs: [`docs/images.md`](../images.md)
 > Implementation: [`ChatTextArea.tsx`](../../webview-ui/src/components/chat/ChatTextArea.tsx),
 > [`ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx),
 > [`Thumbnails.tsx`](../../webview-ui/src/components/common/Thumbnails.tsx),

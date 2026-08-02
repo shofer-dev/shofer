@@ -1,7 +1,6 @@
 # Integration Tests: Chat Scroll Lifecycle
 
 > Feature doc: [`docs/scrolling.md`](../scrolling.md)
-> User manual: [`docs/user-manual/scrolling.md`](../docs/user-manual/scrolling.md)
 > Implementation: [`useScrollLifecycle.ts`](../../webview-ui/src/hooks/useScrollLifecycle.ts),
 > [`ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx)
 

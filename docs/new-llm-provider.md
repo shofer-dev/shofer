@@ -548,7 +548,7 @@ Copy the new keys to all locale files under `webview-ui/src/i18n/locales/*/setti
 
 ### 33. Register model in llm-router (if proxied)
 
-If the provider goes through llm-router (the backend proxy), additional steps are needed in the Go codebase under [`llm-router/`](../llm-router/). See [`llm-router/docs/INTERFACE.md`](../llm-router/docs/INTERFACE.md) for the protocol.
+If the provider goes through llm-router (the backend proxy), additional steps are needed in the Go codebase under `llm-router/`. See `llm-router/docs/INTERFACE.md` for the protocol.
 
 **For providers that talk directly to the upstream API (most common case), skip this layer entirely.**
 

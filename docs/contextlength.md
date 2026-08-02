@@ -6,14 +6,14 @@ Does `ContextLength` in `llm-router/internal/types/model_registry.go` actually g
 
 ## Answer
 
-**Yes.** `ContextLength` in [`model_registry.go`](llm-router/internal/types/model_registry.go:8) flows through the entire pipeline and determines the context window number displayed in Shofer's UI progress bar. The pipeline was **fixed** (2026-05-01) — previously the webview used a static map that caused a fallback to 128K.
+**Yes.** `ContextLength` in `model_registry.go` flows through the entire pipeline and determines the context window number displayed in Shofer's UI progress bar. The pipeline was **fixed** (2026-05-01) — previously the webview used a static map that caused a fallback to 128K.
 
 ## Path A: Shofer Router provider
 
 | Step    | File                                                                                   | Field                                            |
 | ------- | -------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Source  | [`model_registry.go:8`](llm-router/internal/types/model_registry.go:8)                 | `ContextLength int`                              |
-| API     | [`models.go:226`](llm-router/internal/handlers/models.go:226)                          | JSON `context_length`                            |
+| Source  | `model_registry.go:8`                                                                  | `ContextLength int`                              |
+| API     | `models.go:226`                                                                        | JSON `context_length`                            |
 | Proxy   | Shofer Router (hosted)                                                                 | remaps → `context_window`                        |
 | Fetcher | [`useSelectedModel.ts:354`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts) | `info.contextWindow` (via `routerModels.shofer`) |
 | Schema  | [`shofer.ts:35`](../packages/types/src/providers/shofer.ts)                            | `context_window: z.number()`                     |
@@ -21,18 +21,18 @@ Does `ContextLength` in `llm-router/internal/types/model_registry.go` actually g
 
 ## Path B: llm-provider → VSCode LM API → vscode-lm handler
 
-| Step            | File                                                                                           | Field                                                                                             |
-| --------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Source          | [`model_registry.go:218`](llm-router/internal/types/model_registry.go:218)                     | `ContextLength: 1000000`                                                                          |
-| API             | [`models.go:226`](llm-router/internal/handlers/models.go:226)                                  | JSON `context_length: 1000000`                                                                    |
-| llm-provider    | [`llm-client.ts:651`](extensions/llm-provider/src/llm-client.ts:651)                           | `contextLength: model.context_length`                                                             |
-| VSCode info     | [`language-model-provider.ts:976`](extensions/llm-provider/src/language-model-provider.ts:976) | `maxInputTokens: contextLength`                                                                   |
-| VSCode LM       | `vscode.lm.selectChatModels()`                                                                 | `LanguageModelChat.maxInputTokens`                                                                |
-| Runtime handler | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) `getModel()`                               | `contextWindow: this.client.maxInputTokens` (no 128K fallback)                                    |
-| IPC message     | [`webviewMessageHandler.ts:1238-1241`](../src/core/webview/webviewMessageHandler.ts)           | `{ type: "vsCodeLmModels" }` (now `VsCodeLmChatInfo[]` with `shoferCapabilities`/`shoferPricing`) |
-| Context         | [`ExtensionStateContext.tsx:327`](../webview-ui/src/context/ExtensionStateContext.tsx)         | `vsCodeLmModels` state                                                                            |
-| Hook            | [`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts)             | dynamic lookup from context                                                                       |
-| UI              | [`TaskHeader.tsx:106`](../webview-ui/src/components/chat/TaskHeader.tsx)                       | `model?.contextWindow`                                                                            |
+| Step            | File                                                                                   | Field                                                                                             |
+| --------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Source          | `model_registry.go:218`                                                                | `ContextLength: 1000000`                                                                          |
+| API             | `models.go:226`                                                                        | JSON `context_length: 1000000`                                                                    |
+| llm-provider    | `llm-client.ts:651`                                                                    | `contextLength: model.context_length`                                                             |
+| VSCode info     | `language-model-provider.ts:976`                                                       | `maxInputTokens: contextLength`                                                                   |
+| VSCode LM       | `vscode.lm.selectChatModels()`                                                         | `LanguageModelChat.maxInputTokens`                                                                |
+| Runtime handler | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) `getModel()`                       | `contextWindow: this.client.maxInputTokens` (no 128K fallback)                                    |
+| IPC message     | [`webviewMessageHandler.ts:1238-1241`](../src/core/webview/webviewMessageHandler.ts)   | `{ type: "vsCodeLmModels" }` (now `VsCodeLmChatInfo[]` with `shoferCapabilities`/`shoferPricing`) |
+| Context         | [`ExtensionStateContext.tsx:327`](../webview-ui/src/context/ExtensionStateContext.tsx) | `vsCodeLmModels` state                                                                            |
+| Hook            | [`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts)     | dynamic lookup from context                                                                       |
+| UI              | [`TaskHeader.tsx:106`](../webview-ui/src/components/chat/TaskHeader.tsx)               | `model?.contextWindow`                                                                            |
 
 ## Root Cause of the 128K Bug (FIXED)
 
@@ -47,7 +47,7 @@ The backend `vscode-lm` handler's [`getModel()`](../src/api/providers/vscode-lm.
 3. **[`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts)** — vscode-lm case looks up the dynamic `vsCodeLmModels` from context, derives `contextWindow` from `maxInputTokens`, and reads `supportsImages`/`supportsPromptCache`/pricing from `shoferCapabilities`/`shoferPricing` instead of hardcoded defaults.
 4. **[`VSCodeLM.tsx`](../webview-ui/src/components/settings/providers/VSCodeLM.tsx)** — reads models from `useExtensionState()`, uses `maxInputTokens` for `contextWindow`.
 5. **[`vscode-lm.ts`](../src/api/providers/vscode-lm.ts)** — runtime handler removed the `openAiModelInfoSaneDefaults.contextWindow` (128K) fallback and the hardcoded `supportsImages: false` / `supportsPromptCache: true` flags; all three now come from `this.client.maxInputTokens` and `shoferCapabilities` (fetched via `shofer.llm.getModelCapabilities`).
-6. **[`llm-router`](llm-router/internal/handlers/models.go)** + **[`llm-provider`](extensions/llm-provider/src/language-model-provider.ts)** — added `prompt_cache` capability to `/v1/models` (derived from `ContextCacheRead > 0`) and the `shofer.llm.getModelCapabilities` side-channel command in llm-provider, since VS Code's `LanguageModelChatProviderCapabilities` only exposes `imageInput` and `toolCalling`.
+6. **`llm-router`** + **`llm-provider`** — added `prompt_cache` capability to `/v1/models` (derived from `ContextCacheRead > 0`) and the `shofer.llm.getModelCapabilities` side-channel command in llm-provider, since VS Code's `LanguageModelChatProviderCapabilities` only exposes `imageInput` and `toolCalling`.
 
 ## Verification
 
@@ -79,7 +79,7 @@ Several hops have fallback values that are not mentioned:
 
 | Hop                                             | Fallback  | Where                                                                                                                                |
 | ----------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `language-model-provider.ts` → `maxInputTokens` | `4096`    | [`language-model-provider.ts:976`](extensions/llm-provider/src/language-model-provider.ts:976) — `contextLength ?? 4096`             |
+| `language-model-provider.ts` → `maxInputTokens` | `4096`    | `language-model-provider.ts:976` — `contextLength ?? 4096`                                                                           |
 | `vscode-lm.ts` no-client fallback               | `128_000` | [`vscode-lm.ts:920`](../src/api/providers/vscode-lm.ts) — `...openAiModelInfoSaneDefaults` when `this.client` is null                |
 | `useSelectedModel.ts` vscode-lm fallback        | `128_000` | [`useSelectedModel.ts:317`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts) — `openAiModelInfoSaneDefaults.contextWindow` |
 | `TaskHeader.tsx` zero guard                     | `1`       | [`TaskHeader.tsx:106`](../webview-ui/src/components/chat/TaskHeader.tsx) — `model?.contextWindow \|\| 1`                             |
@@ -92,7 +92,7 @@ The `modelCache.ts` returns `{}` for the `"shofer"` provider case (line 91: `// 
 
 ### 4. `llm-client.ts:651` is in a private method
 
-The `contextLength` mapping at [`llm-client.ts:651`](extensions/llm-provider/src/llm-client.ts:651) is in `parseModelsResponse()`, a private method of `LLMClient`. This is not discoverable from the public API. The doc should note this for readers tracing the data flow.
+The `contextLength` mapping at `llm-client.ts:651` is in `parseModelsResponse()`, a private method of `LLMClient`. This is not discoverable from the public API. The doc should note this for readers tracing the data flow.
 
 ### 5. Line numbers are fragile — no "last verified" date
 

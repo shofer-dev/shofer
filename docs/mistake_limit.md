@@ -86,7 +86,7 @@ This is the mechanism that triggered in the `delme.json` example: two blocked to
 
 ### 4. Tool-level parameter validation errors
 
-**Location:** Individual tool files in [`packages/core/src/tools/`](packages/core/src/tools/)
+**Location:** Individual tool files in [`packages/core/src/tools/`](../packages/core/src/tools/)
 
 Nearly every tool handler increments `consecutiveMistakeCount++` on parameter validation failure before calling `recordToolError`. Examples:
 

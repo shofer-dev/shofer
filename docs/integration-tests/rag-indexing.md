@@ -1,7 +1,6 @@
 # RAG Code Indexing — Integration Test Scenarios
 
-> Feature docs: [`plugins/rag-indexing/DESIGN.md`](../../plugins/rag-indexing/DESIGN.md),
-> [`docs/user-manual/rag-indexing.md`](../docs/user-manual/rag-indexing.md)
+> Feature docs: [`plugins/rag-indexing/DESIGN.md`](../../plugins/rag-indexing/DESIGN.md)
 > Implementation: [`plugins/rag-indexing/src/manager.ts`](../../plugins/rag-indexing/src/manager.ts),
 > [`plugins/rag-indexing/src/orchestrator.ts`](../../plugins/rag-indexing/src/orchestrator.ts),
 > [`plugins/rag-indexing/src/indexing/scanner.ts`](../../plugins/rag-indexing/src/indexing/scanner.ts),
