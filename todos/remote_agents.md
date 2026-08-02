@@ -23,7 +23,9 @@ protocol built for it:
   on AgentApi, exactly as today, attached **on demand** to the worker that owns
   the task. Temporal never carries transcript data; AgentApi never schedules.
 
-Both ends are **plugins** (a public pair), not core features. Core keeps the
+Both ends are **plugins**, not core features — integrator-private initially,
+openable later; the contract here is the generic design any dispatcher can
+implement. Core keeps the
 transport (`shofer serve`, the HTTP/SSE binding) and gains one generic
 primitive: _attach to a remote task by address + task id_. Everything else the
 current fleet layer does — worker registries, address books, load balancing,
@@ -69,7 +71,7 @@ flowchart LR
 
 ## 2. End state
 
-### 2a. The plugin pair (public)
+### 2a. The plugin pair (private initially, openable later)
 
 **`temporal-worker`** — runs on each worker (`shofer serve` + plugin):
 
@@ -288,14 +290,15 @@ detach and re-attach — with `workers.json` and every Phase-1 symbol gone.
 
 ### Phase 3 — the plugin pair
 
-- `temporal-worker` (public): the existing private integration generalized —
-  activity + wrapper workflow, identity-as-address, **named multi-server
-  connections** with the full per-connection config surface of §2a, the
-  settings-panel UI. (An integrator's private variant then carries only its
-  credential exchange and deployment specifics.)
-- `temporal-controller` (public): dispatch through the **placement seam** (the
-  standard new-task surfaces, §2a-2), owner discovery, auto-attach via the
-  Phase 2 primitive, the panel UI, queue health.
+- `temporal-worker`: the existing integration extended in place (it stays
+  private for now) — activity + wrapper workflow, identity-as-address, **named
+  multi-server connections** with the full per-connection config surface of
+  §2a, the settings-panel UI. Keep the credential exchange behind the
+  pluggable auth hook so the deployment-specific half stays separable — that
+  separation is what makes opening the pair up later cheap.
+- `temporal-controller` (new, private for now): dispatch through the
+  **placement seam** (the standard new-task surfaces, §2a-2), owner discovery,
+  auto-attach via the Phase 2 primitive, the panel UI, queue health.
 
 **Done when:** two `shofer serve` hosts + `temporal server start-dev`: a task
 created through the **normal new-task surface** with a queue target lands on a
@@ -312,6 +315,16 @@ with **two named connections** demonstrably polls both servers.
 
 **Done when:** restart the controller with two dispatched tasks in flight; both
 reappear in the panel and re-attach with full history.
+
+### Follow-on (separate workstream): the built-in Slang backend
+
+The same reasoning eventually retires the in-process Slang workflow backend
+(`WorkflowTask.slangLoop()`): with dispatch and attachment in place, a
+workflow runs on an integrator's durable orchestrator — specs authored and
+started **by reference**, never handed inline to a trusted interpreter; stakes
+observed via the attachment primitive — and the second engine is removed
+rather than maintained. Tracked with the integrator's pipeline design, not in
+this doc.
 
 ### Ordering rationale
 
