@@ -87,14 +87,34 @@ flowchart LR
 - Runs the task like any served task: asks are left outstanding for a
   controller to answer over AgentApi; an unattached task **blocks durably** on
   its ask — nothing is lost, and Temporal's visibility shows it pending.
-- Credential/connection config (host, namespace, TLS, auth) is plugin config —
-  pluggable, so integrators can substitute their own credential exchange.
+- **Fully parameterized — nothing about the Temporal deployment is hardwired.**
+  Connection and pickup are plugin config: `temporalAddress`, `namespace`,
+  task queue(s) to poll, `activityName` (default `runShoferTask`),
+  `concurrency` (slot count = capacity + backpressure), `heartbeatMs`, worker
+  `tags`, TLS, and a pluggable auth hook (none for a dev server / API key /
+  mTLS / an integrator's own credential exchange). The pair must work
+  unmodified against a laptop `start-dev`, a self-hosted cluster, or a hosted
+  Temporal.
+- **Configurable through the normal surfaces, not just provisioning.** The
+  config rides the standard plugin-config mechanism — `pluginConfigs` in the
+  layered `.shofer/settings.json` scopes (global/user/project, live-reloaded
+  by the scope watcher), with `.shofer/plugins.json` handling
+  source/version/enablement as for any plugin — and is **editable in the UI**:
+  the pair's settings panel exposes every key above, so a desktop user can
+  point Shofer at a Temporal server and pick a queue without touching a file.
+  Env-var fallbacks remain for headless/provisioned workers, lowest
+  precedence. Secrets (an API key) go through secret storage, never the
+  config file.
 
 **`temporal-controller`** — runs on the dispatching Shofer (the IDE):
 
 - Dispatches: starts a `shoferTask` workflow on a named queue with
   `maximumAttempts: 1` by default (an agent task is not idempotent; a re-run
   against the same workspace is opt-in, never a silent retry).
+- **Same connection config surface** as the worker (`temporalAddress`,
+  `namespace`, TLS, auth hook), plus dispatch parameters — target task queue,
+  workflow type (default `shoferTask`), retry policy, timeouts — settable as
+  defaults and overridable per dispatch.
 - Discovers the owner from Temporal, then hands the controller-side session to
   the core attachment primitive (below).
 - Owns the UI (a plugin panel): dispatch surface, the fan-out task list, and
@@ -149,7 +169,11 @@ Delete, in one coordinated change (with the doc updates in the same change):
   `packages/core/src/config/worker-declaration.ts`,
   `src/core/config/workerDeclarationLoader.ts`, the `workers.json` half of the
   scope watcher (the settings half stays), `locked.json` `workers/<id>`
-  entries.
+  entries — **and every cross-reference**: sweep `rg workers.json` at
+  execution time; today that also hits the `ContextProxy` wiring, the
+  workers-collection sections of `configuration.md` and `settings_overlay.md`,
+  the drain-on-withdrawal item in `TODO.md`, and
+  `todos/layered-config-single-sot.md`.
 - **Config sync, entirely**: `AgentApi.applyConfig` + the `POST /api/v1/config`
   route, `SyncedSettings`/`SyncedSecrets`/`SyncedPluginState`,
   `SETTING_SYNC_SCOPE`/`SYNCED_SETTINGS_KEYS`/`SYNCED_SECRET_KEYS`,
@@ -170,10 +194,36 @@ task-scoped SSE route, `/health` (liveness + version) and `/whoami`,
 `allowClientConfig` (per-task config gate), per-host storage separation, the
 scope watcher's settings reload, task persistence.
 
-Docs in lock-step: rewrite `v3_architecture.md` §12 (this doc becomes the
-referenced design), delete `config_sync.md`, update `agentapi.md` (drop
-`applyConfig`/config route, drop the Workers framing). Bump minor `Y`
-(settings keys and persisted/wire shapes removed).
+**Docs consolidation, in the same change.** Three docs largely overlap once
+the fleet layer is gone — the removal collapses them rather than patching each:
+
+- **`config_sync.md` — deleted.** Its subject is the removed channel; nothing
+  survives.
+- **`v3_architecture.md` — deleted.** Half of it (distributed execution, §12,
+  the delivery/status sections) describes what Phase 1 removes; the other half
+  (the Category I/II host boundary, the seam families, the portable-core
+  inventory, front-end adapters) duplicates `host-boundary.md`'s ground.
+  Fold that still-true half into **`host-boundary.md`**, which becomes the
+  single architecture doc — current-state only, no initiative/status tables
+  (the strangler-migration narrative served its purpose and is history now).
+  Its "Where the boundary is going" section is rewritten to point here.
+- **`headless.md` — deleted.** It is a CLI usage reference wearing a stale
+  v3-era architecture preamble ("as call sites migrate the shim shrinks" — the
+  migration is done). The shim/adapter narrative that duplicates
+  `v3_architecture.md` dies with it; the genuinely unique content — operating
+  modes, flags, the stdin NDJSON protocol, `ShoferAPI` recipes, the shim file
+  reference — moves to a trimmed **`cli.md`**.
+- **`agentapi.md` — stays** the transport source of truth: drop
+  `applyConfig`/the config route and the Workers framing (Phase 2 later adds
+  the task-snapshot route).
+- Repoint every reference to the deleted files — `docs/README.md`, `acp.md`,
+  `configuration.md`, `plugin_system.md`, `public_api.md`, `multi_threaded.md`,
+  `adding-new-tools.md`, `tool-categories.md`,
+  `outside-workspace-path-allowlist.md`, the `rag-indexing` plugin docs, and
+  this doc's own status header (enumerate the full set with `rg` at execution
+  time).
+
+Bump minor `Y` (settings keys and persisted/wire shapes removed).
 
 **Done when:** `rg` over the repo finds none of the removed symbols; all
 packages build and test green; the docs above are coherent with the code.
