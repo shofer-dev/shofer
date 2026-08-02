@@ -7,6 +7,17 @@ import { PluginRegistry } from "../plugin-registry.js"
 import { loadPluginFromEntry, createNodePluginCodeLoader } from "../plugin-loader.js"
 
 /**
+ * These specs drive the REAL loader: an esbuild transpile plus a dynamic ESM import
+ * of a just-written fixture. That work does not fit the registry's 500ms default
+ * hook budget (`PLUGIN_HOOK_TIMEOUT_MS`) on a loaded machine — and `collectTools`
+ * turns an exceeded budget into an EMPTY tool list rather than an error, so the
+ * symptom is a baffling `Cannot read properties of undefined (reading 'execute')`
+ * instead of a timeout. These tests are about the loader, not the budget, so they
+ * grant one large enough that it cannot be what fails.
+ */
+const LOADER_HOOK_BUDGET_MS = 30_000
+
+/**
  * Loader tests exercise the *real* esbuild transpile + dynamic-import path (same
  * as the custom-tools loader), so they write TypeScript/JS fixtures to a temp dir
  * and load them. A unique cacheDir per suite avoids cross-run bundle reuse.
@@ -60,7 +71,7 @@ describe("plugin-loader (§7 code loading, step 2.1)", () => {
 		expect(plugin.name).toBe("ts-plugin")
 
 		const reg = new PluginRegistry()
-		await reg.register(plugin)
+		await reg.register(plugin, {}, { hookTimeoutMs: LOADER_HOOK_BUDGET_MS })
 
 		const tools = await reg.collectTools()
 		expect(tools.map((t) => t.name)).toEqual(["hello"])
@@ -105,7 +116,7 @@ describe("plugin-loader (§7 code loading, step 2.1)", () => {
 
 		const plugin = await loadPluginFromEntry({ name: "ext-plugin", root, main: "index.ts" }, { cacheDir })
 		const reg = new PluginRegistry()
-		await reg.register(plugin)
+		await reg.register(plugin, {}, { hookTimeoutMs: LOADER_HOOK_BUDGET_MS })
 		const tools = await reg.collectTools()
 		expect(tools.map((t) => t.name)).toEqual(["probe"])
 		expect(await tools[0]!.execute!({}, {} as never)).toBe("EXTERNAL")
@@ -142,7 +153,7 @@ describe("plugin-loader (§7 code loading, step 2.1)", () => {
 
 		const plugin = await loadPluginFromEntry({ name: "baked-plugin", root, main: "index.ts" }, { cacheDir })
 		const reg = new PluginRegistry()
-		await reg.register(plugin)
+		await reg.register(plugin, {}, { hookTimeoutMs: LOADER_HOOK_BUDGET_MS })
 		const tools = await reg.collectTools()
 		expect(await tools[0]!.execute!({}, {} as never)).toBe("BAKED")
 	}, 30_000)
