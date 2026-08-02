@@ -8,7 +8,7 @@ just expose callable functions.
 Everything described here is implemented and shipped, **except** the additive changes in
 [§14 Proposed](#14-proposed-agent-control-api-for-workflow--runner-plugins) (a scoped agent-control
 API for long-running workflow/runner plugins — the enabling work for the
-[Temporal runner plugin](../plugins/temporal-runner/DESIGN.md)) and the deferred hosted remote plugin **registry**
+[Temporal worker plugin](../plugins/temporal-worker/DESIGN.md)) and the deferred hosted remote plugin **registry**
 ([§13 Deferred](#13-deferred)).
 
 For **authoring** a plugin (manifest fields, build invocations, step-by-step
@@ -1319,7 +1319,7 @@ model).
 > **Status: proposed, not yet shipped.** §1–§12 are implemented; this section specifies the
 > small, additive changes that let a plugin **drive** the agent as a durable unit of work —
 > workflow, integration, and **runner** plugins (e.g. a Temporal activity worker; see
-> [`temporal-runner/DESIGN.md`](../plugins/temporal-runner/DESIGN.md)). The additions ride the seams §5.11/§7 already
+> [`temporal-worker/DESIGN.md`](../plugins/temporal-worker/DESIGN.md)). The additions ride the seams §5.11/§7 already
 > define and expose a **scoped** capability, never the raw `ShoferAPI`.
 
 ### 14.1 Motivation
@@ -1438,7 +1438,7 @@ The rest of the runner/workflow surface is **already shipped**: `ctx.registerSer
 `ctx.agent.notify` already does spawn/queue/interrupt inbound delivery; `onEvent` + lifecycle hooks
 observe; `ctx.config` / `ctx.storage` back config + idempotency state. So a runner/workflow plugin is
 **~85% shipped** — §14.2–§14.3 are the delta. The first consumer and worked example is the
-**Temporal runner plugin** ([`temporal-runner/DESIGN.md`](../plugins/temporal-runner/DESIGN.md)).
+**Temporal worker plugin** ([`temporal-worker/DESIGN.md`](../plugins/temporal-worker/DESIGN.md)).
 
 ---
 
@@ -1447,7 +1447,7 @@ observe; `ctx.config` / `ctx.storage` back config + idempotency state. So a runn
 | Document                                                                          | Relationship                                                                     |
 | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | [`../PLUGINS.md`](../PLUGINS.md)                                                  | Author-facing how-to: manifest fields, build invocations, walkthroughs.          |
-| [`temporal-runner/DESIGN.md`](../plugins/temporal-runner/DESIGN.md)               | First consumer of the §14 agent-control additions: the Temporal runner plugin.   |
+| [`temporal-worker/DESIGN.md`](../plugins/temporal-worker/DESIGN.md)               | First consumer of the §14 agent-control additions: the Temporal worker plugin.   |
 | [`agentapi.md`](./agentapi.md)                                                    | The programmatic agent API surface plugins run alongside.                        |
 | [`acp.md`](./acp.md)                                                              | Agent Client Protocol — an external control surface complementary to plugins.    |
 | [`v3_architecture.md`](./v3_architecture.md)                                      | The host-agnostic carve-out the plugin substrate is built on.                    |
