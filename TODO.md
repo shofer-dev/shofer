@@ -59,17 +59,10 @@
 
 - **The RAG indexer is transient.** The controller being the sole indexer is a
   consequence of the indexer living in-process. When it moves to a standalone k3s
-  service that everyone queries, `codebaseIndexSearchOnly` collapses — the controller
+  service that everyone queries, the plugin's `searchOnly` mode collapses — the controller
   becomes just another query client and the sole-writer invariant moves into the
   service. Don't build more machinery on top of "the controller is special" than the
   sole-writer rule already requires.
-
-- **A withdrawn worker is cut off, not drained.** `WorkerRegistry` reconciles
-  `.shofer/workers.json` by disconnecting a worker the declaration no longer names (or has
-  re-pointed) immediately, so a task running on it dies with the connection. Fine while
-  pools are sized at workspace creation and resized by hand; not fine once scale-down is
-  automatic, which is when this needs a drain: stop assigning, wait for in-flight tasks
-  (bounded), then disconnect. Design: `docs/workspace_agent_pool.md` §5.
 
 - **One dependency advisory left open**, and it is the only one: `pnpm audit`
   residue is 0 critical / 0 high / 0 moderate / 1 low.

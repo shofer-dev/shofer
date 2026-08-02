@@ -1,14 +1,6 @@
 import { type ShoferAPI, ShoferEventName } from "@shofer/types"
 
-import type {
-	AgentApi,
-	AskResponse,
-	CreateTaskInput,
-	ServerEvent,
-	SyncedPluginState,
-	SyncedSecrets,
-	SyncedSettings,
-} from "@shofer/types"
+import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent } from "@shofer/types"
 
 /** Construction options for {@link ShoferApiAgent}. */
 export interface ShoferApiAgentOptions {
@@ -46,51 +38,16 @@ const FORWARDED_EVENTS = [
 	ShoferEventName.Message,
 	ShoferEventName.TaskModeSwitched,
 	ShoferEventName.TaskTitleChanged,
-	// Full-fidelity remote rendering (Shofer Workers L2): the controller's token/context
-	// meter + TaskHeader summary need authoritative token usage from the executor.
+	// Full-fidelity remote rendering: a client's token/context meter needs
+	// authoritative token usage from the executor.
 	ShoferEventName.TaskTokenUsageUpdated,
 ] as const
 
 export class ShoferApiAgent implements AgentApi {
-	private appliedConfigVersion?: string
-
 	constructor(
 		private readonly api: ShoferAPI,
 		private readonly options: ShoferApiAgentOptions = {},
 	) {}
-
-	/** The last controller config-sync version this node applied (config_sync §6). */
-	get configVersion(): string | undefined {
-		return this.appliedConfigVersion
-	}
-
-	/**
-	 * Whether this node accepts controller config pushes (config_sync §Part A). A
-	 * self-administered node (`allowClientConfig === false`) ignores `applyConfig`, so
-	 * it never echoes the controller's `desiredVersion`; it advertises `managed: false`
-	 * on `/health` & `/whoami` so the controller EXEMPTS it from version-gating.
-	 */
-	get acceptsClientConfig(): boolean {
-		return !!this.options.allowClientConfig
-	}
-
-	async applyConfig(
-		config: SyncedSettings,
-		version: string,
-		secrets: SyncedSecrets,
-		plugins?: SyncedPluginState,
-	): Promise<void> {
-		// Node CLI override wins — ignore controller pushes, same rule as apiConfiguration.
-		if (!this.options.allowClientConfig) return
-		await this.api.applySyncedSettings(config)
-		// Credentials land after the settings they belong to, so a node never briefly
-		// holds a store/embedder config it has no key for.
-		await this.api.applySyncedSecrets(secrets)
-		// Plugin state last: applying it reloads the affected plugins, which then read a
-		// settings + secrets picture that is already complete.
-		if (plugins) await this.api.applySyncedPluginState(plugins)
-		this.appliedConfigVersion = version // opaque; echoed on /health & /whoami so the controller sees convergence
-	}
 
 	async createTask(input: CreateTaskInput): Promise<{ taskId: string }> {
 		// Apply the controller's per-task API Configuration only when this node has
@@ -130,7 +87,7 @@ export class ShoferApiAgent implements AgentApi {
 		await this.api.respondToAsk(taskId, response)
 	}
 
-	// ── Reverse data channel (Shofer Workers L3) — delegate to the in-process API ──
+	// ── Reverse data channel — delegate to the in-process API ─────────────────────
 
 	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
 		return this.api.pluginRequest(taskId, plugin, method, params)

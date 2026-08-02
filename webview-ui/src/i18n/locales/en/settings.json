@@ -19,16 +19,6 @@
 		"placeholder": "Search settings...",
 		"noResults": "No settings found"
 	},
-	"shoferWorkers": {
-		"loadBalancer": {
-			"label": "Load balancing",
-			"description": "How new tasks are distributed across the enabled workers.",
-			"roundRobin": "Round-robin",
-			"leastLoad1m": "Least load (1m)",
-			"leastLoad5m": "Least load (5m)",
-			"leastLoad15m": "Least load (15m)"
-		}
-	},
 	"plugins": {
 		"description": "Plugins bundle modes, skills, slash commands, MCP servers, and rules into a single package. Discovered from ~/.shofer/plugins (global) and .shofer/plugins (this workspace). Enable a plugin to activate its contributions.",
 		"empty": "No plugins found. Drop a plugin folder with a plugin.json into ~/.shofer/plugins or .shofer/plugins.",
@@ -74,7 +64,6 @@
 		"providers": "Providers",
 		"modes": "Modes",
 		"mcp": "MCP Servers",
-		"shoferWorkers": "Shofer Workers",
 		"plugins": "Plugins",
 		"skills": "Skills",
 		"autoApprove": "Auto-Approve",

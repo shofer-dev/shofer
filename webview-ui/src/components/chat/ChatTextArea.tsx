@@ -27,14 +27,12 @@ import { StandardTooltip } from "@src/components/ui"
 import Thumbnails from "../common/Thumbnails"
 import { ModeSelector } from "./ModeSelector"
 import { ApiConfigSelector } from "./ApiConfigSelector"
-import { WorkerSelector } from "./WorkerSelector"
 import { AutoApproveDropdown } from "./AutoApproveDropdown"
 import { CommandsButton } from "./CommandsButton"
 import { SkillsButton } from "./SkillsButton"
 import { PluginSlot } from "../plugins/PluginSlot"
 import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ContextMenu from "./ContextMenu"
-import { WorkerStatus } from "./WorkerStatus"
 import { usePromptHistory } from "./hooks/usePromptHistory"
 // CloudAccountSwitcher removed
 
@@ -1573,10 +1571,6 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							allGroups={isWorkflow}
 							triggerClassName="min-w-[28px] text-ellipsis overflow-hidden flex-shrink"
 						/>
-						{/* Where the next new task runs — only visible with ≥1 remote worker. */}
-						{!isWorkflow && (
-							<WorkerSelector triggerClassName="min-w-[28px] text-ellipsis overflow-hidden flex-shrink" />
-						)}
 						{!isWorkflow && <CommandsButton />}
 						{!isWorkflow && <SkillsButton />}
 					</div>
@@ -1605,7 +1599,6 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								</button>
 							</StandardTooltip>
 						)}
-						{!isEditMode ? <WorkerStatus /> : null}
 						{/* Plugin chat-input-toolbar contributions (design §6.8) — placed in the
 						    right-hand indicator cluster next to IndexingStatusBadge, matching where
 						    the built-in LiveMemoryStatusBadge sat. Renders nothing without a plugin. */}

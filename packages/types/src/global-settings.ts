@@ -9,7 +9,6 @@ import {
 } from "./provider-settings.js"
 import { historyItemSchema, costLimitSchema } from "./history.js"
 import { experimentsSchema } from "./experiment.js"
-import type { SyncedPluginState } from "./plugin.js"
 import { telemetrySettingsSchema } from "./telemetry.js"
 import { modeConfigSchema } from "./mode.js"
 import { customModePromptsSchema, customSupportPromptsSchema } from "./mode.js"
@@ -103,8 +102,6 @@ export const globalSettingsSchema = z.object({
 	commandExecutionTimeout: z.number().optional(),
 	commandTimeoutAllowlist: z.array(z.string()).optional(),
 	preventCompletionWithOpenTodos: z.boolean().optional(),
-	/** WorkerPool new-task load-balancing policy (was `shofer.workers.loadBalancer`). */
-	workersLoadBalancer: z.enum(["round-robin", "least-load-1m", "least-load-5m", "least-load-15m"]).optional(),
 	/** Which `.shofer/` scope Settings writes persist to (default: the user scope). */
 	settingsWriteScope: z.enum(["user", "project"]).optional(),
 	// Migrated from `shofer.*` VS Code config into ContextProxy/globalState — the
@@ -329,241 +326,6 @@ export type GlobalSettings = z.infer<typeof globalSettingsSchema>
 export const GLOBAL_SETTINGS_KEYS = globalSettingsSchema.keyof().options
 
 /**
- * SyncedSettings — controller→node config-sync scope (docs/config_sync.md §3/§4a/§6)
- *
- * `SETTING_SYNC_SCOPE` classifies EVERY `globalSettingsSchema` key as:
- *   - "node"     — changes how the agent core behaves on the executor; replicated
- *                  controller→node via `AgentApi.applyConfig` (the synced allowlist).
- *   - "frontend" — pure UI/front-end state, secrets, or host-specific config with no
- *                  executor effect; NOT synced (the conservative default when unsure).
- *
- * The `satisfies Record<(typeof GLOBAL_SETTINGS_KEYS)[number], …>` makes the map
- * EXHAUSTIVE over the live schema: adding a `globalSettings` key is a compile error
- * until its sync scope is declared (mirrors the SECRET_STATE_KEYS/isSecretStateKey
- * idiom below). `SYNCED_SETTINGS_KEYS`/`SyncedSettings` are DERIVED from it, never
- * hand-maintained. Per §3 secrets never ride this channel (e.g. `openRouterImageApiKey`
- * is a GLOBAL_SECRET_KEY → "frontend").
- */
-export const SETTING_SYNC_SCOPE = {
-	// ── Provider/profile selection & front-end config (per-task or UI-only) ──
-	currentApiConfigName: "frontend",
-	listApiConfigMeta: "frontend",
-	pinnedApiConfigs: "frontend",
-	lastShownAnnouncementId: "frontend",
-	customInstructions: "frontend", // mode/instruction config uses its own file-based channel, not this one
-	taskHistory: "frontend",
-	dismissedUpsells: "frontend",
-
-	// ── Image generation (UI/experimental; API key is a secret) ──
-	imageGenerationProvider: "frontend",
-	openRouterImageApiKey: "frontend", // secret (GLOBAL_SECRET_KEYS) — MUST never sync
-	openRouterImageGenerationSelectedModel: "frontend",
-
-	// Custom condensing prompt drives the executor's context-condense LLM call (see autoCondenseContext).
-	customCondensingPrompt: "node",
-
-	// ── Auto-approval (the motivating consumer — all node-scoped) ──
-	autoApprovalEnabled: "node",
-	alwaysAllowReadOnly: "node",
-	alwaysAllowReadOnlyOutsideWorkspace: "node",
-	alwaysAllowWrite: "node",
-	alwaysAllowWriteOutsideWorkspace: "node",
-	alwaysAllowWriteProtected: "node",
-	alwaysAllowBrowser: "node",
-	writeDelayMs: "node",
-	requestDelaySeconds: "node", // API-request pacing applied where the executor makes LLM calls
-	alwaysAllowMcp: "node",
-	alwaysAllowUncategorized: "node",
-	alwaysAllowModeSwitch: "node",
-	alwaysAllowSubtasks: "node",
-	alwaysAllowExecute: "node",
-	alwaysAllowFollowupQuestions: "node",
-	followupAutoApproveTimeoutMs: "node",
-	allowedCommands: "node",
-	deniedCommands: "node",
-	allowedReadPaths: "node", // outside-workspace path allowlist — auto-approval gate on the executor
-	allowedWritePaths: "node",
-	commandExecutionTimeout: "node",
-	commandTimeoutAllowlist: "node",
-	preventCompletionWithOpenTodos: "node",
-	workersLoadBalancer: "frontend", // WorkerPool policy — the pool lives on the controller, nodes never read it
-	settingsWriteScope: "frontend", // write routing is a controller/UI concern; nodes never persist settings
-	// Migrated from `shofer.*` VS Code config (config-cleanup.md Part A).
-	newTaskRequireTodos: "node", // gates the new_task tool on the executor
-	apiRequestTimeout: "node", // API timeout where the executor makes LLM calls
-	vsCodeLmModelSelector: "node", // selects the vscode-lm model the agent uses
-	maximumIndexedFilesForFileSearch: "node", // file-search runs on the node
-	debugProxyEnabled: "node", // MITM proxy for the executor's outgoing API requests
-	debugProxyServerUrl: "node",
-	debugProxyTlsInsecure: "node",
-	enableCodeActions: "frontend", // host editor Quick Fix UI, not agent behavior
-	debug: "frontend", // webview debug buttons only
-
-	// ── Behavioral limits & context management ──
-	allowedMaxRequests: "node",
-	allowedMaxCost: "node",
-	autoCondenseContext: "node",
-	autoCondenseContextPercent: "node",
-
-	// ── Environment-detail toggles (affect the executor's env-details block) ──
-	includeCurrentTime: "node",
-	includeCurrentCost: "node",
-	maxGitStatusFiles: "node",
-	includeDiagnosticMessages: "node",
-	maxDiagnosticMessages: "node",
-
-	// ── Notification prefs (front-end only) ──
-	ttsEnabled: "frontend",
-	ttsSpeed: "frontend",
-	soundEnabled: "frontend",
-	soundVolume: "frontend",
-
-	maxOpenTabsContext: "node",
-	maxWorkspaceFiles: "node",
-	showShoferIgnoredFiles: "node", // drives the executor's ignore controller + tool-listing output
-	enableSubfolderRules: "node", // rules feed the system prompt built on the executor
-	useAgentRules: "node", // AGENTS.md rules feed the executor-built system prompt
-	maxImageFileSize: "node", // image ingestion happens on the executor
-	maxTotalImageSize: "node",
-
-	// ── Terminal behavior (terminal* — node-scoped shell/integration knobs) ──
-	terminalOutputPreviewSize: "node",
-	terminalShellIntegrationTimeout: "node",
-	terminalShellIntegrationDisabled: "node",
-	terminalCommandDelay: "node",
-	terminalPowershellCounter: "node",
-	terminalZshClearEolMark: "node",
-	terminalZshOhMy: "node",
-	terminalZshP10k: "node",
-	terminalZdotdir: "node",
-	execaShellPath: "frontend", // host-specific filesystem path — MUST NOT be replicated across hosts
-
-	diagnosticsEnabled: "node", // master toggle for the diagnostics env-detail feature (with includeDiagnosticMessages)
-
-	rateLimitSeconds: "frontend", // also a ProviderSettings field (provider-settings.ts) — already shipped per-task via apiConfiguration; excluded here to avoid a double source
-	experiments: "frontend",
-
-	// ── Codebase index (RAG) ──
-	// Synced so a remote node can answer `rag_search` against the controller's index.
-
-	language: "frontend",
-	telemetrySetting: "frontend",
-	mcpEnabled: "frontend", // HELD, not synced: in the shared-workspace-FS node model the node already has the mirrored .shofer/mcp.json and runs stdio servers node-locally, so it self-determines MCP — syncing the global toggle is unnecessary and could override a locally-correct node. Genuine cross-host gaps (the user/org scopes' mcp.json outside the workspace; loopback/controller-hosted servers) are out of scope — revisit with remote-MCP.
-
-	// ── Mode/prompt config (own file-based channel) & UI state ──
-	mode: "frontend",
-	customModes: "frontend",
-	customModePrompts: "frontend",
-	customSupportPrompts: "frontend",
-	enhancementApiConfigId: "frontend",
-	includeTaskHistoryInEnhance: "frontend",
-	historyPreviewCollapsed: "frontend",
-	reasoningBlockCollapsed: "frontend",
-	enterBehavior: "frontend",
-	profileThresholds: "frontend",
-	hasOpenedModeSelector: "frontend",
-	lastModeExportPath: "frontend",
-	lastModeImportPath: "frontend",
-	lastSettingsExportPath: "frontend",
-	lastTaskExportPath: "frontend",
-	lastImageSavePath: "frontend",
-
-	disabledTools: "node",
-
-	defaultCostLimit: "frontend", // per-task cost default applied at creation; allowedMaxCost is the synced enforcement knob — conservative
-	archivedTaskRetentionDays: "frontend", // task-history retention/persistence — no agent-core effect
-	maxParallelTasks: "node", // subtask concurrency evaluated by NewTaskTool on the executor (a task tree runs on one executor)
-	enableLlmProviderIntegration: "frontend", // depends on a host-installed companion extension — conservative
-	shoferBlobCapBytes: "node", // blob externalization/truncation on the executor
-	shoferMcpMaxResponseBytes: "node", // MCP response truncation on the executor
-	logLevel: "frontend", // logging is a host/UI concern
-	logCategories: "frontend",
-
-	// ── Captcha-solver budgets (sub-task tuning) ──
-	captchaSolverMaxAttempts: "node", // tune the captcha sub-task, which runs as a task on the executor
-	captchaSolverMaxRounds: "node",
-	captchaSolverTimeoutSec: "node",
-
-	pluginConfigs: "frontend",
-} satisfies Record<(typeof GLOBAL_SETTINGS_KEYS)[number], "node" | "frontend">
-
-/**
- * Compile-time union of the keys classified "node" in SETTING_SYNC_SCOPE. Used to
- * narrow SYNCED_SETTINGS_KEYS so `SyncedSettings` is a strict SUBSET of GlobalSettings
- * (a plain `.filter` would widen the element type back to every key).
- */
-type NodeScopedSettingKey = {
-	[K in keyof typeof SETTING_SYNC_SCOPE]: (typeof SETTING_SYNC_SCOPE)[K] extends "node" ? K : never
-}[keyof typeof SETTING_SYNC_SCOPE]
-
-/** The node-scoped, syncable subset of GlobalSettings keys, derived from the scope map. */
-export const SYNCED_SETTINGS_KEYS = GLOBAL_SETTINGS_KEYS.filter(
-	(k): k is NodeScopedSettingKey => SETTING_SYNC_SCOPE[k as keyof typeof SETTING_SYNC_SCOPE] === "node",
-)
-
-/** The node-scoped settings slice replicated controller→executor (config_sync §4a). */
-export type SyncedSettings = Pick<GlobalSettings, (typeof SYNCED_SETTINGS_KEYS)[number]>
-
-/** Pick the node-scoped, syncable subset from any settings object (undefined keys omitted). */
-export function pickSyncedSettings(state: Partial<GlobalSettings>): SyncedSettings {
-	const out: Record<string, unknown> = {}
-	for (const key of SYNCED_SETTINGS_KEYS) {
-		if (state[key] !== undefined) {
-			out[key] = state[key]
-		}
-	}
-	return out as SyncedSettings
-}
-
-/**
- * Recursively sort object keys so the serialization is insertion-order-independent.
- * Arrays keep their element order (meaningful for e.g. allowedCommands).
- */
-function canonicalize(value: unknown): unknown {
-	if (Array.isArray(value)) {
-		return value.map(canonicalize)
-	}
-	if (value !== null && typeof value === "object") {
-		const record = value as Record<string, unknown>
-		const sorted: Record<string, unknown> = {}
-		for (const key of Object.keys(record).sort()) {
-			sorted[key] = canonicalize(record[key])
-		}
-		return sorted
-	}
-	return value
-}
-
-/**
- * Deterministic content hash of a synced slice — the config version (§6).
- * Pure JS (no node:crypto / node:os) so it runs identically on both sides of the wire
- * and in the browser. Canonicalizes (sorted keys), JSON.stringify, then FNV-1a → base36.
- * Identical content ⇒ identical string, regardless of key insertion order.
- *
- * `secrets` participates in the hash so that rotating a credential moves the version
- * and the health-echo reconciliation re-pushes it; hashing settings alone would leave
- * nodes holding a stale key forever, since the settings slice never changed. `plugins`
- * is in for the same reason: an indexer's embedder swapped in a plugin's own config must
- * reach the node, and that change touches nothing in the settings slice. The
- * version is an opaque convergence token, not a security boundary — it is a 32-bit
- * non-cryptographic digest and is echoed on `/health` & `/whoami`, so it must never be
- * treated as proof of knowing a secret.
- */
-export function computeConfigVersion(
-	config: SyncedSettings,
-	secrets: SyncedSecrets = {},
-	plugins: SyncedPluginState = {},
-): string {
-	const canonical = JSON.stringify(canonicalize({ config, secrets, plugins }))
-	let hash = 0x811c9dc5 // FNV-1a 32-bit offset basis
-	for (let i = 0; i < canonical.length; i++) {
-		hash ^= canonical.charCodeAt(i)
-		hash = Math.imul(hash, 0x01000193) // FNV prime
-	}
-	return (hash >>> 0).toString(36)
-}
-
-/**
  * ShoferSettings
  */
 
@@ -632,55 +394,20 @@ export const isSecretStateKey = (key: string): key is Keys<SecretState> =>
 	SECRET_STATE_KEYS.includes(key as ProviderSecretKey) || GLOBAL_SECRET_KEYS.includes(key as GlobalSecretKey)
 
 /**
- * Secrets replicated controller→node (config_sync §4a), the credential counterpart of
- * SETTING_SYNC_SCOPE.
- *
- * **Empty, deliberately.** The one entry this list ever had was the codebase-index (RAG)
- * pair, and those credentials now belong to the `rag-indexing` plugin — they travel on
- * the plugin channel (`syncConfig`, config_sync §4b-2), where the plugin decides what a
- * node receives. LLM provider keys are not here either: they ride per-task on
- * `CreateTaskInput.apiConfiguration`.
- *
- * The mechanism stays because a future node-scoped credential that is genuinely core's
- * belongs here; adding one means the controller pushes it to every managed node.
- */
-export const SYNCED_SECRET_KEYS = [] as const satisfies readonly ProviderSecretKey[]
-
-/** The node-scoped, syncable subset of secrets replicated controller→node. */
-export type SyncedSecrets = Partial<Record<(typeof SYNCED_SECRET_KEYS)[number], string>>
-
-/** Pick the node-scoped, syncable secrets from a secret bag (undefined keys omitted). */
-export function pickSyncedSecrets(secrets: Partial<Record<string, string | undefined>>): SyncedSecrets {
-	const out: Record<string, string> = {}
-	for (const key of SYNCED_SECRET_KEYS) {
-		const value = secrets[key]
-		if (value !== undefined) {
-			out[key] = value
-		}
-	}
-	return out as SyncedSecrets
-}
-
-/**
  * Provider-profile secret keys — the per-profile LLM credentials whose sole
  * persisted store is the provider-profiles blob (`shofer_config_api_config`,
- * managed by `ProviderSettingsManager`). This is exactly the LLM half of
- * `SECRET_STATE_KEYS`: every provider API key, minus the seven cross-profile
- * code-index credentials (`SYNCED_SECRET_KEYS`).
+ * managed by `ProviderSettingsManager`). This is exactly `SECRET_STATE_KEYS`:
+ * every provider API key.
  *
  * These keys are NOT written to individual `SecretStorage` entries. `ContextProxy`'s
  * `secretCache` holds only the *current* profile's copy in memory, sourced from the
  * blob on activation (the profile object carries the values) and on restart (loaded
- * from the blob for the live-profile marker). Contrast the eight secrets that DO keep
- * their own `SecretStorage` entries: the seven `SYNCED_SECRET_KEYS` (global,
- * controller→node replicated, written by the code-index save path directly, never via
- * a profile) plus `openRouterImageApiKey` (a GlobalSettings secret absent from
- * `providerSettingsSchema`, so it cannot live in a profile).
+ * from the blob for the live-profile marker). Contrast the secrets that DO keep
+ * their own `SecretStorage` entries: the `GLOBAL_SECRET_KEYS`
+ * (`openRouterImageApiKey`, `pluginSecrets`) — GlobalSettings secrets absent from
+ * `providerSettingsSchema`, so they cannot live in a profile.
  */
-export const PROFILE_SECRET_KEYS = SECRET_STATE_KEYS.filter(
-	(key): key is Exclude<ProviderSecretKey, (typeof SYNCED_SECRET_KEYS)[number]> =>
-		!(SYNCED_SECRET_KEYS as readonly string[]).includes(key),
-)
+export const PROFILE_SECRET_KEYS = [...SECRET_STATE_KEYS]
 
 /** A per-profile LLM credential whose source of truth is the profiles blob. */
 export type ProfileSecretKey = (typeof PROFILE_SECRET_KEYS)[number]

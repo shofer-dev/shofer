@@ -128,8 +128,8 @@ accidental contract changes.
 > Most native tools have been migrated to `defineNativeTool`. A few are still
 > hand-written `OpenAI.Chat.ChatCompletionTool` objects where the schema needs
 > shapes the helper doesn't yet model (free-form object args, `strict: false`,
-> dynamic/factory schemas, deeply-nested optionals) — see the §3 notes in
-> `docs/v3_architecture.md`. New tools should use `defineNativeTool`.
+> dynamic/factory schemas, deeply-nested optionals). New tools should use
+> `defineNativeTool`.
 
 Add to `native-tools/index.ts` — import it and append to the `tools` array that `getNativeTools()` builds and returns:
 

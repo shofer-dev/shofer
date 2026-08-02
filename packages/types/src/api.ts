@@ -2,8 +2,7 @@ import type { EventEmitter } from "events"
 import type { Socket } from "net"
 
 import type { ShoferEvents } from "./events.js"
-import type { ShoferSettings, SyncedSecrets, SyncedSettings } from "./global-settings.js"
-import type { SyncedPluginState } from "./plugin.js"
+import type { ShoferSettings } from "./global-settings.js"
 import type { HistoryItem } from "./history.js"
 import type { ProviderSettingsEntry, ProviderSettings } from "./provider-settings.js"
 import type { IpcMessage, IpcServerEvents } from "./ipc.js"
@@ -85,7 +84,7 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 		response: { askResponse: string; text?: string; images?: string[]; askId?: string; mode?: string },
 	): Promise<void>
 
-	// ─── Reverse data channel (Shofer Workers L3) ─────────────────────
+	// ─── Reverse data channel ─────────────────────────────────────────
 	// Executor side of a plugin-owned per-task feature: resolve the managed task by id
 	// and drive the same in-process plugin a local task uses, so a controller can
 	// render and operate a REMOTE task's diffs, snapshots or change list.
@@ -131,24 +130,6 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	 * @param values An object containing key-value pairs to set.
 	 */
 	setConfiguration(values: ShoferSettings): Promise<void>
-	/** Apply a node-scoped settings slice to this executor's local state (config_sync).
-	 *  Writes only the given keys (a Partial of GlobalSettings) via ContextProxy — no
-	 *  provider-profile save, no secrets. */
-	applySyncedSettings(config: SyncedSettings): Promise<void>
-	/** Apply the node-scoped secret slice to this executor's local state (config_sync).
-	 *  Writes only the `SYNCED_SECRET_KEYS` credentials via ContextProxy's secret path —
-	 *  no provider-profile save. Keys absent from the slice are left untouched. */
-	applySyncedSecrets(secrets: SyncedSecrets): Promise<void>
-	/**
-	 * Apply the controller's plugin slice (config + credentials) for the plugins that
-	 * declare `syncConfig`.
-	 *
-	 * Merged **per plugin**, never wholesale: a node may hold local config for plugins the
-	 * controller does not sync, and losing it on every push would make the node's own
-	 * setup unreproducible. Affected plugins are reloaded so `ctx.config` reflects the new
-	 * values without a restart.
-	 */
-	applySyncedPluginState(plugins: SyncedPluginState): Promise<void>
 	/**
 	 * Returns a list of all configured profile names
 	 * @returns Array of profile names

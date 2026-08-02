@@ -41,11 +41,10 @@ import type { ProviderSettingsManager } from "./ProviderSettingsManager"
 
 /**
  * The `.shofer/` filenames whose change must reach a running host: the settings
- * layers, the global scope's lock manifest (unlocking a key changes the effective
- * value of a file this host already read), and the node declaration (owned by
- * `WorkerRegistry`, watched here because the scope roots and the watcher live here).
+ * layers and the global scope's lock manifest (unlocking a key changes the
+ * effective value of a file this host already read).
  */
-const WATCHED_SCOPE_FILES = ["settings.json", "locked.json", "workers.json", "shofermodes", "providers.json"] as const
+const WATCHED_SCOPE_FILES = ["settings.json", "locked.json", "shofermodes", "providers.json"] as const
 
 type GlobalStateKey = keyof GlobalState
 type SecretStateKey = keyof SecretState
@@ -114,8 +113,8 @@ export class ContextProxy {
 	public readonly onDidRefreshOverlay = this._onDidRefreshOverlayEmitter.event
 
 	// Fires with the watched `.shofer/` filenames a change touched, whatever they hold.
-	// This is the seam for the scope files ContextProxy does not itself own — today
-	// `workers.json`, which WorkerRegistry reconciles from (docs/workspace_agent_pool.md §4).
+	// This is the seam for the scope files ContextProxy does not itself own —
+	// `shofermodes` (CustomModesManager) and `providers.json` reconcile from it.
 	private readonly _onDidChangeScopeFilesEmitter = new TypedEmitter<{ files: string[] }>()
 	public readonly onDidChangeScopeFiles = this._onDidChangeScopeFilesEmitter.event
 
@@ -334,15 +333,6 @@ export class ContextProxy {
 				void this.applyExternalScopeChange()
 			},
 		})
-	}
-
-	/**
-	 * The three `.shofer/` scope roots this host reads. Exposed so a component that
-	 * owns its own scope file (WorkerRegistry and `workers.json`) resolves the same roots
-	 * rather than re-deriving them and drifting.
-	 */
-	public getScopeRoots(): ScopeRoots {
-		return this.resolveScopeRoots()
 	}
 
 	/**
@@ -754,7 +744,7 @@ export class ContextProxy {
 		// (written by ProviderSettingsManager). Do NOT mirror it into an individual
 		// SecretStorage entry — secretCache is its in-memory holder for the current
 		// profile only. Only the GLOBAL_SECRET_KEYS (openRouterImageApiKey,
-		// pluginSecrets) plus any SYNCED_SECRET_KEYS keep individual entries below.
+		// pluginSecrets) keep individual entries below.
 		if (isProfileSecretKey(key)) {
 			this._onDidChangeEmitter.fire({ key })
 			return Promise.resolve()
@@ -980,10 +970,8 @@ export class ContextProxy {
 
 		// The layered `.shofer/` overlay wins over globalState here for the same reason
 		// it does in getValue — otherwise the two disagree, and every consumer that reads
-		// the whole snapshot rather than a key silently ignores file-based settings. That
-		// is not academic: `WorkerRegistry.currentSyncedSlice()` builds the controller→node
-		// config slice from this, so a settings file would reach the IDE and never reach
-		// the pool. Secrets stay last: they are never in the overlay by construction.
+		// the whole snapshot rather than a key silently ignores file-based settings.
+		// Secrets stay last: they are never in the overlay by construction.
 		return { ...globalState, ...this.layeredOverlay, ...secretState }
 	}
 

@@ -8,7 +8,7 @@ remote controller) can drive the same core without touching it.
 - **Definition:** [`packages/types/src/agent-api.ts`](../packages/types/src/agent-api.ts)
   (in `@shofer/types`, vscode-free, so both the core implementations and the wire-protocol
   modules share it).
-- **Strategic context:** [`v3_architecture.md`](./v3_architecture.md) §10–§12 (host boundary,
+- **Strategic context:** [`host-boundary.md`](./host-boundary.md) (host boundary,
   HTTP/SDK, distributed execution).
 
 ## Why it exists
@@ -16,11 +16,11 @@ remote controller) can drive the same core without touching it.
 The decoupling seam is `AgentApi`, **not** any single wire protocol. Everything else is a
 _transport_ that binds to it:
 
-| Binding        | Implementer                                                                                            | Role                                                                                                                                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **In-process** | `ShoferApiAgent implements AgentApi` (`transport/shofer-api-agent.ts`)                                 | The live core agent, backed by the extension's `ShoferAPI`.                                                                                                                                    |
-| **HTTP/SSE**   | `createHttpServer(api)` + `ShoferHttpClient implements AgentApi` (`transport/http-{server,client}.ts`) | A **1:1 projection of the full surface** (see [routes](#httpsse-binding)). Powers **Shofer Workers** — remote headless executors (`shofer serve`) driven by a controller (`ShoferHttpClient`). |
-| **ACP**        | `AcpAgentServer` over `AgentApi` (`transport/acp-*.ts`)                                                | A **lossy adapter** onto the external [Agent Client Protocol](./acp.md) so ACP editors (Zed, …) can drive shofer. Narrower than `AgentApi` — see [acp.md](./acp.md).                           |
+| Binding        | Implementer                                                                                            | Role                                                                                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **In-process** | `ShoferApiAgent implements AgentApi` (`transport/shofer-api-agent.ts`)                                 | The live core agent, backed by the extension's `ShoferAPI`.                                                                                                                          |
+| **HTTP/SSE**   | `createHttpServer(api)` + `ShoferHttpClient implements AgentApi` (`transport/http-{server,client}.ts`) | A **1:1 projection of the full surface** (see [routes](#httpsse-binding)). The native transport for driving a served executor (`shofer serve`) from any client (`ShoferHttpClient`). |
+| **ACP**        | `AcpAgentServer` over `AgentApi` (`transport/acp-*.ts`)                                                | A **lossy adapter** onto the external [Agent Client Protocol](./acp.md) so ACP editors (Zed, …) can drive shofer. Narrower than `AgentApi` — see [acp.md](./acp.md).                 |
 
 ```mermaid
 flowchart LR
@@ -50,16 +50,15 @@ The full method set (see the source for exact signatures):
 
 ### Control plane
 
-| Method                                                                    | Purpose                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createTask({ prompt, mode, taskId?, apiConfiguration? })` → `{ taskId }` | Start a task. `mode` (**required**) is the mode slug it runs in. `apiConfiguration` ships the controller's resolved [API Configuration](#per-task-api-configuration) so a remote task runs on the same provider/model the front-end picked.                                                                                             |
-| `sendMessage(taskId, message)`                                            | Send a follow-up message to a running task.                                                                                                                                                                                                                                                                                             |
-| `cancelTask(taskId)`                                                      | Abort a task.                                                                                                                                                                                                                                                                                                                           |
-| `respondToAsk(taskId, AskResponse)`                                       | Answer an outstanding `ask` (interactive tool approval / follow-up). The reverse of the `ask` events on the stream, so a remote task's approvals round-trip like a local one's.                                                                                                                                                         |
-| `subscribe(listener)` → `unsubscribe`                                     | Subscribe to the agent event stream ([`ServerEvent`](#event-model)).                                                                                                                                                                                                                                                                    |
-| `applyConfig(config, version, secrets)`                                   | Apply a controller-pushed settings slice + its allow-listed credentials, stamped with an opaque convergence `version` the worker echoes on `/health` & `/whoami`. Ignored wholesale by a worker pinned with its own CLI config (`allowClientConfig`), exactly like per-task `apiConfiguration`. See [config_sync.md](./config_sync.md). |
+| Method                                                                    | Purpose                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createTask({ prompt, mode, taskId?, apiConfiguration? })` → `{ taskId }` | Start a task. `mode` (**required**) is the mode slug it runs in. `apiConfiguration` ships the controller's resolved [API Configuration](#per-task-api-configuration) so a remote task runs on the same provider/model the front-end picked. |
+| `sendMessage(taskId, message)`                                            | Send a follow-up message to a running task.                                                                                                                                                                                                 |
+| `cancelTask(taskId)`                                                      | Abort a task.                                                                                                                                                                                                                               |
+| `respondToAsk(taskId, AskResponse)`                                       | Answer an outstanding `ask` (interactive tool approval / follow-up). The reverse of the `ask` events on the stream, so a remote task's approvals round-trip like a local one's.                                                             |
+| `subscribe(listener)` → `unsubscribe`                                     | Subscribe to the agent event stream ([`ServerEvent`](#event-model)).                                                                                                                                                                        |
 
-### Reverse data channel (Shofer Workers L3)
+### Reverse data channel
 
 Any **plugin-owned** per-task feature for a **remote (shadow) task**: the controller
 reads and mutates it on the owning executor exactly like a local task drives its own
@@ -85,15 +84,14 @@ ACP maps the common cases onto its typed `session/update` variants and wraps the
 
 ## HTTP/SSE binding
 
-Shofer's **native, full-fidelity** transport (`transport/http-server.ts`), used by Shofer
-Workers. All routes under `/api/v1` except `/health`; bearer-token auth + version handshake.
+Shofer's **native, full-fidelity** transport (`transport/http-server.ts`). All
+routes under `/api/v1` except `/health`; bearer-token auth + version handshake.
 
 ```
-GET  /health                      liveness + version + load metrics (open)
+GET  /health                      liveness + version (open)
 GET  /api/v1/whoami               { version } (authed; one-shot liveness+auth)
 GET  /api/v1/event                SSE event stream (worker-wide: ALL tasks) → subscribe()
 GET  /api/v1/task/:id/event       SSE event stream filtered to ONE task   → subscribe() + filter
-POST /api/v1/config               { config, version, secrets, plugins? } → applyConfig()
 POST /api/v1/task                 { prompt, mode, taskId?, apiConfiguration? } → createTask()
 POST /api/v1/task/:id/message     { message }                 → sendMessage()
 POST /api/v1/task/:id/cancel                                  → cancelTask()
@@ -241,5 +239,5 @@ behavior, not plugin UI, unless it implements its own plugin-UI host.
 ## See also
 
 - [acp.md](./acp.md) — the ACP adapter and how it differs from this surface.
-- [v3_architecture.md](./v3_architecture.md) — host boundary + distributed execution (Shofer Workers).
-- [public_api.md](./public_api.md) / [headless.md](./headless.md) — the `ShoferAPI` / CLI surface `ShoferApiAgent` is built on.
+- [host-boundary.md](./host-boundary.md) — the architecture this transport plugs into.
+- [public_api.md](./public_api.md) / [cli.md](./cli.md) — the `ShoferAPI` / CLI surface `ShoferApiAgent` is built on.

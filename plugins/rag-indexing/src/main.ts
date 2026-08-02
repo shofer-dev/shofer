@@ -21,9 +21,9 @@
  * `ragSearch`/`gitSearch` for other plugins (Live Memory), but the host now asks THIS
  * plugin for the results.
  *
- * **Nodes.** The manifest sets `syncConfig`, so a controller replicates the settings and
- * credentials to every executor it drives, and `node-config` (below) pins those nodes to
- * `searchOnly` against the collection the controller resolved — one writer, many readers.
+ * **Search-only hosts.** A host provisioned with `searchOnly: true` (plus the shared
+ * `indexKey`) queries the shared store and never scans — one writer, many readers.
+ * The config arrives like any other plugin config (the layered `.shofer/` files).
  */
 
 import { defineCustomTool, parametersSchema as z } from "@shofer/types"
@@ -207,29 +207,6 @@ const plugin: ShoferPlugin = {
 				const { query, maxResults } = params as { query: string; maxResults?: number }
 				if (!managers.git?.isFeatureEnabled || !managers.git.isInitialized) return []
 				return managers.git.searchIndex(query, maxResults)
-			}
-
-			/**
-			 * What a Shofer Node should receive (`config_sync` §4b-2).
-			 *
-			 * Two overrides, both load-bearing: a node **queries** the shared store and
-			 * never scans (the controller's watcher already sees every change on the shared
-			 * workspace, so a second indexer would duplicate the embedding work and race it
-			 * as a writer), and it addresses the collection the controller actually
-			 * resolved rather than hashing its own workspace path — every executor pod
-			 * mounts the workspace at the same path, so path-derived identity would map
-			 * unrelated repositories onto one collection.
-			 */
-			case "node-config": {
-				const slice = params as { config?: Record<string, unknown>; secrets?: Record<string, string> }
-				return {
-					config: {
-						...(slice.config ?? {}),
-						searchOnly: true,
-						indexKey: managers.code?.resolvedIndexKey ?? slice.config?.indexKey,
-					},
-					secrets: slice.secrets ?? {},
-				}
 			}
 
 			/**

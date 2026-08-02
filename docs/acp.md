@@ -142,13 +142,13 @@ Modes map **1:1** — the shofer mode slug _is_ the ACP session-mode id (a named
 Both let arbitrary front-ends drive the core, but they are **different contracts**, not two
 pipes for one contract:
 
-|                    | ACP                                                                                                   | [AgentApi](./agentapi.md) (HTTP/SSE)           |
-| ------------------ | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Owner              | External standard (Zed-originated)                                                                    | Shofer's own                                   |
-| Schema             | **Fixed, narrow** ACP method set                                                                      | **Full, faithful** shofer surface              |
-| Notably **absent** | plugin requests — the channel behind the changed-files panel, checkpoints, … (no such concept in ACP) | — (exposes all of it)                          |
-| Wire               | JSON-RPC 2.0 over stdio (subprocess)                                                                  | REST + SSE, bearer auth + version handshake    |
-| Purpose            | Interop with ACP editors                                                                              | Remote headless execution (**Shofer Workers**) |
+|                    | ACP                                                                                                   | [AgentApi](./agentapi.md) (HTTP/SSE)        |
+| ------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Owner              | External standard (Zed-originated)                                                                    | Shofer's own                                |
+| Schema             | **Fixed, narrow** ACP method set                                                                      | **Full, faithful** shofer surface           |
+| Notably **absent** | plugin requests — the channel behind the changed-files panel, checkpoints, … (no such concept in ACP) | — (exposes all of it)                       |
+| Wire               | JSON-RPC 2.0 over stdio (subprocess)                                                                  | REST + SSE, bearer auth + version handshake |
+| Purpose            | Interop with ACP editors                                                                              | Driving a served executor remotely          |
 
 Key point: `AgentApi` is **richer than ACP**. ACP is a lowest-common-denominator adapter;
 HTTP/SSE is the full-fidelity binding. Even running ACP JSON-RPC over a socket would still
@@ -180,4 +180,4 @@ core (no VS Code needed). Deferred:
 3. `loadSession`/`listSessions`, `setSessionModel`, and end-to-end validation against a live
    ACP client (Zed), reconciling raw-event → `ShoferStreamEvent` normalization with real payloads.
 
-See [`v3_architecture.md`](./v3_architecture.md) initiative §11.
+See [`host-boundary.md`](./host-boundary.md) for the architecture this adapter plugs into.

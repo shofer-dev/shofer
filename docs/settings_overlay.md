@@ -423,9 +423,9 @@ are `setModeConfig()` (via `setModeApiConfig` on Save, `activateProviderProfile`
 the `handleUserModeSwitch` backfill); because they all write the one store, a profile
 activation can no longer drift the UI away from what task creation resolves. The
 headless host (`shofer serve`) reads the same files (and its blob through the
-vscode-shim's file-backed `SecretStorage`), and remote workers never resolve it themselves — the
-controller resolves `resolveTaskApiConfiguration()` and ships the concrete
-`ProviderSettings` per task.
+vscode-shim's file-backed `SecretStorage`); a client driving it may also ship a
+concrete per-task `apiConfiguration` on `CreateTaskInput`, which wins for that
+task when the host runs without CLI overrides (`allowClientConfig`).
 
 #### Three concepts that are routinely conflated
 
@@ -831,7 +831,7 @@ The archive carries everything the layered file model owns:
 ├── shofermodes        # the user's custom modes
 ├── mcp.json           # the user's MCP servers
 ├── commands/  rules*/  skills*/
-└── plugins.json  workers.json
+└── plugins.json
 ```
 
 ### 10b. What Is NOT Exported
@@ -1223,9 +1223,8 @@ The per-profile LLM API keys are no longer stored as individual `SecretStorage`
 entries: the v2 secrets blob (`shofer_config_api_config`) is their sole
 Shofer-written store (non-secret fields live in `providers.json` — §1a), and the
 current profile's secrets are sourced from the composed profile. Only
-`openRouterImageApiKey` and `pluginSecrets` remain individual entries (§1b) —
-`SYNCED_SECRET_KEYS` is now empty. The historical duplication is described below
-for context.
+`openRouterImageApiKey` and `pluginSecrets` remain individual entries (§1b).
+The historical duplication is described below for context.
 
 API keys were previously stored in **two places** in `SecretStorage`:
 
@@ -1306,10 +1305,7 @@ around a **staged-save (buffered) pattern**:
   (`commitToolBuffers()` / `discardToolBuffers()` — MCP per-tool enablement),
   [`PluginsSettings`](../webview-ui/src/components/settings/PluginsSettings.tsx)
   (`commitConfigBuffers()` / `discardConfigBuffers()` — plugin config, enable, and
-  billed-AI consent),
-  [`ShoferWorkersSettings`](../webview-ui/src/components/settings/ShoferWorkersSettings.tsx)
-  (`commitNodeBuffers()` / `discardNodeBuffers()` — load-balancer policy and per-node
-  enable/disable), and
+  billed-AI consent), and
   [`RagIndexerSettings`](../plugins/rag-indexing/ui/settings.tsx)
   (`saveCodeIndexSecrets()`).
 - **Nothing in Settings applies before Save.** Every control either writes
@@ -1329,12 +1325,12 @@ around a **staged-save (buffered) pattern**:
 flowchart TD
     IN["a control in Settings<br/>onChange / onValueChange / onClick"]
     CS["cachedState<br/>setCachedStateField / setApiConfigurationField"]
-    PB["dedicated pending buffers<br/>pendingDefaultConfigName · ModesView · ToolsSettings<br/>PluginsSettings · ShoferWorkersSettings · RagIndexerSettings"]
+    PB["dedicated pending buffers<br/>pendingDefaultConfigName · ModesView · ToolsSettings<br/>PluginsSettings · RagIndexerSettings"]
     DIRTY{"isChangeDetected — the Save button enables"}
     SAVE["Save — handleSubmit()"]
-    HOST["updateSettings · upsertApiConfiguration ·<br/>setDefaultApiConfiguration ·<br/>commitBuffers() / commitToolBuffers() /<br/>commitConfigBuffers() / commitNodeBuffers() /<br/>saveCodeIndexSecrets()"]
+    HOST["updateSettings · upsertApiConfiguration ·<br/>setDefaultApiConfiguration ·<br/>commitBuffers() / commitToolBuffers() /<br/>commitConfigBuffers() /<br/>saveCodeIndexSecrets()"]
     DISC["Discard — checkUnsaveChanges() dialog"]
-    REV["setCachedState(extensionState)<br/>discardBuffers() / discardToolBuffers() /<br/>discardConfigBuffers() / discardNodeBuffers()"]
+    REV["setCachedState(extensionState)<br/>discardBuffers() / discardToolBuffers() /<br/>discardConfigBuffers()"]
     PROXY[("ContextProxy — source of truth")]
 
     IN -->|"field lives in cachedState"| CS

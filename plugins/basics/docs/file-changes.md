@@ -218,19 +218,14 @@ Two guards live on this side of the seam:
 
 ## Keeping the panel current
 
-- **Local task:** `afterFileEdit` schedules a debounced push (500 ms) over the plugin's UI
+- `afterFileEdit` schedules a debounced push (500 ms) over the plugin's UI
   channel, serialized so a burst of accepts cannot deliver a stale list last.
-- **Remote task:** the executor's push reaches its own webview, not this one, so the panel
-  re-reads when the task's `messageCount` changes (throttled to once a second) and after
-  every action.
 
-## Remote tasks (Shofer Workers L3)
+## Served tasks (AgentApi)
 
-A task running on a remote executor keeps its copies on that executor. The panel needs no
-branch for it: `PluginUIApi.request` is routed to the plugin instance on the task's own
-host (`resolvePluginRequestTarget` → `AgentApi.pluginRequest`), and `local:file-changes:show-diff` is
-pinned to the host with the editor. `pluginRequest` carries all of it — there are no
-changed-files methods on `AgentApi`.
+For a task driven over AgentApi, per-task plugin state is reachable through the
+generic `pluginRequest(taskId, plugin, method, params)` wire method — there are
+no changed-files methods on `AgentApi` itself.
 
 ## What lives where
 
@@ -244,5 +239,4 @@ changed-files methods on `AgentApi`.
 | [`packages/core/src/context-tracking/FileContextTracker.ts`](../../../packages/core/src/context-tracking/FileContextTracker.ts) | Task metadata, watchers, and the two hook dispatch points                                                           |
 | [`packages/core/src/plugins/plugin-registry.ts`](../../../packages/core/src/plugins/plugin-registry.ts)                         | `applyBeforeFileEdit` / `applyAfterFileEdit` / `requestAll`                                                         |
 | [`src/integrations/editor/DiffViewProvider.ts`](../../../src/integrations/editor/DiffViewProvider.ts)                           | Captures the pre-edit content for every diff-view-based tool                                                        |
-| [`src/core/webview/pluginUiRequestRouting.ts`](../../../src/core/webview/pluginUiRequestRouting.ts)                             | Local vs owning-executor routing for a plugin request                                                               |
 | [`webview-ui/src/components/plugins/PluginSlot.tsx`](../../../webview-ui/src/components/plugins/PluginSlot.tsx)                 | Mounts the `chat-footer` region and builds the UI context                                                           |

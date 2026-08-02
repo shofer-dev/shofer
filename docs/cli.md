@@ -1,4 +1,4 @@
-# Shofer Headless (CLI) Guide
+# Shofer CLI Guide
 
 How to build, configure, and use the Shofer CLI — the headless runtime that
 runs the full Shofer agent from the terminal without VSCode.
@@ -11,18 +11,10 @@ Node.js process, intercepting `require("vscode")` to return a mock API layer
 (`@shofer/vscode-shim`) that makes the extension think it's running inside
 VSCode.
 
-> **Toward a clean host boundary (§8).** The shim mocks the _entire_ `vscode`
-> API. The v3-architecture direction is to put what the core actually needs
-> behind narrow, host-agnostic interfaces instead: `HostBridge` in
-> [`packages/types/src/host.ts`](../packages/types/src/host.ts) — which now spans
-> the filesystem, `Notifier`, editor, `HostTerminals`/terminal, language services,
-> workspace, config, and env, alongside the SQLite message store (§5) and the
-> HTTP/ACP transport — with in-memory reference impls in
-> [`host-memory.ts`](../packages/types/src/host-memory.ts) for the CLI/tests and a
-> VS Code-backed adapter in the extension. As call sites migrate from `vscode.*`
-> to `HostBridge`, the shim shrinks and the core becomes genuinely
-> `vscode`-free — the gating milestone for the HTTP API/SDK (§10) and ACP (§11).
-> See [`host-boundary.md`](host-boundary.md) for the seam mechanics.
+> The shim mocks the `vscode` API surface the extension bundle still touches;
+> the portable core itself reaches its environment through the host-agnostic
+> `HostBridge` seam — see [`host-boundary.md`](host-boundary.md) for the
+> architecture and seam mechanics.
 
 ```mermaid
 flowchart TD

@@ -9,7 +9,7 @@ import { createInMemoryHost } from "./host-memory.js"
  * Defaults to the in-memory host so the core works in tests and before a front-end
  * installs its adapter. A front-end (the VS Code extension, the CLI, a headless
  * server) calls {@link setHost} once at startup with its own `HostBridge`
- * implementation (Category I). See `docs/v3_architecture.md`.
+ * implementation (Category I). See `docs/host-boundary.md`.
  */
 let host: HostBridge = createInMemoryHost()
 

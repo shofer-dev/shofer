@@ -1,14 +1,6 @@
 import http from "node:http"
-import os from "node:os"
 
-import type {
-	AgentApi,
-	ProviderSettings,
-	ServerEvent,
-	SyncedPluginState,
-	SyncedSecrets,
-	SyncedSettings,
-} from "@shofer/types"
+import type { AgentApi, ProviderSettings, ServerEvent } from "@shofer/types"
 
 /**
  * HTTP + SSE transport boundary (v3 architecture §11).
@@ -72,7 +64,7 @@ async function readJson(req: http.IncomingMessage): Promise<Record<string, unkno
 	return JSON.parse(raw) as Record<string, unknown>
 }
 
-/** Options for the HTTP/SSE server (auth + version handshake, §Shofer Workers L1). */
+/** Options for the HTTP/SSE server (auth + version handshake). */
 export interface HttpServerOptions {
 	/**
 	 * Optional bearer token. When set, every `/api/v1/*` route requires
@@ -81,31 +73,19 @@ export interface HttpServerOptions {
 	 */
 	token?: string
 	/**
-	 * The controller/agent build version this executor reports. Surfaced on the
-	 * open `/health` and the authed `/whoami` so a controller can enforce that
-	 * node and controller run the exact same shofer version before connecting.
+	 * The agent build version this executor reports. Surfaced on the open
+	 * `/health` and the authed `/whoami` so a client can verify the served
+	 * build before driving it.
 	 */
 	version?: string
-	/**
-	 * The node's applied config-sync version (config_sync §6), surfaced on
-	 * `/health` and `/whoami` so the controller detects drift.
-	 */
-	getConfigVersion?: () => string | undefined
-	/**
-	 * Whether this node accepts controller config (config_sync §Part A). Surfaced on
-	 * `/health` and `/whoami` so the controller EXEMPTS a self-administered node
-	 * (`false`) from config-version pool-gating — it serves tasks on its own config.
-	 */
-	getManaged?: () => boolean
 }
 
 /**
  * Create the shofer HTTP/SSE server. Routes (all under `/api/<version>` except
  * `/health`):
- *   GET  /health                     → liveness + version + load metrics (loadavg, cpus) + configVersion (open)
- *   GET  /api/v1/whoami              → { version, configVersion } (authed; one-shot liveness+version+auth)
- *   POST /api/v1/config              → { config, version, secrets } → 202 (controller→node config sync, §config_sync)
- *   GET  /api/v1/event               → SSE event stream (node-wide: ALL tasks)
+ *   GET  /health                     → liveness + version (open)
+ *   GET  /api/v1/whoami              → { version } (authed; one-shot liveness+version+auth)
+ *   GET  /api/v1/event               → SSE event stream (worker-wide: ALL tasks)
  *   GET  /api/v1/task/:id/event      → SSE event stream filtered to ONE task
  *   POST /api/v1/task                → { prompt, taskId?, apiConfiguration? } → { taskId }
  *   POST /api/v1/task/:id/message    → { message }
@@ -129,7 +109,7 @@ export function createRequestHandler(
 	opts: HttpServerOptions = {},
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
 	const base = `/api/${API_VERSION}`
-	const { token, version, getConfigVersion, getManaged } = opts
+	const { token, version } = opts
 
 	return (req, res) => {
 		void handle(req, res).catch((error) => {
@@ -142,18 +122,9 @@ export function createRequestHandler(
 		const path = url.pathname
 		const method = req.method ?? "GET"
 
-		// Open liveness probe — never gated by the bearer token. Also the
-		// load-metric channel: `loadavg`/`cpus` let a controller's WorkerPool
-		// run a load-average LB policy (Shofer Workers).
+		// Open liveness probe — never gated by the bearer token.
 		if (method === "GET" && path === "/health") {
-			return send(res, 200, {
-				ok: true,
-				version,
-				loadavg: os.loadavg(),
-				cpus: os.cpus().length,
-				configVersion: getConfigVersion?.(),
-				managed: getManaged?.(),
-			})
+			return send(res, 200, { ok: true, version })
 		}
 
 		// Bearer-token gate for the entire versioned API surface.
@@ -166,7 +137,7 @@ export function createRequestHandler(
 
 		// Authed liveness+version+auth check in a single round-trip.
 		if (method === "GET" && path === `${base}/whoami`) {
-			return send(res, 200, { version, configVersion: getConfigVersion?.(), managed: getManaged?.() })
+			return send(res, 200, { version })
 		}
 
 		if (method === "GET" && path === `${base}/event`) {
@@ -179,10 +150,10 @@ export function createRequestHandler(
 		}
 
 		// Per-task event stream — the same SSE as /event, filtered to ONE task's
-		// events. Multi-tenant isolation: a controller driving many users' tasks on
-		// a shared node subscribes per authorized task instead of to the node-wide
+		// events. Multi-tenant isolation: a client driving many users' tasks on
+		// a shared host subscribes per authorized task instead of to the worker-wide
 		// firehose, so it never receives (or has to demux) other tenants' content.
-		// The node-wide /event stays for single-tenant / whole-node consumers.
+		// The worker-wide /event stays for single-tenant / whole-host consumers.
 		const taskEventMatch = path.match(new RegExp(`^${base}/task/([^/]+)/event$`))
 		if (method === "GET" && taskEventMatch) {
 			const taskId = decodeURIComponent(taskEventMatch[1]!)
@@ -194,18 +165,6 @@ export function createRequestHandler(
 			})
 			req.on("close", unsubscribe)
 			return
-		}
-
-		if (method === "POST" && path === `${base}/config`) {
-			const body = await readJson(req)
-			if (typeof body.version !== "string") return send(res, 400, { error: "version is required" })
-			await api.applyConfig(
-				body.config as SyncedSettings,
-				body.version,
-				(body.secrets as SyncedSecrets | undefined) ?? {},
-				body.plugins as SyncedPluginState | undefined,
-			)
-			return send(res, 202, { applied: true })
 		}
 
 		if (method === "POST" && path === `${base}/task`) {
@@ -249,7 +208,7 @@ export function createRequestHandler(
 			return send(res, 202, { taskId, cancelled: true })
 		}
 
-		// ── Reverse data channel (Shofer Workers L3) — plugin requests ────────────────
+		// ── Reverse data channel — plugin requests ────────────────────────────────────
 		// One generic route carries every plugin-owned per-task feature (the file-changes
 		// panel, checkpoints, …): `plugin` + `method` + opaque `params` in, the plugin's
 		// JSON result out. Adding a feature never means adding a route.

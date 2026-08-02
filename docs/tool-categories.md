@@ -9,7 +9,7 @@ Shofer uses a single unified ToolGroup system as the **single source of truth** 
 
 > **Not to be confused with the host boundary's "Category I / II".** The nine
 > ToolGroups here (`read`, `write`, …) classify _tools by capability_. The
-> Category I / Category II terminology in [`v3_architecture.md`](v3_architecture.md)
+> Category I / Category II terminology in [`host-boundary.md`](host-boundary.md)
 > and [`host-boundary.md`](host-boundary.md) is unrelated — it classifies _host
 > interfaces_ (portable seam vs. VS Code adapter).
 

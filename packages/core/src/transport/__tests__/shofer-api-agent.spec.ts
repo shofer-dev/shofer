@@ -17,8 +17,6 @@ describe("ShoferApiAgent (§11)", () => {
 			sendMessage: vi.fn(async () => {}),
 			cancelCurrentTask: vi.fn(async () => {}),
 			respondToAsk: vi.fn(async () => {}),
-			applySyncedSettings: vi.fn(async () => {}),
-			applySyncedSecrets: vi.fn(async () => {}),
 			pluginRequest: vi.fn(async () => ({ ok: true })),
 		}) as unknown as ShoferAPI & EventEmitter
 		return api
@@ -59,36 +57,6 @@ describe("ShoferApiAgent (§11)", () => {
 			initialMode: "code",
 			configuration: undefined,
 		})
-	})
-
-	it("applyConfig applies the config + secrets and records the version when allowClientConfig is set (config_sync §Part A)", async () => {
-		const api = makeApi()
-		const agent = new ShoferApiAgent(api, { allowClientConfig: true })
-		const config = { autoApprovalEnabled: true } as never
-		const secrets = { codeIndexOpenAiKey: "sk-test" }
-		await agent.applyConfig(config, "v1", secrets)
-		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).applySyncedSettings).toHaveBeenCalledWith(
-			config,
-		)
-		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).applySyncedSecrets).toHaveBeenCalledWith(
-			secrets,
-		)
-		expect(agent.configVersion).toBe("v1")
-	})
-
-	it("applyConfig ignores the controller push when it has a CLI override (default)", async () => {
-		const api = makeApi()
-		const agent = new ShoferApiAgent(api) // allowClientConfig defaults to false
-		await agent.applyConfig({ autoApprovalEnabled: true } as never, "v1", { codeIndexOpenAiKey: "sk-test" })
-		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).applySyncedSettings).not.toHaveBeenCalled()
-		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).applySyncedSecrets).not.toHaveBeenCalled()
-		expect(agent.configVersion).toBeUndefined()
-	})
-
-	it("acceptsClientConfig reflects the constructed allowClientConfig option", () => {
-		expect(new ShoferApiAgent(makeApi(), { allowClientConfig: true }).acceptsClientConfig).toBe(true)
-		expect(new ShoferApiAgent(makeApi(), { allowClientConfig: false }).acceptsClientConfig).toBe(false)
-		expect(new ShoferApiAgent(makeApi()).acceptsClientConfig).toBe(false) // default
 	})
 
 	it("sendMessage resumes the addressed task then sends", async () => {

@@ -9,16 +9,12 @@ import pWaitFor from "p-wait-for"
 import {
 	type ShoferAPI,
 	type ShoferSettings,
-	type SyncedPluginState,
-	type SyncedSecrets,
-	type SyncedSettings,
 	type ShoferEvents,
 	type ProviderSettings,
 	type ProviderSettingsEntry,
 	type TaskEvent,
 	type CreateTaskOptions,
 	type HistoryItem,
-	SYNCED_SECRET_KEYS,
 	ShoferEventName,
 	TaskCommandName,
 	isSecretStateKey,
@@ -480,7 +476,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		)
 	}
 
-	// ─── Reverse data channel (Shofer Workers L3) ─────────────────────
+	// ─── Reverse data channel ─────────────────────────────────────────
 	// Executor side: resolve the managed task by id and drive the SAME in-process
 	// changed-files service (or plugin) a local task uses, so a controller can
 	// render/operate a remote task's state over the control plane.
@@ -720,57 +716,6 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		await this.sidebarProvider.contextProxy.setValues(values)
 		await this.sidebarProvider.providerSettingsManager.saveConfig(values.currentApiConfigName || "default", values)
 		await this.sidebarProvider.postInitState()
-	}
-
-	public async applySyncedSettings(config: SyncedSettings): Promise<void> {
-		await this.sidebarProvider.contextProxy.setValues(config as ShoferSettings)
-		await this.sidebarProvider.postInitState()
-	}
-
-	public async applySyncedSecrets(secrets: SyncedSecrets): Promise<void> {
-		// Iterate the allow-list, not the payload's own keys: the slice arrives as
-		// untrusted JSON off the wire, so driving the loop from SYNCED_SECRET_KEYS is
-		// what keeps a controller from writing a secret outside the synced scope.
-		// A key the controller omitted is left alone rather than cleared — the
-		// controller only ever sends the credentials it holds.
-		await Promise.all(
-			SYNCED_SECRET_KEYS.filter((key) => secrets[key] !== undefined).map((key) =>
-				this.sidebarProvider.contextProxy.storeSecret(key, secrets[key]),
-			),
-		)
-		// The Settings view renders each code-index credential as a set/unset indicator
-		// derived from the posted state, so the push must refresh it like a local edit.
-		await this.sidebarProvider.postInitState()
-	}
-
-	/**
-	 * Apply the controller's plugin slice: per-plugin config and credentials for the
-	 * plugins that declare `syncConfig`.
-	 *
-	 * Merged rather than replaced, on both halves. A node can hold local config for
-	 * plugins the controller does not sync at all, and a push that replaced the whole map
-	 * would silently erase it — the same reasoning as `applySyncedSecrets` leaving an
-	 * omitted key alone. Each touched plugin is then reloaded so its `ctx.config` reflects
-	 * the new values without a restart.
-	 */
-	public async applySyncedPluginState(plugins: SyncedPluginState): Promise<void> {
-		const provider = this.sidebarProvider
-		const configs = {
-			...((provider.contextProxy.getValue("pluginConfigs") as
-				| Record<string, Record<string, unknown>>
-				| undefined) ?? {}),
-		}
-		const secrets = provider.readPluginSecretsForSync()
-
-		for (const [name, slice] of Object.entries(plugins)) {
-			if (slice.config) configs[name] = { ...(configs[name] ?? {}), ...slice.config }
-			if (slice.secrets) secrets[name] = { ...(secrets[name] ?? {}), ...slice.secrets }
-		}
-
-		await provider.contextProxy.setValue("pluginConfigs", configs)
-		await provider.writePluginSecretsForSync(secrets)
-		await provider.reloadPlugins(Object.keys(plugins))
-		await provider.postInitState()
 	}
 
 	// Provider Profile Management

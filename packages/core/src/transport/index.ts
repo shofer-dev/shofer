@@ -10,7 +10,6 @@ import { runAcpAgent } from "./run-acp-agent.js"
 
 export * from "./http-server.js"
 export * from "./http-client.js"
-export * from "./worker-connection.js"
 export { ShoferApiAgent } from "./shofer-api-agent.js"
 export * from "./acp-mapping.js"
 export * from "./acp-connection.js"
@@ -32,8 +31,6 @@ export function serveHttpOverShoferApi(
 	const server = createHttpServer(agent, {
 		token: opts.token,
 		version: opts.version ?? Package.version,
-		getConfigVersion: () => agent.configVersion,
-		getManaged: () => agent.acceptsClientConfig,
 	})
 	server.listen(opts.port, opts.host)
 	return server

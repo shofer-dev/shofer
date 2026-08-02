@@ -1055,15 +1055,6 @@ The split rules (empty string deletes, an absent key keeps, a non-string is refu
 in [`plugin-config-secrets.ts`](../packages/core/src/plugins/plugin-config-secrets.ts) so
 the write path, the read path and the manager cannot disagree about them.
 
-**Config on a remote executor.** A manifest may also declare `"syncConfig": true`, and the
-controller then replicates that plugin's config + secrets to every Shofer Worker it drives
-(`AgentApi.applyConfig`'s `plugins` argument — [`config_sync.md` §4b-2](./config_sync.md)).
-Opt-in per plugin, because only the plugin knows whether its settings describe the machine
-it is on or the feature it provides. Before sending, the controller asks the plugin the
-`"node-config"` request so it can shape its own outgoing slice — how the bundled indexer
-pins workers to search-only against the collection the controller resolved, without the host
-knowing what either means. The worker merges per plugin and reloads the affected plugins.
-
 ### Enable / Disable / Reload / Uninstall
 
 - **Disable** — the plugin is removed from the registry; tools, modes, skills, commands disappear, UI unmounts, MCP servers disconnect, services stop.
@@ -1480,7 +1471,7 @@ observe; `ctx.config` / `ctx.storage` back config + idempotency state. So a runn
 | [`../PLUGINS.md`](../PLUGINS.md)                                                  | Author-facing how-to: manifest fields, build invocations, walkthroughs.          |
 | [`agentapi.md`](./agentapi.md)                                                    | The programmatic agent API surface plugins run alongside.                        |
 | [`acp.md`](./acp.md)                                                              | Agent Client Protocol — an external control surface complementary to plugins.    |
-| [`v3_architecture.md`](./v3_architecture.md)                                      | The host-agnostic carve-out the plugin substrate is built on.                    |
+| [`host-boundary.md`](./host-boundary.md)                                          | The host-agnostic architecture the plugin substrate is built on.                 |
 | [`marketplace.md`](./marketplace.md)                                              | Marketplace is the plugin distribution/curation layer.                           |
 | [`mcp.md`](./mcp.md)                                                              | MCP servers are one kind of plugin contribution (`contributes.mcpServers`).      |
 | [`adding-new-tools.md`](./adding-new-tools.md)                                    | Plugin tools follow the `CustomToolDefinition` contract.                         |

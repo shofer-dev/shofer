@@ -49,7 +49,6 @@ Each scope's `.shofer/` holds the same file set:
 ├── locked.json          # (global scope only) org-policy lock manifest
 ├── plugins.json         # plugin declarations (see PLUGINS.md)
 ├── providers.json       # provider profiles (non-secret fields; keys stay in SecretStorage)
-├── workers.json           # Shofer Worker declarations (below)
 ├── mcp.json             # MCP servers
 ├── shofermodes          # custom modes (YAML)
 ├── skills/  skills-<mode>/ # skills
@@ -57,8 +56,8 @@ Each scope's `.shofer/` holds the same file set:
 └── rules/  rules-<mode>/ # rules / custom instructions
 ```
 
-Every file in the tree is read from **all three scopes**: `settings.json`,
-`plugins.json` and `workers.json` through their loaders, `shofermodes`,
+Every file in the tree is read from **all three scopes**: `settings.json`
+and `plugins.json` through their loaders, `shofermodes`,
 `mcp.json` and `providers.json` per named entity (slug / server name / profile
 name) through the same locked-vs-default rule, and `commands/`, `skills*/`,
 `rules*/` by directory order (org, then user, then project — later wins per
@@ -173,58 +172,15 @@ merge would silently shadow it. The one deliberate exception: a locked provider
 profile still accepts a locally-entered API key (the secret overlay), so a user
 can supply their own credential for an org-shipped keyless profile.
 
-### `workers.json` — Shofer Worker declarations
-
-`.shofer/workers.json` declares the **remote executors** this host should be talking to
-(see [`v3_architecture.md` §Distributed execution](v3_architecture.md) for what a worker is). Its schema and merge
-are in [`worker-declaration.ts`](../packages/core/src/config/worker-declaration.ts):
-
-```json
-{
-	"version": 1,
-	"workers": {
-		"pool-0": {
-			"label": "runner-0",
-			"host": "ws-42-runner-0.ws-42-runner.proj-ns.svc.cluster.local:30099",
-			"tokenFile": "/var/run/secrets/arkware/node-token",
-			"autoConnect": true
-		}
-	}
-}
-```
-
-It exists so a worker set can be **provisioned by writing a file** rather than only
-through the Settings UI — which is the only way a headless host (which has no UI at
-all) can have workers, and the only way a platform can provision a pool.
-
-- **Per-entity merge**, keyed by worker id, exactly like `plugins.json`: locking
-  `workers/<id>` makes the global scope's entry final while the user may still add
-  workers of their own. A worker _list_ under a `settings.json` key could not do this —
-  arrays are replaced wholesale, so any user entry would destroy the platform's.
-- **No secrets.** The bearer token is named by reference — `tokenFile` (typically a
-  projected Kubernetes Secret) or `tokenEnv` (the name of an environment variable,
-  which is the shape a k8s `secretKeyRef` produces) — and resolved at connect time,
-  so rotating it needs no edit here. A `token` field is rejected by the schema.
-- **Declared workers are reconciled live.** `WorkerRegistry` re-reads the file whenever
-  it changes (below): an added entry appears and connects, a withdrawn one
-  disconnects and disappears, a changed `host` reconnects. The declaration owns
-  identity (`host`/`tls`/`tokenFile`/`label`); the user still owns the runtime flags
-  (`disabled`, `autoConnect`) unless the entry states them. Such a worker carries
-  `declared: true` and the UI offers no Edit/Remove for it — the file is its source
-  of truth — but Disable still applies.
-- **A corrupt `workers.json` changes nothing.** The last good worker set stands, which is
-  a deliberate deviation from the fail-closed rule everywhere else here: emptying a
-  project's pool over a typo is worse than running on a stale list.
-
 ### Live reload — the scope watcher
 
 The overlay is not only read at start. Every host watches the three scopes'
 `.shofer/` directories ([`scopeWatcher.ts`](../src/core/config/scopeWatcher.ts)) and
-re-reads `settings.json`, `locked.json` and `workers.json` when they change, so an edit
+re-reads `settings.json` and `locked.json` when they change, so an edit
 made by a person, by another host sharing the volume, or by a ConfigMap rewrite takes
 effect **without a restart**. `ContextProxy` refreshes the merged overlay and
-announces the keys that actually moved (`onDidRefreshOverlay`); `WorkerRegistry`
-reconciles its declared workers; and `ShoferProvider` **reloads any plugin whose
+announces the keys that actually moved (`onDidRefreshOverlay`); and
+`ShoferProvider` **reloads any plugin whose
 `pluginConfigs` entry changed**, because a plugin holds the `config` object it was
 handed at load — without the reload the overlay would report the new value while the
 plugin kept running on the old one. Only the plugins whose own entry moved are
@@ -508,18 +464,6 @@ Batch size for embedding operations during code indexing. Adjust to
 match your API provider's limits. The former
 `shofer.codeIndex.embeddingBatchSize` VS Code setting was read by nothing —
 the real knob is the rag-indexing plugin's config.
-
-### `workersLoadBalancer`
-
-|         |                                                                           |
-| ------- | ------------------------------------------------------------------------- |
-| Type    | `"round-robin" \| "least-load-1m" \| "least-load-5m" \| "least-load-15m"` |
-| Default | `"round-robin"`                                                           |
-| Where   | layered `.shofer/settings.json` (+ the Workers panel)                     |
-
-How the Shofer Workers executor pool assigns each new task across the Local
-and remote executors: rotate evenly, or pick the executor with the lowest
-normalized CPU load average over the given window.
 
 ---
 

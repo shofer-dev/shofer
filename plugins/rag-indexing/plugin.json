@@ -7,7 +7,6 @@
 	"license": "Apache-2.0",
 	"main": "main.mjs",
 	"defaultEnabled": true,
-	"syncConfig": true,
 	"hookTimeoutMs": 60000,
 	"permissions": {
 		"tools": true,

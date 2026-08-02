@@ -1339,22 +1339,6 @@ export const pluginManifestSchema = z
 		/** JSON-schema-ish description of user-configurable settings (Phase 2). */
 		config: z.record(z.string(), z.unknown()).optional(),
 		/**
-		 * Replicate this plugin's config (and its `secret` properties) from a controller
-		 * to the Shofer Workers it drives.
-		 *
-		 * Plugin settings are host-local by default, which is right for anything that
-		 * describes THIS machine. It is wrong for a plugin whose feature actually runs on
-		 * the executor: an indexer asked to answer a search there needs its embedder
-		 * settings and its store credentials, and neither is in the global settings schema
-		 * the node sync already carries.
-		 *
-		 * The plugin may shape what leaves the controller by answering the
-		 * `"node-config"` request — the seam that lets a plugin pin a node to a
-		 * different mode of itself (search-only, say) rather than having the host encode
-		 * that rule on its behalf.
-		 */
-		syncConfig: z.boolean().optional(),
-		/**
 		 * Enable this plugin on first discovery, without waiting for the user to toggle
 		 * it (design §7). Honored **only for `bundled` (first-party) scope** — a global
 		 * or project plugin can never enable itself, since enabling is the user's consent
@@ -1560,22 +1544,6 @@ export function pluginConfigSecretKeys(schema: PluginConfigSchema | undefined): 
 		.filter(([, spec]) => spec?.secret === true)
 		.map(([key]) => key)
 }
-
-/**
- * One plugin's controller→node slice: what a node needs to run the plugin's feature.
- *
- * Both halves are per-plugin and merged on the node, never replacing its whole plugin
- * state — a node may have local config for plugins the controller does not sync.
- */
-export interface SyncedPluginSlice {
-	/** Ordinary config values (the plugin's stored overrides, possibly shaped by it). */
-	config?: Record<string, unknown>
-	/** The plugin's `secret: true` values — credentials, so allow-listed by the plugin itself. */
-	secrets?: Record<string, string>
-}
-
-/** The controller→node plugin slice, keyed by plugin name (`AgentApi.applyConfig`). */
-export type SyncedPluginState = Record<string, SyncedPluginSlice>
 
 /** Snapshot of discovered plugins pushed to the webview (`ExtensionMessage.plugins`). */
 export interface PluginsState {

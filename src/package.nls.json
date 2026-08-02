@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "Shofer",
-	"extension.description": "Shofer is an open-source AI coding agent for VS Code with unparalleled parallelism, usability and observability. Specify multi-agent workflows declaratively, and watch them execute as live diagrams \u2014 on top of all the standard features you expect from your AI-powered development environment.",
+	"extension.description": "Shofer is an open-source AI coding agent for VS Code with unparalleled parallelism, usability and observability. Specify multi-agent workflows declaratively, and watch them execute as live diagrams — on top of all the standard features you expect from your AI-powered development environment.",
 	"views.contextMenu.label": "Shofer",
 	"views.terminalMenu.label": "Shofer",
 	"views.activitybar.title": "Shofer",
@@ -30,7 +30,6 @@
 	"command.toggleAutoApprove.title": "Toggle Auto-Approve",
 	"command.refreshWebview.title": "Refresh Webview",
 	"command.reloadWindow.title": "Reload Window",
-
 	"commands.allowedCommands.description": "Commands that can be automatically executed when 'Always approve execute operations' is enabled",
 	"commands.commandExecutionTimeout.description": "Maximum time in seconds to wait for command execution to complete before timing out (0 = no timeout, 1-600s, default: 0s)",
 	"commands.commandTimeoutAllowlist.description": "Command prefixes that are excluded from command execution timeout. Commands matching these prefixes will run without timeout restrictions.",
@@ -46,11 +45,6 @@
 	"settings.debugProxy.tlsInsecure.description": "Accept self-signed certificates from the proxy. Required for MITM inspection. Use only for local debugging.",
 	"settings.enableCodeActions.description": "Enable Shofer Quick Fix code actions.",
 	"settings.enableLlmProviderIntegration.description": "Enable integration with the Shofer LLM Model Provider extension (requires llm-provider to be installed). When enabled, the vscode-lm provider queries shofer.llm.getModelPricing and shofer.llm.getRequestCost for per-token pricing and per-conversation cost tracking — required for cost-limit enforcement and accurate API Cost display. When disabled (default), only token counts are available.",
-	"settings.nodes.loadBalancer.description": "How the Shofer Workers executor pool assigns each new task across the Local and remote executors. 'round-robin' rotates evenly (default). The 'least-load-*' policies pick the executor with the lowest CPU load average (normalized by core count) over the given window, reported by each node's health ping.",
-	"settings.nodes.loadBalancer.roundRobin": "Rotate new tasks evenly across executors (default).",
-	"settings.nodes.loadBalancer.leastLoad1m": "Assign to the executor with the lowest 1-minute normalized CPU load average.",
-	"settings.nodes.loadBalancer.leastLoad5m": "Assign to the executor with the lowest 5-minute normalized CPU load average.",
-	"settings.nodes.loadBalancer.leastLoad15m": "Assign to the executor with the lowest 15-minute normalized CPU load average.",
 	"settings.maximumIndexedFilesForFileSearch.description": "Maximum number of files to index for the @-file search feature. Higher values provide better search results in large projects but may consume more memory. Default: 10000.",
 	"settings.newTaskRequireTodos.description": "Require todos parameter when creating new tasks with the new_task tool",
 	"settings.vsCodeLmModelSelector.description": "Settings for the VSCode Language Model API",

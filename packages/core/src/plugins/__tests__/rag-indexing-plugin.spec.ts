@@ -146,23 +146,6 @@ describe("RAG Indexing plugin (first-party, loaded off disk)", () => {
 		).resolves.toEqual([])
 	}, 60_000)
 
-	it("pins a Shofer Node to search-only against the controller's index", async () => {
-		const cwd = makeWorkspace()
-		await build({ workspacePath: cwd })
-
-		// The Sole-Indexer rule, now the plugin's to enforce: the controller asks what a
-		// node should receive and the plugin adds the constraint.
-		const slice = (await pluginRegistry.request(
-			"rag-indexing",
-			"node-config",
-			{ config: { enabled: true, qdrantUrl: "http://qdrant:6333" }, secrets: { qdrantApiKey: "k" } },
-			{ workspacePath: cwd, cwd },
-		)) as { config: Record<string, unknown>; secrets: Record<string, string> }
-
-		expect(slice.config).toMatchObject({ enabled: true, qdrantUrl: "http://qdrant:6333", searchOnly: true })
-		expect(slice.secrets).toEqual({ qdrantApiKey: "k" })
-	}, 60_000)
-
 	it("refuses to embed for another plugin when nothing is configured", async () => {
 		const cwd = makeWorkspace()
 		await build({ workspacePath: cwd })

@@ -39,7 +39,6 @@ import {
 	type ExtensionState,
 	type OrgLockedResources,
 	type ShoferAPI,
-	type ShoferWorkersState,
 	type MarketplaceInstalledMetadata,
 	ShoferEventName,
 	requestyDefaultModelId,
@@ -50,7 +49,6 @@ import {
 	isRetiredProvider,
 } from "@shofer/types"
 import { aggregateTaskCostsRecursive, type AggregatedCosts } from "@shofer/core"
-import { WorkerRegistry } from "../workers/WorkerRegistry"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Package } from "@shofer/core"
@@ -105,8 +103,6 @@ import { pluginConfigSecretKeys } from "@shofer/types"
 import type {
 	PluginConfigSchema,
 	PluginRequest,
-	SyncedPluginSlice,
-	SyncedPluginState,
 	PluginView,
 	PluginsState,
 	PluginUiMessageEnvelope,
@@ -157,7 +153,6 @@ import { TaskHistoryStore } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { buildPluginHostImportMap } from "./pluginHostImportMap"
-import { resolvePluginRequestTarget } from "./pluginUiRequestRouting"
 import { PluginPanelManager } from "./PluginPanelManager"
 import { REQUESTY_BASE_URL } from "@shofer/core"
 import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
@@ -251,10 +246,6 @@ export class ShoferProvider
 	private recentTasksCache?: string[]
 	public readonly taskHistoryStore: TaskHistoryStore
 	public readonly taskManager: TaskManager
-	/** Shofer Workers registry (Local + remote executors). Set post-construction via {@link initNodeRegistry}. */
-	public nodeRegistry?: WorkerRegistry
-	/** Unsubscribe from the shared registry's onChange (cleared on dispose). */
-	private nodeRegistryUnsub?: () => void
 	private taskHistoryStoreInitialized = false
 	private globalStateWriteThroughTimer: ReturnType<typeof setTimeout> | null = null
 	private static readonly GLOBAL_STATE_WRITE_THROUGH_DEBOUNCE_MS = 5000 // 5 seconds
@@ -1269,12 +1260,6 @@ export class ShoferProvider
 
 		this._disposed = true
 
-		// L2/D: detach from the SHARED node registry (do NOT dispose it — other
-		// providers may still be using it). Drop our onChange listener + render slot.
-		this.nodeRegistryUnsub?.()
-		this.nodeRegistryUnsub = undefined
-		this.nodeRegistry?.detachProvider(this)
-
 		// Phase 3: H8 disposables removed
 
 		// Clear all tasks from the stack.
@@ -2143,71 +2128,6 @@ export class ShoferProvider
 		}
 	}
 
-	// ------------------------------------------------------------------
-	// Shofer Workers registry (Local + remote executors).
-	// ------------------------------------------------------------------
-
-	/**
-	 * Attach the Shofer Workers registry. Called by the extension once the live
-	 * {@link ShoferAPI} exists (the registry drives the Local node through it).
-	 * Idempotent: a second call is ignored so re-activation can't double-register.
-	 */
-	public initNodeRegistry(localApi: ShoferAPI, controllerVersion: string): void {
-		if (this.nodeRegistry) return
-		// L2/D: the registry is a process-wide SHARED singleton. The sidebar
-		// activation (which owns the live ShoferAPI) constructs it; the editor-tab
-		// provider retrieves the same instance via attachSharedNodeRegistry().
-		// config_sync §4c: the ContextProxy is the controller-authoritative settings
-		// source the registry reads + subscribes to, to replicate the synced slice to nodes.
-		const registry = WorkerRegistry.getInstance({
-			context: this.context,
-			localApi,
-			controllerVersion,
-			configSource: this.contextProxy,
-			// …and the plugin half of the same sync: a plugin whose feature runs on the
-			// executor (an indexer answering a search there) needs its own settings and
-			// credentials, which are not in the global settings schema.
-			pluginSyncSource: {
-				currentPluginSlice: () => this.buildSyncedPluginSlice(),
-				onDidChange: this.pluginSyncChanged.event,
-			},
-			// Nodes declared in `.shofer/workers.json` — how a platform-provisioned pool
-			// reaches this host, and how it changes while it is running (§4).
-			scopeSource: this.contextProxy,
-		})!
-		this.attachNodeRegistry(registry)
-		void registry.init()
-	}
-
-	/**
-	 * Attach to the already-constructed shared {@link WorkerRegistry} (editor-tab
-	 * provider path — it has no ShoferAPI of its own). No-op if the singleton isn't
-	 * up yet (sidebar activation hasn't run).
-	 */
-	public attachSharedNodeRegistry(): void {
-		if (this.nodeRegistry) return
-		const registry = WorkerRegistry.getInstance()
-		if (!registry) return
-		this.attachNodeRegistry(registry)
-		void this.pushShoferNodesState()
-	}
-
-	/** Wire this provider to a registry: render target + `shoferWorkers` push listener. */
-	private attachNodeRegistry(registry: WorkerRegistry): void {
-		this.nodeRegistry = registry
-		registry.attachProvider(this)
-		this.nodeRegistryUnsub = registry.onChange(() => {
-			void this.pushShoferNodesState()
-		})
-	}
-
-	/** Push the current Shofer Workers state (registry + live status, no secrets) to the webview. */
-	public async pushShoferNodesState(): Promise<void> {
-		const shoferWorkers = this.nodeRegistry?.getState()
-		if (!shoferWorkers) return
-		await this.postMessageToWebview({ type: "shoferWorkers", shoferWorkers })
-	}
-
 	/**
 	 * Lazily construct the declarative {@link PluginManager} (design §7) and install
 	 * it as the process-wide shared instance so core subsystems (McpHub, command
@@ -2906,70 +2826,6 @@ export class ShoferProvider
 	}
 
 	/**
-	 * Every plugin's stored secret config values, as `{ [plugin]: { [key]: value } }`.
-	 *
-	 * One `pluginSecrets` entry in the secret store rather than one per property:
-	 * `SecretState` is a fixed, typed key set, and a plugin must not be able to mint new
-	 * keys in it. A corrupt/absent blob reads as "no secrets", which degrades a plugin to
-	 * unconfigured rather than breaking the whole panel.
-	 */
-	/**
-	 * Build the controller→node plugin slice: for every enabled plugin that declares
-	 * `syncConfig`, what a node needs to run its feature.
-	 *
-	 * A plugin may **shape its own slice** by answering the `"node-config"` request. That
-	 * is deliberate: the rule "a node runs this feature in search-only mode, against the
-	 * collection the controller resolved" is the plugin's knowledge, and encoding it here
-	 * would put a feature's semantics back in the host the plugin was extracted from. A
-	 * plugin that does not answer sends its stored config and credentials unchanged; one
-	 * that throws is skipped rather than sent a slice it disowns.
-	 */
-	private async buildSyncedPluginSlice(): Promise<SyncedPluginState> {
-		const manager = await this.getPluginManager()
-		const configs =
-			(this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined) ?? {}
-		const secrets = this.readPluginSecrets()
-
-		const out: SyncedPluginState = {}
-		for (const plugin of manager.listPlugins()) {
-			if (!plugin.enabled || plugin.manifest.syncConfig !== true) continue
-			const stored: SyncedPluginSlice = {
-				config: configs[plugin.name] ?? {},
-				secrets: secrets[plugin.name] ?? {},
-			}
-			try {
-				const shaped = (await pluginRegistry.request(plugin.name, "node-config", stored, {
-					workspacePath: this.cwd,
-					cwd: this.cwd,
-				})) as SyncedPluginSlice | undefined
-				out[plugin.name] = shaped ?? stored
-			} catch {
-				// The plugin does not answer the question (or failed answering it): send
-				// what the user configured, which is what it would have received anyway.
-				out[plugin.name] = stored
-			}
-		}
-		return out
-	}
-
-	/** Tell the node registry a synced plugin's config or credentials changed. */
-	private readonly pluginSyncChanged = new vscode.EventEmitter<void>()
-
-	/** {@link readPluginSecrets} for the controller→node sync path (`ShoferAPI`). */
-	public readPluginSecretsForSync(): Record<string, Record<string, string>> {
-		return this.readPluginSecrets()
-	}
-
-	/** {@link writePluginSecrets} for the controller→node sync path (`ShoferAPI`). */
-	public async writePluginSecretsForSync(all: Record<string, Record<string, string>>): Promise<void> {
-		await this.writePluginSecrets(all)
-	}
-
-	/**
-	 * Reload several plugins at once, then re-sync the subsystems their contributions
-	 * feed — what a controller config push needs after rewriting plugin config on a node.
-	 */
-	/**
 	 * Reload every loaded plugin whose effective config changed on disk, so an external
 	 * `.shofer/settings.json` edit reaches a running plugin's `ctx.config`.
 	 *
@@ -3012,6 +2868,14 @@ export class ShoferProvider
 		await this.resyncAfterPluginChange()
 	}
 
+	/**
+	 * Every plugin's stored secret config values, as `{ [plugin]: { [key]: value } }`.
+	 *
+	 * One `pluginSecrets` entry in the secret store rather than one per property:
+	 * `SecretState` is a fixed, typed key set, and a plugin must not be able to mint new
+	 * keys in it. A corrupt/absent blob reads as "no secrets", which degrades a plugin to
+	 * unconfigured rather than breaking the whole panel.
+	 */
 	private readPluginSecrets(): Record<string, Record<string, string>> {
 		const raw = this.contextProxy.getSecret("pluginSecrets")
 		if (!raw) return {}
@@ -3120,9 +2984,6 @@ export class ShoferProvider
 					await this.writePluginSecrets(secrets)
 				}
 
-				// A synced plugin's settings just changed — the nodes running its feature
-				// need the new ones (the registry re-broadcasts only on a real difference).
-				this.pluginSyncChanged.fire()
 				await manager.reloadPlugin(request.name)
 				await this.resyncAfterPluginChange()
 				break
@@ -3289,14 +3150,8 @@ export class ShoferProvider
 	}
 
 	/**
-	 * Resolve a plugin UI request against the plugin instance on the **focused task's
-	 * own host** and post the result back over the plugin's scoped channel.
-	 *
-	 * When the focused task is a remote shadow, its per-task plugin state lives on the
-	 * owning executor, so the call is routed there over the control plane
-	 * (`AgentApi.pluginRequest`); otherwise it is answered in-process. This is what
-	 * makes a plugin-owned feature behave identically for local and remote tasks
-	 * without the plugin — or its UI — knowing which it is.
+	 * Resolve a plugin UI request against the in-process plugin instance and post
+	 * the result back over the plugin's scoped channel.
 	 */
 	private async resolvePluginUiRequest(
 		pluginName: string,
@@ -3306,32 +3161,10 @@ export class ShoferProvider
 			this.postPluginUiMessage(pluginName, { __pluginResponse: { id: request.id, ...payload } })
 
 		try {
-			const route = resolvePluginRequestTarget({
-				method: request.method,
-				mutates: request.mutates,
-				shadowTaskId: this.nodeRegistry?.getFocusedShadow(this)?.taskId,
-				hasActiveLocalTask: this.taskManager.getActiveManagedTasks().length > 0,
-				blockedMessage: t("common:plugins.blockedTaskRunning"),
+			const result = await pluginRegistry.request(pluginName, request.method, request.params, {
+				taskId: this.getCurrentTask()?.taskId,
+				cwd: this.getCurrentTask()?.cwd ?? this.cwd,
 			})
-
-			if ("blocked" in route) {
-				throw new Error(route.blocked)
-			}
-
-			const result =
-				route.target === "shadow"
-					? await this.nodeRegistry!.pluginRequest(route.taskId, pluginName, request.method, request.params)
-					: await pluginRegistry.request(pluginName, request.method, request.params, {
-							taskId: this.getCurrentTask()?.taskId,
-							cwd: this.getCurrentTask()?.cwd ?? this.cwd,
-						})
-
-			// The remote task's conversation moved under us; rebuild the shadow so this
-			// host renders what the executor now actually has.
-			if (route.target === "shadow" && (result as PluginRewoundResult | undefined)?.rewound) {
-				await this.nodeRegistry!.rebuildShadow(route.taskId)
-			}
-
 			await respond({ result })
 		} catch (error) {
 			await respond({ error: error instanceof Error ? error.message : String(error) })
@@ -3771,42 +3604,6 @@ export class ShoferProvider
 			profileName = listApiConfig.find(({ id }) => id === savedConfigId)?.name
 		}
 		return profileName
-	}
-
-	/**
-	 * Resolve the effective {@link ProviderSettings} a new task would run under,
-	 * WITHOUT creating the task — the same precedence {@link createTask} applies:
-	 * an explicit `apiConfigName` (or the one the task's `mode` maps to) names a
-	 * profile; on any miss it falls back to the global active `apiConfiguration`.
-	 *
-	 * This is what the controller ships to a REMOTE node so a distributed task runs
-	 * on the exact provider/model the front-end selected (see
-	 * {@link WorkerRegistry.routeNewTask}). It resolves controller-side because remote
-	 * nodes don't share the front-end's saved profiles.
-	 */
-	public async resolveTaskApiConfiguration(seeds: {
-		apiConfigName?: string
-		mode?: string
-	}): Promise<ProviderSettings> {
-		const { apiConfiguration } = await this.getState()
-		let apiConfigName = seeds.apiConfigName
-		if (!apiConfigName && seeds.mode) {
-			apiConfigName = await this.resolveModeApiConfigName(seeds.mode as Mode)
-		}
-		if (apiConfigName) {
-			try {
-				const profile = await this.providerSettingsManager.getProfile({ name: apiConfigName })
-				if (profile?.apiProvider) {
-					return profile
-				}
-			} catch (error) {
-				this.log(
-					`[resolveTaskApiConfiguration] Failed to load API profile "${apiConfigName}"; ` +
-						`using global default: ${error instanceof Error ? error.message : String(error)}`,
-				)
-			}
-		}
-		return apiConfiguration
 	}
 
 	/**
@@ -5107,15 +4904,6 @@ export class ShoferProvider
 		const cwd = this.cwd
 		const currentTask = this.getCurrentTask()
 
-		// Shofer Workers L2 — full-state clobber fix: when a REMOTE shadow task is the
-		// focused task, the webview must render the shadow's reduced-but-real
-		// conversation + synthetic header, NOT the local current task's. Without
-		// this override, any global full-state push (settings, MCP lifecycle, focus
-		// swaps) would wipe the remote conversation with whatever the local stack
-		// currently holds. The three render fields (currentTaskId, currentTaskItem,
-		// shoferMessages) short-circuit to the shadow below.
-		const focusedShadow = this.nodeRegistry?.getFocusedShadow(this)
-
 		// Re-seed the workflow visualization from the *focused* task. The viz
 		// fields below are normally pushed as deltas by WorkflowTask via
 		// postConfigUpdate, but those are global keys any live workflow writes to.
@@ -5150,7 +4938,6 @@ export class ShoferProvider
 
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
-			shoferWorkers: this.nodeRegistry?.getState(),
 			orgLockedResources: await this.getOrgLockedResources(),
 			apiConfiguration,
 			// editingApiConfiguration is intentionally NOT seeded here: it's a
@@ -5174,10 +4961,8 @@ export class ShoferProvider
 			autoCondenseContext: autoCondenseContext ?? true,
 			autoCondenseContextPercent: autoCondenseContextPercent ?? 90,
 			uriScheme: vscode.env.uriScheme,
-			currentTaskId: focusedShadow?.taskId ?? currentTask?.taskId,
+			currentTaskId: currentTask?.taskId,
 			currentTaskItem: (() => {
-				// L2: a focused remote shadow renders its synthetic header summary.
-				if (focusedShadow) return focusedShadow.toTaskItem()
 				if (!currentTask?.taskId) return undefined
 				const stored = this.taskHistoryStore.get(currentTask.taskId)
 				// Resolve the live cost limit by walking up to the root task,
@@ -5196,8 +4981,6 @@ export class ShoferProvider
 				return stored ? { ...stored, costLimit: liveCostLimit } : undefined
 			})(),
 			shoferMessages: (() => {
-				// L2: a focused remote shadow renders its buffered conversation.
-				if (focusedShadow) return focusedShadow.messages
 				const msgs = currentTask?.shoferMessages || []
 				// LLM hint: diagnostic for the task-switch home-screen flash.
 				// Fires when we are about to broadcast an empty messages array
@@ -5226,11 +5009,9 @@ export class ShoferProvider
 			})(),
 			// T1.B: signal the webview that older messages exist on disk
 			// and a "Load older messages" sentinel should be shown.
-			hasMoreShoferMessages: focusedShadow ? false : (currentTask?.hasMoreShoferMessages ?? false),
-			// L2/E: a remote shadow's todos/queue live on the remote — never surface
-			// the local task's here.
-			currentTaskTodos: focusedShadow ? [] : currentTask?.todoList || [],
-			messageQueue: focusedShadow ? [] : (currentTask?.messageQueueService?.messages ?? []),
+			hasMoreShoferMessages: currentTask?.hasMoreShoferMessages ?? false,
+			currentTaskTodos: currentTask?.todoList || [],
+			messageQueue: currentTask?.messageQueueService?.messages ?? [],
 			taskHistory: this.taskHistoryStore.getAll().filter((item: HistoryItem) => item.ts && item.task),
 			soundEnabled: soundEnabled ?? false,
 			ttsEnabled: ttsEnabled ?? false,
@@ -6517,11 +6298,6 @@ export class ShoferProvider
 
 			await this.updateTaskHistory(historyItem)
 
-			// Shofer Workers L2: a new LOCAL task takes focus in THIS view — drop this
-			// view's remote shadow focus so its render override + activeWorkerId revert
-			// to Local before the full state push below.
-			this.nodeRegistry?.clearShadowFocus(this)
-
 			// Notify the webview of the new current task and switch to the chat tab.
 			await this.postInitState()
 			await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
@@ -6549,12 +6325,6 @@ export class ShoferProvider
 	 */
 	public async focusTask(taskId: string): Promise<void> {
 		try {
-			// Shofer Workers L2: focusing a task from the task list is always a LOCAL,
-			// in-process task (remote shadows aren't in taskHistory). Drop THIS view's
-			// remote shadow focus so its render override + activeWorkerId revert to Local
-			// before the postInitState below recomputes the state.
-			this.nodeRegistry?.clearShadowFocus(this)
-
 			// Check if we already have this task focused
 			const currentTask = this.getCurrentTask()
 			if (currentTask?.taskId === taskId) {

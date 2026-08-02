@@ -1,6 +1,6 @@
 # Outside-Workspace Path Allowlist (Design)
 
-**Status:** Implemented (branch `feat/config-sync`). Rides the implemented config-sync channel.
+**Status:** Implemented.
 **Owner:** —
 **Related:** [`auto_approval.md`](auto_approval.md), [`settings_overlay.md`](settings_overlay.md), [`command-execution.md`](command-execution.md), [`configuration.md`](configuration.md), [`tool-categories.md`](tool-categories.md)
 
@@ -262,13 +262,12 @@ its subtasks only** — in-memory, gone when the task ends. Mechanism:
   (`handleWebviewAskResponse("yesButtonClicked", …)`) — trust-and-approve in one action.
 
 **"Trust path (always)" is persistent.** It writes the dir straight into the same permanent
-`allowedReadPaths`/`allowedWritePaths` settings the Settings panel edits — surviving restarts
-and replicated to workers by config-sync — then approves the ask. Mechanism: the same
+`allowedReadPaths`/`allowedWritePaths` settings the Settings panel edits — surviving restarts —
+then approves the ask. Mechanism: the same
 `trustOutsideWorkspacePath` message is posted with `outsideWorkspacePersist: true`; the handler
 appends the dir (deduped) to `allowedWritePaths` (write grant) or `allowedReadPaths` (read grant)
 via `contextProxy.setValue`, calls `postInitState()` (so the Settings lists refresh), then
-approves. Because `contextProxy` is the `WorkerRegistry` `configSource`, the `setValue`'s
-`onDidChange` drives the config-sync broadcast to remote workers automatically ([§8](#8-persistence--configuration)).
+approves.
 
 **Permanent trust is also editable in Settings**: `AutoApproveSettings.tsx` has two editable
 lists (read paths / read+write paths) next to the command lists, writing the same
@@ -287,7 +286,6 @@ flowchart TB
     PERM["persist: true<br/>contextProxy.setValue appends (deduped),<br/>then postInitState()"]
     SET["Settings — AutoApproveSettings.tsx<br/>two curated lists via updateSettings"]
     STORE["globalState<br/>allowedReadPaths / allowedWritePaths"]
-    SYNC["onDidChange drives the config-sync<br/>broadcast to remote workers"]
     APPR["approve the ask<br/>handleWebviewAskResponse('yesButtonClicked', …)"]
 
     ASKQ --> BTN --> MSG
@@ -296,7 +294,6 @@ flowchart TB
     MSG --> PERM --> APPR
     PERM --> STORE
     SET --> STORE
-    STORE --> SYNC
 ```
 
 > **Implementation gotcha (fixed).** `checkAutoApproval` reads the allowlist from the object
@@ -312,14 +309,14 @@ This is a first-class requirement: paths must be settable **without any interact
 by the user or an external service, and interactive grants must survive restarts.
 
 **Where the decision runs (this constrains everything below).** `checkAutoApproval` lives in
-**`@shofer/core`** and runs wherever the agent core runs — the **executor**, which per the
-[v3 architecture](v3_architecture.md#distributed-execution-horizontal-scaling) may be the
-in-process VS Code host, a headless CLI process, or a **remote `shofer serve` worker**. It
+**`@shofer/core`** and runs wherever the agent core runs — the **executor**, which may be the
+in-process VS Code host, a headless CLI process, or a `shofer serve` host
+([host-boundary.md](host-boundary.md)). It
 does **not** read config through Category I `HostConfig`; it reads the settings object
-returned by `provider.getState()` in-core. VS Code is _just one front-end_ — "the config
-must reach the remote workers too." So the trusted paths must live in the **portable settings
+returned by `provider.getState()` in-core. VS Code is _just one front-end_. So the trusted
+paths must live in the **portable settings
 state that `getState()` serves on every executor**, and reach each executor as described in
-[§8d](#8d-reaching-every-executor-cli--remote-nodes) — for remote workers, replicated from the
+[§8d](#8d-reaching-every-executor-cli--remote-nodes) — never through a
 controller (locally present for the VS Code host and the self-driven CLI).
 
 **Do NOT use VS Code `settings.json` (`contributes.configuration`).** It fails the constraint
@@ -405,7 +402,7 @@ provisioner can write. Its entries would union with globalState at gate-evaluati
 This is a **larger surface** (new file schema + watcher + merge) and is proposed as a
 follow-up, not part of v1. v1 = globalState + auto-import ([§8a](#8a-store-contextproxy-globalstate-globalsettingsschema--source-of-truth)–[§8b](#8b-external--automated-setup-auto-import-the-recommended-channel)).
 
-### 8d. Reaching every executor (CLI & remote workers)
+### 8d. Reaching every executor (CLI / headless)
 
 The setting must be usable wherever the core runs, because that is where the decision is
 made. The design's guiding rule: **the path allowlist is just additional fields on the
@@ -414,38 +411,14 @@ so it inherits, for free, whatever already carries that state to each executor. 
 new distribution mechanism** — we only insist the fields live in the portable state, not a
 front-end-only backend.
 
-| Executor                           | How the auto-approval state (incl. these fields) is present                                                                                                                                                                                                                                                                                     |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **VS Code (local)**                | Controller == executor; `provider.getState()` reads globalState directly. ([§8a](#8a-store-contextproxy-globalstate-globalsettingsschema--source-of-truth))                                                                                                                                                                                     |
-| **CLI / headless**                 | The core runs against the `vscode-shim` (globalState → `~/.vscode-mock/` JSON; config overlay in `WorkspaceConfiguration`). Pre-seed via `ShoferAPI.importConfiguration(json)` / auto-import — the same `globalSettings` block ([`headless.md`](headless.md) "Configuration Import/Export", which explicitly covers **auto-approval toggles**). |
-| **Remote worker (`shofer serve`)** | **Controller-authoritative.** The controller owns the config and **replicates it to each worker** — on worker registration and again on every controller-side change — and the worker applies it to the local state its `provider.getState()` serves. Nothing is hand-edited on the node. (See design below.)                                   |
-
-**Design: controller-authoritative config, pushed to workers (registration + on change).**
-The intended model is that a worker is a **replica**, never a separately-administered box: the
-user (or an external service) configures trust **once, on the controller**, and it
-propagates. Concretely:
-
-- **On registration** — when `WorkerRegistry` completes a worker's connect/auth/version
-  handshake ([`worker-connection.ts`](../packages/core/src/transport/worker-connection.ts)), the
-  controller ships the current auto-approval config (incl. `allowedReadPaths` /
-  `allowedWritePaths`) to the worker, which applies it to its local state.
-- **On change** — any controller-side mutation (Settings panel, the interactive
-  "approve this path" grant, an auto-import) **broadcasts** the updated config to all
-  registered workers, so a path trusted mid-session takes effect on every worker without a worker
-  restart or manual edit.
-
-**This rides an existing channel, specified separately.** The controller→worker config-sync
-channel is **implemented** ([`config_sync.md`](config_sync.md)) — it replicates the
-node-scoped `globalSettings` slice to every remote worker on connect and on change. The path
-allowlist is one **consumer**: `allowedReadPaths`/`allowedWritePaths` are classified `"worker"`
-in `SETTING_SYNC_SCOPE` (the exhaustiveness guard forces the classification when the keys are
-added), so they are part of the synced slice and reach every remote worker **for free** — a
-path trusted on the controller (via Settings, an interactive grant, or auto-import)
-propagates to workers with no node-side edit.
+| Executor                            | How the auto-approval state (incl. these fields) is present                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **VS Code (local)**                 | Controller == executor; `provider.getState()` reads globalState directly. ([§8a](#8a-store-contextproxy-globalstate-globalsettingsschema--source-of-truth))                                                                                                                                                                                                                                                       |
+| **CLI / headless (`shofer serve`)** | The core runs against the `vscode-shim` (globalState → `~/.vscode-mock/` JSON; config overlay in `WorkspaceConfiguration`). Pre-seed via `ShoferAPI.importConfiguration(json)` / auto-import, or the layered `.shofer/settings.json` files the host was provisioned with — the same `globalSettings` block ([`cli.md`](cli.md) "Configuration Import/Export", which explicitly covers **auto-approval toggles**). |
 
 Because this feature only _adds fields_ to the portable auto-approval state, it imposes just
 one hard requirement of its own: the fields must live in the serializable
-`globalSettingsSchema` state (so config-sync can ship them), and **not** in VS Code
+`globalSettingsSchema` state, and **not** in VS Code
 `settings.json`, which is front-end-only and would strand every non-VS-Code executor.
 
 The whole picture — every writer feeds one portable store, and the store is what
@@ -461,8 +434,7 @@ flowchart TB
     STORE["controller globalState — globalSettingsSchema<br/>allowedReadPaths / allowedWritePaths<br/>the source of truth"]
 
     VS["VS Code host — controller is the executor<br/>reads globalState directly"]
-    CLI["CLI / headless<br/>vscode-shim; pre-seeded via<br/>ShoferAPI.importConfiguration or auto-import"]
-    NODE["remote 'shofer serve' worker<br/>config-sync pushes the node-scoped slice<br/>on connect and on change<br/>SETTING_SYNC_SCOPE = worker"]
+    CLI["CLI / headless — 'shofer serve'<br/>vscode-shim; pre-seeded via<br/>ShoferAPI.importConfiguration, auto-import,<br/>or provisioned .shofer/ files"]
 
     STATE["provider.getState() on that executor — a curated copy;<br/>the keys must also be in getStateToPostToWebview()"]
     GATE["checkAutoApproval in @shofer/core"]
@@ -474,10 +446,8 @@ flowchart TB
 
     STORE --> VS
     STORE --> CLI
-    STORE --> NODE
     VS --> STATE
     CLI --> STATE
-    NODE --> STATE
     STATE --> GATE
 ```
 
@@ -538,13 +508,10 @@ toggle is off, and never overrides the master switch.
   traversal), not `realpath`; the symlink caveat is documented ([§9](#9-security-considerations)).
 - **No `deniedPaths` in v1** — allow-only lists; revisit with the longest-prefix rule if a
   carve-out need appears.
-- **Config-sync rides for free** — `allowedReadPaths`/`allowedWritePaths` are `"worker"` in the
-  (implemented) config-sync `SETTING_SYNC_SCOPE`, so trusted paths propagate to remote workers
-  with no extra work ([§8d](#8d-reaching-every-executor-cli--remote-nodes)).
 
 ### Open / deferred
 
 1. **Project-scoped `.shofer/allowed-paths.json`** ([§8c](#8c-optional-project-scoped-file-live-reload)) —
    the only channel giving live reload + per-workspace scoping + a git-committable
    declaration, but a larger surface (schema + watcher + merge). Deferred; v1 is globalState +
-   auto-import + config-sync.
+   auto-import.

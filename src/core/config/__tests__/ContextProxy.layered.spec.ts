@@ -192,10 +192,8 @@ describe("ContextProxy — layered .shofer overlay (Part E3)", () => {
 	})
 
 	it("(e) getValues() resolves the overlay too, so bulk readers agree with getValue", async () => {
-		// Not a cosmetic consistency point: `WorkerRegistry.currentSyncedSlice()` builds the
-		// controller→node config slice from getValues(), so an overlay-only value that this
-		// snapshot omitted would reach the IDE and never reach the pool — file-based
-		// settings would silently stop at the controller.
+		// A bulk reader that omitted overlay-only values would silently disagree with
+		// per-key getValue() reads — file-based settings would vanish from snapshots.
 		const homeDir = await tmpDir()
 		hoisted.home = homeDir
 		await writeSettings(path.join(homeDir, ".shofer"), { writeDelayMs: 321 })

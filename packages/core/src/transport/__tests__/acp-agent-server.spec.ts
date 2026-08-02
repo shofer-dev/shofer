@@ -12,7 +12,6 @@ function makeApi() {
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
-		applyConfig: vi.fn(async () => {}),
 		pluginRequest: vi.fn(async () => null),
 		subscribe: (listener) => {
 			emit = listener

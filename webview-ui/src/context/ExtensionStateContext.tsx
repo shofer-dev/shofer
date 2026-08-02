@@ -17,7 +17,6 @@ import {
 	type McpServer,
 	type VsCodeLmChatInfo,
 	type TaskState,
-	type ShoferWorkersState,
 	type PluginsState,
 	type PluginUiContributionsState,
 	RouterModels,
@@ -70,9 +69,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	publicSharingEnabled: boolean
 	mdmCompliant?: boolean
 	hasOpenedModeSelector: boolean // New property to track if user has opened mode selector
-	// Shofer Workers (remote agents) — registry + live status pushed by the extension.
-	// Undefined until the (v3-native) backend populates it; UI renders empty state.
-	shoferWorkers?: ShoferWorkersState
 	// Plugins (Settings → Plugins tab) — discovered plugins pushed by the extension.
 	plugins?: PluginsState
 	// Plugin UI contributions per region (design §6.8), pushed by the extension.
@@ -175,15 +171,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setIncludeCurrentCost: (value: boolean) => void
 	skills?: SkillMetadata[]
 	loadedSkills?: Record<string, string>
-	/**
-	 * Webview-only: which Shofer Node the NEXT new task should run on. `undefined`
-	 * means "Auto" — round-robin — and the `newTask` post omits `preferredWorkerId`
-	 * entirely (letting the host's WorkerRegistry.routeNewTask pick). Set by the
-	 * chat-composer WorkerSelector; sticky across tasks, like the mode/API-config
-	 * selectors beside it. Not persisted across reloads and not synced to the host.
-	 */
-	preferredWorkerId: string | undefined
-	setPreferredNodeId: (value: string | undefined) => void
 }
 
 export const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
@@ -339,11 +326,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	})
 	const [skills, setSkills] = useState<SkillMetadata[]>([])
 	const [loadedSkills, setLoadedSkills] = useState<Record<string, string>>({})
-	// Webview-only "run the next task on this node" selection (undefined = Auto).
-	const [preferredWorkerId, setPreferredNodeId] = useState<string | undefined>(undefined)
 	const [prevCloudIsAuthenticated, setPrevCloudIsAuthenticated] = useState(false)
-	// Shofer Workers snapshot pushed by the extension (undefined until a backend sends it).
-	const [shoferWorkers, setShoferNodes] = useState<ShoferWorkersState | undefined>(undefined)
 	// Plugins snapshot pushed by the extension (undefined until the Plugins tab asks).
 	const [plugins, setPlugins] = useState<PluginsState | undefined>(undefined)
 	// Plugin UI contributions per region (design §6.8), pushed on launch + on toggle.
@@ -444,10 +427,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 						return merged
 					})
 					setShowWelcome(!checkExistKey(newState.apiConfiguration))
-					// Shofer Workers live in their own state slice; hydrate them from the
-					// cold-load snapshot so the Nodes UI renders before the first
-					// dedicated `shoferWorkers` push.
-					if (newState.shoferWorkers) setShoferNodes(newState.shoferWorkers)
 					setDidHydrateState(true)
 					break
 				}
@@ -688,10 +667,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					}))
 					break
 				}
-				case "shoferWorkers": {
-					setShoferNodes(message.shoferWorkers)
-					break
-				}
 				case "plugins": {
 					setPlugins(message.plugins)
 					break
@@ -876,8 +851,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			includeTaskHistoryInEnhance: state.includeTaskHistoryInEnhance ?? true,
 			setIncludeTaskHistoryInEnhance: (value) =>
 				setState((prevState) => ({ ...prevState, includeTaskHistoryInEnhance: value })),
-			preferredWorkerId,
-			setPreferredNodeId,
 			includeCurrentTime: state.includeCurrentTime ?? true,
 			setIncludeCurrentTime: (value) => setState((prevState) => ({ ...prevState, includeCurrentTime: value })),
 			includeCurrentCost: state.includeCurrentCost ?? true,
@@ -888,8 +861,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			parallelTasks: state.parallelTasks ?? [],
 			focusedTaskId: state.focusedTaskId ?? null,
 			taskNotifications: (state.taskNotifications ?? []) as TaskNotification[],
-			// Shofer Workers (remote agents)
-			shoferWorkers,
 			// Plugins (Settings → Plugins tab)
 			plugins,
 			// Plugin UI contributions per region (design §6.8)
@@ -898,7 +869,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		[
 			state,
 			didHydrateState,
-			shoferWorkers,
 			plugins,
 			pluginUiContributions,
 			showWelcome,
@@ -913,7 +883,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			marketplaceInstalledMetadata,
 			skills,
 			loadedSkills,
-			preferredWorkerId,
 			setApiConfiguration,
 			setEditingApiConfiguration,
 			setListApiConfigMeta,

@@ -41,8 +41,7 @@ export class CodeIndexConfigManager {
 	private _loadAndSetConfiguration(): void {
 		// Every value comes from the plugin's own settings (`ctx.config`), which the host
 		// merges from the manifest defaults, the user's overrides and — for the seven
-		// credentials, declared `secret: true` — its secret store. A node running this
-		// plugin reads the same keys after a controller push (`syncConfig`).
+		// credentials, declared `secret: true` — its secret store.
 		const codebaseIndexEnabled = setting("enabled", false)
 		const codebaseIndexSearchOnly = setting("searchOnly", false)
 		const codebaseIndexKey = setting<string | undefined>("indexKey", undefined)
@@ -455,8 +454,8 @@ export class CodeIndexConfigManager {
 
 	/**
 	 * Search-only mode: this host may query the index but MUST NOT run the scan or
-	 * the file-watcher. Set on remote Shofer Workers, which read the controller's
-	 * index over the shared vector store; the controller is the sole writer.
+	 * the file-watcher. Set on search-only hosts, which read the indexing host's
+	 * index over the shared vector store; the indexing host is the sole writer.
 	 */
 	public get isSearchOnly(): boolean {
 		return this.codebaseIndexSearchOnly

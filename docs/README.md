@@ -1,9 +1,8 @@
 # Shofer design docs — conventions
 
 This directory holds Shofer's design/feature docs. To keep them trustworthy
-(see the v3-architecture evolution, `docs/v3_architecture.md` §2:
-"docs running ahead of code erode trust and create phantom maintenance"), follow
-one rule:
+("docs running ahead of code erode trust and create phantom maintenance"),
+follow one rule:
 
 > **A feature doc describes shipped behavior. Anything not yet built is marked as
 > such — a status banner and/or a clearly-labeled "Proposed"/"Future work"
@@ -54,9 +53,9 @@ docs and their verdicts:
 
 | Doc                                                                        | Verdict                                                                                                                                                                             |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `v3_architecture.md`                                                       | ✅ Active — the single canonical host-agnostic (Category I/II) architecture + implementation status                                                                                 |
+| `host-boundary.md`                                                         | ✅ Active — the single canonical host-agnostic (Category I/II) architecture                                                                                                         |
 | `parallelism.md`, `message_queue.md`, `task-export.md`, `summarization.md` | ✅ Shipped                                                                                                                                                                          |
-| `performance_optimizations.md`, `public_api.md`, `headless.md`             | ✅ Shipped (`performance_optimizations.md` rewritten to current-state characteristics for SQLite persistence + delta IPC)                                                           |
+| `performance_optimizations.md`, `public_api.md`, `cli.md`                  | ✅ Shipped (`performance_optimizations.md` rewritten to current-state characteristics for SQLite persistence + delta IPC)                                                           |
 | `otel-metrics.md`                                                          | ✅ Shipped — OpenTelemetry metrics catalog + instrument surface                                                                                                                     |
 | `worktree-shell-sandboxing.md`                                             | ✅ Shipped (the feature itself is the bundled `basics` plugin's worktrees feature — see `plugins/basics/docs/worktrees.md`)                                                         |
 | `chatview-windowed-message-loading.md`                                     | ✅ Shipped (H2 reverted, re-shipped as tail-window cold load — doc already explains this)                                                                                           |

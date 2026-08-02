@@ -256,7 +256,7 @@ demonstrates:
 
 ## Relationship to CLI
 
-The [CLI (`apps/cli/`)](headless.md) and companion extensions **both use the same
+The [CLI (`apps/cli/`)](cli.md) and companion extensions **both use the same
 `ShoferAPI` interface** as their control plane. The CLI calls `activate()` which
 returns a `ShoferAPI` instance, then delegates all task management, configuration,
 profile operations, and event subscriptions through it. Companion extensions

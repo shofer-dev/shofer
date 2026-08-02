@@ -45,18 +45,18 @@ and a per-workspace toggle. The chip in the chat input carries the same state wh
 type, because a search that silently returns nothing looks like a bad model rather than an
 index that never finished.
 
-## With Shofer Workers
+## Multiple hosts, one index
 
-Enable it on the controller only. The controller replicates the settings and credentials
-to every node it drives and pins those nodes to **search-only** against the collection it
-resolved — nodes answer searches, the controller does the writing. Nothing to configure
-per node.
+When several hosts share one workspace, exactly one of them indexes. Provision
+every other host with `searchOnly: true` plus the shared `indexKey` (ordinary
+plugin config in the layered `.shofer/` files): search-only hosts answer
+searches against the shared collection, the indexing host does the writing.
 
 ## Files
 
 | Path                     | What it is                                                        |
 | ------------------------ | ----------------------------------------------------------------- |
-| `src/main.ts`            | Plugin entry: the two tools, the request surface, `node-config`   |
+| `src/main.ts`            | Plugin entry: the two tools and the request surface               |
 | `src/manager.ts`         | Code-index lifecycle (configure → services → scan → watch)        |
 | `src/orchestrator.ts`    | A scan run: git-aware narrowing, batching, progress, cancellation |
 | `src/indexing/`          | The directory scanner and the file watcher                        |

@@ -1,11 +1,67 @@
-# The Host Boundary
+# The Host Boundary — Shofer's architecture
 
-`@shofer/core` (`packages/core/src`) is the portable agent engine. It must never
-import `vscode`. Everything it needs from its environment — filesystem,
-notifications, editor, terminals, language services, config, workspace, external
-open — it reaches through one seam: the **`HostBridge`**. This doc is the
-contributor how-to for that seam: how it resolves, how to add a capability, and
-how tests use it.
+Shofer separates a **portable agent core** (the "brain" — task loop, tools,
+prompts, model dispatch, context management) from the **front-end** that hosts
+it (the VS Code extension, the CLI, a headless server). The core is written
+against narrow, host-agnostic interfaces and never imports any front-end SDK;
+each front-end provides concrete implementations of those interfaces. This doc
+is the single description of that architecture and the contributor how-to for
+its central seam, the **`HostBridge`**.
+
+## Category I vs Category II
+
+- **Category I — Host APIs (host-agnostic contracts).** The small set of
+  capabilities the portable core needs from _whatever_ is hosting it, expressed
+  as plain TypeScript interfaces with no platform types in their signatures.
+  They live in **`@shofer/types`** (vscode-free) and are aggregated into one
+  `HostBridge` object.
+- **Category II — Front-end adapters (platform implementations).** The concrete
+  implementation of Category I for a specific front-end, **plus** the
+  platform-only surface that has no portable equivalent (rich editor UI, diff
+  views, terminals, a platform's own language-model API). Category II is the
+  _only_ place a platform SDK is imported.
+
+Category I interfaces are **DTO-based**: they pass plain data (paths as
+strings, positions as `{line, column}` numbers, edits as
+`{startLine, …, newText}`), never platform objects. That is what makes them
+implementable by any front-end and keeps the core's type graph free of
+platform SDKs.
+
+| Capability        | Interface                | What the core uses it for                                                                                    |
+| ----------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Notifications     | `Notifier`               | info/warn/error messages + choice dialogs (`showChoice`)                                                     |
+| Filesystem        | `HostFileSystem`         | read/write/exists/mkdir/delete + `findFiles` (glob)                                                          |
+| Configuration     | `HostConfig`             | `get<T>(section, key, default)` settings reads                                                               |
+| Environment       | `HostEnv`                | UI `language`, `appRoot` (locate bundled binaries), `machineId` (telemetry), `appInfo`                       |
+| Language services | `HostLsp`                | diagnostics, references, workspace symbols, rename (DTO-based)                                               |
+| Workspace actions | `HostWorkspace`          | open a folder, execute a command, workspace-folder change event, `visibleFiles`/`openTabs`                   |
+| File watching     | `HostWatcher`            | watch a glob; create/change/delete callbacks                                                                 |
+| Terminals         | `HostTerminals`          | integrated-terminal backend + shell-execution start/end events                                               |
+| Diff view         | `createDiffView(...)`    | per-edit `DiffView` factory (open/update/save/revert)                                                        |
+| External links    | `HostExternal`           | `openExternal` (open a URI in the OS/browser)                                                                |
+| Editor surface    | `HostEditor`             | `revealInExplorer`/`openFile`/`focusPanel`/`showMultiFileDiff`/`readTerminalContents`/`getWorkspaceProblems` |
+| Persisted state   | `HostState`              | `readModeOverrides` (mode/tooling overrides the front-end persists)                                          |
+| Message storage   | `MessagePersistencePort` | durable api/UI message persistence (SQLite-backed)                                                           |
+
+Alongside the host capabilities, two further seam families let the core stay
+platform-free:
+
+- **Front-end resolvers** the host supplies at startup — storage / cache-dir /
+  token-counter / custom-storage resolvers — so core code that needs a durable
+  location or a tokenizer does not reach for a `vscode.ExtensionContext`.
+- **Core-side registries** (mirroring the `mcp-hub-factory` pattern): the
+  **native-api-handler registry**
+  (`packages/core/src/api/native-handler-registry.ts`, which the 2
+  VS Code-only providers register into), and the **manager registries** for
+  the code-index, git-index, live-memory, and skills subsystems. The core owns
+  the portable half; the front-end registers its concrete VS Code manager
+  against the registry.
+
+Finally, two **interface abstractions** replace value-level coupling of the
+core to the concrete VS Code provider: `TaskProviderLike` and `TaskManagerLike`
+(`packages/core/src/task-provider/` + `@shofer/types/task-manager.ts`). Every
+tool that once imported `ShoferProvider` now `import type`s the interface, so
+`Task` and the tools name only the contract — never the Category II class.
 
 ## How `getHost()` / `setHost()` / `HostBridge` work
 
@@ -14,8 +70,6 @@ how tests use it.
   (`HostFileSystem`), `editor` (`HostEditor`), `terminals` (`HostTerminals`),
   `notifier` (`Notifier`), `lsp` (`HostLsp`), `workspace` (`HostWorkspace`),
   `watcher`, `config`, `env`, `external`, `state`, plus `createDiffView(cwd, task)`.
-  Every method signature is DTO-based (plain data in, plain data out), which is
-  what lets the same interface run in-process _and_ over RPC.
 
 - **`getHost()` / `setHost()`**
   ([`packages/types/src/host-registry.ts`](../packages/types/src/host-registry.ts))
@@ -53,22 +107,114 @@ flowchart TD
     MEM -.->|"the default — active until someone calls setHost()"| GH
 ```
 
-The two implementations of the interface are the **Category I / Category II**
-split: Category I = the interfaces in `@shofer/types`; Category II = a concrete
-adapter (the VS Code one in `src/`, the in-memory one in `@shofer/types`).
+## The front-ends
+
+The same core runs unchanged on any of:
+
+- **VS Code extension** — `src/host/host-bridge.ts` implements every
+  Category I interface against the `vscode` API, and `integrations/*` provides
+  the rich UI (decorations, diff view, terminal, theme). Installed via
+  `setHost(createVsCodeHost())` at activation. The rest of Category II lives in
+  `src`: `ShoferProvider` (implements `TaskProviderLike`), `TaskManager`
+  (implements `TaskManagerLike`), `ContextProxy`, the webview handlers, the
+  `vscode-lm` and `openai-codex` providers (`src/api/providers/`, registered
+  into the core native-handler registry), `McpServerManager`, the concrete
+  VS Code terminal, `integrations/editor`, and `activate/*`.
+- **CLI** (`apps/cli`) — implements Category I for a terminal: glob-based
+  `findFiles`, stdout notifications, direct-to-disk edits, `execa` command
+  execution. See [`cli.md`](cli.md).
+- **Headless server** (`shofer serve`, `shofer acp`) — the same extension
+  bundle loaded under the vscode-shim, exposing the agent over
+  [`AgentApi`](agentapi.md) (HTTP/SSE) or [ACP](acp.md). Dialogs are left as
+  outstanding asks for a client to answer; watchers and editor surfaces are
+  inert.
+
+The in-memory reference implementation (`createInMemoryHost`, in
+`@shofer/types`) documents the minimum a Category II adapter must provide and
+backs tests.
+
+## Where the line is drawn
+
+A file belongs in the portable core only if it can be written with zero
+platform imports. Three kinds of code legitimately stay in Category II and are
+**not** abstracted away (doing so would just recreate the platform API as an
+interface):
+
+1. **Front-end UI** — editor decorations, the live diff editor, the VS Code
+   _integrated_ terminal, dialogs, theme (`integrations/*`). This is the
+   adapter's job by definition. (Only the _presentation_ is Category II:
+   command execution itself is portable — the terminal registry + `execa`
+   backend are Category I core; the integrated terminal is one optional
+   backend behind `HostTerminals`.)
+2. **Platform-bound configuration** — objects handed a platform context
+   (e.g. a `vscode.ExtensionContext`) are inherently front-end-scoped.
+3. **A platform's own model API** — e.g. the VS Code Language Model provider
+   is the VS Code LM API; it is one _provider_ among many, available only on
+   that front-end.
+
+## The portable core
+
+The portable agent core lives in **`@shofer/core`** (`packages/core/src/`).
+Everything below runs with no runtime platform import, reaching the host only
+through Category I (`getHost()` + the registries above):
+
+- **`Task`** — the agent task loop (the core's heart), at
+  `packages/core/src/task/Task.ts`. It has zero `vscode.` references and
+  reaches the platform only through `getHost()` and the host-agnostic
+  `TypedEmitter` (`@shofer/types`).
+- **All native tool implementations** (`packages/core/src/tools/`), plus
+  `build-tools`, `BaseTool`, and the schema-as-contract primitive
+  `defineNativeTool`.
+- **Assistant-message dispatch** (`presentAssistantMessage`) and the native
+  tool-call parser (`packages/core/src/assistant-message/`).
+- **The model-dispatch subsystem** (`packages/core/src/api/`) — the
+  host-agnostic providers, `transform/`, `buildApiHandler`, and the
+  native-handler registry the 2 VS Code providers plug into.
+- **Prompts** (`packages/core/src/prompts/`), plus `condense` and
+  `context-management`.
+- **Language + indexing engines** — `tree-sitter`
+  (`packages/core/src/services/tree-sitter/`) and the code-index engine
+  consumed by the `rag-indexing` plugin.
+- **The transport layer** (`packages/core/src/transport/`) — the HTTP/SSE
+  server + typed client and the ACP stack, all over the transport-agnostic
+  [`AgentApi`](agentapi.md).
+- **`slang`/workflow interpreter**, **`apply-patch`**, **`auto-approval`**,
+  **`glob`**, the **`McpHub`**, **`shofer-config`**, **`extract-text`**, the
+  **`diff`** strategies, tiktoken/token-counter, `safeWriteJson`, storage,
+  i18n (`@shofer/core/i18n`, static locale imports), and the utils.
+- **Context tracking** (`FileContextTracker`, `getEnvironmentDetails`,
+  `mentions`, `message-manager`) and the **ignore controller**.
+
+Persistence (Category I `MessagePersistencePort`) is SQLite-backed via Node's
+built-in `node:sqlite` — no flat files, no native dependency.
+
+Three VS Code-coupled subsystems `Task` depends on are abstracted behind
+seams, their implementations staying Category II in `src`:
+
+- `services/mcp/McpHub` routes through `getHost()` (config/watcher/fs + an
+  `onDidChangeWorkspaceFolders` capability).
+- `DiffViewProvider` sits behind the vscode-free `DiffView` interface, built
+  via a `getHost().createDiffView(cwd, task)` factory — a live diff editor is
+  intrinsically front-end presentation, so `DiffView` stays a Category I
+  _interface_ over a wholly Category II implementation.
+- The terminal subsystem splits along the
+  `ShoferTerminalProvider = "vscode" | "execa"` line: command **execution is
+  Category I** (the registry + `execa` backend live in
+  `@shofer/core/terminal`), while the VS Code integrated terminal is one
+  optional Category II backend, injected via a `HostTerminals.createTerminal`
+  host factory.
 
 ## Adding a host capability
 
 To let the core reach a new piece of the environment, add it to the boundary in
-four places (all four, or the build breaks — every implementation must satisfy the
-interface):
+three places (all three, or the build breaks — every implementation must satisfy
+the interface):
 
 1. **Declare it** in the relevant interface in
    [`packages/types/src/host.ts`](../packages/types/src/host.ts). Extend an
    existing capability (e.g. add a method to `HostEditor`) or, for a whole new
    area, add a new interface and a member on `HostBridge`. Keep parameters and
-   return types DTO-shaped (no `vscode.*` types) so the capability stays
-   remoteable.
+   return types DTO-shaped (no `vscode.*` types).
 
 2. **Implement the VS Code adapter** in
    [`src/host/host-bridge.ts`](../src/host/host-bridge.ts) — the real behavior,
@@ -79,13 +225,6 @@ interface):
    (`createInMemoryHost`) — an in-memory / no-op version for the CLI and tests. A
    missing method here is a test-time crash, so this keeps the headless path
    honest.
-
-4. **Proxy it** in [`packages/types/src/host-rpc.ts`](../packages/types/src/host-rpc.ts)
-   _if_ the capability must cross a process boundary. `createSplitHost` proxies
-   the front-end-bound slice (notifications, LSP, workspace commands) back to the
-   controller; the workspace-scoped slice (fs, watching, config, env) is served
-   locally on the executor. Add async, front-end-facing capabilities to the proxied
-   set; leave synchronous, workspace-local ones served locally.
 
 Then update the core call site to use `getHost().<capability>.<method>()`.
 
@@ -108,35 +247,24 @@ beforeEach(() => {
 so assertions read them back. Because the default host is complete, most tests
 need no host setup at all.
 
-## Where the boundary is going: executors and distributed execution
+## Remote agents
 
-Because Category I is DTO-based, a `HostBridge` can be split across a wire.
-[`host-rpc.ts`](../packages/types/src/host-rpc.ts) (`createSplitHost` /
-`dispatchHostCall`) makes the front-end-bound host slice remoteable, and
-[`worker-pool.ts`](../packages/types/src/worker-pool.ts) builds on that: an
-`WorkerPool` is itself an `AgentApi` that fans a front-end across one or more
-**executors** (a local in-process agent, or remote ones), each running the core
-against its own local host while proxying UI-bound calls back to the controller.
-With a single executor it is behaviourally identical to driving the core directly.
+Shofer has **no built-in multi-worker capability**: the former "Shofer Workers"
+fleet layer (a controller-side worker registry, pool, config replication and
+remote-task shadows) was removed in favor of dispatching work over an external
+scheduler and observing running tasks over AgentApi attach-on-demand. The end
+state and roadmap live in [`todos/remote_agents.md`](../todos/remote_agents.md);
+what core will grow for it is a **remote-task attachment primitive** (snapshot
+backfill + the existing task-scoped SSE), not another scheduler.
 
-```mermaid
-flowchart LR
-    FE["front-end (controller)<br/>its real HostBridge adapter"]
-    POOL["WorkerPool — itself an AgentApi<br/>packages/types/src/worker-pool.ts"]
+## What we deliberately keep
 
-    subgraph EX["Executor — core + createSplitHost bridge"]
-        direction TB
-        CORE["@shofer/core"]
-        LOCAL["served locally:<br/>fs · watching · config · env"]
-        PROXY["proxied over HostRpcChannel:<br/>notifications · lsp · workspace commands"]
-        CORE --> LOCAL
-        CORE --> PROXY
-    end
+The host boundary preserves the things that make Shofer strong and that a
+generic agent-backend design tends to lose:
 
-    FE --> POOL
-    POOL -->|"AgentApi"| CORE
-    PROXY -->|"dispatchHostCall on the controller"| FE
-```
-
-See [`v3_architecture.md`](v3_architecture.md) for the full distributed-execution
-model.
+- **Rich, typed tool catalog** with golden-snapshot contracts.
+- **Spend caps and honest cost/limit accounting** driven by the model catalog.
+- **Per-model tool customization** and a unified permission engine.
+- **First-class editor integration** (the Category II VS Code adapter) —
+  abstracting the core does not flatten the IDE experience; it makes the IDE
+  one front-end among several.

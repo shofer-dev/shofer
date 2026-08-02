@@ -1,9 +1,12 @@
 # Remote agents — Temporal dispatch, AgentApi observation
 
-> **Status: decided direction, nothing built.** This doc captures the END STATE
-> for horizontal scaling / remote agents and the ROADMAP from the current state.
-> The current state it replaces is the shipped "Shofer Workers" fleet layer
-> (`v3_architecture.md` §12), which the first roadmap phase REMOVES.
+> **Status: Phase 1 (removal) EXECUTED — the bespoke "Shofer Workers" fleet
+> layer, the config-sync channel, and the split-host substrate are gone from
+> the codebase, and the docs they anchored (`v3_architecture.md`,
+> `config_sync.md`, `headless.md`) are consolidated into
+> [`host-boundary.md`](../docs/host-boundary.md) and
+> [`cli.md`](../docs/cli.md). Phases 2–4 are not built.** This doc captures the
+> END STATE for horizontal scaling / remote agents and the ROADMAP.
 
 ## 0. The decision
 
@@ -231,7 +234,7 @@ untouched throughout).
 
 Each phase is independently shippable; the tree stays green at every step.
 
-### Phase 1 — REMOVE the bespoke fleet layer
+### Phase 1 — REMOVE the bespoke fleet layer — ✅ DONE (shofer 2.45.0)
 
 Delete, in one coordinated change (with the doc updates in the same change):
 

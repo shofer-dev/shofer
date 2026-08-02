@@ -178,7 +178,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		parallelTasks,
 		taskNotifications,
 		hasMoreShoferMessages,
-		preferredWorkerId,
 	} = useExtensionState()
 
 	// Show a WarningRow when the user sends a message with a retired provider.
@@ -1186,10 +1185,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						// Settings defaults when absent.
 						mode,
 						apiConfigName: currentApiConfigName,
-						// Node picked in the composer. Undefined = "Auto": omit it so
-						// WorkerRegistry.routeNewTask round-robins. Sticky across tasks,
-						// like mode/apiConfigName above.
-						preferredWorkerId: preferredWorkerId ?? undefined,
 					})
 				} else if (shoferAskRef.current) {
 					if (shoferAskRef.current === "followup") {
@@ -1268,7 +1263,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			apiConfiguration?.apiProvider,
 			mode,
 			currentApiConfigName,
-			preferredWorkerId,
 		], // messagesRef and shoferAskRef are stable
 	)
 
@@ -2562,10 +2556,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 									</StandardTooltip>
 								</div>
 							)}
-							{/* Shofer Workers: a remote (shadow) task's asks now round-trip to the
-							     executor over the reverse ask channel, so it presents the SAME
-							     approve/deny buttons as a local task (auto-approved asks stay
-							     button-less via the existing autoApproved flag). */}
 							{(primaryButtonText || secondaryButtonText) && (
 								<div className="flex h-9 items-center mb-1 px-[15px]">
 									{primaryButtonText && (
