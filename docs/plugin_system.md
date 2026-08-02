@@ -1131,6 +1131,28 @@ Discovery classifies each plugin by where it was found (`PluginScope`):
 - **`global`** — installed under `~/.shofer/plugins/` (all workspaces).
 - **`project`** — installed under `<workspace>/.shofer/plugins/` (checked into VCS or gitignored per team choice).
 
+### The "no bundled plugins" build flavor
+
+Setting `SHOFER_NO_BUNDLED_PLUGINS=1` (or `true`) when bundling (`src/esbuild.mjs`, so
+`SHOFER_NO_BUNDLED_PLUGINS=1 pnpm bundle` / `pnpm vsix`) packages the extension with
+**no bundled plugins at all**: the `plugins/**` → `dist/plugins` copy and every bundled
+plugin's UI build are skipped. It exists for hosts/embedders that supply their entire
+plugin set out-of-band — the global scope (`~/.shofer/plugins`) or `.shofer/plugins.json`
+declarations — and want none of the first-party set on disk. The headless CLI/`serve`
+runtime consumes the same `src/dist` output, so the flag governs that artifact too. The
+plugin SDK (`dist/plugin-sdk`) still ships: global/project code plugins resolve
+`@shofer/types` through it regardless of flavor.
+
+At runtime the absent `dist/plugins` degrades to **no built-in tier**: a missing scan
+root discovers nothing (and is tolerated, not an error), and `effectiveModes` merges
+only what the remaining scopes and the user's/project's own mode files supply. Because
+the built-in modes ship as the bundled `builtin-config` plugin, this flavor has no
+`code`/`architect`/… modes of its own — the host's tiers must define the mode set; an
+entirely empty effective mode list surfaces as an error when a prompt is built
+(`resolveModeConfig`). Pinned by
+[`no-bundled-plugins.spec.ts`](../packages/core/src/plugins/__tests__/no-bundled-plugins.spec.ts).
+The default build is unchanged and ships all bundled plugins.
+
 ### Package format
 
 A plugin is distributed as a `.shofer-plugin` archive (gzip tarball) containing

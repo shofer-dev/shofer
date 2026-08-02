@@ -11,6 +11,19 @@ import { copyPaths, copyWasms } from "@shofer/build"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+/**
+ * Build flavor: `SHOFER_NO_BUNDLED_PLUGINS=1` (or `true`) produces an extension with
+ * NO first-party bundled plugins — the packaging step skips both the `plugins/**` →
+ * `dist/plugins` copy and each bundled plugin's UI build. For hosts/embedders that
+ * supply their entire plugin set out-of-band (e.g. via the global scope
+ * `~/.shofer/plugins`). The default build (marketplace) ships all bundled plugins.
+ * The headless CLI/`serve` runtime consumes this same `src/dist` output
+ * (getDefaultExtensionPath → `src/dist`; the CLI release copies `src/dist/*`
+ * wholesale), so the flag governs that artifact too. The plugin SDK
+ * (`dist/plugin-sdk`) still ships: global/project code plugins need it regardless.
+ */
+const NO_BUNDLED_PLUGINS = ["1", "true"].includes(process.env.SHOFER_NO_BUNDLED_PLUGINS ?? "")
+
 /** Directory/file names never shipped into a packaged plugin (dev-only cruft). */
 const PLUGIN_COPY_EXCLUDE_DIRS = new Set(["node_modules", "__tests__"])
 const PLUGIN_COPY_EXCLUDE_FILES = new Set(["tsconfig.json", "vitest.config.ts", "build-ui.mjs"])
@@ -253,8 +266,19 @@ async function main() {
 					//
 					// Build each plugin's UI bundle(s) from source FIRST so logic + UI ship
 					// together as one current unit (no stale hand-built .js).
-					buildBundledPluginUis(path.join(srcDir, "..", "plugins"))
-					copyBundledPlugins(path.join(srcDir, "..", "plugins"), path.join(distDir, "plugins"))
+					//
+					// Under SHOFER_NO_BUNDLED_PLUGINS both steps are skipped: the runtime
+					// tolerates the absent `dist/plugins` (discovery finds nothing there and
+					// the built-in tier simply does not exist — the host's own scopes supply
+					// every plugin, including modes).
+					if (NO_BUNDLED_PLUGINS) {
+						console.log(
+							"[esbuild] SHOFER_NO_BUNDLED_PLUGINS set — skipping bundled plugins (no dist/plugins, no plugin UI builds)",
+						)
+					} else {
+						buildBundledPluginUis(path.join(srcDir, "..", "plugins"))
+						copyBundledPlugins(path.join(srcDir, "..", "plugins"), path.join(distDir, "plugins"))
+					}
 				})
 			},
 		},

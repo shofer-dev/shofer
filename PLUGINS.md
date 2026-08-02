@@ -42,6 +42,13 @@ If a plugin of the same `name` exists in both, the **project** one (scanned late
 **disabled by default** after install — the user enables it per-plugin (that toggle is the consent
 gate; see [§7](#7-permissions--consent)).
 
+A third, lowest-precedence scope is **`bundled`** — the first-party plugins shipped inside the
+extension build itself (`<extension>/dist/plugins/`). Hosts that supply their entire plugin set
+out-of-band can build an extension without any of them: `SHOFER_NO_BUNDLED_PLUGINS=1` at bundle
+time skips the bundled-plugins packaging entirely, and the runtime treats the absent directory as
+"no built-in tier" (see the build-flavor section of
+[`docs/plugin_system.md`](docs/plugin_system.md)).
+
 ---
 
 ## 2. Quickstart
