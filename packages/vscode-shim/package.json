@@ -14,7 +14,6 @@
 		"@shofer/config-eslint": "workspace:^",
 		"@shofer/config-typescript": "workspace:^",
 		"@types/node": "^24.1.0",
-		"vitest": "^3.2.3"
-	},
-	"dependencies": {}
+		"vitest": "^3.2.7"
+	}
 }

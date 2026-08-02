@@ -70,3 +70,20 @@
   pools are sized at workspace creation and resized by hand; not fine once scale-down is
   automatic, which is when this needs a drain: stop assigning, wait for in-flight tasks
   (bounded), then disconnect. Design: `docs/workspace_agent_pool.md` §5.
+
+- **Dependency advisories left open on purpose** (state after the 2026-08 audit
+  sweep: everything fixable within the declared/current major was fixed via
+  in-range updates and range-scoped `pnpm.overrides`; `pnpm audit` residue is
+  0 critical / 4 high / 4 moderate / 1 low). Each of these needs a major (or
+  0.x-minor, same thing) jump of a dependency we don't control the API of, or
+  has no fixed release at all — revisit when the dependent moves:
+    - `@ai-sdk/provider-utils` (via `sambanova-ai-provider`, runtime): no fixed
+      release exists upstream (GHSA-866g-f22w-33x8, low).
+    - `@hono/node-server` (via `@modelcontextprotocol/sdk` — already at the
+      newest SDK): fix only exists in hono 2.x, SDK pins 1.x. Server-side HTTP
+      transport of the SDK; Shofer only uses the client side.
+    - `drizzle-orm` 0.44→0.45 (packages/evals, dev-only).
+    - `serialize-javascript` 6→7 (mocha, apps/vscode-e2e, dev-only).
+    - `js-cookie` 2→3 (react-use, apps/web-evals, dev-only).
+    - `sharp` 0.34→0.35 (next's optional dep, apps/web-evals, dev-only).
+    - `uuid` 8→11 (@azure/msal-node under @vscode/vsce, packaging-time only).
