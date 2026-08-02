@@ -95,6 +95,15 @@ flowchart LR
   mTLS / an integrator's own credential exchange). The pair must work
   unmodified against a laptop `start-dev`, a self-hosted cluster, or a hosted
   Temporal.
+- **Multiple Temporal servers, each with its own settings.** The config is a
+  set of **named connections**, each complete in itself (address, namespace,
+  TLS, auth, queues, `activityName`, per-connection `concurrency`); the
+  plugin runs one SDK worker per connection × namespace × queue — SDK workers
+  are cheap. This is how one worker fleet serves two dispatchers at once —
+  e.g. the controller's own Temporal *and* an integrator platform's — with
+  one plugin install. Because every connection's tasks land on the same
+  machine, a **pod-wide slot budget** shared across connections bounds total
+  concurrency (per-connection slots alone would multiply).
 - **Configurable through the normal surfaces, not just provisioning.** The
   config rides the standard plugin-config mechanism — `pluginConfigs` in the
   layered `.shofer/settings.json` scopes (global/user/project, live-reloaded
@@ -111,10 +120,10 @@ flowchart LR
 - Dispatches: starts a `shoferTask` workflow on a named queue with
   `maximumAttempts: 1` by default (an agent task is not idempotent; a re-run
   against the same workspace is opt-in, never a silent retry).
-- **Same connection config surface** as the worker (`temporalAddress`,
-  `namespace`, TLS, auth hook), plus dispatch parameters — target task queue,
-  workflow type (default `shoferTask`), retry policy, timeouts — settable as
-  defaults and overridable per dispatch.
+- **Same connection config surface** as the worker (named connections:
+  `temporalAddress`, `namespace`, TLS, auth hook), plus dispatch parameters —
+  connection name, target task queue, workflow type (default `shoferTask`),
+  retry policy, timeouts — settable as defaults and overridable per dispatch.
 - Discovers the owner from Temporal, then hands the controller-side session to
   the core attachment primitive (below).
 - Owns the UI (a plugin panel): dispatch surface, the fan-out task list, and
@@ -124,6 +133,39 @@ flowchart LR
   `ListWorkflows` in the namespace, so a controller restart rebuilds its
   fan-out list from Temporal and re-attaches on demand. (The current fleet
   layer loses remote tasks on restart — shadows were never in task history.)
+
+### 2a-2. One dispatch surface — the standard task path, not a parallel one
+
+The pair adds **no second way to run tasks**. `temporal-controller` hooks the
+core **task-placement seam** (Phase 2; a sibling of the existing
+`resolve-task-cwd` plugin broadcast): when a task is created through the
+normal surfaces — the new-task UI, the `new_task` tool — with a **queue/tag
+target**, the plugin claims it and dispatches over Temporal, and the task
+renders through the attachment primitive like any other; an untargeted task
+runs in-process exactly as today. The plugin panel is for fleet visibility
+(queue health, the fan-out list), never the only door to dispatch.
+
+Two deliberate boundaries inside that unification:
+
+- **Local execution is not routed through Temporal.** In-process task creation
+  is a function call, not a channel — it must work with zero external services
+  (a Shofer with no plugins installed still runs), it is latency-free, and it
+  keeps foreground subtask parent↔child coordination in-process. "One dispatch
+  mechanism" means one **remote** dispatch mechanism; it does not mean adding
+  a server round-trip to local work that ends up executing in the same
+  process it started from.
+- **Background `new_task` children may target a queue.** A parent that spawns
+  a background child onto the pool steers it the same way a human steers any
+  remote task — over the attachment primitive — and the child's asks route to
+  the parent as background-subtask asks already do. Foreground/synchronous
+  subtasks stay in-process.
+
+The same host can run **both plugins**: the controller side always (that is
+what makes the IDE a dispatcher), and optionally a `temporal-worker`
+connection too, when an integrator wants that host's capacity in a pool.
+Making the IDE poll for its *own* dispatches is possible but pointless in the
+default setup — an extension host is as ephemeral as its window, and local
+work is better off never leaving the process.
 
 ### 2b. What core keeps: the attachment primitive
 
@@ -228,12 +270,16 @@ Bump minor `Y` (settings keys and persisted/wire shapes removed).
 **Done when:** `rg` over the repo finds none of the removed symbols; all
 packages build and test green; the docs above are coherent with the code.
 
-### Phase 2 — the attachment primitive
+### Phase 2 — the core seams: attachment + placement
 
 - New AgentApi **task snapshot** route (messages so far, outstanding asks,
   status, token usage) served from the worker's task store.
 - Core **attach/detach** implementation per §2b, rendering into the chat view;
   per-view focus so an editor tab and the sidebar can watch different tasks.
+- The **task-placement seam** (§2a-2): task creation broadcasts a placement
+  question a plugin may claim ("dispatched — here is the task reference"), a
+  sibling of the `resolve-task-cwd` broadcast; unclaimed tasks run in-process
+  unchanged.
 
 **Done when:** against a plain `shofer serve` running a task, a controller can
 attach mid-task by `(address, taskId, token)`, render the full transcript
@@ -303,3 +349,6 @@ untouched.
 - **Load-balancing in the controller** — matching is the server's job; a
   worker that shouldn't take work stops polling (concurrency/slot config on
   the worker plugin).
+- **A parallel dispatch surface** — remote dispatch rides the standard
+  task-creation path via the placement seam (§2a-2); the plugin panel
+  observes the fleet, it is never the only door to running a task.
