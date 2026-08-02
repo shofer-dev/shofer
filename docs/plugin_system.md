@@ -1153,10 +1153,14 @@ entirely empty effective mode list surfaces as an error when a prompt is built
 [`no-bundled-plugins.spec.ts`](../packages/core/src/plugins/__tests__/no-bundled-plugins.spec.ts).
 The default build is unchanged and ships all bundled plugins.
 
-The flag is part of the turbo cache key for the `bundle` task (`src/turbo.json` →
-`env`), so the two flavors never replay each other's cached `dist/**` — without that,
-alternating flavors on one working tree would silently package whichever flavor turbo
-cached last.
+The flag is declared as task `env` for **both** the `bundle` and `vsix` tasks
+(`src/turbo.json`), and both declarations are load-bearing. On `bundle` it keys the
+turbo cache, so the two flavors never replay each other's cached `dist/**`. On `vsix`
+it is what actually delivers the variable to the packaging step: turbo runs tasks in
+strict env mode, and `vsce package` re-runs `vscode:prepublish` (a fresh
+`node esbuild.mjs` outside turbo), so without the declaration that rebuild silently
+reverts to the full-fat default and packages it — while the lean `bundle` output sits
+cached, looking correct.
 
 ### Package format
 

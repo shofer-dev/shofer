@@ -21,6 +21,7 @@
 		},
 		"vsix": {
 			"dependsOn": ["bundle"],
+			"env": ["SHOFER_NO_BUNDLED_PLUGINS"],
 			"inputs": ["dist/**"],
 			"outputs": ["../bin/**"]
 		},
