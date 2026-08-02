@@ -322,7 +322,7 @@ describe("a pass", () => {
 		expect(h.notifies[0]).toContain("no user authority")
 		// The user copy is attributed with the mute affordance.
 		expect(advisoryMarkers[0]!.text).toContain("standard-questions")
-		expect(advisoryMarkers[0]!.text).toContain("catalogue.json")
+		expect(advisoryMarkers[0]!.text).toContain("detectors")
 	})
 
 	it("a human-only advisory reaches the marker but never the agent", async () => {

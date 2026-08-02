@@ -22,7 +22,7 @@ result readably:
   `<detector>.txt` are written to.
 - **uptake per detector** — `adopted/delivered`: whether advice is being acted on.
   A detector whose advice is persistently ignored is a detector to disable in
-  `.shofer/second-brain/catalogue.json`.
+  the plugin's `detectors` config.
 
 The badge (🧠 in the chat toolbar) and the Second Brain sidebar panel show the
 same numbers continuously, without spending a model turn.

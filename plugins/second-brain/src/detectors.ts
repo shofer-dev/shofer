@@ -8,7 +8,8 @@
  * grant, provider link) lives here; what a mode has no field for (enablement, cadence,
  * floors, deadlines, pilot flag, exec allowlists, detector config) lives in
  * {@link CATALOGUE_DEFAULTS}, overridable per workspace from
- * `.shofer/second-brain/catalogue.json` (see catalogue.ts).
+ * the plugin's own `detectors` config — reachable from an admin config bundle (see
+ * catalogue.ts).
  */
 
 import type { ModeConfig } from "@shofer/types"

@@ -15,28 +15,36 @@ file knows is missing.
   (watching/passes/cost). What it could NOT reach: no advisory ever cleared the
   gate, so neither `notify` injection nor `queue` re-trigger was observed. Blockers
   found, and where they stand:
-  1. **FIXED — `ForkLlmClient` resolves the handler per call.** Empty `profileRef`
-     means the host's *current* default profile; the client used to build the
-     handler once and pin it (a keyless org profile made every pass die on the
-     Anthropic SDK's "Could not resolve authentication method" until a plugin
-     reload). `getHandler` no longer caches.
-  2. **The workspace catalogue override never loads in the VS Code host.**
-     `catalogueReader` passes the workspace-relative `CATALOGUE_PATH` to
-     `host.fs.readFile`, which resolves against the extension host's cwd (not the
-     workspace) — and even a copy at the cwd (`/home/user/.shofer/...`) was not
-     picked up, so the only override surface is unusable exactly where a
-     deterministic always-advise detector was needed. (The pluginConfigs-keyed
-     catalogue rework in flight replaces this path.)
-  3. **FIXED — streamed tool-call arguments were dropped by the fork client.**
-     Confirmed, not just suspected: OpenAI-compatible providers stream a call as
-     `tool_call_partial` fragments keyed by `index` (id/name on the first
-     fragment only, arguments as append-fragments), and `tool_call_delta`
-     carries its fragment in `delta` — the client keyed by id and REPLACED
-     arguments, scattering fragments into nameless entries, so every feedback
-     call arrived empty and coerced to silent. `llm.ts` now accumulates
-     index-keyed fragments (llm.spec.ts covers the observed shapes).
-  Until (2) is resolved and an advisory is observed end-to-end, keep treating
-  the finish gate as experimental; it degrades to user-only surfaces by design.
+
+    1. **FIXED — `ForkLlmClient` resolves the handler per call.** Empty `profileRef`
+       means the host's _current_ default profile; the client used to build the
+       handler once and pin it (a keyless org profile made every pass die on the
+       Anthropic SDK's "Could not resolve authentication method" until a plugin
+       reload). `getHandler` no longer caches.
+    2. **FIXED — the catalogue override rides `pluginConfigs`, not a file.** The old
+       `catalogueReader` passed a workspace-relative `CATALOGUE_PATH` to
+       `host.fs.readFile`, which resolves against the extension host's cwd rather
+       than the workspace, so the only override surface was unusable exactly where
+       a deterministic always-advise detector was needed. Both are gone:
+       `loadCatalogue(raw, warn)` now takes the already-resolved
+       `pluginConfigs["second-brain"].detectors` value (`CATALOGUE_CONFIG_KEY`) and
+       is synchronous, so the override arrives through the same layered-config path
+       as every other plugin setting and needs no filesystem access at all.
+    3. **FIXED — streamed tool-call arguments were dropped by the fork client.**
+       Confirmed, not just suspected: OpenAI-compatible providers stream a call as
+       `tool_call_partial` fragments keyed by `index` (id/name on the first
+       fragment only, arguments as append-fragments), and `tool_call_delta`
+       carries its fragment in `delta` — the client keyed by id and REPLACED
+       arguments, scattering fragments into nameless entries, so every feedback
+       call arrived empty and coerced to silent. `llm.ts` now accumulates
+       index-keyed fragments (llm.spec.ts covers the observed shapes).
+
+    All three blockers are now fixed, but **no advisory has yet been observed
+    clearing the gate end-to-end**, so `notify` injection and `queue` re-trigger
+    remain unverified against a live host. Keep treating the finish gate as
+    experimental until a live session shows one; it degrades to user-only surfaces
+    by design.
+
 - **Digest-overflow fallback.** The digest is the complete conversation and is never
   truncated (owner directive); past `DIGEST_HARD_CAP_CHARS` passes skip with a visible
   "(digest exceeds the observer's practical context)" verdict. A graceful fallback for

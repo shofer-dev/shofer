@@ -1,7 +1,7 @@
 // Catalogue: the manifest ↔ runtime sync (contributes.modes must equal DETECTOR_MODES,
-// so the declarative contribution and the code cannot drift), the layering of
-// .shofer/second-brain/catalogue.json over the bundled defaults, the fail-closed parse,
-// and the pilot fallback chain.
+// so the declarative contribution and the code cannot drift), the layering of the
+// plugin's `detectors` config over the bundled defaults (the surface an admin config
+// bundle writes), the fail-closed parse, and the pilot fallback chain.
 
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -11,10 +11,6 @@ import { CATALOGUE_DEFAULTS, DETECTOR_MODES } from "../src/detectors.js"
 import { expandModeGrant, loadCatalogue, pickPilot } from "../src/catalogue.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
-
-const missing = async () => {
-	throw Object.assign(new Error("ENOENT"), { code: "ENOENT" })
-}
 
 describe("manifest ↔ detectors sync", () => {
 	it("plugin.json contributes.modes equals DETECTOR_MODES exactly", () => {
@@ -28,14 +24,23 @@ describe("manifest ↔ detectors sync", () => {
 		expect(new Set(DETECTOR_MODES.map((m) => m.slug))).toEqual(new Set(Object.keys(CATALOGUE_DEFAULTS)))
 	})
 
+	it("declares a `detectors` config key, so an admin bundle can reach every override", () => {
+		// A bundle's config tree has a closed key set and drops unknown keys, so the
+		// overrides MUST ride the plugin's own config to be admin-authorable at all.
+		const manifest = JSON.parse(readFileSync(join(here, "..", "plugin.json"), "utf8")) as {
+			config: { properties: Record<string, { type?: string }> }
+		}
+		expect(manifest.config.properties.detectors?.type).toBe("object")
+	})
+
 	it("every mode is private — a detector leaking into a picker would be a bug", () => {
 		for (const mode of DETECTOR_MODES) expect(mode.private).toBe(true)
 	})
 })
 
 describe("loadCatalogue", () => {
-	it("no override file ⇒ the bundled defaults, with mode grants expanded", async () => {
-		const defs = await loadCatalogue(missing)
+	it("no overrides ⇒ the bundled defaults, with mode grants expanded", () => {
+		const defs = loadCatalogue(undefined)
 		const bySlug = Object.fromEntries(defs.map((d) => [d.slug, d]))
 		expect(bySlug["repeat-failure"]!.enabled).toBe(true)
 		expect(bySlug["repeat-failure"]!.pilot).toBe(true)
@@ -49,14 +54,12 @@ describe("loadCatalogue", () => {
 		expect(bySlug["cross-task-collision"]!.structural).toBe(true)
 	})
 
-	it("workspace overrides shadow defaults per field, keyed by slug", async () => {
-		const defs = await loadCatalogue(async () =>
-			JSON.stringify({
-				"static-analysis": { enabled: true, exec: ["go build ./..."], deadlineS: 60 },
-				"standard-questions": { config: { questions: [{ key: "x", ask: "X done?" }] } },
-				default: { system: "custom watcher prompt" },
-			}),
-		)
+	it("overrides shadow defaults per field, keyed by slug", () => {
+		const defs = loadCatalogue({
+			"static-analysis": { enabled: true, exec: ["go build ./..."], deadlineS: 60 },
+			"standard-questions": { config: { questions: [{ key: "x", ask: "X done?" }] } },
+			default: { system: "custom watcher prompt" },
+		})
 		const bySlug = Object.fromEntries(defs.map((d) => [d.slug, d]))
 		expect(bySlug["static-analysis"]!.enabled).toBe(true)
 		expect(bySlug["static-analysis"]!.exec).toEqual(["go build ./..."])
@@ -67,49 +70,51 @@ describe("loadCatalogue", () => {
 		expect(bySlug["repeat-failure"]!.enabled).toBe(true)
 	})
 
-	it("a broken catalogue degrades to the bundled one, never to no observer", async () => {
-		const warnings: string[] = []
-		const defs = await loadCatalogue(
-			async () => "{not json",
-			(m) => warnings.push(m),
-		)
-		expect(defs.length).toBe(DETECTOR_MODES.length)
-		expect(defs.find((d) => d.slug === "repeat-failure")!.enabled).toBe(true)
-		expect(warnings.length).toBe(1)
+	it("a malformed overrides value degrades to the bundled catalogue, never to no observer", () => {
+		for (const bad of ["not an object", 42, ["an", "array"]]) {
+			const warnings: string[] = []
+			const defs = loadCatalogue(bad, (m) => warnings.push(m))
+			expect(defs.length).toBe(DETECTOR_MODES.length)
+			expect(defs.find((d) => d.slug === "repeat-failure")!.enabled).toBe(true)
+			expect(warnings.length).toBe(1)
+		}
 	})
 
-	it("invalid override fields are dropped, valid ones kept", async () => {
-		const defs = await loadCatalogue(async () => JSON.stringify({ default: { confidenceFloor: 7, cadenceNth: 2 } }))
+	it("a malformed entry for ONE detector leaves the others on their defaults", () => {
+		const defs = loadCatalogue({ "git-log": "nonsense", default: { enabled: false } })
+		expect(defs.find((d) => d.slug === "git-log")!.enabled).toBe(false) // bundled default
+		expect(defs.find((d) => d.slug === "default")!.enabled).toBe(false) // honored override
+		expect(defs.find((d) => d.slug === "repeat-failure")!.enabled).toBe(true)
+	})
+
+	it("invalid override fields are dropped, valid ones kept", () => {
+		const defs = loadCatalogue({ default: { confidenceFloor: 7, cadenceNth: 2 } })
 		const def = defs.find((d) => d.slug === "default")!
 		expect(def.confidenceFloor).toBe(0.65) // 7 is out of range — dropped
 		expect(def.cadenceNth).toBe(2)
 	})
 
-	it("override tools are filtered to the plugin's own catalog", async () => {
-		const defs = await loadCatalogue(async () =>
-			JSON.stringify({ default: { tools: ["read_file", "write_to_file", "execute_command"] } }),
-		)
+	it("override tools are filtered to the plugin's own catalog", () => {
+		const defs = loadCatalogue({ default: { tools: ["read_file", "write_to_file", "execute_command"] } })
 		expect(defs.find((d) => d.slug === "default")!.tools).toEqual(["read_file", "execute_command"])
 	})
 })
 
 describe("pickPilot", () => {
-	it("declared pilot wins when enabled", async () => {
-		const defs = await loadCatalogue(missing)
+	it("declared pilot wins when enabled", () => {
+		const defs = loadCatalogue(undefined)
 		expect(pickPilot(defs)!.slug).toBe("repeat-failure")
 	})
 
-	it("falls back to the first tool-less enabled detector, then any enabled", async () => {
-		const defs = await loadCatalogue(async () => JSON.stringify({ "repeat-failure": { enabled: false } }))
+	it("falls back to the first tool-less enabled detector, then any enabled", () => {
+		const defs = loadCatalogue({ "repeat-failure": { enabled: false } })
 		const pilot = pickPilot(defs)!
 		expect(pilot.slug).toBe("standard-questions")
 
-		const onlyTools = await loadCatalogue(async () =>
-			JSON.stringify({
-				"repeat-failure": { enabled: false },
-				"standard-questions": { enabled: false },
-			}),
-		)
+		const onlyTools = loadCatalogue({
+			"repeat-failure": { enabled: false },
+			"standard-questions": { enabled: false },
+		})
 		expect(pickPilot(onlyTools)!.slug).toBe("default")
 	})
 })

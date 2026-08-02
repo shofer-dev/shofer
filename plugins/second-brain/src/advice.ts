@@ -52,7 +52,8 @@ export function renderForUser(a: Advisory): string {
 	return (
 		`🧠 Second Brain · ${a.detector} (confidence ${a.confidence.toFixed(2)})${scope}\n` +
 		`${a.headline}\n${a.body}${evidence}\n` +
-		`— disable this detector in .shofer/second-brain/catalogue.json ("${a.detector}": {"enabled": false}), ` +
+		`— disable this detector in the Second Brain plugin's "detectors" config ` +
+		`("${a.detector}": {"enabled": false}), ` +
 		`or mute the Second Brain in Settings → Plugins`
 	)
 }

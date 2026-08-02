@@ -215,6 +215,11 @@
 				"default": false,
 				"description": "Silence: no passes, no delivery, nothing sent. Observation continues locally, so unmuting resumes with full context."
 			},
+			"detectors": {
+				"type": "object",
+				"default": {},
+				"description": "Per-detector overrides keyed by mode slug (repeat-failure, standard-questions, default, goal-drift, git-log, prior-art, constraint-drift, static-analysis, cross-task-collision). Each may set: enabled, cadenceNth, confidenceFloor, deadlineS, exec (exact-string command allowlist), system (the detector's prompt), tools, and config (e.g. the standard-questions checklist). Anything invalid is dropped and the bundled default kept. Authorable by an admin as part of a Shofer config bundle."
+			},
 			"debug": {
 				"type": "boolean",
 				"default": false,

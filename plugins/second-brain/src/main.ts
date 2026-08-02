@@ -23,7 +23,7 @@ import {
 	projectToolError,
 	projectUserMessage,
 } from "./projection.js"
-import { CATALOGUE_PATH, catalogueReader, loadCatalogue } from "./catalogue.js"
+import { CATALOGUE_CONFIG_KEY, loadCatalogue } from "./catalogue.js"
 import { CollisionIndex } from "./collisions.js"
 import { LedgerStore } from "./ledger.js"
 import { ForkLlmClient } from "./llm.js"
@@ -133,7 +133,9 @@ function seamsFor(ctx: PluginContext, taskId: string): DeliverySeams {
 			}
 		},
 		async loadDetectors() {
-			return loadCatalogue(catalogueReader(ctx), (m) => log(ctx, m))
+			// Read from ctx.config each pass: a Settings edit or an org bundle change
+			// reloads the plugin with a fresh context, so this is always current.
+			return loadCatalogue(cfg(ctx)[CATALOGUE_CONFIG_KEY], (m) => log(ctx, m))
 		},
 		clientFor(provider) {
 			const key = provider ?? (cfg(ctx).profileRef as string) ?? ""
@@ -353,7 +355,7 @@ const plugin: ShoferPlugin = {
 				return {
 					consent: isReady(ctx),
 					muted: bool(ctx, "mute", false),
-					cataloguePath: CATALOGUE_PATH,
+					catalogueKey: `pluginConfigs["second-brain"].${CATALOGUE_CONFIG_KEY}`,
 					// Where the per-pass digest.txt / pass.json / <detector>.txt land when
 					// `debug` is on — undiscoverable otherwise, since it is the plugin's
 					// private storage rather than a path the user chose.

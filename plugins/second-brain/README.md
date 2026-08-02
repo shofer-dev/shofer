@@ -41,20 +41,33 @@ Enabled out of the box (the tool-less ones): `repeat-failure` (the pilot),
 `prior-art`, `constraint-drift`, `static-analysis` (ships with an **empty** command
 allowlist you must fill), `cross-task-collision` (structural). Flip one on — and
 override any detector's prompt, tools, cadence, floor, exec allowlist or checklist —
-in the workspace catalogue, keyed by mode slug:
+in the plugin's `detectors` config, keyed by mode slug:
 
 ```jsonc
-// .shofer/second-brain/catalogue.json
+// .shofer/settings.json — or an admin's config bundle, which materializes to it
 {
-	"static-analysis": { "enabled": true, "exec": ["go build ./..."] },
-	"git-log": { "enabled": true },
-	"standard-questions": {
-		"config": { "questions": [{ "key": "migrations", "ask": "Was the migration written for both directions?" }] },
+	"pluginConfigs": {
+		"second-brain": {
+			"detectors": {
+				"static-analysis": { "enabled": true, "exec": ["go build ./..."] },
+				"git-log": { "enabled": true },
+				"standard-questions": {
+					"config": { "questions": [{ "key": "migrations", "ask": "Migration written both ways?" }] },
+				},
+			},
+		},
 	},
 }
 ```
 
-A broken catalogue degrades to the bundled one, never to no observer. For a deep
+Every parameter lives in the plugin's config for a reason: a Shofer **config bundle**
+([`docs/shofer_bundles.md`](../../../../docs/shofer_bundles.md)) has a closed key set
+that materializes to fixed `.shofer/` paths and silently drops anything else, so a
+bespoke file of our own could never be authored by an admin. Riding `pluginConfigs`
+means an admin can control **every** Second Brain parameter — thresholds, budgets,
+which detectors run, even their prompts — from admin-console, delivered as
+`.shofer/settings.json` and inherited down the object tree. A malformed override
+degrades to the bundled default, never to no observer. For a deep
 one-off investigation, spawn a detector's private mode as a real task:
 `new_task` with mode `second-brain:git-log`.
 

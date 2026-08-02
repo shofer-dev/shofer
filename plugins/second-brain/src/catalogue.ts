@@ -2,23 +2,31 @@
  * catalogue — merges the built-in detector modes with the workspace's overrides into
  * the effective detector definitions a pass runs.
  *
- * Layers, lowest first: the mode definitions + CATALOGUE_DEFAULTS (bundled) →
- * `.shofer/second-brain/catalogue.json` (the workspace, keyed by unqualified mode
- * slug). The workspace file is the deliberate ONLY override surface — private modes
- * are hidden from the Modes UI — and it may also shadow a detector's `system` and
- * `tools`. A broken file degrades to the bundled catalogue, never to no observer
- * (fail-closed parse, warn once), and it is re-read at pass boundaries so edits take
- * effect without a restart.
+ * Layers, lowest first: the mode definitions + CATALOGUE_DEFAULTS (bundled) → the
+ * plugin's own `detectors` config value, keyed by unqualified mode slug.
+ *
+ * **Why the plugin's config and not a file of our own.** Overrides must be authorable
+ * by an admin as a *config bundle* (`docs/shofer_bundles.md`), and a bundle's `config`
+ * tree has a CLOSED key set — `settings`, `modes`, `mcp`, `commands`, `rules`,
+ * `skills`, `workflows`, `plugins` — materialized to fixed `.shofer/` paths, with any
+ * unknown key silently dropped. A bespoke `.shofer/second-brain/catalogue.json` is
+ * therefore unreachable from a bundle: an admin could author it and it would never
+ * arrive. Riding the plugin's `config` instead puts the catalogue inside
+ * `settings.pluginConfigs["second-brain"].detectors`, which materializes to
+ * `.shofer/settings.json` and reaches the plugin through the layered overlay — so
+ * every parameter is admin-controllable through the mechanism that already exists.
+ *
+ * Values are validated field by field and anything invalid is dropped, so a malformed
+ * override degrades to the bundled catalogue rather than to no observer.
  */
 
 import { getToolsForMode, type ModeConfig } from "@shofer/types"
-import type { PluginContext } from "@shofer/types"
 
 import { CATALOGUE_DEFAULTS, DETECTOR_MODES } from "./detectors.js"
 import { GATE_CONFIDENCE_FLOOR, type DetectorDef } from "./types.js"
 
-/** Workspace-relative path of the override file (under `.shofer/`, like everything else). */
-export const CATALOGUE_PATH = ".shofer/second-brain/catalogue.json"
+/** The plugin-config key holding the per-detector overrides, keyed by mode slug. */
+export const CATALOGUE_CONFIG_KEY = "detectors"
 
 /** The tools the plugin's fork dispatcher actually implements (tool-executor.ts). */
 export const PLUGIN_TOOL_CATALOG = new Set([
@@ -70,32 +78,21 @@ export function expandModeGrant(mode: ModeConfig): string[] {
 }
 
 /**
- * Load the effective detector definitions. `readWorkspaceFile` is the seam (backed by
- * `ctx.host.fs.readFile` in production, a stub in tests); a missing file is the normal
- * case and reads as "no overrides".
+ * Load the effective detector definitions from the plugin's `detectors` config value
+ * (`ctx.config.detectors`), layered over the bundled catalogue.
  */
-export async function loadCatalogue(
-	readWorkspaceFile: (relPath: string) => Promise<string>,
-	warn: (message: string) => void = () => {},
-): Promise<DetectorDef[]> {
+export function loadCatalogue(raw: unknown, warn: (message: string) => void = () => {}): DetectorDef[] {
 	let overrides: Record<string, CatalogueOverride> = {}
-	try {
-		const raw = await readWorkspaceFile(CATALOGUE_PATH)
-		const parsed: unknown = JSON.parse(raw)
-		if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-			for (const [slug, entry] of Object.entries(parsed as Record<string, unknown>)) {
+	if (raw !== undefined && raw !== null) {
+		if (typeof raw === "object" && !Array.isArray(raw)) {
+			for (const [slug, entry] of Object.entries(raw as Record<string, unknown>)) {
 				overrides[slug] = parseOverride(entry)
 			}
 		} else {
-			warn(`second-brain: ${CATALOGUE_PATH} is not an object — using the bundled catalogue`)
-		}
-	} catch (error) {
-		if (error instanceof SyntaxError) {
-			// A broken catalogue degrades to the bundled one, never to no observer.
-			warn(`second-brain: ${CATALOGUE_PATH} is invalid JSON — using the bundled catalogue`)
+			// Degrade to the bundled catalogue — never to no observer.
+			warn(`second-brain: the "${CATALOGUE_CONFIG_KEY}" config must be an object — using the bundled catalogue`)
 			overrides = {}
 		}
-		// ENOENT and friends: no overrides, the normal case.
 	}
 
 	return DETECTOR_MODES.map((mode) => {
@@ -127,13 +124,4 @@ export function pickPilot(defs: DetectorDef[]): DetectorDef | undefined {
 	return (
 		enabled.find((d) => d.pilot) ?? enabled.find((d) => d.tools.length === 0 && d.exec.length === 0) ?? enabled[0]
 	)
-}
-
-/** Convenience: a catalogue reader bound to the plugin context's host fs. */
-export function catalogueReader(ctx: PluginContext): (relPath: string) => Promise<string> {
-	return async (relPath: string) => {
-		const fs = ctx.host?.fs
-		if (!fs) throw new Error("host fs unavailable")
-		return fs.readFile(relPath)
-	}
 }

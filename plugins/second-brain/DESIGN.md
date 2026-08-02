@@ -298,7 +298,7 @@ sequenceDiagram
 | `src/digest.ts`                                   | The digest: the complete conversation's projected stream, append-only, never evicted or compacted; rendered into the shared system block              |
 | `src/fork.ts`                                     | One detector fork: prefix + tail, the small tool loop, the feedback tool schema, deadlines                                                            |
 | `src/detectors.ts`                                | Single in-code source for the detector modes + catalogue defaults; a spec asserts `plugin.json` `contributes.modes` equals it byte-for-byte           |
-| `src/catalogue.ts`                                | Layers `.shofer/second-brain/catalogue.json` over the bundled defaults into effective detector definitions; fail-closed parse; pilot fallback chain   |
+| `src/catalogue.ts`                                | Layers the plugin's `detectors` config over the bundled defaults into effective detector definitions; fail-closed parse; pilot fallback chain         |
 | `src/gate.ts`                                     | Evidence → mute → suppression → dedup → confidence floors → rate/cooldown → staleness; the two delivery-time expiry clocks                            |
 | `src/ledger.ts`                                   | Per-task durable judgment; TTL sweep; dropped on `onTaskDeleted`                                                                                      |
 | `src/collisions.ts`                               | Paths touched per live task, in-process; the structural `cross-task-collision` trigger                                                                |
@@ -596,16 +596,17 @@ the finish gate degrades to marker + badge only (user-facing), never to interrup
 Three layers, lowest first — and every user-editable JSON file lives under `.shofer/`,
 like every other project-owned Shofer artifact:
 
-| Layer            | Where                                                                 | Holds                                                                                                                                                                                                                                                         |
-| ---------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bundled defaults | the plugin (`modes.ts`, `catalogue.json`, manifest `config` defaults) | detector modes, catalogue defaults, every tunable's default                                                                                                                                                                                                   |
-| User settings    | manifest `config` schema via `ctx.config` — Settings → Plugins        | tunables: `profileRef`, loop cadence (`minIntervalS`, `triggerChars`, `maxIntervalS`), gate (`ratePerHour`, `cooldownS`, floors, caps, the two TTL clocks), budgets, finish gate, `mute`, `debug`                                                             |
-| Workspace        | **`.shofer/second-brain/catalogue.json`**                             | per-detector overrides keyed by mode slug: `enabled`, `cadence`, `confidenceFloor`, `deadlineS`, exec allowlists (`static-analysis` ships empty **by design**), and detector config — the `standard-questions` checklist is the canonical project-owned entry |
+| Layer            | Where                                                                    | Holds                                                                                                                                                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bundled defaults | the plugin (`detectors.ts`, manifest `config` defaults)                  | detector modes, catalogue defaults, every tunable's default                                                                                                                                                                                                                             |
+| User settings    | manifest `config` schema via `ctx.config` — Settings → Plugins           | tunables: `profileRef`, loop cadence (`minIntervalS`, `triggerChars`, `maxIntervalS`), gate (`ratePerHour`, `cooldownS`, floors, caps, the two TTL clocks), budgets, finish gate, `mute`, `debug`                                                                                       |
+| Workspace / org  | **`pluginConfigs["second-brain"].detectors`** in `.shofer/settings.json` | per-detector overrides keyed by mode slug: `enabled`, `cadenceNth`, `confidenceFloor`, `deadlineS`, `exec` allowlists (`static-analysis` ships empty **by design**), `system`, `tools`, and detector `config` — the `standard-questions` checklist is the canonical project-owned entry |
 
-Semantics: the catalogue file is validated with a Zod schema (fail-closed to the bundled
-defaults, per the Schema-First Persistence Rule — a broken catalogue must degrade to the
-shipped one, never to no observer), watched via `ctx.host.watch`, and re-read at pass
-boundaries — except `mute`, honored immediately. A Settings edit reloads the plugin
+Semantics: every override is validated field by field and anything invalid is dropped
+(fail-closed to the bundled defaults — a broken catalogue must degrade to the shipped
+one, never to no observer). The catalogue is read from `ctx.config` at each pass
+boundary, and a config change reloads the plugin with a fresh context, so an edit is
+picked up without a restart. A Settings edit reloads the plugin
 (host behavior); state survives because ledgers and status live in `ctx.storage`, and
 the digest restarts from attach (a reload costs the warm prefix, not judgment — same trade
 as the original's worker restart). Detector _prompts and grants_ are overridden by
@@ -621,6 +622,68 @@ The two independent rate limits keep their roles and their names: the loop's
 `minIntervalS` bounds what the Second Brain **costs**; the gate's `ratePerHour` bounds
 what it costs **the primary**.
 
+## Admin control: every parameter is bundle-authorable
+
+An admin authors a **Shofer config bundle** in admin-console; it is anchored on the
+object tree, inherited down it, and materialized by resource-manager into the
+workspace's read-only global `.shofer/`
+([`docs/shofer_bundles.md`](../../../../docs/shofer_bundles.md);
+[`docs/configuration.md`](../../docs/configuration.md) for the three scopes and the
+merge). For that to reach this plugin, **the parameter has to be a key a bundle can
+express** — the bundle's `config` tree has a closed key set (`settings`, `modes`,
+`mcp`, `commands`, `rules`, `skills`, `workflows`, `plugins`) mapped to fixed
+`.shofer/` paths, and `Materialize` silently drops anything else.
+
+So the Second Brain keeps **all** of its configuration in the plugin's own config —
+tunables and the detector catalogue alike:
+
+```jsonc
+// a bundle's `settings` → .shofer/settings.json
+{
+	"pluginConfigs": {
+		"second-brain": {
+			"profileRef": "haiku", // which model observes
+			"minIntervalS": 120, // what it costs
+			"ratePerHour": 2, // what it costs the primary
+			"detectors": {
+				// which lenses run, and how
+				"git-log": { "enabled": true },
+				"static-analysis": { "enabled": true, "exec": ["go build ./..."] },
+				"standard-questions": {
+					"config": {
+						"questions": [
+							/* the org's bar */
+						],
+					},
+				},
+			},
+		},
+	},
+}
+```
+
+An earlier draft put the catalogue in a bespoke `.shofer/second-brain/catalogue.json`.
+It read well and was unreachable: an admin could author it and it would never arrive.
+Nothing else in the plugin may acquire a config file of its own for the same reason.
+
+Two platform properties this leans on, both of which had to be fixed for it to work:
+
+- **A file layer's value is what runs, and the UI says so.** The layered overlay wins
+  over locally stored settings, so the Plugins panel renders a file-managed plugin's
+  config **read-only** with its source named
+  (`ContextProxy.isManagedByFileLayer`) rather than offering an edit that would be
+  silently shadowed.
+- **A change is picked up without a restart.** A plugin holds the `config` object it
+  was handed at load, so the host reloads any plugin whose `pluginConfigs` entry moved
+  when the overlay refreshes — otherwise a re-materialized bundle would be reported by
+  the overlay while the observer kept running on the old values.
+
+The one granularity wrinkle, stated rather than hidden: `pluginConfigs` merges
+**whole-value** across scopes, so an org bundle that sets it supplies _every_ plugin's
+config, not just this one's — a project cannot add config for a different plugin on
+top. That is the platform's current layered-merge semantics, not something this plugin
+chooses; per-plugin merging would be a change to `layered-config`'s collection specs.
+
 ## Storage topology
 
 | Data                             | Location                                                                                                                  | Survives                                                                                    |
@@ -631,7 +694,7 @@ what it costs **the primary**.
 | Debug captures (`debug: true`)   | `ctx.storage`: `debug/<taskId>/<pass>/` — `digest.txt`, `pass.json`, one `<detector>.txt` per fork (§Verifying the cache) | until manually cleared; never TTL-swept                                                     |
 | Windows, spools, collision index | memory only                                                                                                               | no — a restart costs the warm cache and the uncompacted tail (accepted, as in the original) |
 | Tunables                         | `ctx.config` (ContextProxy)                                                                                               | yes                                                                                         |
-| Workspace catalogue              | `.shofer/second-brain/catalogue.json` (the repo)                                                                          | committed                                                                                   |
+| Detector overrides               | `pluginConfigs["second-brain"].detectors` in `.shofer/settings.json` (a config bundle, or the repo's own file)            | committed / org-delivered                                                                   |
 
 ## Human surfaces
 
@@ -682,7 +745,7 @@ anything, and no attempt to be right often — only right cheaply, and quiet oth
 | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Core seams (`private` enumeration gaps, `onAssistantMessage`, `parentTaskId`, default consent)                  | **landed**, with host-side specs                                                                               |
 | Observation → projection → digest → passes → forks → gate → delivery                                            | **built**, offline-tested (projection goldens, gate sims, fork against a scripted client, observer end-to-end) |
-| The catalogue (bundled defaults + `.shofer/second-brain/catalogue.json` layering, manifest↔code sync spec)     | **built**                                                                                                      |
+| The catalogue (bundled defaults + `detectors` config layering, manifest↔code sync spec)                        | **built**                                                                                                      |
 | Adjudication → suppression/uptake, demotion ladder, budgets, cross-task collisions, ledger TTL sweep            | **built**                                                                                                      |
 | Surfaces: badge, advisory row, panel, skills, commands, `handleRequest`                                         | **built**                                                                                                      |
 | Finish gate (queue-wake on a completed task) and `notify` rendering in both hosts                               | built, **live verification pending** — see TODO.md; degrades to user-only surfaces on failure                  |

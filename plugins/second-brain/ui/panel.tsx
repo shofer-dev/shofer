@@ -45,7 +45,7 @@ interface WhyEntry {
 interface StatsResult {
 	consent: boolean
 	muted: boolean
-	cataloguePath: string
+	catalogueKey: string
 	debug?: { enabled: boolean; dir?: string }
 	tasks: {
 		taskId: string
@@ -116,7 +116,7 @@ export default function SecondBrainPanel({ api }: { api: PluginUIApi }) {
 							))}
 						</div>
 					))}
-					<div style={{ marginTop: 6, opacity: 0.6 }}>overrides: {stats.cataloguePath}</div>
+					<div style={{ marginTop: 6, opacity: 0.6 }}>overrides: {stats.catalogueKey}</div>
 					{stats.debug?.enabled && <div style={{ opacity: 0.6 }}>debug captures: {stats.debug.dir}</div>}
 				</div>
 			)}

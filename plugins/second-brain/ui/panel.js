@@ -48,8 +48,8 @@ function SecondBrainPanel({ api }) {
           t.tokens.cacheRead.toLocaleString(),
           " read / ",
           t.tokens.cacheWrite.toLocaleString(),
-          " written /",
           " ",
+          "written / ",
           t.tokens.prompt.toLocaleString(),
           " uncached)"
         ] }),
@@ -64,7 +64,7 @@ function SecondBrainPanel({ api }) {
       ] }, t.taskId)),
       /* @__PURE__ */ jsxs("div", { style: { marginTop: 6, opacity: 0.6 }, children: [
         "overrides: ",
-        stats.cataloguePath
+        stats.catalogueKey
       ] }),
       stats.debug?.enabled && /* @__PURE__ */ jsxs("div", { style: { opacity: 0.6 }, children: [
         "debug captures: ",
