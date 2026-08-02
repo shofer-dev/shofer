@@ -810,7 +810,7 @@ notifies the main thread, which can trigger `_resetWebview()`.
 | [`packages/vscode-shim/src/api/create-vscode-api-mock.ts`](../packages/vscode-shim/src/api/create-vscode-api-mock.ts) | Factory that assembles the full vscode mock object                                        |
 | [`webview-ui/src/context/ExtensionStateContext.tsx`](../webview-ui/src/context/ExtensionStateContext.tsx)             | Webview state management                                                                  |
 | [`docs/cli.md`](cli.md)                                                                                               | CLI headless runtime documentation                                                        |
-| [`docs/public_api.md`](public_api.md)                                                                                 | `ShoferExtensionApi` documentation — the control plane used by both CLI and Agent Workers |
+| [`docs/shofer-api.md`](shofer-api.md#3-shoferextensionapi--the-host-only-surface)                                     | `ShoferExtensionApi` documentation — the control plane used by both CLI and Agent Workers |
 
 ## 9. Gaps & Open Questions
 

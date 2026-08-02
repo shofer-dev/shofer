@@ -1,9 +1,10 @@
 # One public API — `ShoferExtensionApi extends ShoferApi`
 
-> **Status: decided direction, not started.** Sequenced as a phase of
-> [`remote_agents.md`](remote_agents.md) — after its Phase 2 (which is still
-> adding methods to the root contract) and before its plugin-pair phase, so the
-> pair is written against the settled interface rather than migrated onto it.
+> **Status: ✅ DONE (shofer 2.47.0).** Executed as
+> [`remote_agents.md`](remote_agents.md) Phase 3 — after its Phase 2 had
+> finished adding methods to the root contract, and before the plugin pair, so
+> the pair is written against the settled interface rather than migrated onto
+> it. The ordering below is the record of what was done.
 
 ## The decision
 
@@ -85,7 +86,7 @@ finds all of it.
 
 **Rename `ShoferExtensionApi` → `ShoferExtensionApi`:** `packages/types/src/api.ts`,
 `src/extension/api.ts`, the CLI's `ExtensionHost` (`host.api`), the IPC layer,
-and `docs/public_api.md`. Note this renames the type companion extensions
+and `docs/shofer-api.md`. Note this renames the type companion extensions
 consume (the `activate()` export object itself is unchanged).
 
 **Migrate off the current-task methods:**
@@ -113,7 +114,7 @@ translation is gone. (If it survives, rename it: `ShoferApiAgent` next to
 
 ### One doc: `docs/shofer-api.md`
 
-`agentapi.md`, `public_api.md` **and `acp.md`** collapse into a single
+`shofer-api.md`, `shofer-api.md` **and `shofer-api.md`** collapse into a single
 `docs/shofer-api.md` — one place answering "how do I drive Shofer
 programmatically", in the order the contract nests:
 

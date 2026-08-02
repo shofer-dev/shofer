@@ -841,7 +841,7 @@ implements `handleRequest(method, params, ctx)` and the caller awaits its result
   channel as `postMessage`, with correlation handled by the transport;
 - from the controller to a plugin running on a **remote executor**, via
   **`ShoferApi.pluginRequest(taskId, plugin, method, params)`**
-  ([`agentapi.md`](./agentapi.md)).
+  ([`shofer-api.md`](./shofer-api.md)).
 
 Unlike the observer hooks, a request is **not** timeout-guarded or error-isolated: a
 caller is waiting on the answer, so a throw (or an unknown plugin / missing
@@ -1362,7 +1362,7 @@ model).
 spawn/queue/interrupt — but it is **fire-and-forget**: no handle, no completion, no result, no
 cancel. A runner/workflow plugin needs to treat an agent run as a **job**: start it, **await its
 structured result**, and **cancel** it (e.g. when an external orchestrator cancels, or a kill
-switch fires). The full `ShoferExtensionApi` ([`public_api.md`](./public_api.md)) already has exactly this
+switch fires). The full `ShoferExtensionApi` ([`shofer-api.md`](./shofer-api.md#3-shoferextensionapi--the-host-only-surface)) already has exactly this
 (`startNewTask → taskId`, `cancelCurrentTask`, the event stream) — but it is a **companion-extension**
 surface, not available to sandboxed plugins, and dumping it into `ctx` would break the
 restricted-context model ([§7](#7-security-model)). So the additions expose a **scoped, gated** slice
@@ -1481,8 +1481,8 @@ observe; `ctx.config` / `ctx.storage` back config + idempotency state. So a runn
 | Document                                                                          | Relationship                                                                     |
 | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | [`../PLUGINS.md`](../PLUGINS.md)                                                  | Author-facing how-to: manifest fields, build invocations, walkthroughs.          |
-| [`agentapi.md`](./agentapi.md)                                                    | The programmatic agent API surface plugins run alongside.                        |
-| [`acp.md`](./acp.md)                                                              | Agent Client Protocol — an external control surface complementary to plugins.    |
+| [`shofer-api.md`](./shofer-api.md)                                                | The programmatic agent API surface plugins run alongside.                        |
+| [`shofer-api.md`](./shofer-api.md#4-acp--the-external-adapter)                    | Agent Client Protocol — an external control surface complementary to plugins.    |
 | [`host-boundary.md`](./host-boundary.md)                                          | The host-agnostic architecture the plugin substrate is built on.                 |
 | [`mcp.md`](./mcp.md)                                                              | MCP servers are one kind of plugin contribution (`contributes.mcpServers`).      |
 | [`adding-new-tools.md`](./adding-new-tools.md)                                    | Plugin tools follow the `CustomToolDefinition` contract.                         |

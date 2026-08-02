@@ -1,6 +1,6 @@
 # Remote agents — Temporal dispatch, ShoferApi observation
 
-> **Status: Phases 1–2 EXECUTED.** The bespoke "Shofer Workers" fleet layer,
+> **Status: Phases 1–3 EXECUTED.** The bespoke "Shofer Workers" fleet layer,
 > the config-sync channel and the split-host substrate are gone (Phase 1), and
 > core now carries the two generic seams that replace them (Phase 2): the
 > ShoferApi **task-snapshot** route with the **attachment primitive** built on
@@ -8,7 +8,7 @@
 > the removed layer anchored (`v3_architecture.md`, `config_sync.md`,
 > `headless.md`) are consolidated into
 > [`host-boundary.md`](../docs/host-boundary.md) and
-> [`cli.md`](../docs/cli.md). **Phases 3–4 (the plugin pair, durable fan-out)
+> [`cli.md`](../docs/cli.md). **Phases 4–5 (the plugin pair, durable fan-out)
 > are not built.** This doc captures the END STATE for horizontal scaling /
 > remote agents and the ROADMAP.
 
@@ -294,11 +294,11 @@ the fleet layer is gone — the removal collapses them rather than patching each
   `v3_architecture.md` dies with it; the genuinely unique content — operating
   modes, flags, the stdin NDJSON protocol, `ShoferExtensionApi` recipes, the shim file
   reference — moves to a trimmed **`cli.md`**.
-- **`agentapi.md` — stays** the transport source of truth: drop
+- **`shofer-api.md` — stays** the transport source of truth: drop
   `applyConfig`/the config route and the Workers framing (Phase 2 later adds
   the task-snapshot route).
-- Repoint every reference to the deleted files — `docs/README.md`, `acp.md`,
-  `configuration.md`, `plugin_system.md`, `public_api.md`, `multi_threaded.md`,
+- Repoint every reference to the deleted files — `docs/README.md`, `shofer-api.md`,
+  `configuration.md`, `plugin_system.md`, `shofer-api.md`, `multi_threaded.md`,
   `adding-new-tools.md`, `tool-categories.md`,
   `outside-workspace-path-allowlist.md`, the `rag-indexing` plugin docs, and
   this doc's own status header (enumerate the full set with `rg` at execution
@@ -315,7 +315,7 @@ packages build and test green; the docs above are coherent with the code.
   `GET /api/v1/task/:id/snapshot`: the whole transcript, the ask the task is
   blocked on, lifecycle and token usage, assembled in `ShoferApiAgent` from the
   worker's live task or its persisted `ui_messages.jsonl`
-  ([`agentapi.md`](../docs/agentapi.md#task-snapshots--attaching-to-a-running-task)).
+  ([`shofer-api.md`](../docs/shofer-api.md#task-snapshots--attaching-to-a-running-task)).
 - Core **attach/detach** per §2b — `TaskAttachmentManager` + `AttachedTask`
   (`src/core/attach/`): subscribe the task-scoped SSE, backfill, render into the
   chat view with the normal ask affordances, `sendMessage` and cancel routed to
@@ -337,7 +337,17 @@ sequence through the real `ShoferApiAgent`, HTTP handler, `ShoferHttpClient` and
 attachment manager (only the socket is substituted — the test sandbox blocks
 loopback).
 
-### Phase 3 — the plugin pair
+### Phase 3 — one public API — ✅ DONE (shofer 2.47.0)
+
+`ShoferExtensionApi extends ShoferApi`: the two public interfaces became one
+inheritance chain, so a method cannot exist on the wire contract without
+existing on the extension API, and transports bind the base — the host-only
+administration surface cannot reach the wire by accident. Sequenced here
+deliberately: Phase 2 was still adding methods to the root contract, and the
+plugin pair below should be written against the settled interface rather than
+migrated onto it. Full record: [`one-public-api.md`](one-public-api.md).
+
+### Phase 4 — the plugin pair
 
 - `temporal-worker`: the existing integration extended in place (it stays
   private for now) — activity + wrapper workflow, identity-as-address, **named
@@ -356,7 +366,7 @@ round-trips, the result returns as the activity result, and killing the
 worker mid-task surfaces a failed task (no silent retry). A worker configured
 with **two named connections** demonstrably polls both servers.
 
-### Phase 4 — durable fan-out
+### Phase 5 — durable fan-out
 
 - The panel's task list is driven by `ListWorkflows` (status filters, re-attach
   action); controller restart rebuilds the list from Temporal.
@@ -394,7 +404,7 @@ untouched.
   token can do anything on that worker. Fine for the single-operator case; a
   multi-tenant integrator either scopes network reachability (mesh/network
   policy) or extends the transport with per-user identity (the
-  `--require-user-auth` direction in `agentapi.md`).
+  `--require-user-auth` direction in `shofer-api.md`).
 - Dispatch authorization is Temporal's: namespace-scoped credentials confine a
   controller and a worker to the namespaces they hold claims for. The pair
   inherits whatever authz the operator's Temporal server enforces, including

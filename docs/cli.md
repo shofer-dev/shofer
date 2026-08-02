@@ -327,7 +327,7 @@ pnpm --filter @shofer/cli dev:local-router -w . --print "Hello"
 
 The CLI's [`ExtensionHost`](../apps/cli/src/agent/extension-host.ts) calls `activate()`
 which returns a `ShoferExtensionApi` instance. This is the **same `ShoferExtensionApi`** used by companion
-extensions (see [`public_api.md`](public_api.md)). All task management, configuration,
+extensions (see [`shofer-api.md`](shofer-api.md#3-shoferextensionapi--the-host-only-surface)). All task management, configuration,
 profile operations, and events route through it.
 
 `ExtensionHost` keeps a small set of dedicated methods only where it adds
@@ -403,7 +403,7 @@ instead of VSCode Terminal. File edits go through the real filesystem via
 
 ## CLI via ShoferExtensionApi — Extended Capabilities
 
-The CLI accesses the full [`ShoferExtensionApi`](public_api.md) surface through the
+The CLI accesses the full [`ShoferExtensionApi`](shofer-api.md#3-shoferextensionapi--the-host-only-surface) surface through the
 `host.api` accessor on [`ExtensionHost`](../apps/cli/src/agent/extension-host.ts).
 Beyond the core task lifecycle (`startNewTask`, `sendMessage`, `cancelCurrentTask`),
 the following capabilities are available to CLI consumers. In the examples below,

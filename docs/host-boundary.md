@@ -125,7 +125,7 @@ The same core runs unchanged on any of:
   execution. See [`cli.md`](cli.md).
 - **Headless server** (`shofer serve`, `shofer acp`) — the same extension
   bundle loaded under the vscode-shim, exposing the agent over
-  [`ShoferApi`](agentapi.md) (HTTP/SSE) or [ACP](acp.md). Dialogs are left as
+  [`ShoferApi`](shofer-api.md) (HTTP/SSE) or [ACP](shofer-api.md#4-acp--the-external-adapter). Dialogs are left as
   outstanding asks for a client to answer; watchers and editor surfaces are
   inert.
 
@@ -177,7 +177,7 @@ through Category I (`getHost()` + the registries above):
   consumed by the `rag-indexing` plugin.
 - **The transport layer** (`packages/core/src/transport/`) — the HTTP/SSE
   server + typed client and the ACP stack, all over the transport-agnostic
-  [`ShoferApi`](agentapi.md).
+  [`ShoferApi`](shofer-api.md).
 - **`slang`/workflow interpreter**, **`apply-patch`**, **`auto-approval`**,
   **`glob`**, the **`McpHub`**, **`shofer-config`**, **`extract-text`**, the
   **`diff`** strategies, tiktoken/token-counter, `safeWriteJson`, storage,
@@ -258,7 +258,7 @@ keeps exactly two generic seams for it, and neither of them schedules anything:
 - **Attachment** — [`TaskAttachmentManager`](../src/core/attach/TaskAttachmentManager.ts)
   attaches a view to a task running on another host, given
   `(address, taskId, token)`: subscribe the task-scoped SSE, backfill
-  [`getTaskSnapshot`](./agentapi.md#task-snapshots--attaching-to-a-running-task),
+  [`getTaskSnapshot`](./shofer-api.md#task-snapshots--attaching-to-a-running-task),
   and render the result in the chat view like any other task — asks, follow-up
   messages and cancel all travel back over ShoferApi. Focus is **per view**, so the
   sidebar and an editor tab can watch different remote tasks; a connection exists
