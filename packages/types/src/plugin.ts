@@ -1340,7 +1340,7 @@ export const pluginManifestSchema = z
 		config: z.record(z.string(), z.unknown()).optional(),
 		/**
 		 * Replicate this plugin's config (and its `secret` properties) from a controller
-		 * to the Shofer Nodes it drives.
+		 * to the Shofer Workers it drives.
 		 *
 		 * Plugin settings are host-local by default, which is right for anything that
 		 * describes THIS machine. It is wrong for a plugin whose feature actually runs on
@@ -1511,6 +1511,18 @@ export interface PluginView {
 	 * that it exists.
 	 */
 	configSecretsSet?: string[]
+	/**
+	 * Set when this plugin's configuration is supplied by a `.shofer/` file layer
+	 * (org policy delivered as a config bundle, or a hand-written `settings.json`)
+	 * rather than by the user's own settings.
+	 *
+	 * The layered overlay WINS over locally stored settings, so a value shown here is
+	 * the one the plugin is actually running with and an edit made in the panel would
+	 * be silently shadowed. The panel therefore renders the config form read-only and
+	 * says where the values come from — a control the user cannot change must not look
+	 * like one they can.
+	 */
+	configManagedBy?: "file-layer"
 }
 
 /** A plugin's config JSON-schema (manifest `config`) as surfaced to the Plugins panel. */
