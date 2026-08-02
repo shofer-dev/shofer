@@ -71,19 +71,48 @@
   automatic, which is when this needs a drain: stop assigning, wait for in-flight tasks
   (bounded), then disconnect. Design: `docs/workspace_agent_pool.md` §5.
 
-- **Dependency advisories left open on purpose** (state after the 2026-08 audit
-  sweep: everything fixable within the declared/current major was fixed via
-  in-range updates and range-scoped `pnpm.overrides`; `pnpm audit` residue is
-  0 critical / 4 high / 4 moderate / 1 low). Each of these needs a major (or
-  0.x-minor, same thing) jump of a dependency we don't control the API of, or
-  has no fixed release at all — revisit when the dependent moves:
-    - `@ai-sdk/provider-utils` (via `sambanova-ai-provider`, runtime): no fixed
-      release exists upstream (GHSA-866g-f22w-33x8, low).
-    - `@hono/node-server` (via `@modelcontextprotocol/sdk` — already at the
-      newest SDK): fix only exists in hono 2.x, SDK pins 1.x. Server-side HTTP
-      transport of the SDK; Shofer only uses the client side.
-    - `drizzle-orm` 0.44→0.45 (packages/evals, dev-only).
-    - `serialize-javascript` 6→7 (mocha, apps/vscode-e2e, dev-only).
-    - `js-cookie` 2→3 (react-use, apps/web-evals, dev-only).
-    - `sharp` 0.34→0.35 (next's optional dep, apps/web-evals, dev-only).
-    - `uuid` 8→11 (@azure/msal-node under @vscode/vsce, packaging-time only).
+- **One dependency advisory left open**, and it is the only one: `pnpm audit`
+  residue is 0 critical / 0 high / 0 moderate / 1 low.
+
+    - `@ai-sdk/provider-utils` (via `sambanova-ai-provider`, runtime):
+      GHSA-866g-f22w-33x8, low. There is genuinely no fixed release — the
+      advisory covers `<=3.0.97` and the 3.x line stops at 3.0.31, so no
+      patched 3.x exists. Escaping it means `@ai-sdk/provider-utils` 4.x/5.x,
+      which belongs to AI SDK v6, while `sambanova-ai-provider` 1.2.2 pins
+      `@ai-sdk/provider-utils` at exactly `3.0.5` against `@ai-sdk/provider`
+      `2.0.0`. Forcing the jump would break the provider's API contract, so
+      this waits on `sambanova-ai-provider` moving. Revisit when it does.
+
+- **Three `pnpm.overrides` force a version outside the dependent's declared
+  range.** Each replaces a transitive-only advisory the dependent has not
+  picked up, and each was checked for module-format and API compatibility
+  against the actual call site rather than assumed safe. Drop the override once
+  the dependent's own range covers the fix:
+
+    - `serialize-javascript@<7.0.5 → >=7.0.5` — `mocha` declares `^6.0.2` and
+      no 6.x fix exists. 7.x is still CommonJS (`main: index.js`) with
+      `engines.node >=20`, and `apps/vscode-e2e` (the only consumer, dev-only)
+      runs mocha serially, where serialize-javascript is not even loaded — it
+      is mocha's parallel-worker serializer.
+    - `sharp@<0.35.0 → >=0.35.0` — `next` 16.2.12 (the newest) declares
+      `sharp: ^0.34.5` as an _optional_ dep, used only by its image optimizer.
+      The advisory is inherited libvips CVEs. `apps/web-evals` only, dev-only.
+    - `uuid@<11.1.1 → >=11.1.1 <12` — `gaxios` 6.7.1 (under
+      `google-auth-library` 9.15.1, a **runtime** dep of `packages/core` and
+      also pulled by `@anthropic-ai/vertex-sdk` 0.7.0) declares `uuid ^9.0.1`
+      and calls `require("uuid").v4()` for a multipart boundary;
+      `@azure/msal-node` 3.5.3 (packaging-time, under `@vscode/vsce`) does
+      `import { v4 } from "uuid"`. uuid 11 keeps both the CJS and ESM `v4`
+      named exports, and both call sites were smoke-tested against it.
+      Clearing this properly needs `google-auth-library` 10 (whose `gaxios` 7
+      dropped `uuid` entirely), which in turn needs
+      `@anthropic-ai/vertex-sdk` ≥0.19 and therefore `@anthropic-ai/sdk`
+      `>=0.50.3` against the pinned `^0.37.0` — a real provider-code migration,
+      not a version bump.
+
+- **`undici` is capped at `>=6.27.0 <7` and that cap is correct, not debt.**
+  6.27.0 is the _patched_ release; there is no open undici advisory. The cap is
+  not silencing anything, and moving to 7 or 8 would be churn with no security
+  benefit. (For the record, the Node floor is not what holds undici back:
+  undici 7 needs only Node `>=20.18.1`, below the declared `>=20.19.2`. Only
+  undici **8** needs Node `>=22.19.0`.)
