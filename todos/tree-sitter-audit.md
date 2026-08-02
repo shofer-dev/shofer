@@ -37,7 +37,7 @@ Both bugs below have the same shape: the extension is advertised as supported in
 on the call site:
 
 - **Indexing path** ([`processors/parser.ts::parseContent`](../extensions/shofer/src/services/code-index/processors/parser.ts:120)) catches the throw, emits `CODE_INDEX_ERROR` telemetry, and returns `[]` — so the file is silently dropped from the RAG index and every such file produces error spam.
-- **Definitions path** ([`tree-sitter/index.ts::parseSourceCodeDefinitionsForFile`](../extensions/shofer/src/services/tree-sitter/index.ts:77), used by the `list_code_definition_names` tool) does NOT catch the throw → the tool call fails on the affected file.
+- **Definitions path** ([`tree-sitter/index.ts::parseSourceCodeDefinitionsForFile`](../packages/core/src/services/tree-sitter/index.ts), used by the `list_code_definition_names` tool) does NOT catch the throw → the tool call fails on the affected file.
 
 ### 1. ✅ `.elm` files are unindexable / crash `list_code_definition_names`
 
@@ -48,7 +48,7 @@ on the call site:
 ### 2. ✅ `.htm` files are unindexable / crash `list_code_definition_names`
 
 - **Status:** FIXED
-- **Fix:** Added `case "htm":` alongside `case "html":` at [`languageParser.ts:168`](../extensions/shofer/src/services/tree-sitter/languageParser.ts:168), both sharing `parserKey = "html"`.
+- **Fix:** Added `case "htm":` alongside `case "html":` at [`languageParser.ts:168`](../packages/core/src/services/tree-sitter/languageParser.ts), both sharing `parserKey = "html"`.
 
 ---
 
@@ -56,7 +56,7 @@ on the call site:
 
 ### 3. 🔴 `.swift` parser loaded but never used — NOT FIXED
 
-- **File**: [`languageParser.ts`](../extensions/shofer/src/services/tree-sitter/languageParser.ts:154-156)
+- **File**: [`languageParser.ts`](../packages/core/src/services/tree-sitter/languageParser.ts)
 - **File**: [`shared/supported-extensions.ts`](../extensions/shofer/src/services/code-index/shared/supported-extensions.ts:23)
 - `.swift` is still in `fallbackExtensions` → `parseContent()` returns fallback-chunked blocks BEFORE reaching `loadRequiredLanguageParsers`. The switch case (loading swift WASM + `swiftQuery`) is never reached.
 - **Options**: either remove `.swift` from fallbackExtensions (to actually use the parser) or remove the dead switch case.
@@ -64,7 +64,7 @@ on the call site:
 ### 4. ✅ `.scala` parser loaded but never used (doubly dead)
 
 - **Status:** FIXED
-- **Fix:** `.scala` removed from `fallbackExtensions`. [`case "scala":`](../extensions/shofer/src/services/tree-sitter/languageParser.ts:178) now imports and uses `scalaQuery` (was `luaQuery`). The parser is actually live.
+- **Fix:** `.scala` removed from `fallbackExtensions`. [`case "scala":`](../packages/core/src/services/tree-sitter/languageParser.ts) now imports and uses `scalaQuery` (was `luaQuery`). The parser is actually live.
 
 ---
 

@@ -33,8 +33,8 @@ moves that unified surface off `globalState` and onto layered `.shofer/` files �
 
 ## Current state — the SoTs to consolidate
 
-Verified against [`docs/settings_overlay.md`](../docs/settings_overlay.md) and
-[`ContextProxy`](../src/core/config/ContextProxy.ts):
+Verified against [`docs/settings_overlay.md`](../../docs/settings_overlay.md) and
+[`ContextProxy`](../../src/core/config/ContextProxy.ts):
 
 | Config                                       | Today's SoT                                                                                 | Notes                               |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------- |
@@ -111,7 +111,7 @@ not core's (Core Self-Sufficiency Rule).
 ## Export / import become trivial (Part E consequence)
 
 - **Export**: zip the chosen scope's `.shofer/` (default: merged/global view). Replaces
-  `exportSettings` in [`importExport.ts`](../src/core/config/importExport.ts).
+  `exportSettings` in [`importExport.ts`](../../src/core/config/importExport.ts).
 - **Import**: unzip into a scope root. Replaces `importSettingsFromPath` +
   `providerSettingsManager.import` + `contextProxy.setValues`. Secrets, if any, applied
   out of band, never from the zip.
@@ -205,7 +205,7 @@ from `package.json` `contributes.configuration.properties`.
 
 ### A5. `enableCodeActions`
 
-- **Status:** Boolean. NOT in `globalSettingsSchema`. Consumer: [`CodeActionProvider.ts:41`](extensions/shofer/src/activate/CodeActionProvider.ts:41)
+- **Status:** Boolean. NOT in `globalSettingsSchema`. Consumer: [`CodeActionProvider.ts:41`](../../src/activate/CodeActionProvider.ts)
   reads from vscode config.
 - **Action:** Add to `globalSettingsSchema`. Update consumer. Remove `package.json`.
 - **Settings UI:** Needs new toggle in UI/General tab.
@@ -218,7 +218,7 @@ from `package.json` `contributes.configuration.properties`.
 
 ### A7. `apiRequestTimeout`
 
-- **Status:** Number (0–3600). NOT in `globalSettingsSchema`. Consumer: [`timeout-config.ts:12`](extensions/shofer/src/api/providers/utils/timeout-config.ts:12) →
+- **Status:** Number (0–3600). NOT in `globalSettingsSchema`. Consumer: [`timeout-config.ts:12`](../../packages/core/src/api/providers/utils/timeout-config.ts) →
   all API provider handlers use `getApiRequestTimeout()`.
 - **Action:** Add to `globalSettingsSchema`. Update `getApiRequestTimeout()` to read from
   ContextProxy (convert to async, or cache the value). Remove `package.json`.
@@ -228,7 +228,7 @@ from `package.json` `contributes.configuration.properties`.
 
 - **Status:** Boolean. NOT in `globalSettingsSchema`. Consumers: [`NewTaskTool.ts:99-100`](extensions/shofer/src/core/tools/NewTaskTool.ts:99),
   [`Task.ts:4961-4962`](extensions/shofer/src/core/task/Task.ts:4961),
-  [`generateSystemPrompt.ts:62-63`](extensions/shofer/src/core/webview/generateSystemPrompt.ts:62).
+  [`generateSystemPrompt.ts:62-63`](../../src/core/webview/generateSystemPrompt.ts).
 - **Action:** Add to `globalSettingsSchema`. Update consumers. Remove `package.json`.
 - **Settings UI:** Needs new toggle in Task Behaviour section.
 
@@ -241,14 +241,14 @@ from `package.json` `contributes.configuration.properties`.
 
 ### A10. `debug`
 
-- **Status:** Boolean. NOT in `globalSettingsSchema`. Consumers: [`ShoferProvider.ts:2917`](extensions/shofer/src/core/webview/ShoferProvider.ts:2917)
-  (posted to webview state), [`webviewMessageHandler.ts:2488-2489`](extensions/shofer/src/core/webview/webviewMessageHandler.ts:2488).
+- **Status:** Boolean. NOT in `globalSettingsSchema`. Consumers: [`ShoferProvider.ts:2917`](../../src/core/webview/ShoferProvider.ts)
+  (posted to webview state), [`webviewMessageHandler.ts:2488-2489`](../../src/core/webview/webviewMessageHandler.ts).
 - **Action:** Add to `globalSettingsSchema`. Update consumers. Remove `package.json`.
 - **Settings UI:** Needs new toggle in Debug/Diagnostics section.
 
 ### A11–A13. `debugProxy.enabled`, `debugProxy.serverUrl`, `debugProxy.tlsInsecure`
 
-- **Status:** Boolean / string / boolean. NOT in `globalSettingsSchema`. Consumer: [`networkProxy.ts:207`](extensions/shofer/src/utils/networkProxy.ts:207).
+- **Status:** Boolean / string / boolean. NOT in `globalSettingsSchema`. Consumer: [`networkProxy.ts:207`](../../src/utils/networkProxy.ts).
 - **Action:** Add all three to `globalSettingsSchema`. Update consumer. Remove `package.json`.
 - **Settings UI:** Needs new section in Debug tab.
 
@@ -359,7 +359,7 @@ API keys are stored in TWO places:
 
 - Change `ContextProxy.getSecret(key)` to delegate to `ProviderSettingsManager.getActiveProfile()[key]`
   instead of reading from individual SecretStorage entries.
-- This is the TODO acknowledged at [`importExport.ts:172-174`](extensions/shofer/src/core/config/importExport.ts:172):
+- This is the TODO acknowledged at [`importExport.ts:172-174`](../../src/core/config/importExport.ts):
     > "It seems like we don't need to have the provider settings in the proxy;
     > we can just use providerSettingsManager as the source of truth."
 
@@ -430,7 +430,7 @@ API keys are stored in TWO places:
 
 ### D4. Remove `mergeCommandLists` from ShoferProvider
 
-- [`ShoferProvider.ts:2572-2597`](extensions/shofer/src/core/webview/ShoferProvider.ts:2572)
+- [`ShoferProvider.ts:2572-2597`](../../src/core/webview/ShoferProvider.ts)
   merges command lists from vscode config + globalState. After A1/A2, only globalState
   is needed — simplify to single-source read.
 
@@ -487,7 +487,7 @@ This is the new end-state (Phase 2), done after A–D have unified everything in
 > **Status (E4 — DONE, write-through only; scope selector SKIPPED).** `ContextProxy.setValue`
 > now mirrors a globalSettings write (not secrets, not provider-only keys, not the
 > `taskHistory` pass-through blob) into the **user** scope's `~/.shofer/settings.json` via
-> `writeScopeSetting` in [`layeredSettingsLoader.ts`](../src/core/config/layeredSettingsLoader.ts),
+> `writeScopeSetting` in [`layeredSettingsLoader.ts`](../../src/core/config/layeredSettingsLoader.ts),
 > then refreshes the E3 overlay so `getValue` reflects it. The write is atomic (temp +
 > rename), key-order-stable, and serialized per file (an in-process lock) so a bulk
 > `setValues` cannot lose keys to a read-modify-write race. It is **strictly opt-in**: the
@@ -503,14 +503,14 @@ This is the new end-state (Phase 2), done after A–D have unified everything in
 ### E5. Export/import = zip/unzip `.shofer/`
 
 - Replace `exportSettings`/`importSettingsFromPath` in
-  [`importExport.ts`](../src/core/config/importExport.ts) with zip of a scope's `.shofer/`
+  [`importExport.ts`](../../src/core/config/importExport.ts) with zip of a scope's `.shofer/`
   and unzip into a scope root. Secrets stay out of the zip (Part B); applied out of band.
 
 > **Status (E5 — DONE).** `exportScopeArchive`/`importScopeArchive`/`listScopeArchiveEntries`
-> in [`scope-archive.ts`](../packages/core/src/config/scope-archive.ts) archive a scope's
+> in [`scope-archive.ts`](../../packages/core/src/config/scope-archive.ts) archive a scope's
 > `.shofer/` tree to a gzipped tar (`tar`, the archiver `@shofer/core` already vendors) and
 > unpack it into a scope root; host wrappers `exportScopeSettingsArchive` /
-> `importScopeSettingsArchive` in [`importExport.ts`](../src/core/config/importExport.ts)
+> `importScopeSettingsArchive` in [`importExport.ts`](../../src/core/config/importExport.ts)
 > default to the user scope. Secrets are out of the archive **by construction** — provider
 > keys live in `SecretStorage` (outside `.shofer/`) and `settings.json` references profiles
 > by name only. The JSON `exportSettings`/`importSettingsFromPath` path is now

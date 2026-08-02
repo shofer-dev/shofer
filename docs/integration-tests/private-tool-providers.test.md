@@ -9,9 +9,9 @@ mock or real provider extension activated.
 
 Related files:
 
-- [`build-tools.ts`](../packages/core/src/task/build-tools.ts) — discovery pipeline
-- [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) — invocation
-- [`tool-registration-interface.md`](../docs/tool-registration-interface.md) — contract spec
+- [`build-tools.ts`](../../packages/core/src/task/build-tools.ts) — discovery pipeline
+- [`presentAssistantMessage.ts`](../../packages/core/src/assistant-message/presentAssistantMessage.ts) — invocation
+- [`tool-registration-interface.md`](../tool-registration-interface.md) — contract spec
 
 ## Scenario 1: Provider Discovery — Single Provider
 
@@ -23,7 +23,7 @@ Related files:
 
 **Then**:
 
-- [`getPrivateLmToolMeta()`](../packages/core/src/task/build-tools.ts:106) returns
+- [`getPrivateLmToolMeta()`](../../packages/core/src/task/build-tools.ts) returns
   two `PrivateToolMeta` entries
 - Both tools appear in the task's tool set
 - Both tools are assigned group `"uncategorized"` (no explicit group)
@@ -125,7 +125,7 @@ a `group` field, and `settings.json` has:
 
 **Then**:
 
-- [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts)
+- [`presentAssistantMessage.ts`](../../packages/core/src/assistant-message/presentAssistantMessage.ts)
   calls `vscode.commands.executeCommand("arkware.vscodeTools.invokeTool", "ide_file_read", { path: "src/index.ts" })`
 - The result `{ content: "...file contents..." }` is rendered in chat
 - The result is included in the API conversation history
@@ -181,10 +181,10 @@ provider whose extension is not installed
 **Then**:
 
 - The call throws (or returns `undefined`)
-- The `catch` block at [`build-tools.ts:140`](../packages/core/src/task/build-tools.ts:140) silently skips the provider
+- The `catch` block at [`build-tools.ts:140`](../../packages/core/src/task/build-tools.ts) silently skips the provider
 - No tools from that provider are added
 - Currently: **no user-facing warning** (see Gaps section in
-  [`tool-registration-interface.md`](../docs/tool-registration-interface.md))
+  [`tool-registration-interface.md`](../tool-registration-interface.md))
   — this should eventually surface a warning
 
 ## Scenario 13: Discovery — Provider Returns Non-Array
@@ -197,7 +197,7 @@ provider whose extension is not installed
 **Then**:
 
 - `!definitions || !Array.isArray(definitions)` guard at
-  [`build-tools.ts:120`](../packages/core/src/task/build-tools.ts:120) triggers
+  [`build-tools.ts:120`](../../packages/core/src/task/build-tools.ts) triggers
 - Provider is skipped (no tools added)
 - No error thrown
 

@@ -12,7 +12,7 @@ Design for the user-initiated terminate/kill of a running command from the chat 
 
 ## 1. User-Visible Behavior
 
-When a command is running (status `"started"`), the [`CommandExecution`](webview-ui/src/components/chat/CommandExecution.tsx) component renders an **OctagonX** icon button (from `lucide-react` — a stop-sign octagon with an X) next to the process PID:
+When a command is running (status `"started"`), the [`CommandExecution`](../webview-ui/src/components/chat/CommandExecution.tsx) component renders an **OctagonX** icon button (from `lucide-react` — a stop-sign octagon with an X) next to the process PID:
 
 ```tsx
 // CommandExecution.tsx:170-186
@@ -38,7 +38,7 @@ When a command is running (status `"started"`), the [`CommandExecution`](webview
 }
 ```
 
-The tooltip reads "Abort" (i18n key `chat:commandExecution.abort`). On click, the button sends a `terminalOperation: "abort"` IPC message to the extension host. This is the **exact same IPC path** used by the "Kill Command" secondary button in [`ChatView`](webview-ui/src/components/chat/ChatView.tsx:1304-1305) for the `command_output` ask flow.
+The tooltip reads "Abort" (i18n key `chat:commandExecution.abort`). On click, the button sends a `terminalOperation: "abort"` IPC message to the extension host. This is the **exact same IPC path** used by the "Kill Command" secondary button in [`ChatView`](../webview-ui/src/components/chat/ChatView.tsx) for the `command_output` ask flow.
 
 ---
 
@@ -103,15 +103,15 @@ The `"abort"` operation kills the running command. The `"continue"` operation (u
 
 ### 3.2 Routing
 
-| Step                 | File                                                                           | Lines                       | Role                                                                         |
-| -------------------- | ------------------------------------------------------------------------------ | --------------------------- | ---------------------------------------------------------------------------- |
-| Button click         | [`CommandExecution.tsx`](webview-ui/src/components/chat/CommandExecution.tsx)  | 170-186                     | Posts `terminalOperation: "abort"`                                           |
-| ChatView Kill button | [`ChatView.tsx`](webview-ui/src/components/chat/ChatView.tsx)                  | 1304-1305                   | Posts `terminalOperation: "abort"` on secondary button                       |
-| IPC handler          | [`webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts)        | 1008-1011                   | Routes to `task.handleTerminalOperation()`                                   |
-| Task dispatch        | [`Task.ts`](packages/core/src/task/Task.ts)                                    | `handleTerminalOperation()` | Calls `terminalProcess?.abort()`                                             |
-| VS Code kill         | [`TerminalProcess.ts`](src/integrations/terminal/TerminalProcess.ts)           | 259-263                     | Sends `\x03` (Ctrl+C) via `terminal.sendText()`                              |
-| Execa kill           | [`ExecaTerminalProcess.ts`](src/integrations/terminal/ExecaTerminalProcess.ts) | `abort()`                   | `terminateProcessTree(pid)` — SIGTERM→grace→SIGKILL over the tree (§6)       |
-| Process termination  | [`utils/process-termination.ts`](src/utils/process-termination.ts)             | `terminateProcessTree`      | Reusable SIGTERM→SIGKILL escalation over a process tree (injectable, tested) |
+| Step                 | File                                                                             | Lines                       | Role                                                                         |
+| -------------------- | -------------------------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------- |
+| Button click         | [`CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx) | 170-186                     | Posts `terminalOperation: "abort"`                                           |
+| ChatView Kill button | [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                 | 1304-1305                   | Posts `terminalOperation: "abort"` on secondary button                       |
+| IPC handler          | [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)       | 1008-1011                   | Routes to `task.handleTerminalOperation()`                                   |
+| Task dispatch        | [`Task.ts`](../packages/core/src/task/Task.ts)                                   | `handleTerminalOperation()` | Calls `terminalProcess?.abort()`                                             |
+| VS Code kill         | [`TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts)          | 259-263                     | Sends `\x03` (Ctrl+C) via `terminal.sendText()`                              |
+| Execa kill           | [`ExecaTerminalProcess.ts`](src/integrations/terminal/ExecaTerminalProcess.ts)   | `abort()`                   | `terminateProcessTree(pid)` — SIGTERM→grace→SIGKILL over the tree (§6)       |
+| Process termination  | [`utils/process-termination.ts`](src/utils/process-termination.ts)               | `terminateProcessTree`      | Reusable SIGTERM→SIGKILL escalation over a process tree (injectable, tested) |
 
 ---
 
@@ -200,8 +200,8 @@ flowchart TD
 
 When the user clicks the global **Stop** button, the flow is:
 
-1. [`ShoferProvider.cancelTask()`](src/core/webview/ShoferProvider.ts) → `cancelAndProcessQueuedMessages()`
-2. If the task is running, calls [`task.abortTask()`](packages/core/src/task/Task.ts) which includes:
+1. [`ShoferProvider.cancelTask()`](../src/core/webview/ShoferProvider.ts) → `cancelAndProcessQueuedMessages()`
+2. If the task is running, calls [`task.abortTask()`](../packages/core/src/task/Task.ts) which includes:
     ```typescript
     this.terminalProcess?.abort()
     ```
@@ -224,7 +224,7 @@ When a command is killed, three things happen:
 
 ### Current Status Values in `CommandExecutionStatus`
 
-From [`packages/types/src/terminal.ts`](packages/types/src/terminal.ts):7-32:
+From [`packages/types/src/terminal.ts`](../packages/types/src/terminal.ts):7-32:
 
 | Status         | Meaning                                               | When Emitted                                                                               |
 | -------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------ |
@@ -237,7 +237,7 @@ From [`packages/types/src/terminal.ts`](packages/types/src/terminal.ts):7-32:
 
 The `"terminated"` status distinguishes user-initiated kills (the inline Abort/Kill
 Command button) from natural exits and from user timeouts. It is emitted by
-`onShellExecutionComplete` when [`Task.userTerminatedCommand`](packages/core/src/task/Task.ts)
+`onShellExecutionComplete` when [`Task.userTerminatedCommand`](../packages/core/src/task/Task.ts)
 is set — a flag raised by `handleTerminalOperation("abort")` and cleared when the
 next command starts or completes. The user-timeout path aborts the process
 directly (not via `handleTerminalOperation`), so it keeps its own `"timeout"`
@@ -345,12 +345,12 @@ A `"terminated"` variant was added to `CommandExecutionStatus` (`commandExecutio
 
 | File                                                                                   | Role                                                                                        |
 | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [`CommandExecution.tsx`](webview-ui/src/components/chat/CommandExecution.tsx:170-186)  | OctagonX button + click handler                                                             |
-| [`ChatView.tsx`](webview-ui/src/components/chat/ChatView.tsx:1304-1305)                | Kill Command button during `command_output` ask                                             |
-| [`webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts:1008-1011)      | IPC routing for `terminalOperation`                                                         |
-| [`Task.ts`](packages/core/src/task/Task.ts)                                            | `handleTerminalOperation()` dispatch + `abortTask()` — both call `terminalProcess?.abort()` |
-| [`TerminalProcess.ts`](src/integrations/terminal/TerminalProcess.ts:259-263)           | VS Code SIGINT kill (`\x03`)                                                                |
+| [`CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx)       | OctagonX button + click handler                                                             |
+| [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                       | Kill Command button during `command_output` ask                                             |
+| [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)             | IPC routing for `terminalOperation`                                                         |
+| [`Task.ts`](../packages/core/src/task/Task.ts)                                         | `handleTerminalOperation()` dispatch + `abortTask()` — both call `terminalProcess?.abort()` |
+| [`TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts)                | VS Code SIGINT kill (`\x03`)                                                                |
 | [`ExecaTerminalProcess.ts`](src/integrations/terminal/ExecaTerminalProcess.ts:163-221) | Execa SIGKILL + process tree kill                                                           |
 | [`TerminalRegistry.ts`](src/integrations/terminal/TerminalRegistry.ts:77-119)          | Shell execution end event → exit code interpretation                                        |
-| [`packages/types/src/terminal.ts`](packages/types/src/terminal.ts:7-32)                | `CommandExecutionStatus` discriminated union schema                                         |
+| [`packages/types/src/terminal.ts`](../packages/types/src/terminal.ts)                  | `CommandExecutionStatus` discriminated union schema                                         |
 | [`BaseTerminalProcess.ts`](src/integrations/terminal/BaseTerminalProcess.ts:16)        | `interpretExitCode()` maps exit codes to signals                                            |

@@ -132,7 +132,7 @@ for `callTool` (see the "MCP Call-Site Indirection Rule" in `AGENTS.md`):
   [`accessMcpResourceTool.ts`](../packages/core/src/tools/accessMcpResourceTool.ts:56):
   `mcpHub.readResource(server, uri, undefined, task.abortSignal)`.
 
-### 4. McpHub — [`McpHub.ts`](../src/services/mcp/McpHub.ts)
+### 4. McpHub — [`McpHub.ts`](../packages/core/src/services/mcp/McpHub.ts)
 
 Both `callTool` and `readResource` accept an optional
 `signal?: AbortSignal` and forward it to the MCP SDK as part of

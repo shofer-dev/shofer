@@ -1,7 +1,7 @@
 # Task Export — Integration Test Scenarios
 
 Feature under test: Markdown and JSON task export from both the task header and the History panel.  
-Sources: [`export-markdown.ts`](../src/integrations/misc/export-markdown.ts), [`export-json.ts`](../src/integrations/misc/export-json.ts), [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts), [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts), [`TaskActions.tsx`](../webview-ui/src/components/chat/TaskActions.tsx).
+Sources: [`export-markdown.ts`](../../src/integrations/misc/export-markdown.ts), [`export-json.ts`](../../src/integrations/misc/export-json.ts), [`ShoferProvider.ts`](../../src/core/webview/ShoferProvider.ts), [`webviewMessageHandler.ts`](../../src/core/webview/webviewMessageHandler.ts), [`TaskActions.tsx`](../../webview-ui/src/components/chat/TaskActions.tsx).
 
 ## Smoke Tests
 

@@ -47,7 +47,7 @@ Detail the steps to test your changes. This helps reviewers verify your work.
 - [ ] **Self-Review**: I have performed a thorough self-review of my code.
 - [ ] **Testing**: New and/or updated tests have been added to cover my changes (if applicable).
 - [ ] **Documentation Impact**: I have considered if my changes require documentation updates (see "Documentation Updates" section below).
-- [ ] **Contribution Guidelines**: I have read and agree to the [Contributor Guidelines](/CONTRIBUTING.md).
+- [ ] **Contribution Guidelines**: I have read and agree to the [Contributor Guidelines](../CONTRIBUTING.md).
 
 ### Screenshots / Videos
 

@@ -3,11 +3,11 @@
 Feature under test: Shofer configuration key sources, dual-source setting
 coherence, dead config key isolation, GlobalSettings runtime application, and
 settings migration correctness.  
-Sources: [`configuration.md`](../docs/configuration.md),
-[`package.json`](../src/package.json),
-[`global-settings.ts`](../packages/types/src/global-settings.ts),
-[`ContextProxy.ts`](../src/core/config/ContextProxy.ts),
-[`networkProxy.ts`](../src/utils/networkProxy.ts).
+Sources: [`configuration.md`](../configuration.md),
+[`package.json`](../../src/package.json),
+[`global-settings.ts`](../../packages/types/src/global-settings.ts),
+[`ContextProxy.ts`](../../src/core/config/ContextProxy.ts),
+[`networkProxy.ts`](../../src/utils/networkProxy.ts).
 
 ## Smoke Tests
 

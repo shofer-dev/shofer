@@ -22,7 +22,7 @@ How Shofer discovers, connects to, and calls MCP servers.
 
 Shofer implements the [Model Context Protocol](https://modelcontextprotocol.io/) to let the LLM call tools and access resources provided by external MCP servers. MCP servers can run locally (via `stdio`) or remotely (via `sse` or `streamable-http`).
 
-A singleton [`McpHub`](../src/services/mcp/McpHub.ts) manages all connections. Tools discovered from MCP servers are exposed to the LLM as native tool schemas alongside Shofer's built-in tools.
+A singleton [`McpHub`](../packages/core/src/services/mcp/McpHub.ts) manages all connections. Tools discovered from MCP servers are exposed to the LLM as native tool schemas alongside Shofer's built-in tools.
 
 > **Two ways an MCP server gets here.** Besides the user-configured servers documented below, a
 > Shofer **plugin** can bundle MCP server configs via `contributes.mcpServers`; they merge into this
@@ -74,7 +74,7 @@ Project config takes priority over global config when the same server name appea
 
 ### Server Schema
 
-Each server entry is validated by [`ServerConfigSchema`](../src/services/mcp/McpHub.ts) (line 148). Three transport types are supported:
+Each server entry is validated by [`ServerConfigSchema`](../packages/core/src/services/mcp/McpHub.ts) (line 148). Three transport types are supported:
 
 | Transport         | Description                                                     |
 | ----------------- | --------------------------------------------------------------- |
@@ -130,7 +130,7 @@ On Windows, non-`.exe` commands (like `npx.ps1`) are automatically wrapped with 
 
 ### Variable Injection
 
-Before connection, [`injectVariables()`](../src/utils/config.ts) expands `${env:KEY}` and `${workspaceFolder}` references in the config, allowing environment-aware and workspace-relative paths.
+Before connection, [`injectVariables()`](../packages/core/src/utils/config.ts) expands `${env:KEY}` and `${workspaceFolder}` references in the config, allowing environment-aware and workspace-relative paths.
 
 ---
 
@@ -138,14 +138,14 @@ Before connection, [`injectVariables()`](../src/utils/config.ts) expands `${env:
 
 ### Startup
 
-1. [`McpServerManager.getInstance()`](../src/services/mcp/McpServerManager.ts) (line 21) is called during provider activation. It creates a single [`McpHub`](../src/services/mcp/McpHub.ts) (line 174) and waits for [`waitUntilReady()`](../src/services/mcp/McpHub.ts) (line 197).
+1. [`McpServerManager.getInstance()`](../src/services/mcp/McpServerManager.ts) (line 21) is called during provider activation. It creates a single [`McpHub`](../packages/core/src/services/mcp/McpHub.ts) (line 174) and waits for [`waitUntilReady()`](../packages/core/src/services/mcp/McpHub.ts) (line 197).
 
 2. `McpHub` constructor:
 
     - Reads global MCP settings and project `.shofer/mcp.json`.
-    - For each enabled server, calls [`connectToServer()`](../src/services/mcp/McpHub.ts) (line 703).
+    - For each enabled server, calls [`connectToServer()`](../packages/core/src/services/mcp/McpHub.ts) (line 703).
 
-3. [`connectToServer()`](../src/services/mcp/McpHub.ts) (line 703):
+3. [`connectToServer()`](../packages/core/src/services/mcp/McpHub.ts) (line 703):
     - Creates an MCP SDK [`Client`](https://github.com/modelcontextprotocol/typescript-sdk) with name `"Shofer"`.
     - Builds the appropriate transport (`StdioClientTransport`, `SSEClientTransport`, or `StreamableHTTPClientTransport`).
     - For `stdio`: starts the child process and pipes `stderr` for error logging.
@@ -161,7 +161,7 @@ Before connection, [`injectVariables()`](../src/utils/config.ts) expands `${env:
 
 ### Shutdown
 
-[`McpHub.dispose()`](../src/services/mcp/McpHub.ts) closes all transports and clears watchers. `McpServerManager.cleanup()` handles the global state key.
+[`McpHub.dispose()`](../packages/core/src/services/mcp/McpHub.ts) closes all transports and clears watchers. `McpServerManager.cleanup()` handles the global state key.
 
 ---
 
@@ -173,7 +173,7 @@ Before connection, [`injectVariables()`](../src/utils/config.ts) expands `${env:
 
 **Naming convention:** `mcp--{sanitizedServer}--{sanitizedTool}`
 
-Built by [`buildMcpToolName()`](../src/utils/mcp-name.ts) (line 127). Names are:
+Built by [`buildMcpToolName()`](../packages/core/src/utils/mcp-name.ts) (line 127). Names are:
 
 - Sanitized (alphanumeric, `_`, `-` only).
 - Capped at 64 characters (Gemini constraint).
@@ -181,7 +181,7 @@ Built by [`buildMcpToolName()`](../src/utils/mcp-name.ts) (line 127). Names are:
 
 The LLM receives these alongside Shofer's native tools. When the LLM calls `mcp--server--tool`, the [`NativeToolCallParser`](../packages/core/src/assistant-message/NativeToolCallParser.ts) (`parseToolCall()`, line 960) recognizes the prefix and routes execution to the MCP tool handler.
 
-**Hyphen normalization:** Some models convert `--` to `__` in function names. [`normalizeMcpToolName()`](../src/utils/mcp-name.ts) (line 44) handles this by converting `mcp__server__tool` back to `mcp--server--tool`.
+**Hyphen normalization:** Some models convert `--` to `__` in function names. [`normalizeMcpToolName()`](../packages/core/src/utils/mcp-name.ts) (line 44) handles this by converting `mcp__server__tool` back to `mcp--server--tool`.
 
 ### Wrapper Mode (Fallback)
 
@@ -189,7 +189,7 @@ When `use_mcp_tool` appears in the tool list, it serves as an explicit wrapper. 
 
 ### Tool Discovery on the Wire
 
-[`fetchToolsList()`](../src/services/mcp/McpHub.ts) (line 1057) sends the MCP `tools/list` request and annotates each tool with:
+[`fetchToolsList()`](../packages/core/src/services/mcp/McpHub.ts) (line 1057) sends the MCP `tools/list` request and annotates each tool with:
 
 - `enabledForPrompt`: `false` if the tool name is in `disabledTools`.
 - `group`: resolved from user override → server-declared → default `"uncategorized"`.
@@ -219,7 +219,7 @@ The filtering is performed by [`filterMcpToolsForMode()`](../packages/core/src/p
 
 ### Schema Normalization
 
-MCP tool `inputSchema` is normalized by [`normalizeToolSchema()`](../src/utils/json-schema.ts) to convert JSON Schema 2020-12 constructs (type arrays → `anyOf`) into a form all LLM providers accept. If no schema is provided, `{ type: "object", additionalProperties: false }` is used.
+MCP tool `inputSchema` is normalized by [`normalizeToolSchema()`](../packages/core/src/utils/json-schema.ts) to convert JSON Schema 2020-12 constructs (type arrays → `anyOf`) into a form all LLM providers accept. If no schema is provided, `{ type: "object", additionalProperties: false }` is used.
 
 ---
 
@@ -253,7 +253,7 @@ sequenceDiagram
 
 - **Timeout:** Each server's `timeout` config (default 60s) governs `client.request()`.
 - **Cancellation:** The task's `AbortSignal` is passed through, so stopping a task cancels in-flight MCP calls.
-- **Fuzzy tool matching:** [`toolNamesMatch()`](../src/utils/mcp-name.ts) (line 188) treats `-` and `_` as equivalent so that model mangling of hyphens doesn't cause "tool not found" errors.
+- **Fuzzy tool matching:** [`toolNamesMatch()`](../packages/core/src/utils/mcp-name.ts) (line 188) treats `-` and `_` as equivalent so that model mangling of hyphens doesn't cause "tool not found" errors.
 
 ### Result Processing
 
@@ -298,7 +298,7 @@ McpHub.readResource(serverName, uri, source, signal)    ← line 1795
      }, ReadResourceResultSchema)
 ```
 
-Resources are also listed at connect time via [`fetchResourcesList()`](../src/services/mcp/McpHub.ts) (line 1127) and resource templates via [`fetchResourceTemplatesList()`](../src/services/mcp/McpHub.ts) (line 1141). Both are stored on the `McpServer` object and pushed to the webview.
+Resources are also listed at connect time via [`fetchResourcesList()`](../packages/core/src/services/mcp/McpHub.ts) (line 1127) and resource templates via [`fetchResourceTemplatesList()`](../packages/core/src/services/mcp/McpHub.ts) (line 1141). Both are stored on the `McpServer` object and pushed to the webview.
 
 ---
 
@@ -306,7 +306,7 @@ Resources are also listed at connect time via [`fetchResourcesList()`](../src/se
 
 ### Group Resolution Priority
 
-For each MCP tool, the group is resolved by [`fetchToolsList()`](../src/services/mcp/McpHub.ts):
+For each MCP tool, the group is resolved by [`fetchToolsList()`](../packages/core/src/services/mcp/McpHub.ts):
 
 1. **User override** — `toolGroups[toolName]` in the server config (project or global).
 2. **Server-declared** — `tool.group` from the server's tool definition.
@@ -340,7 +340,7 @@ MCP tool calls arrive at [`checkAutoApproval()`](../packages/core/src/auto-appro
 
 ### Server State Push
 
-When server state changes, [`setNotifyAllProviders()`](../src/services/mcp/McpHub.ts) (line 189) broadcasts an `"mcpServers"` message to all registered webviews via the injected callback, with the full server list (including tools, resources, status, and error history).
+When server state changes, [`setNotifyAllProviders()`](../packages/core/src/services/mcp/McpHub.ts) (line 189) broadcasts an `"mcpServers"` message to all registered webviews via the injected callback, with the full server list (including tools, resources, status, and error history).
 
 ### Execution Status Streaming
 
@@ -367,13 +367,13 @@ MCP tool execution sends real-time status updates:
 
 | File                                                                                              | Role                                                                           |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| [`McpHub.ts`](../src/services/mcp/McpHub.ts)                                                      | Central hub: connections, tool discovery, execution                            |
+| [`McpHub.ts`](../packages/core/src/services/mcp/McpHub.ts)                                        | Central hub: connections, tool discovery, execution                            |
 | [`McpServerManager.ts`](../src/services/mcp/McpServerManager.ts)                                  | Singleton lifecycle, provider notification                                     |
-| [`mcpLogger.ts`](../src/services/mcp/mcpLogger.ts)                                                | Output-channel logger                                                          |
+| [`mcpLogger.ts`](../packages/core/src/services/mcp/mcpLogger.ts)                                  | Output-channel logger                                                          |
 | [`UseMcpToolTool.ts`](../packages/core/src/tools/UseMcpToolTool.ts)                               | `use_mcp_tool` handler and native MCP tool executor                            |
 | [`accessMcpResourceTool.ts`](../packages/core/src/tools/accessMcpResourceTool.ts)                 | `access_mcp_resource` handler                                                  |
 | [`mcp_server.ts`](../packages/core/src/prompts/tools/native-tools/mcp_server.ts)                  | Generates LLM tool schemas from connected servers                              |
-| [`mcp-name.ts`](../src/utils/mcp-name.ts)                                                         | Name sanitization, parsing, fuzzy matching                                     |
+| [`mcp-name.ts`](../packages/core/src/utils/mcp-name.ts)                                           | Name sanitization, parsing, fuzzy matching                                     |
 | [`NativeToolCallParser.ts`](../packages/core/src/assistant-message/NativeToolCallParser.ts)       | Parses `mcp--` prefixed tool calls from LLM                                    |
 | [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) | Routes `mcp_tool_use` blocks to handler                                        |
 | [`build-tools.ts`](../packages/core/src/task/build-tools.ts)                                      | Assembles the final tool list sent to the LLM                                  |
@@ -390,13 +390,13 @@ _This section captures deficiencies discovered during doc verification. Address 
 
 1. **Missing Key File entry** — [`use-mcp-shared.ts`](../packages/core/src/tools/mcp/use-mcp-shared.ts) was absent from the Key Files table. Added during this review. It contains the shared `validateMcpToolExists()`, `processMcpToolContent()`, `runMcpToolCall()`, and `sendExecutionStatus()` helpers used by both `use_mcp_tool` and `call_mcp_tool_async` paths.
 
-2. **Missing line numbers for lifecycle methods** — [`McpHub.dispose()`](../src/services/mcp/McpHub.ts) (line 2033) and [`McpServerManager.cleanup()`](../src/services/mcp/McpServerManager.ts) (line 80) are referenced in §"Server Lifecycle → Shutdown" without line numbers. Add these for consistency with other references.
+2. **Missing line numbers for lifecycle methods** — [`McpHub.dispose()`](../packages/core/src/services/mcp/McpHub.ts) (line 2033) and [`McpServerManager.cleanup()`](../src/services/mcp/McpServerManager.ts) (line 80) are referenced in §"Server Lifecycle → Shutdown" without line numbers. Add these for consistency with other references.
 
 3. **UI Components table lacks file paths** — The three UI components (`McpToolApproval`, `McpServerStatus`, `McpServerConfiguration`) list only conceptual locations ("auto-approval flow", "settings view") instead of actual source file paths. This makes them undiscoverable for agents and developers.
 
 4. **Config schema doesn't document `watchPaths`** — The Server Schema table (§Configuration) lists 13 config fields but omits `watchPaths` (per-server file/directory watch list for auto-restart). It is mentioned only in prose under §File Watching.
 
-5. **Webview communication uses callback injection, not direct method** — The doc originally referenced a non-existent `notifyWebviewOfServerChanges()`. The actual pattern is:[`McpServerManager`](../src/services/mcp/McpServerManager.ts) injects a `notifyAllProvidersFn` callback into [`McpHub`](../src/services/mcp/McpHub.ts) via [`setNotifyAllProviders()`](../src/services/mcp/McpHub.ts) (line 189), which broadcasts an `"mcpServers"` `ExtensionMessage` to all registered webview providers. This indirection avoids a circular import between `McpHub` and `McpServerManager`. Verified and corrected during this review.
+5. **Webview communication uses callback injection, not direct method** — The doc originally referenced a non-existent `notifyWebviewOfServerChanges()`. The actual pattern is:[`McpServerManager`](../src/services/mcp/McpServerManager.ts) injects a `notifyAllProvidersFn` callback into [`McpHub`](../packages/core/src/services/mcp/McpHub.ts) via [`setNotifyAllProviders()`](../packages/core/src/services/mcp/McpHub.ts) (line 189), which broadcasts an `"mcpServers"` `ExtensionMessage` to all registered webview providers. This indirection avoids a circular import between `McpHub` and `McpServerManager`. Verified and corrected during this review.
 
 6. **No doc coverage for `call_mcp_tool_async` flow** — The async MCP path (`call_mcp_tool_async`, `check_mcp_call_status`, `wait_for_mcp_call`) shares the same `runMcpToolCall()` + `processMcpToolContent()` + `sendExecutionStatus()` helpers as the synchronous path, but this is not documented. The async path also passes `AbortSignal` through for cooperative cancellation.
 

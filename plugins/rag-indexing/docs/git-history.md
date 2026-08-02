@@ -184,7 +184,7 @@ Reuses existing `codebaseIndex*` settings. New git-specific settings:
 | `codebaseIndexGitBranch`              | string  | ""      | Branch (ref) to index, empty = HEAD   |
 | `codebaseIndexGitSearchMaxResults`    | number  | 20      | Default max results per query         |
 
-These are added to [`packages/types/src/codebase-index.ts`](../packages/types/src/codebase-index.ts) (the existing Zod schema).
+These are added to [`packages/types/src/codebase-index.ts`](../../../packages/types/src/codebase-index.ts) (the existing Zod schema).
 
 ---
 
@@ -324,7 +324,7 @@ All inputs must bind to `cachedState` (Settings View Pattern — see `AGENTS.md`
 
 ## Integration Checklist
 
-Following the [adding-new-tools.md](adding-new-tools.md) 11-step checklist:
+Following the [adding-new-tools.md](../../../docs/adding-new-tools.md) 11-step checklist:
 
 | #   | Location                                                         | Item                                      |
 | --- | ---------------------------------------------------------------- | ----------------------------------------- |
@@ -360,7 +360,7 @@ Following the [adding-new-tools.md](adding-new-tools.md) 11-step checklist:
 
 _These items were identified during verification of this document against the live codebase (2026-05-20)._
 
-1. **Config table was missing `codebaseIndexGitPollIntervalMinutes`** — the Zod schema at [`codebase-index.ts`](packages/types/src/codebase-index.ts:137) defines this field, but the configuration table in §"Configuration" omitted it. Added during correction.
+1. **Config table was missing `codebaseIndexGitPollIntervalMinutes`** — the Zod schema at [`codebase-index.ts`](../../../packages/types/src/codebase-index.ts) defines this field, but the configuration table in §"Configuration" omitted it. Added during correction.
 
 2. **Config table had wrong default for `codebaseIndexGitBranch`** — the table said `"master"` but the source default in [`git-index-manager.ts`](../src/git-index-service/git-index-manager.ts) is the empty string `""` (meaning HEAD). Corrected.
 
@@ -376,7 +376,7 @@ _These items were identified during verification of this document against the li
 
 8. ~~**`GitWatcher` described as "stub in Phase 1"**~~ — ✅ fixed: the architecture tree now reflects the implemented Phase 2 `setInterval`/`git log --since` watcher (`git-watcher.ts`, ~199 lines).
 
-9. **`toolDescription()` case is trivial** — the doc references a `toolDescription()` switch case in the integration checklist, but the actual implementation in [`presentAssistantMessage.ts`](packages/core/src/assistant-message/presentAssistantMessage.ts:417) is a one-liner: `` `[${block.name} for '${block.params.query}']` ``. Any new parameter added to the tool must also update this string, but the doc doesn't call this out.
+9. **`toolDescription()` case is trivial** — the doc references a `toolDescription()` switch case in the integration checklist, but the actual implementation in [`presentAssistantMessage.ts`](../../../packages/core/src/assistant-message/presentAssistantMessage.ts) is a one-liner: `` `[${block.name} for '${block.params.query}']` ``. Any new parameter added to the tool must also update this string, but the doc doesn't call this out.
 
 10. **No coverage of submodule-aware scanning** — the git-index subsystem descends into submodules (via `listSubmoduleDisplayPaths()` in [`git-history-orchestrator.ts`](../src/git-index-service/git-history-orchestrator.ts)), but this is not documented.
 

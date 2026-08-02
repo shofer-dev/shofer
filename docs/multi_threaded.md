@@ -777,7 +777,7 @@ notifies the main thread, which can trigger `_resetWebview()`.
 | [`packages/core/src/task/Task.ts`](../packages/core/src/task/Task.ts)                       | Agent loop, LLM streaming, ask system (7040 LOC) |
 | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts) | Webview→Host message dispatch (4447 LOC)         |
 | [`packages/core/src/api/index.ts`](../packages/core/src/api/index.ts)                       | API handler factory                              |
-| [`src/services/mcp/McpHub.ts`](../src/services/mcp/McpHub.ts)                               | MCP tool execution                               |
+| [`src/services/mcp/McpHub.ts`](../packages/core/src/services/mcp/McpHub.ts)                 | MCP tool execution                               |
 
 ### New Worker Files (Phase 1)
 
@@ -884,7 +884,7 @@ notifies the main thread, which can trigger `_resetWebview()`.
     See [`docs/telemetry.md`](telemetry.md) for the full telemetry architecture.
 
 - **Prometheus / operational metrics**: The `prom-client`-backed metrics
-  registry ([`src/metrics/registry.ts`](../src/metrics/registry.ts)) and HTTP
+  registry ([`src/metrics/registry.ts`](../packages/core/src/metrics/registry.ts)) and HTTP
   server ([`src/metrics/server.ts`](../src/metrics/server.ts)) run on the main
   thread. **Correction:** although `worker_threads` live in the same OS
   process, each is a **separate V8 isolate with its own `prom-client` module

@@ -15,7 +15,7 @@ emit **foreign tool names and argument shapes** drawn from their training prior 
 Claude-lineage models reach for `Bash`/`Edit`/`Grep`/`Glob`, Codex-lineage for
 `shell`/`apply_patch`, Gemini-CLI-lineage for `replace`/`run_shell_command`, etc.
 We know this empirically: we already maintain
-[`CROSS_ASSISTANT_ALIASES`](../extensions/shofer/packages/types/src/tool.ts)
+[`CROSS_ASSISTANT_ALIASES`](../packages/types/src/tool.ts)
 (`bash → execute_command`, `search_file → find_files`, …) and
 [`PATH_ARG_ALIASES`](../extensions/shofer/src/core/assistant-message/NativeToolCallParser.ts)
 (`file_path`/`directory` → `path`) precisely because priors leak through
@@ -64,9 +64,9 @@ Bedrock / Vertex / OpenRouter changes "provider" but not its tool prior.
 Adapt on the model's **tool-training lineage** — a property attached to the model
 id/family, independent of API transport. The codebase already does ad-hoc
 lineage-ish branching (e.g. `isGeminiModel` in
-[`lite-llm.ts`](../extensions/shofer/src/api/providers/lite-llm.ts),
+[`lite-llm.ts`](../packages/core/src/api/providers/lite-llm.ts),
 `modelId.includes("gemini-2.5-pro")` in
-[`model-params.ts`](../extensions/shofer/src/api/transform/model-params.ts)); this
+[`model-params.ts`](../packages/core/src/api/transform/model-params.ts)); this
 design **formalizes** that into a single `ToolDialect` resolver.
 
 ### 3.2 Two directions — leverage is on **presentation**, not acceptance
@@ -87,7 +87,7 @@ bidirectional, **global** arg-alias layer.
 ### 3.4 Telemetry-driven, phased — measure before mapping
 
 Don't guess dialects. We already record per-tool `attempts`/`failures`
-([`toolUsageSchema`](../extensions/shofer/packages/types/src/tool.ts)), capture
+([`toolUsageSchema`](../packages/types/src/tool.ts)), capture
 unknown-tool errors via `NativeToolCallParser.lastParseError` + the "Did you mean?"
 suggestion, and compute `originalName` (the emitted-vs-canonical name) at parse
 time — but we **discard** `originalName` and do not attribute any of this per model.
@@ -247,7 +247,7 @@ turn → resolveToolDialect(model) ─┬─ presentation: buildNativeToolsArray
 a file: `apply_diff`, `edit`, `search_replace`, `edit_file`, `search_and_replace`,
 `insert_edit`, `sed`, `write_to_file`) into a small orthogonal set. Per-lineage
 tuning of a confusing surface just multiplies the confusion. (Tracked separately;
-see [`native_tools.md`](../extensions/shofer/docs/native_tools.md).)
+see [`native_tools.md`](../docs/native_tools.md).)
 
 ---
 
@@ -287,10 +287,10 @@ see [`native_tools.md`](../extensions/shofer/docs/native_tools.md).)
 
 ## 9. References
 
-- Tool registry / aliases: [`packages/types/src/tool.ts`](../extensions/shofer/packages/types/src/tool.ts) (`toolNames`, `TOOL_GROUPS`, `TOOL_ALIASES`, `CROSS_ASSISTANT_ALIASES`, `TOOL_DISPLAY_NAMES`)
+- Tool registry / aliases: [`packages/types/src/tool.ts`](../packages/types/src/tool.ts) (`toolNames`, `TOOL_GROUPS`, `TOOL_ALIASES`, `CROSS_ASSISTANT_ALIASES`, `TOOL_DISPLAY_NAMES`)
 - Presentation choke point: [`build-tools.ts`](../extensions/shofer/src/core/task/build-tools.ts) (`buildNativeToolsArray`)
 - Per-mode + per-model customization: [`filter-tools-for-mode.ts`](../extensions/shofer/src/core/prompts/tools/filter-tools-for-mode.ts) (`resolveToolAlias`, `applyModelToolCustomization`, `filterNativeToolsForMode`)
 - Acceptance side: [`NativeToolCallParser.ts`](../extensions/shofer/src/core/assistant-message/NativeToolCallParser.ts)
-- Existing ad-hoc lineage checks to fold in: [`lite-llm.ts`](../extensions/shofer/src/api/providers/lite-llm.ts), [`model-params.ts`](../extensions/shofer/src/api/transform/model-params.ts)
+- Existing ad-hoc lineage checks to fold in: [`lite-llm.ts`](../packages/core/src/api/providers/lite-llm.ts), [`model-params.ts`](../packages/core/src/api/transform/model-params.ts)
 - Tool schemas presented to the model: [`src/core/prompts/tools/native-tools/`](../extensions/shofer/src/core/prompts/tools/native-tools/)
-- Tool docs: [`docs/native_tools.md`](../extensions/shofer/docs/native_tools.md), [`docs/adding-new-tools.md`](../extensions/shofer/docs/adding-new-tools.md)
+- Tool docs: [`docs/native_tools.md`](../docs/native_tools.md), [`docs/adding-new-tools.md`](../docs/adding-new-tools.md)

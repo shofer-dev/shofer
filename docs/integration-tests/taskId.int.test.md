@@ -13,7 +13,7 @@ Shofer injects `task.taskId` (UUID v7) as `taskId` into MCP
 `tools/call` requests via `_meta["vscode.taskId"]`. Downstream
 services (`mcp-server`, `tools-backend`) extract and propagate it for
 logging, metrics, and distributed tracing. See
-[`docs/taskId.md`](../docs/taskId.md).
+[`docs/taskId.md`](../taskId.md).
 
 ## Scenarios
 

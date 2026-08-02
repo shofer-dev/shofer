@@ -1392,8 +1392,8 @@ All under [`packages/core/src/workflow/`](../packages/core/src/workflow/):
 
 ## Related Documents
 
-- [`parallelism.md`](../parallelism.md) — Parent-child orchestration and background Tasks
-- [`task_states.md`](../task_states.md) — Task lifecycle state model
+- [`parallelism.md`](parallelism.md) — Parent-child orchestration and background Tasks
+- [`task_states.md`](task_states.md) — Task lifecycle state model
 - [`task_messaging.md`](task_messaging.md) — Peer-to-peer task messaging (future foundation for agent communication)
 - [Slang Specification v0.7.5](https://github.com/riktar/slang/blob/master/SPEC.md) — Full Slang language spec
 - [Slang Grammar](https://github.com/riktar/slang/blob/master/GRAMMAR.md) — Formal EBNF grammar

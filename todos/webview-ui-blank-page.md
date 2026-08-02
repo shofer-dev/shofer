@@ -47,20 +47,20 @@ Host receives "webviewDidLaunch"
 
 ### Key Files
 
-| File                                                                                                                                               | Role                                                                                                 |
-| -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| [`extensions/shofer/src/extension.ts:264`](extensions/shofer/src/extension.ts:264)                                                                 | Registers ShoferProvider with `retainContextWhenHidden: true`                                        |
-| [`extensions/shofer/src/core/webview/ShoferProvider.ts:1230`](extensions/shofer/src/core/webview/ShoferProvider.ts:1230)                           | `resolveWebviewView` — host-side webview lifecycle                                                   |
-| [`extensions/shofer/src/core/webview/ShoferProvider.ts:2020`](extensions/shofer/src/core/webview/ShoferProvider.ts:2020)                           | `getHtmlContent` — production HTML generation                                                        |
-| [`extensions/shofer/src/core/webview/ShoferProvider.ts:2848`](extensions/shofer/src/core/webview/ShoferProvider.ts:2848)                           | `postStateToWebview` — pushes full state to webview                                                  |
-| [`extensions/shofer/src/core/webview/ShoferProvider.ts:1783`](extensions/shofer/src/core/webview/ShoferProvider.ts:1783)                           | `postMessageToWebview` — wraps `view?.webview.postMessage()`                                         |
-| [`extensions/shofer/webview-ui/src/index.tsx:22`](extensions/shofer/webview-ui/src/index.tsx:22)                                                   | `installWebviewCrashGuard()` — crash listeners + ping responder                                      |
-| [`extensions/shofer/webview-ui/src/utils/vscode.ts:14`](extensions/shofer/webview-ui/src/utils/vscode.ts:14)                                       | `acquireVsCodeApi()` singleton wrapper                                                               |
-| [`extensions/shofer/webview-ui/src/App.tsx:198`](extensions/shofer/webview-ui/src/App.tsx:198)                                                     | Sends `webviewDidLaunch` on mount                                                                    |
-| [`extensions/shofer/webview-ui/src/App.tsx:230`](extensions/shofer/webview-ui/src/App.tsx:230)                                                     | Returns `null` if `!didHydrateState` — renders nothing                                               |
-| [`extensions/shofer/webview-ui/src/context/ExtensionStateContext.tsx:358`](extensions/shofer/webview-ui/src/context/ExtensionStateContext.tsx:358) | `handleMessage` — receives host messages                                                             |
-| [`extensions/shofer/webview-ui/src/context/ExtensionStateContext.tsx:375`](extensions/shofer/webview-ui/src/context/ExtensionStateContext.tsx:375) | Sets `didHydrateState = true` on `state` message                                                     |
-| [`extensions/shofer/src/core/webview/webviewMessageHandler.ts:644`](extensions/shofer/src/core/webview/webviewMessageHandler.ts:644)               | Handles `webviewDidLaunch` → calls `provider._onWebviewLaunched()` + `provider.postStateToWebview()` |
+| File                                                                                                                            | Role                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| [`extensions/shofer/src/extension.ts:264`](../src/extension.ts)                                                                 | Registers ShoferProvider with `retainContextWhenHidden: true`                                        |
+| [`extensions/shofer/src/core/webview/ShoferProvider.ts:1230`](../src/core/webview/ShoferProvider.ts)                            | `resolveWebviewView` — host-side webview lifecycle                                                   |
+| [`extensions/shofer/src/core/webview/ShoferProvider.ts:2020`](../src/core/webview/ShoferProvider.ts)                            | `getHtmlContent` — production HTML generation                                                        |
+| [`extensions/shofer/src/core/webview/ShoferProvider.ts:2848`](../src/core/webview/ShoferProvider.ts)                            | `postStateToWebview` — pushes full state to webview                                                  |
+| [`extensions/shofer/src/core/webview/ShoferProvider.ts:1783`](../src/core/webview/ShoferProvider.ts)                            | `postMessageToWebview` — wraps `view?.webview.postMessage()`                                         |
+| [`extensions/shofer/webview-ui/src/index.tsx:22`](../webview-ui/src/index.tsx)                                                  | `installWebviewCrashGuard()` — crash listeners + ping responder                                      |
+| [`extensions/shofer/webview-ui/src/utils/vscode.ts:14`](../webview-ui/src/utils/vscode.ts)                                      | `acquireVsCodeApi()` singleton wrapper                                                               |
+| [`extensions/shofer/webview-ui/src/App.tsx:198`](../webview-ui/src/App.tsx)                                                     | Sends `webviewDidLaunch` on mount                                                                    |
+| [`extensions/shofer/webview-ui/src/App.tsx:230`](../webview-ui/src/App.tsx)                                                     | Returns `null` if `!didHydrateState` — renders nothing                                               |
+| [`extensions/shofer/webview-ui/src/context/ExtensionStateContext.tsx:358`](../webview-ui/src/context/ExtensionStateContext.tsx) | `handleMessage` — receives host messages                                                             |
+| [`extensions/shofer/webview-ui/src/context/ExtensionStateContext.tsx:375`](../webview-ui/src/context/ExtensionStateContext.tsx) | Sets `didHydrateState = true` on `state` message                                                     |
+| [`extensions/shofer/src/core/webview/webviewMessageHandler.ts:644`](../src/core/webview/webviewMessageHandler.ts)               | Handles `webviewDidLaunch` → calls `provider._onWebviewLaunched()` + `provider.postStateToWebview()` |
 
 ### Crash Detection Infrastructure
 
@@ -106,7 +106,7 @@ The log shows 80 instances of:
 [messageUpdated] Received update for unknown message ts=1780216624537, dropping.
 ```
 
-This happens because `messageUpdated` targets a specific message by timestamp, but the webview's message list may be out of sync with what the host thinks is current. The handler in [`ExtensionStateContext.tsx`](extensions/shofer/webview-ui/src/context/ExtensionStateContext.tsx:435) does:
+This happens because `messageUpdated` targets a specific message by timestamp, but the webview's message list may be out of sync with what the host thinks is current. The handler in [`ExtensionStateContext.tsx`](../webview-ui/src/context/ExtensionStateContext.tsx) does:
 
 ```typescript
 case "messageUpdated":

@@ -305,7 +305,7 @@ flowchart TB
     SIZE -->|"yes"| MSG
 ```
 
-The exporters receive these via [`ShoferProvider.getTaskWithId()`](../src/core/webview/ShoferProvider.ts), which constructs the task-directory file paths using constants from [`GlobalFileNames`](../src/shared/globalFileNames.ts) and reads `api_conversation_history.jsonl` via `readApiMessages()` (the append-only log is deduped by `ts` on read). Note the `skipApiHistory` option exists for cold task-switch but the export paths call `getTaskWithId(id)` **without** it, so they always receive the full `apiConversationHistory`. The JSON export additionally reads `ui_messages.jsonl` via `readTaskMessages()`. Export path resolution and last-path persistence is handled by [`resolveDefaultSaveUri` / `saveLastExportPath`](../src/utils/export.ts).
+The exporters receive these via [`ShoferProvider.getTaskWithId()`](../src/core/webview/ShoferProvider.ts), which constructs the task-directory file paths using constants from [`GlobalFileNames`](../packages/core/src/shared/globalFileNames.ts) and reads `api_conversation_history.jsonl` via `readApiMessages()` (the append-only log is deduped by `ts` on read). Note the `skipApiHistory` option exists for cold task-switch but the export paths call `getTaskWithId(id)` **without** it, so they always receive the full `apiConversationHistory`. The JSON export additionally reads `ui_messages.jsonl` via `readTaskMessages()`. Export path resolution and last-path persistence is handled by [`resolveDefaultSaveUri` / `saveLastExportPath`](../src/utils/export.ts).
 
 ### Call Partitioning
 

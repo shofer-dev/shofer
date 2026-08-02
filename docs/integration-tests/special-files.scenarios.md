@@ -1,7 +1,7 @@
 # Shofer Special Files — Integration Test Scenarios
 
 Feature under test: Shofer's recognition of and behavior around special workspace files (`.shofer/shoferignore`, `.shofer/shofermodes`, `.shofer/rules/`, `.shofer/commands/`, `.shofer/skills/`, `AGENTS.md`, `.shoferprotected` patterns).  
-Sources: [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts), [`ShoferProtectedController`](../src/core/protect/ShoferProtectedController.ts), [`CustomModesManager`](../src/core/config/CustomModesManager.ts), [`shofer_special_files.md`](../docs/shofer_special_files.md).
+Sources: [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts), [`ShoferProtectedController`](../src/core/protect/ShoferProtectedController.ts), [`CustomModesManager`](../../src/core/config/CustomModesManager.ts), [`shofer_special_files.md`](../shofer_special_files.md).
 
 ## Smoke Tests
 

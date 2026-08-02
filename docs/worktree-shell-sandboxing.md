@@ -7,14 +7,14 @@
 > `3e1dcd33c` (quote prefix tokens), `097bff4cb` (scope Landlock to `/dev/null` node).
 >
 > Implemented entry points (line numbers re-verified against current source):
-> [`getWorktreeSandboxPrefix()`](extensions/shofer/src/utils/worktreePathGuard.ts:108),
-> [`getWorktreeCommandWarning()`](extensions/shofer/src/utils/worktreePathGuard.ts:152) (now macOS/Windows-only),
-> [`validateWorktreePath()`](extensions/shofer/src/utils/worktreePathGuard.ts:63),
-> [`isEmbeddedWorktreeTask()`](extensions/shofer/src/utils/worktreePathGuard.ts:38),
-> [`shellQuote()`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:29) +
-> sandbox prefix application at [`ExecuteCommandTool.ts:136`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:136),
-> the rename-boundary guard at [`RenameSymbolTool.ts:141`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:141), and
-> the wrapper binary [`sandbox/main.go`](extensions/shofer/sandbox/main.go) + [`sandbox/main_test.go`](extensions/shofer/sandbox/main_test.go).
+> [`getWorktreeSandboxPrefix()`](../packages/core/src/utils/worktreePathGuard.ts),
+> [`getWorktreeCommandWarning()`](../packages/core/src/utils/worktreePathGuard.ts) (now macOS/Windows-only),
+> [`validateWorktreePath()`](../packages/core/src/utils/worktreePathGuard.ts),
+> [`isEmbeddedWorktreeTask()`](../packages/core/src/utils/worktreePathGuard.ts),
+> [`shellQuote()`](../packages/core/src/tools/ExecuteCommandTool.ts) +
+> sandbox prefix application at [`ExecuteCommandTool.ts:136`](../packages/core/src/tools/ExecuteCommandTool.ts),
+> the rename-boundary guard at [`RenameSymbolTool.ts:141`](../packages/core/src/tools/RenameSymbolTool.ts), and
+> the wrapper binary [`sandbox/main.go`](../src/sandbox/main.go) + [`sandbox/main_test.go`](../src/sandbox/main_test.go).
 >
 > **Known gap:** the committed binary [`sandbox/shofer-sandbox`](extensions/shofer/sandbox/shofer-sandbox)
 > is x86-64 / not-stripped, with no Bazel target and no `go.work` entry — arm64 deploys fail with a
@@ -24,16 +24,16 @@
 
 When an agent runs inside an embedded worktree (`task.cwd` → `<workspace>/.worktrees/<name>/`),
 shell commands executed via `execute_command` must be unable to **write** outside the task's assigned
-worktree directory. The current [`getWorktreeCommandWarning()`](extensions/shofer/src/utils/worktreePathGuard.ts:97)
+worktree directory. The current [`getWorktreeCommandWarning()`](../packages/core/src/utils/worktreePathGuard.ts)
 advisory warning is a best-effort placeholder that does not prevent escape.
 
 Additionally, `rename_symbol` (LSP rename) could escape worktree boundaries because the LSP rename
 provider operates on the entire workspace. **This is now fixed** (Phase 3 ✅): in addition to the
-source-file guard at [`RenameSymbolTool.execute()`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:70),
+source-file guard at [`RenameSymbolTool.execute()`](../packages/core/src/tools/RenameSymbolTool.ts),
 the handler enumerates every affected file via `workspaceEdit.entries()` and runs each through
-[`validateWorktreePath()`](extensions/shofer/src/utils/worktreePathGuard.ts:62) **before** applying the
+[`validateWorktreePath()`](../packages/core/src/utils/worktreePathGuard.ts) **before** applying the
 edit; if any affected path is outside the worktree, the whole rename is blocked (strict Option A) — see
-[`RenameSymbolTool.ts:139-150`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:139). (Note: this is
+[`RenameSymbolTool.ts:139-150`](../packages/core/src/tools/RenameSymbolTool.ts). (Note: this is
 worktree-boundary enforcement; mode-level `fileRegex` restrictions for `rename_symbol` remain
 source-path-derived — see [`adding-new-tools.md`](adding-new-tools.md).)
 
@@ -62,7 +62,7 @@ READS:               unrestricted
 > metadata directory (typically `../..` → the main `.git` dir) to whitelist `objects/` and
 > `refs/`. This means `git add`, `git commit`, `git checkout`, and other git operations work
 > inside sandboxed worktree shells without any manual configuration. See
-> [`resolveWorktreeGitPaths()`](extensions/shofer/src/sandbox/main.go:305).
+> [`resolveWorktreeGitPaths()`](../src/sandbox/main.go).
 
 ### Mechanism: `landlock` (Linux 5.13+)
 
@@ -85,16 +85,16 @@ calls. This means:
 - On **macOS/Windows**: keep VS Code terminal + current advisory warning (no kernel sandbox available)
 
 The execa path is already the fallback when shell integration fails
-([`ShellIntegrationError`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:25)).
+([`ShellIntegrationError`](../packages/core/src/tools/ExecuteCommandTool.ts)).
 
 **How the backend is actually selected.** In
-[`executeCommandInTerminal()`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:207) the
+[`executeCommandInTerminal()`](../packages/core/src/tools/ExecuteCommandTool.ts) the
 backend is chosen by `terminalShellIntegrationDisabled ? "execa" : "vscode"`, and that flag comes
-from provider state at [`ExecuteCommandTool.ts:85`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:85).
+from provider state at [`ExecuteCommandTool.ts:85`](../packages/core/src/tools/ExecuteCommandTool.ts).
 To force execa for a worktree task we pass `terminalShellIntegrationDisabled: true` into the
 `ExecuteCommandOptions` for that call rather than reading it from provider state. The terminal is
 then created via `TerminalRegistry.getOrCreateTerminal(workingDir, taskId, "execa")` at
-[`ExecuteCommandTool.ts:374`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:374).
+[`ExecuteCommandTool.ts:374`](../packages/core/src/tools/ExecuteCommandTool.ts).
 
 **Where the sandbox prefix is applied.** `ExecaTerminalProcess.run()` invokes the command with
 `` execa({ shell, cwd, … })`${command}` `` at
@@ -117,13 +117,13 @@ despite a denied write will not.
 A dedicated wrapper binary (Go, shipped with the extension) that:
 
 1. Resolves the git metadata directories from the worktree's `.git` file (see `resolveWorktreeGitPaths`
-   in [`main.go`](extensions/shofer/src/sandbox/main.go:305))
+   in [`main.go`](../src/sandbox/main.go))
 2. Detects whether the kernel supports landlock (≥ 5.13)
 3. If landlock: creates a landlock ruleset with write-only restrictions (worktree + git metadata + `/tmp` + `/dev/null`), self-restricts, then `exec`s the target command
 4. If no landlock but `bwrap` available: bind-mounts the worktree + git metadata paths + `/tmp` + `/dev/null` as writable, then `exec`s the target command
 5. If neither: exits with an error (shouldn't happen on Linux)
 
-The [`ExecuteCommandTool.ts`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts) handler:
+The [`ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts) handler:
 
 1. Checks `isEmbeddedWorktreeTask(task)`
 2. If true: forces the execa backend, prepends the sandbox wrapper to the command
@@ -179,7 +179,7 @@ Reads stay unrestricted throughout — only writes are confined.
 
 > **Design deviation:** the original plan threaded a sandbox-prefix parameter through
 > `ExecaTerminalProcess`. The implementation instead bakes the wrapper into the `effectiveCommand`
-> string at [`ExecuteCommandTool.ts:136`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:136),
+> string at [`ExecuteCommandTool.ts:136`](../packages/core/src/tools/ExecuteCommandTool.ts),
 > so `ExecaTerminalProcess` was left unchanged. Functionally equivalent; the wrapper is the outermost
 > process via `<wrapper> … -- /bin/sh -c '<cmd>'`.
 
@@ -188,15 +188,15 @@ Reads stay unrestricted throughout — only writes are confined.
 > The design below describes the approach that was **implemented** in Phase 3. The
 > per-affected-path worktree check is live at `RenameSymbolTool.ts:139-150`.
 
-[`RenameSymbolTool`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:32) calls
+[`RenameSymbolTool`](../packages/core/src/tools/RenameSymbolTool.ts) calls
 `vscode.executeDocumentRenameProvider`, which operates on the entire workspace. The source-file guard
-[`validateWorktreePath(task, filePath)`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:70)
+[`validateWorktreePath(task, filePath)`](../packages/core/src/tools/RenameSymbolTool.ts)
 only validates the **source** file's location, so the downstream-effects check below was added on top.
 
 The handler already enumerates every affected file: the loop at
-[`RenameSymbolTool.ts:127`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:127) iterates
+[`RenameSymbolTool.ts:127`](../packages/core/src/tools/RenameSymbolTool.ts) iterates
 `workspaceEdit.entries()` and collects `affectedRelPaths`/`affectedDisplayPaths` **before** the edit
-is applied at [`RenameSymbolTool.ts:155`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:155)
+is applied at [`RenameSymbolTool.ts:155`](../packages/core/src/tools/RenameSymbolTool.ts)
 (`vscode.workspace.applyEdit`). The validation slots in cleanly between those two points.
 
 ```mermaid
@@ -214,7 +214,7 @@ flowchart TD
 ```
 
 Approach: after building `affectedRelPaths` (before `captureOriginal` / `applyEdit`), run each path
-through [`validateWorktreePath()`](extensions/shofer/src/utils/worktreePathGuard.ts:62). If any edit
+through [`validateWorktreePath()`](../packages/core/src/utils/worktreePathGuard.ts). If any edit
 targets a file outside the worktree boundary:
 
 1. **Option A (strict):** Block the entire rename with an error (nothing has been applied yet).
@@ -257,7 +257,7 @@ if it needs cross-worktree refactoring. (Note: the API here is `WorkspaceEdit.en
 ### Phase 4: Cleanup & Docs ✅ complete
 
 - [x] Update [`plugins/basics/docs/worktrees.md`](../plugins/basics/docs/worktrees.md) — Known Limitation collapsed; sandboxing documented
-- [x] Update [`command-execution.md`](extensions/shofer/docs/command-execution.md) — execa-forcing for worktrees documented
+- [x] Update [`command-execution.md`](command-execution.md) — execa-forcing for worktrees documented
 - [x] `getWorktreeCommandWarning()` repurposed for macOS/Windows-only (`worktreePathGuard.ts:152`)
 
 ## Open / Deferred
@@ -284,7 +284,7 @@ Shofer chat panel. What's lost is specifically the **VS Code integrated-terminal
 panel: the kind with its own trash/X icon. (The chat **Stop** button remains the kill affordance for
 execa, routing to [`ExecaTerminalProcess.abort()`](extensions/shofer/src/integrations/terminal/ExecaTerminalProcess.ts:163)
 — SIGKILL + `psTree` child reaping.) The `vscode` backend creates a real terminal via
-[`Terminal.ts`](extensions/shofer/src/integrations/terminal/Terminal.ts:21); the execa backend creates
+[`Terminal.ts`](../src/integrations/terminal/Terminal.ts); the execa backend creates
 nothing.
 
 **Is it possible?** Yes. The constraint that "VS Code owns the shell process, so it can't be

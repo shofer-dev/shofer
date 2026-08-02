@@ -3,21 +3,21 @@
 ## Status: Implemented (3.66.13)
 
 Components:
-[`CommandsButton.tsx`](webview-ui/src/components/chat/CommandsButton.tsx),
-[`SkillsButton.tsx`](webview-ui/src/components/chat/SkillsButton.tsx)
+[`CommandsButton.tsx`](../webview-ui/src/components/chat/CommandsButton.tsx),
+[`SkillsButton.tsx`](../webview-ui/src/components/chat/SkillsButton.tsx)
 
 Backend:
-[`Task.ts:549`](packages/core/src/task/Task.ts:549) — loadedSkills tracking,
-[`SkillsTool.ts`](packages/core/src/tools/SkillsTool.ts) — reload no-op,
-[`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts) — IPC
+[`Task.ts:549`](../packages/core/src/task/Task.ts) — loadedSkills tracking,
+[`SkillsTool.ts`](../packages/core/src/tools/SkillsTool.ts) — reload no-op,
+[`skillsMessageHandler.ts`](../src/core/webview/skillsMessageHandler.ts) — IPC
 
 Tests:
-[`CommandsButton.spec.tsx`](webview-ui/src/components/chat/__tests__/CommandsButton.spec.tsx),
-[`SkillsButton.spec.tsx`](webview-ui/src/components/chat/__tests__/SkillsButton.spec.tsx),
-[`skillsTool.spec.ts`](packages/core/src/tools/__tests__/skillsTool.spec.ts),
-[`skillsMessageHandler.spec.ts`](src/core/webview/__tests__/skillsMessageHandler.spec.ts)
+[`CommandsButton.spec.tsx`](../webview-ui/src/components/chat/__tests__/CommandsButton.spec.tsx),
+[`SkillsButton.spec.tsx`](../webview-ui/src/components/chat/__tests__/SkillsButton.spec.tsx),
+[`skillsTool.spec.ts`](../packages/core/src/tools/__tests__/skillsTool.spec.ts),
+[`skillsMessageHandler.spec.ts`](../src/core/webview/__tests__/skillsMessageHandler.spec.ts)
 
-i18n: [`quickAccess.json`](webview-ui/src/i18n/locales/en/quickAccess.json)
+i18n: [`quickAccess.json`](../webview-ui/src/i18n/locales/en/quickAccess.json)
 Docs: [`skills.md`](skills.md), [`native_tools.md`](native_tools.md)
 
 ## Problem
@@ -75,7 +75,7 @@ Same flow for the **🎓 Skills** button.
 
 | Property         | Value                                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Component        | [`CommandsButton.tsx`](extensions/shofer/webview-ui/src/components/chat/CommandsButton.tsx)                      |
+| Component        | [`CommandsButton.tsx`](../webview-ui/src/components/chat/CommandsButton.tsx)                                     |
 | Icon             | `Zap` (Lucide) + `ChevronDown` (Lucide)                                                                          |
 | Tooltip          | "Slash Commands — click to browse and insert"                                                                    |
 | Hidden when      | No commands available (`commands.length === 0`)                                                                  |
@@ -87,7 +87,7 @@ Same flow for the **🎓 Skills** button.
 | Open-file button | `ExternalLink` icon on hover, sends `{ type: "openFile", text: filePath }`                                       |
 | Max height       | 400px with scroll                                                                                                |
 
-**Command data** (from [`Command`](extensions/shofer/packages/types/src/vscode-extension-host.ts:465)):
+**Command data** (from [`Command`](../packages/types/src/vscode-extension-host.ts)):
 
 ```typescript
 interface Command {
@@ -103,7 +103,7 @@ interface Command {
 
 | Property         | Value                                                                                                                                                     |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Component        | [`SkillsButton.tsx`](webview-ui/src/components/chat/SkillsButton.tsx)                                                                                     |
+| Component        | [`SkillsButton.tsx`](../webview-ui/src/components/chat/SkillsButton.tsx)                                                                                  |
 | Icon             | `GraduationCap` (Lucide) + `ChevronDown` (Lucide)                                                                                                         |
 | Tooltip          | "Skills — click to browse and insert"                                                                                                                     |
 | Hidden when      | No skills available (`skills.length === 0`)                                                                                                               |
@@ -126,7 +126,7 @@ Each `Task` maintains a `loadedSkills: Map<string,string>` (skill name → SKILL
 - **IPC**: `handleRequestSkills` includes `loadedSkills` in the skills message
 - **UI**: `SkillsButton` shows loaded skills first with a green ✓ checkmark
 
-**Skill data** (from [`SkillMetadata`](extensions/shofer/packages/types/src/skills.ts:5)):
+**Skill data** (from [`SkillMetadata`](../packages/types/src/skills.ts)):
 
 ```typescript
 interface SkillMetadata {
@@ -213,7 +213,7 @@ sequenceDiagram
 
 #### Layout Integration
 
-In [`ChatTextArea.tsx`](extensions/shofer/webview-ui/src/components/chat/ChatTextArea.tsx:1391-1392):
+In [`ChatTextArea.tsx`](../webview-ui/src/components/chat/ChatTextArea.tsx):
 
 ```tsx
 <div className="flex items-center gap-2">
@@ -247,7 +247,7 @@ When a command has an `argumentHint` field (e.g., `<phone>`):
 
 ### i18n
 
-Keys in [`quickAccess.json`](extensions/shofer/webview-ui/src/i18n/locales/en/quickAccess.json):
+Keys in [`quickAccess.json`](../webview-ui/src/i18n/locales/en/quickAccess.json):
 
 | Key                                    | Value                                         |
 | -------------------------------------- | --------------------------------------------- |
@@ -361,7 +361,7 @@ Both popovers include a refresh button (↻, `RefreshCw` from lucide-react) betw
 
 ### 4. `requestLoadedSkills` and `searchSkills` message types have no handlers
 
-The `WebviewMessage` union in [`vscode-extension-host.ts`](packages/types/src/vscode-extension-host.ts) defines `"requestLoadedSkills"` and `"searchSkills"` message types, and the `ExtensionMessage` type includes corresponding `loadedSkills` and `skillSearchResults` payload fields. However, no handler is registered for either message type in [`webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts) or [`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts). These are dead types — defined but not wired.
+The `WebviewMessage` union in [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts) defines `"requestLoadedSkills"` and `"searchSkills"` message types, and the `ExtensionMessage` type includes corresponding `loadedSkills` and `skillSearchResults` payload fields. However, no handler is registered for either message type in [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts) or [`skillsMessageHandler.ts`](../src/core/webview/skillsMessageHandler.ts). These are dead types — defined but not wired.
 
 ### 5. Settings gear uses codicon, not Lucide
 
@@ -369,4 +369,4 @@ Both popovers' settings gear button uses `<span className="codicon codicon-setti
 
 ### 6. One built-in command only (`init`), despite doc implying multiple
 
-The [built-in-commands.ts](src/services/command/built-in-commands.ts) file defines only one built-in command: `init`. The `CommandsButton` groups commands by source including `"built-in"`, so the "Built-in Commands" group would appear only if built-in commands exist. The doc's user-flow diagram shows only Project and Global groups — this is consistent with the current single-command reality but was not explicitly called out.
+The [built-in-commands.ts](../packages/core/src/services/command/built-in-commands.ts) file defines only one built-in command: `init`. The `CommandsButton` groups commands by source including `"built-in"`, so the "Built-in Commands" group would appear only if built-in commands exist. The doc's user-flow diagram shows only Project and Global groups — this is consistent with the current single-command reality but was not explicitly called out.

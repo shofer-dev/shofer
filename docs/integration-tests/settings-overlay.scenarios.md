@@ -2,14 +2,14 @@
 
 Feature under test: Settings storage layers, mode merge precedence, export/import
 round-trip, factory reset, auto-import on startup, and file watcher-based reload.  
-Sources: [`settings_overlay.md`](../docs/settings_overlay.md),
-[`ProviderSettingsManager.ts`](../src/core/config/ProviderSettingsManager.ts),
-[`ContextProxy.ts`](../src/core/config/ContextProxy.ts),
-[`CustomModesManager.ts`](../src/core/config/CustomModesManager.ts),
-[`McpHub.ts`](../src/services/mcp/McpHub.ts),
-[`importExport.ts`](../src/core/config/importExport.ts),
-[`autoImportSettings.ts`](../src/utils/autoImportSettings.ts),
-[`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts).
+Sources: [`settings_overlay.md`](../settings_overlay.md),
+[`ProviderSettingsManager.ts`](../../src/core/config/ProviderSettingsManager.ts),
+[`ContextProxy.ts`](../../src/core/config/ContextProxy.ts),
+[`CustomModesManager.ts`](../../src/core/config/CustomModesManager.ts),
+[`McpHub.ts`](../../packages/core/src/services/mcp/McpHub.ts),
+[`importExport.ts`](../../src/core/config/importExport.ts),
+[`autoImportSettings.ts`](../../src/utils/autoImportSettings.ts),
+[`ShoferProvider.ts`](../../src/core/webview/ShoferProvider.ts).
 
 ## Smoke Tests
 

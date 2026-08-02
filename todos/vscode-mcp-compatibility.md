@@ -75,7 +75,7 @@ Key differences:
 
 - [ ] **Read `.vscode/mcp.json`** from workspace root
 
-    - Add alongside existing [`getProjectMcpPath()`](extensions/shofer/src/services/mcp/McpHub.ts:642)
+    - Add alongside existing [`getProjectMcpPath()`](../packages/core/src/services/mcp/McpHub.ts)
     - Add as `getVscodeMcpPath()` that returns `.vscode/mcp.json` if it exists
     - Add watcher via `vscode.workspace.createFileSystemWatcher` (same pattern as `.shofer/mcp.json`)
 
@@ -107,7 +107,7 @@ Key differences:
     - Same for the user scope's `mcp.json` vs user-level VS Code config
 
 - [ ] **Re-read on VS Code config changes**
-    - Extend [`debounceConfigChange()`](extensions/shofer/src/services/mcp/McpHub.ts:580) to also handle
+    - Extend [`debounceConfigChange()`](../packages/core/src/services/mcp/McpHub.ts) to also handle
       VS Code MCP config paths
     - When `.vscode/mcp.json` changes → remap → `updateServerConnections()` for `"vscode-project"` source
 

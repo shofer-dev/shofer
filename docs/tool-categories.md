@@ -216,5 +216,5 @@ This section tracks known deficiencies in this document and in the tool-group sy
 - [ToolGroup Type Definitions](../packages/types/src/tool.ts)
 - [Mode Configuration](../packages/types/src/mode.ts)
 - [External Tool Resolution](../packages/core/src/task/build-tools.ts)
-- [MCP Hub — Tool Metadata](../src/services/mcp/McpHub.ts)
+- [MCP Hub — Tool Metadata](../packages/core/src/services/mcp/McpHub.ts)
 - [Auto-Approval Tool Group Inference](../packages/core/src/auto-approval/tools.ts)

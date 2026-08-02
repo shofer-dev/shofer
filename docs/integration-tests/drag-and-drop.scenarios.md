@@ -1,12 +1,12 @@
 # Integration Tests: Drag & Drop Context Files
 
-> Feature docs: [`docs/drag_n_drop.md`](../docs/drag_n_drop.md),
+> Feature docs: [`docs/drag_n_drop.md`](../drag_n_drop.md),
 > [`docs/user-manual/drag-and-drop.md`](../docs/user-manual/drag-and-drop.md)
-> Implementation: [`ContextDropZoneProvider.ts`](../src/core/webview/ContextDropZoneProvider.ts),
-> [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx),
-> [`ChatTextArea.tsx`](../webview-ui/src/components/chat/ChatTextArea.tsx),
-> [`droppedContextFiles.ts`](../webview-ui/src/utils/droppedContextFiles.ts),
-> [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)
+> Implementation: [`ContextDropZoneProvider.ts`](../../src/core/webview/ContextDropZoneProvider.ts),
+> [`ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx),
+> [`ChatTextArea.tsx`](../../webview-ui/src/components/chat/ChatTextArea.tsx),
+> [`droppedContextFiles.ts`](../../webview-ui/src/utils/droppedContextFiles.ts),
+> [`vscode-extension-host.ts`](../../packages/types/src/vscode-extension-host.ts)
 
 ## Scenarios
 

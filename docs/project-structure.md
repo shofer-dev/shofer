@@ -258,7 +258,7 @@ The tree shows a simplified subset of the monorepo. Missing from the diagram:
 
 ### Task events section is incomplete
 
-The "Key events emitted" block under Task.ts lists only 5 events. The [`events.ts`](extensions/shofer/packages/types/src/events.ts) `ShoferEventName` enum defines 25+ events. Missing categories:
+The "Key events emitted" block under Task.ts lists only 5 events. The [`events.ts`](../packages/types/src/events.ts) `ShoferEventName` enum defines 25+ events. Missing categories:
 
 - **Subtask lifecycle**: `TaskPaused`, `TaskUnpaused`, `TaskSpawned`, `TaskDelegated`, `TaskDelegationCompleted`, `TaskDelegationResumed`
 - **Execution**: `TaskModeSwitched`, `TaskAskResponded`, `TaskUserMessage`, `QueuedMessagesUpdated`
@@ -271,7 +271,7 @@ The doc says "Task finished with token/tool usage". In the actual schema, `TaskC
 
 ### TaskManager events list is incomplete
 
-The "Key events emitted" block lists 3 events. The actual [`TaskManagerEvents`](extensions/shofer/src/services/task-manager/TaskManager.ts:46) interface defines 7 events. Missing:
+The "Key events emitted" block lists 3 events. The actual [`TaskManagerEvents`](../src/services/task-manager/TaskManager.ts) interface defines 7 events. Missing:
 
 - `managedTask:needs-parent-input` — background child routes a question to its parent
 - `managedTask:completed` — task reached completed lifecycle

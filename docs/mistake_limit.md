@@ -1,6 +1,6 @@
 # Consecutive Mistake Limit
 
-The "Shofer is having trouble…" dialog appears when [`consecutiveMistakeCount`](packages/core/src/task/Task.ts:594) reaches [`consecutiveMistakeLimit`](packages/core/src/task/Task.ts:595) (default: 3, configurable per API profile; 0 disables). The guard fires at the top of every iteration of [`recursivelyMakeShoferRequests()`](packages/core/src/task/Task.ts:4001-4034), **before** the next API request is sent. When the limit is hit:
+The "Shofer is having trouble…" dialog appears when [`consecutiveMistakeCount`](../packages/core/src/task/Task.ts) reaches [`consecutiveMistakeLimit`](../packages/core/src/task/Task.ts) (default: 3, configurable per API profile; 0 disables). The guard fires at the top of every iteration of [`recursivelyMakeShoferRequests()`](../packages/core/src/task/Task.ts), **before** the next API request is sent. When the limit is hit:
 
 1. Telemetry is emitted (`captureConsecutiveMistakeError` + `captureException`)
 2. An `ask("mistake_limit_reached", …)` is posted with the guidance text from [`common:errors.mistake_limit_guidance`](src/i18n/locales/en/common.json:59)
@@ -11,13 +11,13 @@ The counter is also reset to 0 on any **successful** tool execution and on abort
 
 ## UI Rendering
 
-The dialog is rendered by [`ErrorRow`](webview-ui/src/components/chat/ErrorRow.tsx:143) with `type="mistake_limit"`:
+The dialog is rendered by [`ErrorRow`](../webview-ui/src/components/chat/ErrorRow.tsx) with `type="mistake_limit"`:
 
 - **Title:** `chat:troubleMessage` → "Shofer is having trouble…"
 - **Message:** The `message` prop (i18n guidance text)
 - **Icon:** `MessageCircleWarning` (lucide-react)
 
-The `ask("mistake_limit_reached")` case in [`ChatRowContent`](webview-ui/src/components/chat/ChatRow.tsx:2117) also dispatches directly to `<ErrorRow type="mistake_limit" …>`.
+The `ask("mistake_limit_reached")` case in [`ChatRowContent`](../webview-ui/src/components/chat/ChatRow.tsx) also dispatches directly to `<ErrorRow type="mistake_limit" …>`.
 
 ## Mechanisms (categorized by what increments the counter)
 
@@ -62,7 +62,7 @@ flowchart TD
 
 ### 1. Post-stream no-tool-use guard
 
-**File:** [`Task.ts:5314-5322`](packages/core/src/task/Task.ts:5314)
+**File:** [`Task.ts:5314-5322`](../packages/core/src/task/Task.ts)
 
 After each streaming response is consumed, the loop checks whether the LLM produced any `tool_use` blocks. If `!didToolUse`, `consecutiveNoToolUseCount` is incremented. On the **second** consecutive no-tool-use turn (1-turn grace), `consecutiveMistakeCount++` is also incremented. On success, `consecutiveNoToolUseCount` resets to 0.
 
@@ -70,15 +70,15 @@ This fires, for example, when the LLM repeatedly produces pure text without call
 
 ### 2. Tool repetition detection
 
-**File:** [`ToolRepetitionDetector.ts`](packages/core/src/tools/ToolRepetitionDetector.ts)
+**File:** [`ToolRepetitionDetector.ts`](../packages/core/src/tools/ToolRepetitionDetector.ts)
 
-Each complete tool call is serialized to canonical JSON (`safe-stable-stringify` of `{ name, params, nativeArgs }`). If 3 **consecutive identical** calls are detected (same tool, same args), the detector returns `allowExecution: false` and an `ask("mistake_limit_reached", …)` fires directly from [`presentAssistantMessage`](packages/core/src/assistant-message/presentAssistantMessage.ts:841). The counter is reset when a different tool (or different args) is called.
+Each complete tool call is serialized to canonical JSON (`safe-stable-stringify` of `{ name, params, nativeArgs }`). If 3 **consecutive identical** calls are detected (same tool, same args), the detector returns `allowExecution: false` and an `ask("mistake_limit_reached", …)` fires directly from [`presentAssistantMessage`](../packages/core/src/assistant-message/presentAssistantMessage.ts). The counter is reset when a different tool (or different args) is called.
 
 `new_task` is exempt from repetition detection (legitimate fan-out parallelism).
 
 ### 3. Mode/tool-validation failures in presentAssistantMessage
 
-**File:** [`presentAssistantMessage.ts:812`](packages/core/src/assistant-message/presentAssistantMessage.ts:812)
+**File:** [`presentAssistantMessage.ts:812`](../packages/core/src/assistant-message/presentAssistantMessage.ts)
 
 Every tool call goes through `validateToolUse()` before execution. If the tool is not allowed in the current mode (or is unknown, disabled, etc.), the catch block increments `consecutiveMistakeCount++` **per blocked tool call**. Since the LLM may call multiple tools in a single turn, multiple blocked tools in one response can add 2+ to the counter.
 
@@ -112,7 +112,7 @@ Nearly every tool handler increments `consecutiveMistakeCount++` on parameter va
 
 ### 5. presentAssistantMessage dispatch errors
 
-**File:** [`presentAssistantMessage.ts`](packages/core/src/assistant-message/presentAssistantMessage.ts)
+**File:** [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts)
 
 The main tool dispatch switch in `presentAssistantMessage` also increments the counter for:
 
@@ -128,7 +128,7 @@ The main tool dispatch switch in `presentAssistantMessage` also increments the c
 `consecutiveMistakeCount` is reset to 0 by:
 
 - **Every tool on successful execution** — each tool handler explicitly sets `task.consecutiveMistakeCount = 0` in its success path
-- **After the `mistake_limit_reached` dialog** — set to 0 after the user responds ([`Task.ts:4034`](packages/core/src/task/Task.ts:4034))
+- **After the `mistake_limit_reached` dialog** — set to 0 after the user responds ([`Task.ts:4034`](../packages/core/src/task/Task.ts))
 - **On task abort** — `consecutiveNoToolUseCount` and `consecutiveNoAssistantMessagesCount` are reset; `consecutiveMistakeCount` persists but the dialog guard is gated by `this.abort` being false
 
 ## Configuration
@@ -137,9 +137,9 @@ The main tool dispatch switch in `presentAssistantMessage` also increments the c
 
 | Setting                   | Default | Constant                                                                          |
 | ------------------------- | ------- | --------------------------------------------------------------------------------- |
-| `consecutiveMistakeLimit` | `3`     | [`DEFAULT_CONSECUTIVE_MISTAKE_LIMIT`](packages/types/src/provider-settings.ts:29) |
+| `consecutiveMistakeLimit` | `3`     | [`DEFAULT_CONSECUTIVE_MISTAKE_LIMIT`](../packages/types/src/provider-settings.ts) |
 
-Set per API configuration profile. A value of `0` disables the "Shofer is having trouble" dialog entirely — the guard at [`Task.ts`](packages/core/src/task/Task.ts) becomes a no-op.
+Set per API configuration profile. A value of `0` disables the "Shofer is having trouble" dialog entirely — the guard at [`Task.ts`](../packages/core/src/task/Task.ts) becomes a no-op.
 
 ### Experimental Flag: Disable All Mistake Limit Checks
 
@@ -150,8 +150,8 @@ Set per API configuration profile. A value of `0` disables the "Shofer is having
 Located in **Settings → Experimental → "Disable mistake limit checks"**. When enabled, **all** mistake limit gating is bypassed:
 
 - The `recursivelyMakeShoferRequests` guard (mechanisms 1, 3, 4, 5) no longer blocks on `consecutiveMistakeCount >= consecutiveMistakeLimit` — the counter still increments for telemetry, but the dialog and loop interruption never fire.
-- [`ToolRepetitionDetector`](packages/core/src/tools/ToolRepetitionDetector.ts) is completely skipped (mechanism 2).
-- Mode/tool-validation failure increments (mechanism 3 in [`presentAssistantMessage.ts:812`](packages/core/src/assistant-message/presentAssistantMessage.ts:812)) are suppressed so the counter doesn't accumulate from blocked calls.
+- [`ToolRepetitionDetector`](../packages/core/src/tools/ToolRepetitionDetector.ts) is completely skipped (mechanism 2).
+- Mode/tool-validation failure increments (mechanism 3 in [`presentAssistantMessage.ts:812`](../packages/core/src/assistant-message/presentAssistantMessage.ts)) are suppressed so the counter doesn't accumulate from blocked calls.
 
 ⚠️ **Use with caution**: this can lead to infinite loops consuming API credits.
 

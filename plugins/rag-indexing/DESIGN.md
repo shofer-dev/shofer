@@ -102,7 +102,7 @@ flowchart TB
 
 ### Language Coverage
 
-Files are ingested only if their extension appears in [`CODEBASE_INDEX_FILE_EXTENSIONS`](extensions/shofer/packages/types/src/codebase-index.ts:25), defined in `@shofer/types`. The indexing pipeline then routes each file through either tree-sitter AST parsing or length-based fallback chunking. All 28 languages (31 extensions) are supported; 25 use tree-sitter WASM parsers, 3 use fallback chunking, and Markdown uses a custom heading/anchor parser.
+Files are ingested only if their extension appears in [`CODEBASE_INDEX_FILE_EXTENSIONS`](../../packages/types/src/codebase-index.ts), defined in `@shofer/types`. The indexing pipeline then routes each file through either tree-sitter AST parsing or length-based fallback chunking. All 28 languages (31 extensions) are supported; 25 use tree-sitter WASM parsers, 3 use fallback chunking, and Markdown uses a custom heading/anchor parser.
 
 | Extension(s)         | Parser            | Query file                                                                                          | Capture convention                                                | Mechanism                                              |
 | -------------------- | ----------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
@@ -664,7 +664,7 @@ Defined in `src/constants/index.ts`:
 
 ## Multi-node — search-only workers
 
-In the [Shofer Workers](v3_architecture.md#distributed-execution-horizontal-scaling) model several hosts share one workspace filesystem: the **controller** (the VS Code front-end) and N remote executors running `shofer serve`. The code index is a workspace-scoped shared resource, so it needs exactly one writer.
+In the [Shofer Workers](../../docs/v3_architecture.md#distributed-execution-horizontal-scaling) model several hosts share one workspace filesystem: the **controller** (the VS Code front-end) and N remote executors running `shofer serve`. The code index is a workspace-scoped shared resource, so it needs exactly one writer.
 
 **The model: the controller is the sole indexer; workers are search-only readers.**
 
@@ -713,7 +713,7 @@ Because service creation completes, `isInitialized` is true on a worker, so `reg
 
 `CodeIndexConfigManager` exposes the flag as the `isSearchOnly` getter (and the key below as `indexKey`).
 
-> **Not a headless-vs-VS-Code distinction.** `shofer serve` loads the same extension bundle through `ExtensionHost.activate()` ([`serve.ts`](../apps/cli/src/commands/cli/serve.ts), [`extension-host.ts`](../apps/cli/src/agent/extension-host.ts)), so a served worker **does** register the code-index factory and construct a real `CodeIndexManager`. What holds a worker to querying is `searchOnly`, not a missing factory.
+> **Not a headless-vs-VS-Code distinction.** `shofer serve` loads the same extension bundle through `ExtensionHost.activate()` ([`serve.ts`](../../apps/cli/src/commands/cli/serve.ts), [`extension-host.ts`](../../apps/cli/src/agent/extension-host.ts)), so a served worker **does** register the code-index factory and construct a real `CodeIndexManager`. What holds a worker to querying is `searchOnly`, not a missing factory.
 
 ### `key` — why index identity cannot be host-derived
 
@@ -785,7 +785,7 @@ Discovered during the 2026-05-20 review that verified every file path, line numb
 
 - **`serialized-embedder.ts` not documented** — the embedders directory contains a 9th file (`serialized-embedder.ts`) that wraps an `IEmbedder` in a concurrency lane (`embedder-lane.ts`). Neither file is mentioned in the embedder provider table (§8) or architecture diagram.
 
-- **`embeddingModels.ts` path is imprecise** — the doc says "resolved via `shared/embeddingModels.ts`" (§8). The file lives at [`src/shared/embeddingModels.ts`](extensions/shofer/src/shared/embeddingModels.ts), not under `src/shared/`. The doc should use an absolute or workspace-relative link.
+- **`embeddingModels.ts` path is imprecise** — the doc says "resolved via `shared/embeddingModels.ts`" (§8). The file lives at [`src/shared/embeddingModels.ts`](../../packages/core/src/shared/embeddingModels.ts), not under `src/shared/`. The doc should use an absolute or workspace-relative link.
 
 ### Interfaces
 
@@ -799,7 +799,7 @@ Discovered during the 2026-05-20 review that verified every file path, line numb
 
 ### Search Ranking Quality
 
-- **Semantic ranking is too lexical in practice** — Despite the tool description promising meaning-based search, the top results for queries like "home screen recent tasks" are dominated by i18n JSON entries (e.g., `"Show worktrees in home screen"`, score 0.65–0.71) that match on word-level substring overlap ("tasks", "home", "screen"). The actual architectural component ([`HistoryPreview.tsx`](extensions/shofer/webview-ui/src/components/history/HistoryPreview.tsx)) does not appear in the top 15. The embeddings (and the [default `cosine` similarity](src/vector-store/qdrant-client.ts)) appear to heavily weight lexical token overlap rather than structural/semantic relationships, making the tool unreliable for codebase exploration. In practice, `grep_search` with literal strings like `"Recent Tasks"` or component names like `HistoryPreview` finds the right files instantly.
+- **Semantic ranking is too lexical in practice** — Despite the tool description promising meaning-based search, the top results for queries like "home screen recent tasks" are dominated by i18n JSON entries (e.g., `"Show worktrees in home screen"`, score 0.65–0.71) that match on word-level substring overlap ("tasks", "home", "screen"). The actual architectural component ([`HistoryPreview.tsx`](../../webview-ui/src/components/history/HistoryPreview.tsx)) does not appear in the top 15. The embeddings (and the [default `cosine` similarity](src/vector-store/qdrant-client.ts)) appear to heavily weight lexical token overlap rather than structural/semantic relationships, making the tool unreliable for codebase exploration. In practice, `grep_search` with literal strings like `"Recent Tasks"` or component names like `HistoryPreview` finds the right files instantly.
 
     **Root cause:** this is the visible symptom of the _asymmetric retrieval_ design noted in [Supported Embedding Providers](#supported-embedding-providers) — a raw-code index queried with natural-language questions. A general text embedder hasn't learned the NL↔code alignment, so it exploits the one always-available signal (shared surface tokens). It is not a separate bug from the model choice. Possible avenues to investigate:
 

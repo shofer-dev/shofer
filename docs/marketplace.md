@@ -2,14 +2,14 @@
 
 > **⚠️ CURRENT STATUS: DISABLED**
 >
-> The marketplace feature is currently **disabled** via the [`MARKETPLACE_ENABLED`](extensions/shofer/packages/types/src/marketplace.ts:10) feature flag set to `false`. This means:
+> The marketplace feature is currently **disabled** via the [`MARKETPLACE_ENABLED`](../packages/types/src/marketplace.ts) feature flag set to `false`. This means:
 >
 > - No marketplace tab is shown in the Shofer panel.
 > - No marketplace buttons appear in MCP, Modes, ModeSelector, or Skills settings.
 > - No API calls are made to the Shofer backend for marketplace data.
 > - **No server-side infrastructure is required.**
 >
-> To re-enable the marketplace, set `MARKETPLACE_ENABLED = true` in [`packages/types/src/marketplace.ts`](extensions/shofer/packages/types/src/marketplace.ts:10).
+> To re-enable the marketplace, set `MARKETPLACE_ENABLED = true` in [`packages/types/src/marketplace.ts`](../packages/types/src/marketplace.ts).
 
 ## Overview
 
@@ -103,54 +103,54 @@ variable in `MarketplaceManager` remains `undefined`.
 
 ### Types & Schemas
 
-| File                                                                                                                         | Purpose                                                                                                                                                                                                                           |
-| ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`packages/types/src/marketplace.ts`](extensions/shofer/packages/types/src/marketplace.ts)                                   | Zod schemas for `MarketplaceItem`, `ModeMarketplaceItem`, `McpMarketplaceItem`, `McpParameter`, `McpInstallationMethod`, `InstallMarketplaceItemOptions`, `MarketplaceInstalledMetadata`                                          |
-| [`packages/types/src/vscode-extension-host.ts`](extensions/shofer/packages/types/src/vscode-extension-host.ts) (lines 21-33) | Cloud types (formerly in `cloud.ts`) are now defined inline: `CloudUserInfo`, `CloudOrganizationMembership`, `ShareVisibility`. Organization-level MCP settings are no longer defined as a Zod schema.                            |
-| [`packages/types/src/telemetry.ts`](extensions/shofer/packages/types/src/telemetry.ts) (lines 49-52)                         | Telemetry event names: `MARKETPLACE_ITEM_INSTALLED`, `MARKETPLACE_ITEM_REMOVED`, `MARKETPLACE_TAB_VIEWED`, `MARKETPLACE_INSTALL_BUTTON_CLICKED`                                                                                   |
-| [`packages/types/src/vscode-extension-host.ts`](extensions/shofer/packages/types/src/vscode-extension-host.ts)               | Message types: `marketplaceData`, `filterMarketplaceItems`, `installMarketplaceItem`, `removeInstalledMarketplaceItem`, `marketplaceInstallResult`, `marketplaceRemoveResult`, `fetchMarketplaceData`, `marketplaceButtonClicked` |
+| File                                                                                                          | Purpose                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`packages/types/src/marketplace.ts`](../packages/types/src/marketplace.ts)                                   | Zod schemas for `MarketplaceItem`, `ModeMarketplaceItem`, `McpMarketplaceItem`, `McpParameter`, `McpInstallationMethod`, `InstallMarketplaceItemOptions`, `MarketplaceInstalledMetadata`                                          |
+| [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts) (lines 21-33) | Cloud types (formerly in `cloud.ts`) are now defined inline: `CloudUserInfo`, `CloudOrganizationMembership`, `ShareVisibility`. Organization-level MCP settings are no longer defined as a Zod schema.                            |
+| [`packages/types/src/telemetry.ts`](../packages/types/src/telemetry.ts) (lines 49-52)                         | Telemetry event names: `MARKETPLACE_ITEM_INSTALLED`, `MARKETPLACE_ITEM_REMOVED`, `MARKETPLACE_TAB_VIEWED`, `MARKETPLACE_INSTALL_BUTTON_CLICKED`                                                                                   |
+| [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)               | Message types: `marketplaceData`, `filterMarketplaceItems`, `installMarketplaceItem`, `removeInstalledMarketplaceItem`, `marketplaceInstallResult`, `marketplaceRemoveResult`, `fetchMarketplaceData`, `marketplaceButtonClicked` |
 
 ### Extension Host (Backend)
 
-| File                                                                                                                         | Purpose                                                                                                                                                                   |
-| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`src/services/marketplace/index.ts`](extensions/shofer/src/services/marketplace/index.ts)                                   | Barrel export for the marketplace service module                                                                                                                          |
-| [`src/services/marketplace/MarketplaceManager.ts`](extensions/shofer/src/services/marketplace/MarketplaceManager.ts)         | Top-level coordinator: fetches items, filters, installs, removes, reads installation metadata                                                                             |
-| [`src/services/marketplace/RemoteConfigLoader.ts`](extensions/shofer/src/services/marketplace/RemoteConfigLoader.ts)         | HTTP client that calls the Shofer API (`/api/marketplace/modes`, `/api/marketplace/mcps`), parses YAML, validates with Zod, caches results for 5 minutes                  |
-| [`src/services/marketplace/SimpleInstaller.ts`](extensions/shofer/src/services/marketplace/SimpleInstaller.ts)               | Writes marketplace items to the correct config files (`.shofer/shofermodes`, `mcp.json`) at project or global scope; integrates with `CustomModesManager` for mode import |
-| [`src/core/webview/ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts) (lines 2417-2448)               | Provides `fetchMarketplaceData()` method; `MarketplaceManager` is a class field                                                                                           |
-| [`src/core/webview/webviewMessageHandler.ts`](extensions/shofer/src/core/webview/webviewMessageHandler.ts) (lines 3065-3183) | Routes webview messages to `MarketplaceManager` methods                                                                                                                   |
-| [`src/activate/registerCommands.ts`](extensions/shofer/src/activate/registerCommands.ts) (lines 155-159)                     | Registers `marketplaceButtonClicked` command                                                                                                                              |
-| [`src/core/config/CustomModesManager.ts`](extensions/shofer/src/core/config/CustomModesManager.ts) (lines 517-598)           | `deleteCustomMode()` accepts `fromMarketplace` flag for tailored error messages during marketplace removal                                                                |
+| File                                                                                                          | Purpose                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`src/services/marketplace/index.ts`](../src/services/marketplace/index.ts)                                   | Barrel export for the marketplace service module                                                                                                                          |
+| [`src/services/marketplace/MarketplaceManager.ts`](../src/services/marketplace/MarketplaceManager.ts)         | Top-level coordinator: fetches items, filters, installs, removes, reads installation metadata                                                                             |
+| [`src/services/marketplace/RemoteConfigLoader.ts`](../src/services/marketplace/RemoteConfigLoader.ts)         | HTTP client that calls the Shofer API (`/api/marketplace/modes`, `/api/marketplace/mcps`), parses YAML, validates with Zod, caches results for 5 minutes                  |
+| [`src/services/marketplace/SimpleInstaller.ts`](../src/services/marketplace/SimpleInstaller.ts)               | Writes marketplace items to the correct config files (`.shofer/shofermodes`, `mcp.json`) at project or global scope; integrates with `CustomModesManager` for mode import |
+| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts) (lines 2417-2448)               | Provides `fetchMarketplaceData()` method; `MarketplaceManager` is a class field                                                                                           |
+| [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts) (lines 3065-3183) | Routes webview messages to `MarketplaceManager` methods                                                                                                                   |
+| [`src/activate/registerCommands.ts`](../src/activate/registerCommands.ts) (lines 155-159)                     | Registers `marketplaceButtonClicked` command                                                                                                                              |
+| [`src/core/config/CustomModesManager.ts`](../src/core/config/CustomModesManager.ts) (lines 517-598)           | `deleteCustomMode()` accepts `fromMarketplace` flag for tailored error messages during marketplace removal                                                                |
 
 ### Webview UI (React)
 
-| File                                                                                                                                                                             | Purpose                                                                                                                                                                    |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`webview-ui/src/App.tsx`](extensions/shofer/webview-ui/src/App.tsx)                                                                                                             | Tab routing: `"marketplace"` tab renders `MarketplaceView`; tracks `MARKETPLACE_TAB_VIEWED` telemetry                                                                      |
-| [`webview-ui/src/components/marketplace/MarketplaceView.tsx`](extensions/shofer/webview-ui/src/components/marketplace/MarketplaceView.tsx)                                       | Top-level container with MCP/Modes sub-tabs; triggers `fetchMarketplaceData` on mount and when org settings version changes                                                |
-| [`webview-ui/src/components/marketplace/MarketplaceViewStateManager.ts`](extensions/shofer/webview-ui/src/components/marketplace/MarketplaceViewStateManager.ts)                 | State machine managing fetch/complete/error states, active tab, filter state; processes incoming `"state"` and `"marketplaceData"` messages; applies client-side filtering |
-| [`webview-ui/src/components/marketplace/MarketplaceListView.tsx`](extensions/shofer/webview-ui/src/components/marketplace/MarketplaceListView.tsx)                               | Search bar, install-status dropdown, tag filter popover; renders cards in responsive grid; shows org MCPs section for cloud users                                          |
-| [`webview-ui/src/components/marketplace/useStateManager.ts`](extensions/shofer/webview-ui/src/components/marketplace/useStateManager.ts)                                         | React hook binding to `MarketplaceViewStateManager`                                                                                                                        |
-| [`webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx`](extensions/shofer/webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx)         | Individual card with name, author, description, tags, install/remove buttons, remove confirmation dialog                                                                   |
-| [`webview-ui/src/components/marketplace/components/MarketplaceInstallModal.tsx`](extensions/shofer/webview-ui/src/components/marketplace/components/MarketplaceInstallModal.tsx) | Installation modal with scope selector (project/global), method picker (for multi-method MCPs), parameter inputs, prerequisites display, post-install success screen       |
-| [`webview-ui/src/components/marketplace/IssueFooter.tsx`](extensions/shofer/webview-ui/src/components/marketplace/IssueFooter.tsx)                                               | Footer link to file a GitHub issue with the `marketplace.yml` template                                                                                                     |
-| [`webview-ui/src/context/ExtensionStateContext.tsx`](extensions/shofer/webview-ui/src/context/ExtensionStateContext.tsx)                                                         | Holds `marketplaceItems` and `marketplaceInstalledMetadata` in React context                                                                                               |
+| File                                                                                                                                                              | Purpose                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`webview-ui/src/App.tsx`](../webview-ui/src/App.tsx)                                                                                                             | Tab routing: `"marketplace"` tab renders `MarketplaceView`; tracks `MARKETPLACE_TAB_VIEWED` telemetry                                                                      |
+| [`webview-ui/src/components/marketplace/MarketplaceView.tsx`](../webview-ui/src/components/marketplace/MarketplaceView.tsx)                                       | Top-level container with MCP/Modes sub-tabs; triggers `fetchMarketplaceData` on mount and when org settings version changes                                                |
+| [`webview-ui/src/components/marketplace/MarketplaceViewStateManager.ts`](../webview-ui/src/components/marketplace/MarketplaceViewStateManager.ts)                 | State machine managing fetch/complete/error states, active tab, filter state; processes incoming `"state"` and `"marketplaceData"` messages; applies client-side filtering |
+| [`webview-ui/src/components/marketplace/MarketplaceListView.tsx`](../webview-ui/src/components/marketplace/MarketplaceListView.tsx)                               | Search bar, install-status dropdown, tag filter popover; renders cards in responsive grid; shows org MCPs section for cloud users                                          |
+| [`webview-ui/src/components/marketplace/useStateManager.ts`](../webview-ui/src/components/marketplace/useStateManager.ts)                                         | React hook binding to `MarketplaceViewStateManager`                                                                                                                        |
+| [`webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx`](../webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx)         | Individual card with name, author, description, tags, install/remove buttons, remove confirmation dialog                                                                   |
+| [`webview-ui/src/components/marketplace/components/MarketplaceInstallModal.tsx`](../webview-ui/src/components/marketplace/components/MarketplaceInstallModal.tsx) | Installation modal with scope selector (project/global), method picker (for multi-method MCPs), parameter inputs, prerequisites display, post-install success screen       |
+| [`webview-ui/src/components/marketplace/IssueFooter.tsx`](../webview-ui/src/components/marketplace/IssueFooter.tsx)                                               | Footer link to file a GitHub issue with the `marketplace.yml` template                                                                                                     |
+| [`webview-ui/src/context/ExtensionStateContext.tsx`](../webview-ui/src/context/ExtensionStateContext.tsx)                                                         | Holds `marketplaceItems` and `marketplaceInstalledMetadata` in React context                                                                                               |
 
 ### Entry points to the marketplace (from other views)
 
-| View                                                                                                                                               | Trigger                                                                      |
-| -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [`webview-ui/src/components/mcp/McpView.tsx`](extensions/shofer/webview-ui/src/components/mcp/McpView.tsx) (lines 197-211)                         | "Marketplace" button in MCP settings header → opens marketplace to MCP tab   |
-| [`webview-ui/src/components/modes/ModesView.tsx`](extensions/shofer/webview-ui/src/components/modes/ModesView.tsx) (lines 834-845)                 | "Marketplace" button in Modes settings → opens marketplace to Mode tab       |
-| [`webview-ui/src/components/chat/ModeSelector.tsx`](extensions/shofer/webview-ui/src/components/chat/ModeSelector.tsx) (lines 315-322)             | "Marketplace" icon in mode selector dropdown → opens marketplace to Mode tab |
-| [`webview-ui/src/components/settings/SkillsSettings.tsx`](extensions/shofer/webview-ui/src/components/settings/SkillsSettings.tsx) (lines 289-291) | "Marketplace" link in Skills settings → opens marketplace to Mode tab        |
+| View                                                                                                                                | Trigger                                                                      |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [`webview-ui/src/components/mcp/McpView.tsx`](../webview-ui/src/components/mcp/McpView.tsx) (lines 197-211)                         | "Marketplace" button in MCP settings header → opens marketplace to MCP tab   |
+| [`webview-ui/src/components/modes/ModesView.tsx`](../webview-ui/src/components/modes/ModesView.tsx) (lines 834-845)                 | "Marketplace" button in Modes settings → opens marketplace to Mode tab       |
+| [`webview-ui/src/components/chat/ModeSelector.tsx`](../webview-ui/src/components/chat/ModeSelector.tsx) (lines 315-322)             | "Marketplace" icon in mode selector dropdown → opens marketplace to Mode tab |
+| [`webview-ui/src/components/settings/SkillsSettings.tsx`](../webview-ui/src/components/settings/SkillsSettings.tsx) (lines 289-291) | "Marketplace" link in Skills settings → opens marketplace to Mode tab        |
 
 ### Telemetry
 
-| File                                                                                                                         | Purpose                                                                           |
-| ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| [`packages/telemetry/src/TelemetryService.ts`](extensions/shofer/packages/telemetry/src/TelemetryService.ts) (lines 258-302) | `captureMarketplaceItemInstalled()` and `captureMarketplaceItemRemoved()` methods |
+| File                                                                                                          | Purpose                                                                           |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [`packages/telemetry/src/TelemetryService.ts`](../packages/telemetry/src/TelemetryService.ts) (lines 258-302) | `captureMarketplaceItemInstalled()` and `captureMarketplaceItemRemoved()` methods |
 
 ---
 
@@ -315,7 +315,7 @@ This is computed at runtime by reading the actual config files (`.shofer/shoferm
 
 ## API Endpoints
 
-The marketplace fetches data from the Shofer API. The base URL is defined by the `SHOFER_API_URL` environment variable (defaulting to `"https://app.shofer.dev"`) in [`RemoteConfigLoader.ts`](extensions/shofer/src/services/marketplace/RemoteConfigLoader.ts:12).
+The marketplace fetches data from the Shofer API. The base URL is defined by the `SHOFER_API_URL` environment variable (defaulting to `"https://app.shofer.dev"`) in [`RemoteConfigLoader.ts`](../src/services/marketplace/RemoteConfigLoader.ts).
 
 | Endpoint                     | Response Format                              | Description                |
 | ---------------------------- | -------------------------------------------- | -------------------------- |
@@ -332,15 +332,15 @@ The marketplace fetches data from the Shofer API. The base URL is defined by the
 
 ## Organization / Cloud Integration
 
-When a user is authenticated with **Shofer Cloud**, organization settings would augment the marketplace. However, the cloud integration that provided organization-controlled MCP catalogs has been removed from the current codebase. The `orgSettings` variable in [`MarketplaceManager.getMarketplaceItems()`](extensions/shofer/src/services/marketplace/MarketplaceManager.ts:41) is always `undefined`, and the comment reads `"Cloud services removed; orgSettings remains undefined"`.
+When a user is authenticated with **Shofer Cloud**, organization settings would augment the marketplace. However, the cloud integration that provided organization-controlled MCP catalogs has been removed from the current codebase. The `orgSettings` variable in [`MarketplaceManager.getMarketplaceItems()`](../src/services/marketplace/MarketplaceManager.ts) is always `undefined`, and the comment reads `"Cloud services removed; orgSettings remains undefined"`.
 
-The [`MarketplaceView`](extensions/shofer/webview-ui/src/components/marketplace/MarketplaceView.tsx) still watches `organizationSettingsVersion` from `ExtensionStateContext` and re-fetches marketplace data whenever the version changes, though in the current code this version is always `-1`.
+The [`MarketplaceView`](../webview-ui/src/components/marketplace/MarketplaceView.tsx) still watches `organizationSettingsVersion` from `ExtensionStateContext` and re-fetches marketplace data whenever the version changes, though in the current code this version is always `-1`.
 
 ---
 
 ## Client-Side State Management
 
-The [`MarketplaceViewStateManager`](extensions/shofer/webview-ui/src/components/marketplace/MarketplaceViewStateManager.ts) implements a state machine with these transitions:
+The [`MarketplaceViewStateManager`](../webview-ui/src/components/marketplace/MarketplaceViewStateManager.ts) implements a state machine with these transitions:
 
 | Transition       | Payload                                      | Effect                                                                                              |
 | ---------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -379,7 +379,7 @@ Filters are applied client-side in `filterItems()` which checks type, search, ta
 | Mode      | `<globalSettings>/custom-modes.yaml` | YAML   |
 | MCP       | `<globalSettings>/mcp-settings.json` | JSON   |
 
-The global settings directory is resolved via [`ensureSettingsDirectoryExists()`](extensions/shofer/src/utils/globalContext.ts).
+The global settings directory is resolved via [`ensureSettingsDirectoryExists()`](../src/utils/globalContext.ts).
 
 ---
 
@@ -420,7 +420,7 @@ The global settings directory is resolved via [`ensureSettingsDirectoryExists()`
 
 ## Privacy
 
-Per the [Shofer Privacy Policy](extensions/shofer/PRIVACY.md):
+Per the [Shofer Privacy Policy](../PRIVACY.md):
 
 > When you browse or search the Marketplace for Model Configuration Profiles (MCPs) or Custom Modes, Shofer makes a secure API call to Shofer's backend servers to retrieve listing information. These requests send only the query parameters (e.g., extension version, search term) necessary to fulfill the request and do not include your code, prompts, or personally identifiable information.
 
@@ -430,15 +430,15 @@ Per the [Shofer Privacy Policy](extensions/shofer/PRIVACY.md):
 
 The following deficiencies were discovered during the 2026-05-20 verification of this doc against the live codebase.
 
-1. **`cancelMarketplaceInstall` message type not documented**: The [`WebviewMessage` union](extensions/shofer/packages/types/src/vscode-extension-host.ts:642) includes `"cancelMarketplaceInstall"` but this doc does not mention it in the message tables.
+1. **`cancelMarketplaceInstall` message type not documented**: The [`WebviewMessage` union](../packages/types/src/vscode-extension-host.ts) includes `"cancelMarketplaceInstall"` but this doc does not mention it in the message tables.
 
-2. **`filterMarketplaceItems` handler doesn't do server-side filtering**: The webview message handler at [`webviewMessageHandler.ts:3065-3074`](extensions/shofer/src/core/webview/webviewMessageHandler.ts:3065) delegates to `MarketplaceManager.filterItems()`, which is a private method that does client-side filtering — not a server-side operation. The doc describes it as "Applies server-side filters" in the message table but the actual behavior is local.
+2. **`filterMarketplaceItems` handler doesn't do server-side filtering**: The webview message handler at [`webviewMessageHandler.ts:3065-3074`](../src/core/webview/webviewMessageHandler.ts) delegates to `MarketplaceManager.filterItems()`, which is a private method that does client-side filtering — not a server-side operation. The doc describes it as "Applies server-side filters" in the message table but the actual behavior is local.
 
 3. **Stale line numbers for `McpView.tsx` marketplace button**: The doc says lines 197-211 but the button block spans lines 196-217 in the current source. The start (`MARKETPLACE_ENABLED &&`) is at line 196 and the closing `</StandardTooltip>)` is at line 216-217.
 
 4. **Stale line numbers for `SkillsSettings.tsx` marketplace link**: The doc says lines 289-291 but the `window.postMessage` block starts at line 288.
 
-5. **`filterMarketplaceItems` message payload mismatch**: The Webview → Extension Host table says the payload is `{ type?, search?, tags? }` but the actual handler at [`webviewMessageHandler.ts:3065-3074`](extensions/shofer/src/core/webview/webviewMessageHandler.ts:3065) accesses `message.filters.type`, `message.filters.search`, `message.filters.tags` — the payload is nested under `filters`, not flat.
+5. **`filterMarketplaceItems` message payload mismatch**: The Webview → Extension Host table says the payload is `{ type?, search?, tags? }` but the actual handler at [`webviewMessageHandler.ts:3065-3074`](../src/core/webview/webviewMessageHandler.ts) accesses `message.filters.type`, `message.filters.search`, `message.filters.tags` — the payload is nested under `filters`, not flat.
 
 6. **`McpView.tsx` line range in entry points table**: Doc says lines 197-211 but the marketplace button spans 196-217.
 

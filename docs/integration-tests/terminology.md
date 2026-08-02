@@ -1,6 +1,6 @@
 # Terminology Integration Test Scenarios
 
-Tests that verify the canonical terminology, naming, and concepts described in [`docs/terminology.md`](../docs/terminology.md) behave correctly end-to-end.
+Tests that verify the canonical terminology, naming, and concepts described in [`docs/terminology.md`](../terminology.md) behave correctly end-to-end.
 
 ---
 

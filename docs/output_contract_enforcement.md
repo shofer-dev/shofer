@@ -40,11 +40,11 @@ responds:
 
 Key fact: the `attempt_completion` tool the model sees has a **generic schema** —
 `result: string`, a `rating` enum, optional `feedback`
-([`attempt_completion.ts:26-46`](../extensions/shofer/packages/core/src/prompts/tools/native-tools/attempt_completion.ts:26)).
+([`attempt_completion.ts:26-46`](../packages/core/src/prompts/tools/native-tools/attempt_completion.ts)).
 The contract fields (`summary`, etc.) are **not** part of the tool's parameter
 schema. So although `strict: true` is already set on this tool
-([`attempt_completion.ts:25`](../extensions/shofer/packages/core/src/prompts/tools/native-tools/attempt_completion.ts:25),
-re-applied by [`convertToolsForOpenAI()`](../extensions/shofer/packages/core/src/api/providers/base-provider.ts:45)),
+([`attempt_completion.ts:25`](../packages/core/src/prompts/tools/native-tools/attempt_completion.ts),
+re-applied by [`convertToolsForOpenAI()`](../packages/core/src/api/providers/base-provider.ts)),
 strict mode constrains **nothing contract-relevant**: the decoder guarantees
 `{ result: <string> }` and the string can be a markdown table.
 
@@ -114,7 +114,7 @@ dedicated `submit_result`, or a per-stake variant of `attempt_completion`) whose
 }
 ```
 
-The existing [`convertToolSchemaForOpenAI()`](../extensions/shofer/packages/core/src/api/providers/base-provider.ts:63)
+The existing [`convertToolSchemaForOpenAI()`](../packages/core/src/api/providers/base-provider.ts)
 
 - `strict: true` plumbing then forces the decoder to emit conforming JSON at
   decode time, retiring the `JSON.parse` / missing-field retry loop at the source
@@ -129,7 +129,7 @@ are plain JSON assembled per API request, and the `output:` contract is already 
 fully machine-readable AST, not free-form prose.
 
 A stake's `output:` parses into a typed shape
-([`slang-ast.ts:106-113`](../extensions/shofer/packages/core/src/workflow/slang-ast.ts:106)):
+([`slang-ast.ts:106-113`](../packages/core/src/workflow/slang-ast.ts)):
 
 ```ts
 interface OutputSchema {
@@ -173,7 +173,7 @@ it never leaves the workflow runtime.
 
 The missing piece is not schema generation — it is a **per-task tool override
 hook**. Today tools are assembled by mode in
-[`build-tools.ts`](../extensions/shofer/packages/core/src/task/build-tools.ts)
+[`build-tools.ts`](../packages/core/src/task/build-tools.ts)
 (`filterNativeToolsForMode`), and `createTask()` takes no "inject this tool"
 parameter. Lever 1 needs:
 
@@ -183,7 +183,7 @@ parameter. Lever 1 needs:
    injection point.
 2. **A parser case + dispatch route** — per the Native Tool Parser Cases Rule,
    the synthesized tool's name must be handled in
-   [`NativeToolCallParser`](../extensions/shofer/packages/core/src/assistant-message/NativeToolCallParser.ts)
+   [`NativeToolCallParser`](../packages/core/src/assistant-message/NativeToolCallParser.ts)
    and routed to the **same termination path** as `attempt_completion`, or
    `nativeArgs` comes back `undefined` and the call is rejected.
 
@@ -198,8 +198,8 @@ Two sub-shapes, a real design choice:
 
 No form of structured output makes a model _choose_ to terminate rather than call
 `read_file`. That is governed by `tool_choice`, which is plumbed
-([`api/index.ts`](../extensions/shofer/packages/core/src/api/index.ts)) and used in
-[`Task.ts`](../extensions/shofer/packages/core/src/task/Task.ts) — but **hardcoded to
+([`api/index.ts`](../packages/core/src/api/index.ts)) and used in
+[`Task.ts`](../packages/core/src/task/Task.ts) — but **hardcoded to
 `"auto"`** in all four spots, and **never set by the workflow layer** (zero
 references under [`packages/core/src/workflow/`](../extensions/shofer/packages/core/src/workflow/)).
 
@@ -231,20 +231,20 @@ different fates.
 
 ### 4.1 Route trace
 
-`metadata.tools` → [`buildApiHandler()`](../extensions/shofer/packages/core/src/api/index.ts:114)
+`metadata.tools` → [`buildApiHandler()`](../packages/core/src/api/index.ts)
 provider switch → each handler's tool conversion → llm-router → upstream.
 
 **Extension side.** Every provider conversion carries the contract **schema**
 into its native format. The **`strict` flag** survives only on the
 OpenAI-compatible family:
 
-| Family            | Providers                                                                                                                                                                                       | Schema on wire?                  | `strict` flag on wire?        | Conversion site                                                                                                         |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| OpenAI-compatible | `openai`, `deepseek`, `openrouter`→**`shofer`/ds**, `litellm`, `requesty`, `unbound`, `zai`, `qwen-code`, `lmstudio`, `vercel`, `baseten`, `fireworks`, `sambanova`, `poe`, `openai-compatible` | ✅                               | ✅ kept                       | [`convertToolsForOpenAI()`](../extensions/shofer/packages/core/src/api/providers/base-provider.ts:45)                   |
-| Anthropic-native  | `anthropic`, `anthropic-vertex`, `minimax`                                                                                                                                                      | ✅ → `input_schema`              | ❌ dropped                    | [`convertOpenAIToolsToAnthropic()`](../extensions/shofer/packages/core/src/prompts/tools/native-tools/converters.ts:47) |
-| Bedrock           | `bedrock`                                                                                                                                                                                       | ✅ → `toolSpec.inputSchema.json` | ❌ no concept                 | bedrock handler                                                                                                         |
-| Gemini            | `gemini`                                                                                                                                                                                        | ✅ → `parametersJsonSchema`      | ❌ no concept (uses own flag) | gemini handler                                                                                                          |
-| Responses API     | `openai-native`, `openai-codex`, `xai`                                                                                                                                                          | ✅                               | ⚠️ varies                     | responses handler                                                                                                       |
+| Family            | Providers                                                                                                                                                                                       | Schema on wire?                  | `strict` flag on wire?        | Conversion site                                                                                    |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| OpenAI-compatible | `openai`, `deepseek`, `openrouter`→**`shofer`/ds**, `litellm`, `requesty`, `unbound`, `zai`, `qwen-code`, `lmstudio`, `vercel`, `baseten`, `fireworks`, `sambanova`, `poe`, `openai-compatible` | ✅                               | ✅ kept                       | [`convertToolsForOpenAI()`](../packages/core/src/api/providers/base-provider.ts)                   |
+| Anthropic-native  | `anthropic`, `anthropic-vertex`, `minimax`                                                                                                                                                      | ✅ → `input_schema`              | ❌ dropped                    | [`convertOpenAIToolsToAnthropic()`](../packages/core/src/prompts/tools/native-tools/converters.ts) |
+| Bedrock           | `bedrock`                                                                                                                                                                                       | ✅ → `toolSpec.inputSchema.json` | ❌ no concept                 | bedrock handler                                                                                    |
+| Gemini            | `gemini`                                                                                                                                                                                        | ✅ → `parametersJsonSchema`      | ❌ no concept (uses own flag) | gemini handler                                                                                     |
+| Responses API     | `openai-native`, `openai-codex`, `xai`                                                                                                                                                          | ✅                               | ⚠️ varies                     | responses handler                                                                                  |
 
 **Router side (verified).** The llm-router does **not** strip the schema or the
 flag. `strict` is a passthrough `*bool` on both tool structs
@@ -453,16 +453,16 @@ flowchart LR
 
 ### Key files added/changed
 
-| File                                                                           | Role                                                                                                                 |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| [`slang-ast.ts`](packages/core/src/workflow/slang-ast.ts)                      | Added `contractToJsonSchema()` — pure AST→JSON-Schema mapping                                                        |
-| [`index.ts`](packages/core/src/prompts/tools/native-tools/index.ts)            | Added `applyCompletionSchema()` + `getNativeTools({completionSchema})`                                               |
-| [`Task.ts`](packages/core/src/task/Task.ts)                                    | Added `completionSchema` property; threaded through 4 `buildNativeToolsArrayWithRestrictions` call sites + cache key |
-| [`build-tools.ts`](packages/core/src/task/build-tools.ts)                      | Added `completionSchema` to `BuildToolsOptions`                                                                      |
-| [`task.ts`](packages/types/src/task.ts)                                        | Added `completionSchema` to `CreateTaskOptions`                                                                      |
-| [`WorkflowTask.ts`](packages/core/src/workflow/WorkflowTask.ts)                | `spawnAgentTask()` passes contract schema to agent tasks                                                             |
-| [`AttemptCompletionTool.ts`](packages/core/src/tools/AttemptCompletionTool.ts) | `result` param widened to `string \| Record<string, unknown>`; objects JSON-stringified for display/storage          |
-| [`tools.ts`](src/shared/tools.ts)                                              | `NativeToolArgs` widened for `attempt_completion`                                                                    |
+| File                                                                              | Role                                                                                                                 |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| [`slang-ast.ts`](../packages/core/src/workflow/slang-ast.ts)                      | Added `contractToJsonSchema()` — pure AST→JSON-Schema mapping                                                        |
+| [`index.ts`](../packages/core/src/prompts/tools/native-tools/index.ts)            | Added `applyCompletionSchema()` + `getNativeTools({completionSchema})`                                               |
+| [`Task.ts`](../packages/core/src/task/Task.ts)                                    | Added `completionSchema` property; threaded through 4 `buildNativeToolsArrayWithRestrictions` call sites + cache key |
+| [`build-tools.ts`](../packages/core/src/task/build-tools.ts)                      | Added `completionSchema` to `BuildToolsOptions`                                                                      |
+| [`task.ts`](../packages/types/src/task.ts)                                        | Added `completionSchema` to `CreateTaskOptions`                                                                      |
+| [`WorkflowTask.ts`](packages/core/src/workflow/WorkflowTask.ts)                   | `spawnAgentTask()` passes contract schema to agent tasks                                                             |
+| [`AttemptCompletionTool.ts`](../packages/core/src/tools/AttemptCompletionTool.ts) | `result` param widened to `string \| Record<string, unknown>`; objects JSON-stringified for display/storage          |
+| [`tools.ts`](src/shared/tools.ts)                                                 | `NativeToolArgs` widened for `attempt_completion`                                                                    |
 
 ### Test coverage
 
@@ -483,7 +483,7 @@ specific mock entries retained their existing contracts.
 
 ### Smoke harness integration
 
-[`scripts/smoke/harness.sh`](scripts/smoke/harness.sh) gained Part 2
+[`scripts/smoke/harness.sh`](../scripts/smoke/harness.sh) gained Part 2
 (workflow conformance) with process-per-flow parallelism via `xargs -P N`.
 Run with `scripts/smoke/harness.sh [mock|ds]`. `SKIP_PART2=1` to skip.
 
@@ -491,19 +491,19 @@ Run with `scripts/smoke/harness.sh [mock|ds]`. `SKIP_PART2=1` to skip.
 
 ## 9. Files referenced
 
-| File                                                                                          | Role                                                                                                      |
-| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [`WorkflowTask.ts`](packages/core/src/workflow/WorkflowTask.ts)                               | `buildStakePrompt()` (contract → prose), `collectStakeResults()` (post-hoc parse + retry)                 |
-| [`slang-ast.ts`](packages/core/src/workflow/slang-ast.ts)                                     | `OutputSchema` / `OutputField` — the typed contract AST (flat scalar fields)                              |
-| [`attempt_completion.ts`](packages/core/src/prompts/tools/native-tools/attempt_completion.ts) | generic completion tool schema (`result: string`, `strict: true`) — correct by design                     |
-| [`build-tools.ts`](packages/core/src/task/build-tools.ts)                                     | `filterNativeToolsForMode` — per-mode tool assembly; the per-task injection hook would live here          |
-| [`NativeToolCallParser.ts`](packages/core/src/assistant-message/NativeToolCallParser.ts)      | parser cases — a synthesized tool needs a case + termination dispatch route                               |
-| [`base-provider.ts`](packages/core/src/api/providers/base-provider.ts)                        | `convertToolsForOpenAI()` / `convertToolSchemaForOpenAI()` — `strict` + schema-tightening (OpenAI family) |
-| [`converters.ts`](packages/core/src/prompts/tools/native-tools/converters.ts)                 | `convertOpenAIToolsToAnthropic()` — schema → `input_schema`, drops `strict`                               |
-| [`api/index.ts`](packages/core/src/api/index.ts)                                              | `buildApiHandler()` provider switch; `tool_choice` plumbing                                               |
-| [`Task.ts`](packages/core/src/task/Task.ts)                                                   | `tool_choice` call sites (hardcoded `"auto"`)                                                             |
-| [`harness.sh`](scripts/smoke/harness.sh)                                                      | Part 1 CLI scenarios + Part 2 workflow conformance with xargs parallelism                                 |
-| `tools.go`                                                                                    | router `FunctionTool.Strict` / `ChatFunctionDefinition.Strict` passthrough fields                         |
-| `requests.go`                                                                                 | router `response_format` validation (`oneof=text json_object json_schema`)                                |
-| `provider.go`                                                                                 | router outbound POST to upstream with tools intact                                                        |
-| `config.go`                                                                                   | `DEEPSEEK_API_BASE` default (`https://api.deepseek.com`)                                                  |
+| File                                                                                             | Role                                                                                                      |
+| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| [`WorkflowTask.ts`](packages/core/src/workflow/WorkflowTask.ts)                                  | `buildStakePrompt()` (contract → prose), `collectStakeResults()` (post-hoc parse + retry)                 |
+| [`slang-ast.ts`](../packages/core/src/workflow/slang-ast.ts)                                     | `OutputSchema` / `OutputField` — the typed contract AST (flat scalar fields)                              |
+| [`attempt_completion.ts`](../packages/core/src/prompts/tools/native-tools/attempt_completion.ts) | generic completion tool schema (`result: string`, `strict: true`) — correct by design                     |
+| [`build-tools.ts`](../packages/core/src/task/build-tools.ts)                                     | `filterNativeToolsForMode` — per-mode tool assembly; the per-task injection hook would live here          |
+| [`NativeToolCallParser.ts`](../packages/core/src/assistant-message/NativeToolCallParser.ts)      | parser cases — a synthesized tool needs a case + termination dispatch route                               |
+| [`base-provider.ts`](../packages/core/src/api/providers/base-provider.ts)                        | `convertToolsForOpenAI()` / `convertToolSchemaForOpenAI()` — `strict` + schema-tightening (OpenAI family) |
+| [`converters.ts`](../packages/core/src/prompts/tools/native-tools/converters.ts)                 | `convertOpenAIToolsToAnthropic()` — schema → `input_schema`, drops `strict`                               |
+| [`api/index.ts`](../packages/core/src/api/index.ts)                                              | `buildApiHandler()` provider switch; `tool_choice` plumbing                                               |
+| [`Task.ts`](../packages/core/src/task/Task.ts)                                                   | `tool_choice` call sites (hardcoded `"auto"`)                                                             |
+| [`harness.sh`](../scripts/smoke/harness.sh)                                                      | Part 1 CLI scenarios + Part 2 workflow conformance with xargs parallelism                                 |
+| `tools.go`                                                                                       | router `FunctionTool.Strict` / `ChatFunctionDefinition.Strict` passthrough fields                         |
+| `requests.go`                                                                                    | router `response_format` validation (`oneof=text json_object json_schema`)                                |
+| `provider.go`                                                                                    | router outbound POST to upstream with tools intact                                                        |
+| `config.go`                                                                                      | `DEEPSEEK_API_BASE` default (`https://api.deepseek.com`)                                                  |

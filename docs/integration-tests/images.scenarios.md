@@ -1,11 +1,11 @@
 # Integration Tests: Image Support
 
-> Feature docs: [`docs/images.md`](../docs/images.md),
+> Feature docs: [`docs/images.md`](../images.md),
 > [`docs/user-manual/images.md`](../docs/user-manual/images.md)
-> Implementation: [`ChatTextArea.tsx`](../webview-ui/src/components/chat/ChatTextArea.tsx),
-> [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx),
-> [`Thumbnails.tsx`](../webview-ui/src/components/common/Thumbnails.tsx),
-> [`image-cleaning.ts`](../src/api/transform/image-cleaning.ts)
+> Implementation: [`ChatTextArea.tsx`](../../webview-ui/src/components/chat/ChatTextArea.tsx),
+> [`ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx),
+> [`Thumbnails.tsx`](../../webview-ui/src/components/common/Thumbnails.tsx),
+> [`image-cleaning.ts`](../../packages/core/src/api/transform/image-cleaning.ts)
 
 ## Scenarios
 

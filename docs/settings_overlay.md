@@ -659,7 +659,7 @@ scope root by `McpHub.watchMcpSettingsFile()`.
 **Project:** `.shofer/mcp.json` at `<workspace>/.shofer/mcp.json`, watched by
 `McpHub.watchProjectMcpFile()`.
 
-Both use a **500ms debounce** via [`debounceConfigChange()`](../src/services/mcp/McpHub.ts:317)
+Both use a **500ms debounce** via [`debounceConfigChange()`](../packages/core/src/services/mcp/McpHub.ts)
 to avoid redundant server restarts during rapid edits. Programmatic updates
 (from Settings UI) set `isProgrammaticUpdate = true` to skip the watcher-triggered
 re-read entirely.
@@ -668,7 +668,7 @@ On change:
 
 1. File is re-read and parsed
 2. Schema validated against `McpSettingsSchema`
-3. [`updateServerConnections()`](../src/services/mcp/McpHub.ts:364) reconnects affected servers
+3. [`updateServerConnections()`](../packages/core/src/services/mcp/McpHub.ts) reconnects affected servers
 4. WebView is notified of server changes
 
 #### Mode Definitions (`shofermodes` in the three scopes)
@@ -1029,7 +1029,7 @@ The archive and the mounts carry **no Shofer-written secrets**. Options:
 
 ## 12. All GlobalFileNames Constants
 
-Defined in [`GlobalFileNames`](../src/shared/globalFileNames.ts:1):
+Defined in [`GlobalFileNames`](../packages/core/src/shared/globalFileNames.ts):
 
 | Constant                 | Filename                        | Purpose                                   |
 | ------------------------ | ------------------------------- | ----------------------------------------- |
@@ -1136,7 +1136,7 @@ understanding the write paths in §5 and the persisted task files in §13.
 ### 14h. File Watcher Debounce Details Missing
 
 §7 describes MCP config file watching with a 500ms debounce but does not
-mention that [`debounceConfigChange()`](../src/services/mcp/McpHub.ts:317)
+mention that [`debounceConfigChange()`](../packages/core/src/services/mcp/McpHub.ts)
 groups by `(source, filePath)` key and that **programmatic updates**
 (`isProgrammaticUpdate = true`) skip the watcher-triggered re-read
 entirely. This is an important behavioral detail for anyone debugging

@@ -172,10 +172,10 @@ chip in the chat input bar; there is no longer a `WorktreesView` panel. So:
 | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | [`worktree-include.ts`](../extensions/Shofer/packages/core/src/worktree/worktree-include.ts)         | Add `syncWorktreeIncludeFiles(sourceDir, targetDir, { force })` on top of existing `copyWorktreeIncludeFiles`       |
 | [`handlers.ts`](../extensions/Shofer/src/core/webview/worktree/handlers.ts)                          | Add `handleSyncWorktreeInclude(provider, worktreePath, force)`; resolve main via `worktreeService.detectBaseBranch` |
-| [`vscode-extension-host.ts`](../extensions/Shofer/packages/types/src/vscode-extension-host.ts)       | Add `"syncWorktreeInclude"` to the `WebviewMessage` discriminator (message types live here, not in `worktree.ts`)   |
-| [`webviewMessageHandler.ts`](../extensions/Shofer/src/core/webview/webviewMessageHandler.ts)         | Add `case "syncWorktreeInclude"` wiring                                                                             |
+| [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                         | Add `"syncWorktreeInclude"` to the `WebviewMessage` discriminator (message types live here, not in `worktree.ts`)   |
+| [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                           | Add `case "syncWorktreeInclude"` wiring                                                                             |
 | [`WorktreeIndicator.tsx`](../extensions/Shofer/webview-ui/src/components/chat/WorktreeIndicator.tsx) | Phase 4: stale/missing badges + sync action per row                                                                 |
-| [`ChatView.tsx`](../extensions/Shofer/webview-ui/src/components/chat/ChatView.tsx)                   | Phase 3: pre-spawn missing-only sync when a task is created with `worktreeDir`                                      |
+| [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                                     | Phase 3: pre-spawn missing-only sync when a task is created with `worktreeDir`                                      |
 | [`WorktreeTool.ts`](../extensions/Shofer/src/core/tools/WorktreeTool.ts)                             | Phase 3: `worktree sync` subcommand for the agent / CLI-rescue case                                                 |
 
 ## IPC Messages
@@ -187,7 +187,7 @@ chip in the chat input bar; there is no longer a `WorktreesView` panel. So:
 ```
 
 Reuse the existing `worktreeDir?: string` field already on `WebviewMessage` (added at
-[`vscode-extension-host.ts:802`](../extensions/Shofer/packages/types/src/vscode-extension-host.ts#L802))
+[`vscode-extension-host.ts:802`](../packages/types/src/vscode-extension-host.ts#L802))
 so no new envelope field is required. `force=true` overwrites existing items in the target
 worktree with the main worktree's version; defaults to `false` (skip if exists).
 

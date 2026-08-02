@@ -352,7 +352,7 @@ This section captures deficiencies discovered during the 2026-05-20
 factual review. They are not immediate correctness problems but
 represent missing coverage that future write-ups should address.
 
-1. **Undocumented `QueuedMessage` shape.** The [`MessageQueueService`](extensions/shofer/packages/core/src/message-queue/MessageQueueService.ts:41)
+1. **Undocumented `QueuedMessage` shape.** The [`MessageQueueService`](../packages/core/src/message-queue/MessageQueueService.ts)
    wraps each message as `{ id: string (uuidv4), timestamp: number,
 text: string, images?: string[] }`. The `timestamp` and `id` fields
    are never mentioned in this doc; the `id` is relevant because
@@ -362,14 +362,14 @@ text: string, images?: string[] }`. The `timestamp` and `id` fields
 2. **Undocumented methods: `removeMessage`, `updateMessage`, `isEmpty`.**
    Only `addMessage` / `prependMessage` / `dequeueMessage` appear in the
    diagram and the FIFO section. `isEmpty()` is the predicate used by
-   [`AttemptCompletionTool`](extensions/shofer/packages/core/src/tools/AttemptCompletionTool.ts)
+   [`AttemptCompletionTool`](../packages/core/src/tools/AttemptCompletionTool.ts)
    per the Terminal-State Queue-Drain Rule. `removeMessage` and
    `updateMessage` support the host-side edit/delete message flow.
 
 3. **Event plumbing not explained.** Every queue mutation calls
    `this.emit("stateChanged", this._messages)`, which triggers a
    `postStateToWebview` round-trip so the webview's
-   [`QueuedMessages`](extensions/shofer/webview-ui/src/components/chat/QueuedMessages.tsx)
+   [`QueuedMessages`](../webview-ui/src/components/chat/QueuedMessages.tsx)
    component re-renders reactively. The doc mentions
    `"stateChanged"` in the diagram but never explains the
    publication → subscription path (event types `QueueEvents`,
@@ -397,12 +397,12 @@ text: string, images?: string[] }`. The `timestamp` and `id` fields
    `currentRequestAbortController.abort()`, `_taskAbortController.abort()`,
    `_cleanupOrphanedToolUses()`, and `_taskAbortController` replacement
    steps that exist in the real
-   [`cancelAndProcessQueuedMessages`](extensions/shofer/packages/core/src/task/Task.ts:5923).
+   [`cancelAndProcessQueuedMessages`](../packages/core/src/task/Task.ts).
    Add these steps or label the diagram as simplified.
 
 8. **No mention of `webviewMessageHandler` routing.** The `queueMessage`
    IPC type is dispatched in
-   [`webviewMessageHandler.ts`](extensions/shofer/src/core/webview/webviewMessageHandler.ts),
+   [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts),
    which is the entry point for `addMessage()` calls. The doc shows the
    webview-to-Task path conceptually but never names the handler file.
 

@@ -1,12 +1,12 @@
 # Integration Tests: Per-Task Cost Limit (Spend Cap)
 
-> Feature docs: [`docs/cost-calculation-and-limits.md`](../docs/cost-calculation-and-limits.md),
+> Feature docs: [`docs/cost-calculation-and-limits.md`](../cost-calculation-and-limits.md),
 > [`docs/user-manual/cost-limit.md`](../docs/user-manual/cost-limit.md)
-> Implementation: [`Task.ts`](../packages/core/src/task/Task.ts),
+> Implementation: [`Task.ts`](../../packages/core/src/task/Task.ts),
 > [`aggregateTaskCosts.ts`](../src/core/webview/aggregateTaskCosts.ts),
-> [`NewTaskTool.ts`](../packages/core/src/tools/NewTaskTool.ts),
-> [`TaskHeader.tsx`](../webview-ui/src/components/chat/TaskHeader.tsx),
-> [`BudgetLimitDialog.tsx`](../webview-ui/src/components/chat/BudgetLimitDialog.tsx)
+> [`NewTaskTool.ts`](../../packages/core/src/tools/NewTaskTool.ts),
+> [`TaskHeader.tsx`](../../webview-ui/src/components/chat/TaskHeader.tsx),
+> [`BudgetLimitDialog.tsx`](../../webview-ui/src/components/chat/BudgetLimitDialog.tsx)
 
 ## Scenarios
 

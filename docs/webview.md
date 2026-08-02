@@ -6,10 +6,10 @@ This document explains how the Shofer webview UI communicates with the extension
 
 Shofer uses VS Code's [`WebviewViewProvider`](https://code.visualstudio.com/api/references/vscode-api#WebviewViewProvider) API to render its UI inside the VS Code sidebar. The architecture has two halves:
 
-| Side               | Runtime                   | Language                  | Key Entry Point                                                            |
-| ------------------ | ------------------------- | ------------------------- | -------------------------------------------------------------------------- |
-| **Extension Host** | Node.js (VS Code process) | TypeScript                | [`src/core/webview/ShoferProvider.ts`](src/core/webview/ShoferProvider.ts) |
-| **Webview UI**     | Browser (iframe sandbox)  | React + TypeScript + Vite | [`webview-ui/src/index.tsx`](webview-ui/src/index.tsx)                     |
+| Side               | Runtime                   | Language                  | Key Entry Point                                                               |
+| ------------------ | ------------------------- | ------------------------- | ----------------------------------------------------------------------------- |
+| **Extension Host** | Node.js (VS Code process) | TypeScript                | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts) |
+| **Webview UI**     | Browser (iframe sandbox)  | React + TypeScript + Vite | [`webview-ui/src/index.tsx`](../webview-ui/src/index.tsx)                     |
 
 The extension host is the **source of truth** for all state. The webview is a **pure renderer** — it has no autonomous data fetching or persistence. Every piece of data the UI displays arrives via `postMessage` from the host.
 
@@ -38,7 +38,7 @@ flowchart LR
 ```
 
 Both directions are typed unions declared in
-[`packages/types/src/message.ts`](packages/types/src/message.ts): every
+[`packages/types/src/message.ts`](../packages/types/src/message.ts): every
 webview → host message is a `WebviewMessage` variant dispatched from the
 central `webviewMessageHandler`, and every host → webview message is an
 `ExtensionMessage` variant. Components do not post ad-hoc shapes and do not
@@ -74,7 +74,7 @@ sequenceDiagram
 
 ### 1. Registration
 
-When VS Code activates the extension, [`extension.ts`](src/extension.ts:264) registers a `ShoferProvider` instance as the sidebar's webview view provider:
+When VS Code activates the extension, [`extension.ts`](../src/extension.ts) registers a `ShoferProvider` instance as the sidebar's webview view provider:
 
 ```typescript
 vscode.window.registerWebviewViewProvider(ShoferProvider.sideBarId, provider, {
@@ -86,23 +86,23 @@ vscode.window.registerWebviewViewProvider(ShoferProvider.sideBarId, provider, {
 
 ### 2. Webview Creation — `resolveWebviewView`
 
-[`ShoferProvider.resolveWebviewView(webviewView)`](src/core/webview/ShoferProvider.ts:1230) is called by VS Code whenever the sidebar needs a webview:
+[`ShoferProvider.resolveWebviewView(webviewView)`](../src/core/webview/ShoferProvider.ts) is called by VS Code whenever the sidebar needs a webview:
 
 1. **Idempotency guard** — if the same `WebviewView` reference is re-resolved, it short-circuits to prevent re-assigning `webview.html` (which triggers a service-worker conflict in Chromium).
 
 2. **Set options** — `enableScripts: true`, `localResourceRoots` from extension URI + workspace folders.
 
-3. **Build HTML** — In development mode, generates HTML pointing to the Vite HMR dev server ([`getHMRHtmlContent`](src/core/webview/ShoferProvider.ts:1907)). In production, inlines the bundled JS/CSS URIs ([`getHtmlContent`](src/core/webview/ShoferProvider.ts:2020)).
+3. **Build HTML** — In development mode, generates HTML pointing to the Vite HMR dev server ([`getHMRHtmlContent`](../src/core/webview/ShoferProvider.ts)). In production, inlines the bundled JS/CSS URIs ([`getHtmlContent`](../src/core/webview/ShoferProvider.ts)).
 
 4. **Assign HTML** — `view.webview.html = html` triggers Chromium to load and execute the page.
 
-5. **Wire message listener** — [`setWebviewMessageListener`](src/core/webview/ShoferProvider.ts:2094) routes all webview messages to [`webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts).
+5. **Wire message listener** — [`setWebviewMessageListener`](../src/core/webview/ShoferProvider.ts) routes all webview messages to [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts).
 
 6. **Wait for `webviewDidLaunch`** — the heartbeat is deferred until the webview signals readiness.
 
 ### 3. Webview Bootstrap
 
-When the HTML loads, [`webview-ui/src/index.tsx`](webview-ui/src/index.tsx) executes:
+When the HTML loads, [`webview-ui/src/index.tsx`](../webview-ui/src/index.tsx) executes:
 
 1. **Crash guard** — an IIFE installs `window.onerror` and `unhandledrejection` listeners that post `fatal_error` messages back to the host.
 
@@ -112,9 +112,9 @@ When the HTML loads, [`webview-ui/src/index.tsx`](webview-ui/src/index.tsx) exec
 
 ### 4. Handshake — `webviewDidLaunch`
 
-[`App.tsx`](webview-ui/src/App.tsx:198) posts `{ type: "webviewDidLaunch" }` on mount. This is the critical signal that tells the host "the renderer is ready."
+[`App.tsx`](../webview-ui/src/App.tsx) posts `{ type: "webviewDidLaunch" }` on mount. This is the critical signal that tells the host "the renderer is ready."
 
-The host responds in [`webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts:644):
+The host responds in [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts):
 
 ```typescript
 case "webviewDidLaunch":
@@ -124,7 +124,7 @@ case "webviewDidLaunch":
 
 ### 5. State Hydration
 
-The webview receives `{ type: "state" }` in [`ExtensionStateContext.handleMessage`](webview-ui/src/context/ExtensionStateContext.tsx:362):
+The webview receives `{ type: "state" }` in [`ExtensionStateContext.handleMessage`](../webview-ui/src/context/ExtensionStateContext.tsx):
 
 ```typescript
 case "state":
@@ -132,7 +132,7 @@ case "state":
     setDidHydrateState(true)
 ```
 
-Until `didHydrateState === true`, [`App` returns `null`](webview-ui/src/App.tsx:230) — rendering nothing. This is intentional: without state from the host, the UI has nothing meaningful to show.
+Until `didHydrateState === true`, [`App` returns `null`](../webview-ui/src/App.tsx) — rendering nothing. This is intentional: without state from the host, the UI has nothing meaningful to show.
 
 ### 6. Ongoing Communication
 
@@ -162,13 +162,13 @@ To avoid re-serializing the entire state on every chat message, the host pushes 
 - `messageUpdated` — existing message modified (e.g., streaming updates)
 - `parallelTasksUpdated` — task list changed
 
-These bypass the full state snapshot and are applied directly by [`ExtensionStateContext`](webview-ui/src/context/ExtensionStateContext.tsx).
+These bypass the full state snapshot and are applied directly by [`ExtensionStateContext`](../webview-ui/src/context/ExtensionStateContext.tsx).
 
 ## Message Bridge
 
 ### Webview Side
 
-[`webview-ui/src/utils/vscode.ts`](webview-ui/src/utils/vscode.ts) wraps `acquireVsCodeApi()` in a singleton:
+[`webview-ui/src/utils/vscode.ts`](../webview-ui/src/utils/vscode.ts) wraps `acquireVsCodeApi()` in a singleton:
 
 ```typescript
 class VSCodeAPIWrapper {
@@ -197,7 +197,7 @@ Key constraints:
 
 ### Host Side
 
-[`ShoferProvider.postMessageToWebview(message)`](src/core/webview/ShoferProvider.ts:1783):
+[`ShoferProvider.postMessageToWebview(message)`](../src/core/webview/ShoferProvider.ts):
 
 ```typescript
 public async postMessageToWebview(message: ExtensionMessage) {
@@ -218,14 +218,14 @@ Shofer has a liveness monitoring infrastructure, but it is **gated behind the `W
 
 ### Components
 
-| Layer               | Location                                                                     | What It Does                                                    | Status          |
-| ------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------- |
-| Crash guard         | [`index.tsx`](webview-ui/src/index.tsx:22)                                   | Posts `fatal_error` on uncaught errors and unhandled rejections | Always active   |
-| Error boundary      | [`ErrorBoundary.tsx`](webview-ui/src/components/ErrorBoundary.tsx)           | Catches React render crashes → posts `fatal_error`              | Always active   |
-| Ping/pong heartbeat | [`ShoferProvider._startHeartbeat()`](src/core/webview/ShoferProvider.ts:839) | Host pings every 5s, expects pong within 30s                    | Experiment only |
-| Fatal error handler | [`ShoferProvider._onFatalError()`](src/core/webview/ShoferProvider.ts:906)   | Receives `fatal_error` → logs + optionally resets webview       | Experiment only |
-| Webview reset       | [`ShoferProvider._resetWebview()`](src/core/webview/ShoferProvider.ts:1018)  | Re-assigns `webview.html` to force reload                       | Experiment only |
-| Manual refresh      | [`ShoferProvider.refreshWebview()`](src/core/webview/ShoferProvider.ts:939)  | User-triggered forceful reload via VS Code command              | Experiment only |
+| Layer               | Location                                                                    | What It Does                                                    | Status          |
+| ------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------- |
+| Crash guard         | [`index.tsx`](../webview-ui/src/index.tsx)                                  | Posts `fatal_error` on uncaught errors and unhandled rejections | Always active   |
+| Error boundary      | [`ErrorBoundary.tsx`](../webview-ui/src/components/ErrorBoundary.tsx)       | Catches React render crashes → posts `fatal_error`              | Always active   |
+| Ping/pong heartbeat | [`ShoferProvider._startHeartbeat()`](../src/core/webview/ShoferProvider.ts) | Host pings every 5s, expects pong within 30s                    | Experiment only |
+| Fatal error handler | [`ShoferProvider._onFatalError()`](../src/core/webview/ShoferProvider.ts)   | Receives `fatal_error` → logs + optionally resets webview       | Experiment only |
+| Webview reset       | [`ShoferProvider._resetWebview()`](../src/core/webview/ShoferProvider.ts)   | Re-assigns `webview.html` to force reload                       | Experiment only |
+| Manual refresh      | [`ShoferProvider.refreshWebview()`](../src/core/webview/ShoferProvider.ts)  | User-triggered forceful reload via VS Code command              | Experiment only |
 
 Dashed nodes are the experiment-gated half; the two `fatal_error` producers run
 unconditionally but only reach a handler when the experiment is on.
@@ -279,22 +279,22 @@ This is the subject of [`todos/webview-ui-blank-page.md`](../todos/webview-ui-bl
 
 ## Key Files
 
-| File                                                                                                   | Role                                                            |
-| ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| [`src/extension.ts:264`](src/extension.ts:264)                                                         | Registers ShoferProvider as WebviewViewProvider                 |
-| [`src/core/webview/ShoferProvider.ts:1230`](src/core/webview/ShoferProvider.ts:1230)                   | `resolveWebviewView` — host-side webview lifecycle              |
-| [`src/core/webview/ShoferProvider.ts:2020`](src/core/webview/ShoferProvider.ts:2020)                   | `getHtmlContent` — production HTML generation                   |
-| [`src/core/webview/ShoferProvider.ts:1907`](src/core/webview/ShoferProvider.ts:1907)                   | `getHMRHtmlContent` — dev/HMR HTML generation                   |
-| [`src/core/webview/ShoferProvider.ts:2848`](src/core/webview/ShoferProvider.ts:2848)                   | `postStateToWebview` — pushes full state to webview             |
-| [`src/core/webview/ShoferProvider.ts:1783`](src/core/webview/ShoferProvider.ts:1783)                   | `postMessageToWebview` — wrapped `view?.webview.postMessage()`  |
-| [`src/core/webview/ShoferProvider.ts:839`](src/core/webview/ShoferProvider.ts:839)                     | `_startHeartbeat` — ping/pong liveness monitor                  |
-| [`src/core/webview/ShoferProvider.ts:906`](src/core/webview/ShoferProvider.ts:906)                     | `_onFatalError` — crash report handler                          |
-| [`src/core/webview/ShoferProvider.ts:1018`](src/core/webview/ShoferProvider.ts:1018)                   | `_resetWebview` — webview reload                                |
-| [`src/core/webview/ShoferProvider.ts:2094`](src/core/webview/ShoferProvider.ts:2094)                   | `setWebviewMessageListener` — wires host message handler        |
-| [`src/core/webview/webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts)               | Routes all webview messages to handlers                         |
-| [`webview-ui/src/index.tsx`](webview-ui/src/index.tsx)                                                 | Webview entry point — crash guard, heartbeat, React mount       |
-| [`webview-ui/src/utils/vscode.ts`](webview-ui/src/utils/vscode.ts)                                     | `acquireVsCodeApi()` singleton wrapper                          |
-| [`webview-ui/src/App.tsx`](webview-ui/src/App.tsx)                                                     | Main React component — sends `webviewDidLaunch`, routes tabs    |
-| [`webview-ui/src/context/ExtensionStateContext.tsx`](webview-ui/src/context/ExtensionStateContext.tsx) | State synchronization — receives all host messages              |
-| [`webview-ui/src/components/ErrorBoundary.tsx`](webview-ui/src/components/ErrorBoundary.tsx)           | React error boundary → `fatal_error`                            |
-| [`packages/types/src/message.ts`](packages/types/src/message.ts)                                       | Message type definitions (`WebviewMessage`, `ExtensionMessage`) |
+| File                                                                                                      | Role                                                            |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [`src/extension.ts:264`](../src/extension.ts)                                                             | Registers ShoferProvider as WebviewViewProvider                 |
+| [`src/core/webview/ShoferProvider.ts:1230`](../src/core/webview/ShoferProvider.ts)                        | `resolveWebviewView` — host-side webview lifecycle              |
+| [`src/core/webview/ShoferProvider.ts:2020`](../src/core/webview/ShoferProvider.ts)                        | `getHtmlContent` — production HTML generation                   |
+| [`src/core/webview/ShoferProvider.ts:1907`](../src/core/webview/ShoferProvider.ts)                        | `getHMRHtmlContent` — dev/HMR HTML generation                   |
+| [`src/core/webview/ShoferProvider.ts:2848`](../src/core/webview/ShoferProvider.ts)                        | `postStateToWebview` — pushes full state to webview             |
+| [`src/core/webview/ShoferProvider.ts:1783`](../src/core/webview/ShoferProvider.ts)                        | `postMessageToWebview` — wrapped `view?.webview.postMessage()`  |
+| [`src/core/webview/ShoferProvider.ts:839`](../src/core/webview/ShoferProvider.ts)                         | `_startHeartbeat` — ping/pong liveness monitor                  |
+| [`src/core/webview/ShoferProvider.ts:906`](../src/core/webview/ShoferProvider.ts)                         | `_onFatalError` — crash report handler                          |
+| [`src/core/webview/ShoferProvider.ts:1018`](../src/core/webview/ShoferProvider.ts)                        | `_resetWebview` — webview reload                                |
+| [`src/core/webview/ShoferProvider.ts:2094`](../src/core/webview/ShoferProvider.ts)                        | `setWebviewMessageListener` — wires host message handler        |
+| [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)               | Routes all webview messages to handlers                         |
+| [`webview-ui/src/index.tsx`](../webview-ui/src/index.tsx)                                                 | Webview entry point — crash guard, heartbeat, React mount       |
+| [`webview-ui/src/utils/vscode.ts`](../webview-ui/src/utils/vscode.ts)                                     | `acquireVsCodeApi()` singleton wrapper                          |
+| [`webview-ui/src/App.tsx`](../webview-ui/src/App.tsx)                                                     | Main React component — sends `webviewDidLaunch`, routes tabs    |
+| [`webview-ui/src/context/ExtensionStateContext.tsx`](../webview-ui/src/context/ExtensionStateContext.tsx) | State synchronization — receives all host messages              |
+| [`webview-ui/src/components/ErrorBoundary.tsx`](../webview-ui/src/components/ErrorBoundary.tsx)           | React error boundary → `fatal_error`                            |
+| [`packages/types/src/message.ts`](../packages/types/src/message.ts)                                       | Message type definitions (`WebviewMessage`, `ExtensionMessage`) |
