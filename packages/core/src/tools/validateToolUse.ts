@@ -63,7 +63,7 @@ export function validateToolUse(
 	// This catches completely invalid tool names like "edit_file" that don't exist
 	if (!isValidToolName(toolName, experiments)) {
 		throw new Error(
-			`Unknown tool "${toolName}". This tool does not exist. Please use one of the available tools: ${validToolNames.join(", ")}.`,
+			`Unknown tool "${toolName}". This tool does not exist. Please use one of the available tools: ${(validToolNames as readonly string[]).join(", ")}.`,
 		)
 	}
 

@@ -701,9 +701,7 @@ export class McpHub {
 
 		// The org-locked server-name set: org-defined servers the manifest makes
 		// final. Cached beside the merge for the Settings UI and mutation guards.
-		this.lockedGlobalServerNames = Object.keys(orgServers).filter((name) =>
-			this.isMcpServerLocked(name, manifest),
-		)
+		this.lockedGlobalServerNames = Object.keys(orgServers).filter((name) => this.isMcpServerLocked(name, manifest))
 
 		const merged: Record<string, any> = { ...orgServers }
 		for (const [name, config] of Object.entries(userServers)) {
@@ -1315,8 +1313,12 @@ export class McpHub {
 				return parsed.success ? parsed.data : undefined
 			}
 			const tools: McpTool[] = (response?.tools || []).map((tool) => {
+				// `group` is a Shofer extension field, not part of the SDK's Tool schema
+				// (SDK >=1.26 types Tool strictly, so read it via a structural cast).
 				const group: McpTool["group"] =
-					resolveGroup(toolGroupsConfig[tool.name]) ?? resolveGroup(tool.group) ?? "uncategorized"
+					resolveGroup(toolGroupsConfig[tool.name]) ??
+					resolveGroup((tool as { group?: unknown }).group) ??
+					"uncategorized"
 
 				return {
 					...tool,
