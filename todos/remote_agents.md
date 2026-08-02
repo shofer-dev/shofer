@@ -100,7 +100,7 @@ flowchart LR
   TLS, auth, queues, `activityName`, per-connection `concurrency`); the
   plugin runs one SDK worker per connection × namespace × queue — SDK workers
   are cheap. This is how one worker fleet serves two dispatchers at once —
-  e.g. the controller's own Temporal *and* an integrator platform's — with
+  e.g. the controller's own Temporal _and_ an integrator platform's — with
   one plugin install. Because every connection's tasks land on the same
   machine, a **pod-wide slot budget** shared across connections bounds total
   concurrency (per-connection slots alone would multiply).
@@ -163,7 +163,7 @@ Two deliberate boundaries inside that unification:
 The same host can run **both plugins**: the controller side always (that is
 what makes the IDE a dispatcher), and optionally a `temporal-worker`
 connection too, when an integrator wants that host's capacity in a pool.
-Making the IDE poll for its *own* dispatches is possible but pointless in the
+Making the IDE poll for its _own_ dispatches is possible but pointless in the
 default setup — an extension host is as ephemeral as its window, and local
 work is better off never leaving the process.
 
@@ -289,17 +289,20 @@ detach and re-attach — with `workers.json` and every Phase-1 symbol gone.
 ### Phase 3 — the plugin pair
 
 - `temporal-worker` (public): the existing private integration generalized —
-  activity + wrapper workflow, identity-as-address, pluggable
-  connection/credentials. (An integrator's private variant can then carry only
-  its credential exchange and deployment specifics.)
-- `temporal-controller` (public): dispatch, owner discovery, auto-attach via
-  the Phase 2 primitive, the panel UI, queue health.
+  activity + wrapper workflow, identity-as-address, **named multi-server
+  connections** with the full per-connection config surface of §2a, the
+  settings-panel UI. (An integrator's private variant then carries only its
+  credential exchange and deployment specifics.)
+- `temporal-controller` (public): dispatch through the **placement seam** (the
+  standard new-task surfaces, §2a-2), owner discovery, auto-attach via the
+  Phase 2 primitive, the panel UI, queue health.
 
 **Done when:** two `shofer serve` hosts + `temporal server start-dev`: a task
-dispatched from the controller lands on a worker, its transcript renders live
-in the controller, an interactive ask round-trips, the result returns as the
-activity result, and killing the worker mid-task surfaces a failed task (no
-silent retry).
+created through the **normal new-task surface** with a queue target lands on a
+worker, its transcript renders live in the controller, an interactive ask
+round-trips, the result returns as the activity result, and killing the
+worker mid-task surfaces a failed task (no silent retry). A worker configured
+with **two named connections** demonstrably polls both servers.
 
 ### Phase 4 — durable fan-out
 
