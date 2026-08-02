@@ -48,7 +48,7 @@
 >
 > **Relationship to Approach A (H10, done).** The lower-risk webview-only fix —
 > incremental message consolidation — already landed (see
-> `../todos/done/chatview-incremental-message-processing.md`
+> `todos/done/chatview-incremental-message-processing.md`
 > and H10 in the perf doc). It removes the O(n²) per-chunk recompute regardless
 > of `n`. H2 was intended to be complementary: bounding the **cold task-switch**
 > cost — the IPC structured clone and initial render of a very large history —
