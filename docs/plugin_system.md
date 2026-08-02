@@ -853,11 +853,11 @@ every plugin the same question and returns the answers; a plugin that does not r
 the method throws, which counts as "no answer" rather than an error. Three conventions are
 in use:
 
-| Question                    | Answer                                          | Nobody answers                                             |
-| --------------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
-| `"task-stats"`              | `{ insertions, deletions }`                     | A completed task gets no `+`/`−` badge.                    |
-| `"resolve-task-cwd"`        | `{ cwd }` or `{ error }`                        | The task runs in the workspace.                            |
-| `"resolve-task-placement"`  | `{ dispatched: { taskId, address?, token? } }` or `{ error }` | The task runs in-process, exactly as before. |
+| Question                   | Answer                                                        | Nobody answers                               |
+| -------------------------- | ------------------------------------------------------------- | -------------------------------------------- |
+| `"task-stats"`             | `{ insertions, deletions }`                                   | A completed task gets no `+`/`−` badge.      |
+| `"resolve-task-cwd"`       | `{ cwd }` or `{ error }`                                      | The task runs in the workspace.              |
+| `"resolve-task-placement"` | `{ dispatched: { taskId, address?, token? } }` or `{ error }` | The task runs in-process, exactly as before. |
 
 The last two are the **placement seam**, and both share one rule: an `{ error }` answer
 aborts task creation, because a plugin that recognised the question and failed is not the
@@ -874,10 +874,10 @@ routes there implicitly. Two request-shape conventions survive as plugin-side
 conventions, declared in [`plugin.ts`](../packages/types/src/plugin.ts) and interpreted by
 the plugin itself (see `basics`' `main.ts`):
 
-| Convention                                  | Meaning                                                                                                       |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| method prefixed `local:`                    | The UI is stating this must be answered where the UI runs — opening an editor/viewer, which a headless executor would silently no-op. |
-| `{ mutates: true }` on `api.request`        | The request changes state rather than reading it.                                                             |
+| Convention                           | Meaning                                                                                                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| method prefixed `local:`             | The UI is stating this must be answered where the UI runs — opening an editor/viewer, which a headless executor would silently no-op. |
+| `{ mutates: true }` on `api.request` | The request changes state rather than reading it.                                                                                     |
 
 ### 5.14 Task control (`ctx.task`)
 

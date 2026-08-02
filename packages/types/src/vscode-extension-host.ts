@@ -1,5 +1,3 @@
-import { z } from "zod"
-
 import type { GlobalSettings, ShoferSettings } from "./global-settings.js"
 import type { ProviderSettings, ProviderSettingsEntry } from "./provider-settings.js"
 import type { HistoryItem, CostLimit, TaskState } from "./history.js"

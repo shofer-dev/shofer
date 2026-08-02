@@ -1,4 +1,10 @@
-import { ShoferEventName, type AskResponse, type ServerEvent, type ShoferMessage, type TaskSnapshot } from "@shofer/types"
+import {
+	ShoferEventName,
+	type AskResponse,
+	type ServerEvent,
+	type ShoferMessage,
+	type TaskSnapshot,
+} from "@shofer/types"
 
 import { TaskAttachmentManager, type AttachClient, type AttachViewHost } from "../TaskAttachmentManager"
 

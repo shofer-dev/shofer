@@ -323,10 +323,10 @@ packages build and test green; the docs above are coherent with the code.
   Entry points: the `shofer.attachRemoteTask` / `shofer.detachRemoteTask`
   commands.
 - The **task-placement seam** (§2a-2) — `resolveTaskPlacement` broadcasts
-  `"resolve-task-placement"` at `newTask`; a claim (`{ dispatched: { taskId,
-  address?, token? } }`) attaches instead of creating a local task, an
-  `{ error }` aborts creation, and no answer leaves the in-process path
-  unchanged.
+  `"resolve-task-placement"` at `newTask`; a claim
+  (`{ dispatched: { taskId, address?, token? } }`) attaches instead of creating
+  a local task, an `{ error }` aborts creation, and no answer leaves the
+  in-process path unchanged.
 
 **Done when:** against a plain `shofer serve` running a task, a controller can
 attach mid-task by `(address, taskId, token)`, render the full transcript

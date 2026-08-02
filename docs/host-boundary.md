@@ -256,8 +256,8 @@ work over an external scheduler and observing running tasks over AgentApi. Core
 keeps exactly two generic seams for it, and neither of them schedules anything:
 
 - **Attachment** — [`TaskAttachmentManager`](../src/core/attach/TaskAttachmentManager.ts)
-  attaches a view to a task running on another host, given `(address, taskId,
-  token)`: subscribe the task-scoped SSE, backfill
+  attaches a view to a task running on another host, given
+  `(address, taskId, token)`: subscribe the task-scoped SSE, backfill
   [`getTaskSnapshot`](./agentapi.md#task-snapshots--attaching-to-a-running-task),
   and render the result in the chat view like any other task — asks, follow-up
   messages and cancel all travel back over AgentApi. Focus is **per view**, so the

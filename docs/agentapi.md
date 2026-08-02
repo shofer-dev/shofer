@@ -56,7 +56,7 @@ The full method set (see the source for exact signatures):
 | `sendMessage(taskId, message)`                                            | Send a follow-up message to a running task.                                                                                                                                                                                                 |
 | `cancelTask(taskId)`                                                      | Abort a task.                                                                                                                                                                                                                               |
 | `respondToAsk(taskId, AskResponse)`                                       | Answer an outstanding `ask` (interactive tool approval / follow-up). The reverse of the `ask` events on the stream, so a remote task's approvals round-trip like a local one's.                                                             |
-| `getTaskSnapshot(taskId)` → `TaskSnapshot \| undefined`                   | The task's state so far — see [Task snapshots](#task-snapshots-attaching-to-a-running-task). `undefined` when the host owns no such task.                                                                                                  |
+| `getTaskSnapshot(taskId)` → `TaskSnapshot \| undefined`                   | The task's state so far — see [Task snapshots](#task-snapshots-attaching-to-a-running-task). `undefined` when the host owns no such task.                                                                                                   |
 | `subscribe(listener)` → `unsubscribe`                                     | Subscribe to the agent event stream ([`ServerEvent`](#event-model)).                                                                                                                                                                        |
 
 ### Reverse data channel
@@ -118,15 +118,15 @@ route; `404` when the host owns no such task).
 
 [`taskSnapshotSchema`](../packages/types/src/agent-api.ts) is the wire shape:
 
-| Field            | Meaning                                                                                       |
-| ---------------- | --------------------------------------------------------------------------------------------- |
-| `taskId`         | The task, on the host that owns it.                                                           |
-| `summary`        | Its title (the first prompt) — what a synthetic task header renders.                          |
-| `createdAt`      | Creation timestamp, when the host knows one.                                                  |
-| `state`          | `TaskState` — lifecycle, plus the completion rating when there is one.                        |
-| `messages`       | The WHOLE `ShoferMessage` conversation, not a tail.                                           |
+| Field            | Meaning                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------- |
+| `taskId`         | The task, on the host that owns it.                                                                 |
+| `summary`        | Its title (the first prompt) — what a synthetic task header renders.                                |
+| `createdAt`      | Creation timestamp, when the host knows one.                                                        |
+| `state`          | `TaskState` — lifecycle, plus the completion rating when there is one.                              |
+| `messages`       | The WHOLE `ShoferMessage` conversation, not a tail.                                                 |
 | `outstandingAsk` | The ask the task is blocked on: `{ ask, askId?, text?, ts }` — enough to answer via `respondToAsk`. |
-| `tokenUsage`     | Authoritative counters, so an attached view's token/cost meter is the executor's, not a guess. |
+| `tokenUsage`     | Authoritative counters, so an attached view's token/cost meter is the executor's, not a guess.      |
 
 `outstandingAsk` matters more than it looks: a served worker **never resolves an
 interactive ask locally**, so a task found mid-flight is very often blocked on one raised
