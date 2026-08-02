@@ -169,6 +169,36 @@ Making the IDE poll for its _own_ dispatches is possible but pointless in the
 default setup — an extension host is as ephemeral as its window, and local
 work is better off never leaving the process.
 
+### 2a-3. The life of a dispatched task — who carries what
+
+Today the fleet layer hands a task to a worker directly (`createTask` over a
+pool connection). Under this design the hand-off is the Temporal payload, and
+everything after pickup is AgentApi:
+
+1. **Dispatch (Temporal).** The controller mints the `taskId` (uuidv7) and
+   starts a `shoferTask` workflow with **`workflowId = taskId`**; the workflow
+   input carries exactly what the fleet layer's `createTask` carried —
+   `{ taskId, prompt, mode, apiConfiguration?, controllerVersion }`. The
+   initial prompt IS the queued job; it is the only thing the dispatch plane
+   moves.
+2. **Pickup (worker).** A `temporal-worker` claims the activity and creates
+   the task on its local Shofer from that input — the agent starts running
+   immediately, attached controller or not — and advertises ownership
+   (identity-as-address).
+3. **Attach (AgentApi).** The controller reads the owner from Temporal, dials
+   its AgentApi, backfills the snapshot, subscribes the task-scoped SSE. From
+   here **everything interactive is AgentApi**: rendering, `sendMessage`
+   follow-ups, `respondToAsk`, `pluginRequest`. (Cancel prefers AgentApi when
+   attached; Temporal workflow cancellation is the durable fallback.)
+4. **Completion (Temporal).** The final result returns as the activity result
+   and closes the workflow — the durable record. The transcript stays in the
+   worker's task store, retrievable any time via attach/backfill; Temporal
+   history holds only input and outcome.
+
+Temporal carries a task's **birth and death**; AgentApi carries its **life**.
+An unattached task runs to completion on its own configuration, or blocks
+durably on an ask until a controller attaches to answer it.
+
 ### 2b. What core keeps: the attachment primitive
 
 One generic capability, usable by _any_ dispatcher (the temporal-controller
