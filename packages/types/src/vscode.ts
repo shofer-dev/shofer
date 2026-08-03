@@ -42,8 +42,6 @@ export const commandIds = [
 	"newTask",
 
 	// Remote agents — attach this view to a task running on another host.
-	"attachRemoteTask",
-	"detachRemoteTask",
 
 	"setCustomStoragePath",
 	"importSettings",

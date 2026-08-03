@@ -247,31 +247,17 @@ beforeEach(() => {
 so assertions read them back. Because the default host is complete, most tests
 need no host setup at all.
 
-## Remote agents
+## Shofer does not do remote agents
 
-Shofer has **no built-in multi-worker capability** and will not grow one: the
-former "Shofer Workers" fleet layer (a controller-side worker registry, pool,
-config replication and remote-task shadows) was removed in favor of dispatching
-work over an external scheduler and observing running tasks over ShoferApi. Core
-keeps exactly two generic seams for it, and neither of them schedules anything:
+A Shofer host **executes locally**. It has no notion of dispatching a task to
+another machine, attaching to one running elsewhere, or discovering a fleet — and
+that is a deliberate boundary, not a gap waiting to be filled.
 
-- **Attachment** — [`TaskAttachmentManager`](../src/core/attach/TaskAttachmentManager.ts)
-  attaches a view to a task running on another host, given
-  `(address, taskId, token)`: subscribe the task-scoped SSE, backfill
-  [`getTaskSnapshot`](./shofer-api.md#task-snapshots--attaching-to-a-running-task),
-  and render the result in the chat view like any other task — asks, follow-up
-  messages and cancel all travel back over ShoferApi. Focus is **per view**, so the
-  sidebar and an editor tab can watch different remote tasks; a connection exists
-  only while a view is attached, and detaching leaves the task untouched.
-  Invocable as `shofer.attachRemoteTask` / `shofer.detachRemoteTask`.
-- **Placement** — [`resolveTaskPlacement`](../src/core/webview/resolveTaskPlacement.ts)
-  broadcasts `"resolve-task-placement"` at task creation, the sibling of
-  `"resolve-task-cwd"` one level up: a plugin may CLAIM the task (it dispatched it
-  elsewhere; the answer names it), FAIL explicitly (`{ error }`, which aborts
-  creation), or say nothing — in which case the in-process path runs unchanged.
-
-Who dispatches, over what, and where a task should land is a **plugin's** business.
-The end state and roadmap live in [`todos/remote_agents.md`](../todos/remote_agents.md).
+What a host does expose is the [`ShoferApi`](shofer-api.md) transport, so
+something else can drive _it_: `shofer serve` makes a headless host drivable over
+HTTP/SSE, which is how an integrator turns one into a worker for its own
+scheduler. Work then arrives **pulled** by that integration, never pushed by
+another Shofer.
 
 ## What we deliberately keep
 

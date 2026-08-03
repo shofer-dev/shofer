@@ -1,10 +1,7 @@
 # One public API — `ShoferExtensionApi extends ShoferApi`
 
-> **Status: ✅ DONE (shofer 2.47.0).** Executed as
-> [`remote_agents.md`](remote_agents.md) Phase 3 — after its Phase 2 had
-> finished adding methods to the root contract, and before the plugin pair, so
-> the pair is written against the settled interface rather than migrated onto
-> it. The ordering below is the record of what was done.
+> **Status: ✅ DONE (shofer 2.47.0).** The ordering below is the record of what
+> was done.
 
 ## The decision
 
@@ -52,8 +49,8 @@ onto the wire by accident.
 | **Control**             | `startNewTask`, `sendMessage`, `cancelCurrentTask`, `pressPrimaryButton`/`pressSecondaryButton`, `respondToAsk`, `pluginRequest`, task events   | Becomes the inherited `ShoferApi` surface (below)           |
 | **Host administration** | provider-profile CRUD, config import/export, task-history mutation (rename/archive/pin/delete/show), inline exports, `getOutputLogs`, workflows | Stays — this is what `ShoferExtensionApi` _adds_, host-only |
 
-The administration half deliberately gets no wire counterpart: configuration is
-provisioned, never pushed ([`remote_agents.md`](remote_agents.md) §1).
+The administration half deliberately gets no wire counterpart: a host's
+configuration is provisioned, never pushed over the wire.
 
 ## Member-by-member
 

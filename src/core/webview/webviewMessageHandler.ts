@@ -78,8 +78,6 @@ const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
 import { webviewLog, scrollLog } from "@shofer/core"
 import { resolveTaskCwd } from "./resolveTaskCwd"
-import { adoptDispatchedTask, resolveTaskPlacement } from "./resolveTaskPlacement"
-import { TaskAttachmentManager } from "../attach/TaskAttachmentManager"
 
 export const webviewMessageHandler = async (provider: ShoferProvider, message: WebviewMessage) => {
 	// Utility functions provided for concise get/update of global state via contextProxy API.
@@ -735,35 +733,6 @@ export const webviewMessageHandler = async (provider: ShoferProvider, message: W
 					return
 				}
 
-				// …and on WHICH MACHINE? Same shape of question, one level up: a
-				// dispatcher plugin may claim the task, create it elsewhere and hand
-				// back its reference, in which case no local task is created and this
-				// view attaches to the dispatched one instead. Nobody claiming it —
-				// the common case, and the only one when no plugin dispatches — falls
-				// through to the in-process path below, unchanged.
-				let dispatched: DispatchedTaskRef | undefined
-				try {
-					dispatched = await resolveTaskPlacement(provider, {
-						prompt: messageText,
-						mode: message.mode,
-						apiConfigName: message.apiConfigName,
-						cwd,
-					})
-				} catch (error) {
-					await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
-					getHost().notifier.error(error instanceof Error ? error.message : String(error))
-					return
-				}
-
-				if (dispatched) {
-					const attached = await adoptDispatchedTask(provider, dispatched)
-					if (!attached) {
-						getHost().notifier.info(t("common:attach.dispatched_no_address", { taskId: dispatched.taskId }))
-					}
-					await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
-					break
-				}
-
 				// Pre-task mode / API-config seeds chosen in the chat dropdown.
 				// When absent, createTask falls back to the global Settings defaults.
 				await provider.createManagedTask(undefined, messageText, resolved.images, cwd, {
@@ -790,21 +759,6 @@ export const webviewMessageHandler = async (provider: ShoferProvider, message: W
 				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
 
 				const messageText = resolved.text
-
-				// An attached task's ask is answered on the host that RAISED it, over
-				// ShoferApi — never through the in-process path, which has no such
-				// task. The webview posts the attached task's id (currentTaskItem.id),
-				// so this only fires for the view actually rendering it.
-				const attachments = TaskAttachmentManager.getInstance()
-				if (attachments.isAttachedTo(provider, message.taskId)) {
-					await attachments.respondToAsk(provider, {
-						askResponse: message.askResponse!,
-						text: messageText,
-						images: resolved.images,
-						askId: message.askId,
-					})
-					break
-				}
 
 				// Route to the correct task instance when the webview supplies a
 				// taskId — prevents task-switch races where a response meant for
@@ -1499,12 +1453,6 @@ export const webviewMessageHandler = async (provider: ShoferProvider, message: W
 			}
 			break
 		case "cancelTask":
-			// Stop applies to whatever THIS view is rendering: an attached remote
-			// task is cancelled on its own host, over ShoferApi.
-			if (TaskAttachmentManager.getInstance().get(provider)) {
-				await TaskAttachmentManager.getInstance().cancelTask(provider)
-				break
-			}
 			await provider.cancelTask()
 			break
 		case "cancelAutoApproval":
@@ -2958,15 +2906,6 @@ export const webviewMessageHandler = async (provider: ShoferProvider, message: W
 			const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
 
 			const messageText = resolved.text
-
-			// A follow-up typed while an attached task is rendered belongs to that
-			// task. There is no local queue to put it in — `sendMessage` hands it to
-			// the owning host, whose own task queues or consumes it exactly as it
-			// would a message typed on that machine.
-			if (TaskAttachmentManager.getInstance().get(provider)) {
-				await TaskAttachmentManager.getInstance().sendMessage(provider, messageText)
-				break
-			}
 
 			const currentTask = provider.getCurrentTask()
 			currentTask?.messageQueueService.addMessage(messageText, resolved.images)

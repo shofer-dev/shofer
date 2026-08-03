@@ -152,7 +152,6 @@ import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { buildPluginHostImportMap } from "./pluginHostImportMap"
 import { PluginPanelManager } from "./PluginPanelManager"
-import { TaskAttachmentManager } from "../attach/TaskAttachmentManager"
 import { REQUESTY_BASE_URL } from "@shofer/core"
 import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
 import { addTaskLogListener } from "@shofer/core"
@@ -1255,10 +1254,6 @@ export class ShoferProvider
 		}
 
 		this._disposed = true
-
-		// This view is going away: close its remote attachment (if any) so the SSE
-		// connection to the other host does not outlive the thing rendering it.
-		TaskAttachmentManager.getInstance().detach(this, { silent: true })
 
 		// Phase 3: H8 disposables removed
 
@@ -4857,14 +4852,6 @@ export class ShoferProvider
 		const cwd = this.cwd
 		const currentTask = this.getCurrentTask()
 
-		// A view attached to a task running on ANOTHER host renders that task, not
-		// this host's current one. The override has to live here, on the full-state
-		// push, because any global push (settings changed, MCP lifecycle, a focus
-		// swap) would otherwise clobber the attached conversation with whatever the
-		// local stack happens to hold. Four render fields short-circuit below;
-		// everything else on the state is genuinely this host's.
-		const attached = TaskAttachmentManager.getInstance().get(this)
-
 		// Re-seed the workflow visualization from the *focused* task. The viz
 		// fields below are normally pushed as deltas by WorkflowTask via
 		// postConfigUpdate, but those are global keys any live workflow writes to.
@@ -4922,9 +4909,8 @@ export class ShoferProvider
 			autoCondenseContext: autoCondenseContext ?? true,
 			autoCondenseContextPercent: autoCondenseContextPercent ?? 90,
 			uriScheme: vscode.env.uriScheme,
-			currentTaskId: attached?.taskId ?? currentTask?.taskId,
+			currentTaskId: currentTask?.taskId,
 			currentTaskItem: (() => {
-				if (attached) return attached.toTaskItem()
 				if (!currentTask?.taskId) return undefined
 				const stored = this.taskHistoryStore.get(currentTask.taskId)
 				// Resolve the live cost limit by walking up to the root task,
@@ -4943,7 +4929,6 @@ export class ShoferProvider
 				return stored ? { ...stored, costLimit: liveCostLimit } : undefined
 			})(),
 			shoferMessages: (() => {
-				if (attached) return attached.messages
 				const msgs = currentTask?.shoferMessages || []
 				// LLM hint: diagnostic for the task-switch home-screen flash.
 				// Fires when we are about to broadcast an empty messages array
@@ -4972,11 +4957,11 @@ export class ShoferProvider
 			})(),
 			// T1.B: signal the webview that older messages exist on disk
 			// and a "Load older messages" sentinel should be shown.
-			hasMoreShoferMessages: attached ? false : (currentTask?.hasMoreShoferMessages ?? false),
-			// An attached task's todos and queue live on the host that runs it —
+			hasMoreShoferMessages: currentTask?.hasMoreShoferMessages ?? false,
+			//
 			// never surface this host's local task's here.
-			currentTaskTodos: attached ? [] : currentTask?.todoList || [],
-			messageQueue: attached ? [] : (currentTask?.messageQueueService?.messages ?? []),
+			currentTaskTodos: currentTask?.todoList || [],
+			messageQueue: currentTask?.messageQueueService?.messages ?? [],
 			taskHistory: this.taskHistoryStore.getAll().filter((item: HistoryItem) => item.ts && item.task),
 			soundEnabled: soundEnabled ?? false,
 			ttsEnabled: ttsEnabled ?? false,
@@ -6263,11 +6248,6 @@ export class ShoferProvider
 
 			await this.updateTaskHistory(historyItem)
 
-			// A new LOCAL task takes focus in THIS view — drop any remote attachment
-			// it was rendering so the state push below shows the new task rather than
-			// the one on the other host.
-			TaskAttachmentManager.getInstance().detach(this, { silent: true })
-
 			// Notify the webview of the new current task and switch to the chat tab.
 			await this.postInitState()
 			await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
@@ -6295,11 +6275,6 @@ export class ShoferProvider
 	 */
 	public async focusTask(taskId: string): Promise<void> {
 		try {
-			// Focusing from the task list is always a LOCAL task (an attached remote
-			// task is not in this host's history), so this view stops rendering
-			// whatever it was attached to.
-			TaskAttachmentManager.getInstance().detach(this, { silent: true })
-
 			// Check if we already have this task focused
 			const currentTask = this.getCurrentTask()
 			if (currentTask?.taskId === taskId) {
