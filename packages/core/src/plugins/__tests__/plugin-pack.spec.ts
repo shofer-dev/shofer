@@ -1,3 +1,4 @@
+import { createHash } from "crypto"
 import * as nodeFs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
@@ -15,6 +16,7 @@ import {
 	packPluginToFile,
 	unpackPlugin,
 	expectedDigestFromUrl,
+	fetchPluginArchive,
 } from "../plugin-pack.js"
 
 /** A minimal valid plugin directory under `root`. */
@@ -328,5 +330,44 @@ describe("expectedDigestFromUrl", () => {
 	it("returns undefined for a malformed digest and for a non-URL", () => {
 		expect(expectedDigestFromUrl("https://example.com/sha256-tooshort.shofer-plugin")).toBeUndefined()
 		expect(expectedDigestFromUrl("/local/path.shofer-plugin")).toBeUndefined()
+	})
+})
+
+describe("fetchPluginArchive transport policy", () => {
+	let tmp: string
+
+	beforeEach(async () => {
+		tmp = await nodeFs.mkdtemp(path.join(os.tmpdir(), "shofer-fetch-policy-"))
+	})
+	afterEach(async () => {
+		await nodeFs.rm(tmp, { recursive: true, force: true })
+	})
+
+	it("permits plain http for a DIGEST-PINNED url, because the digest is the integrity proof", async () => {
+		const bytes = await packPlugin(await writePlugin(tmp, { name: "pinned-http", version: "1.0.0" }))
+		const hex = createHash("sha256").update(bytes).digest("hex")
+		const fetchImpl = vi.fn(async () => new Response(new Uint8Array(bytes))) as unknown as typeof fetch
+		const got = await fetchPluginArchive(`http://registry.internal:8016/archives/sha256-${hex}.shofer-plugin`, {
+			fetchImpl,
+		})
+		expect(got.equals(bytes)).toBe(true)
+	})
+
+	it("still refuses plain http for an UNPINNED url", async () => {
+		// Nothing would detect a swap there, so https stays mandatory.
+		const fetchImpl = vi.fn(async () => new Response(new Uint8Array())) as unknown as typeof fetch
+		await expect(
+			fetchPluginArchive("http://registry.internal:8016/archives/plain.shofer-plugin", { fetchImpl }),
+		).rejects.toThrow(/insecure http/i)
+	})
+
+	it("refuses a pinned url whose bytes do not match the pin", async () => {
+		const bytes = await packPlugin(await writePlugin(tmp, { name: "mismatch", version: "1.0.0" }))
+		const fetchImpl = vi.fn(async () => new Response(new Uint8Array(bytes))) as unknown as typeof fetch
+		await expect(
+			fetchPluginArchive(`http://registry.internal:8016/archives/sha256-${"0".repeat(64)}.shofer-plugin`, {
+				fetchImpl,
+			}),
+		).rejects.toThrow(/Digest mismatch/i)
 	})
 })

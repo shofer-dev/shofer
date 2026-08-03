@@ -450,8 +450,17 @@ export function archiveDigest(bytes: Buffer): string {
  * materializes into a versioned cache directory of its own.
  */
 export async function fetchPluginArchive(url: string, options: InstallFromUrlOptions = {}): Promise<Buffer> {
-	const bytes = await downloadArchiveBytes(url, options)
 	const expected = expectedDigestFromUrl(url)
+	// A content-addressed URL carries its own integrity proof, so the https
+	// requirement is redundant for it: tampering in transit changes the bytes,
+	// the digest check below fails, and nothing is installed. Plain http is
+	// therefore permitted for a PINNED url only — which is what lets a plugin be
+	// served from an in-cluster registry over http without weakening the default
+	// for an ordinary, unpinned URL, where https is still required because
+	// nothing else would detect a swap. Confidentiality is a separate concern and
+	// a transport one; a plugin archive is not a secret.
+	const opts = expected ? { ...options, allowInsecureHttp: true } : options
+	const bytes = await downloadArchiveBytes(url, opts)
 	if (expected) {
 		const actual = archiveDigest(bytes)
 		if (actual !== expected) {

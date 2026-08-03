@@ -770,7 +770,11 @@ Each entry is `{ source, version, config?, enabled? }`:
   from. A **content-addressed** URL — one whose filename is
   `sha256-<hex>.shofer-plugin` — additionally **pins** the bytes: the resolver
   verifies the digest and refuses a mismatch, so a URL that starts serving
-  different code fails the load instead of silently swapping it. The pin rides
+  different code fails the load instead of silently swapping it. A pinned URL
+  is also the one case where plain `http` is accepted: the digest IS the
+  integrity proof, so tampering in transit fails the check and installs
+  nothing. An **unpinned** `http` URL is still refused — there, nothing would
+  detect a swap. The pin rides
   in the filename because this schema is `.strict()` and parsing fails closed —
   an unknown `digest` key would discard every declaration in the file, not just
   be ignored. A source that cannot be materialized at all (missing path,
