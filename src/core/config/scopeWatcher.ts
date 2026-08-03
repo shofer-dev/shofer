@@ -7,7 +7,8 @@ import type { ScopeRoots } from "./layeredSettingsLoader"
 
 /**
  * scopeWatcher — notices edits to the layered `.shofer/` configuration files while a
- * host is running (docs/workspace_agent_pool.md §5).
+ * host is running. The layering itself (which scopes exist, how they merge) is
+ * documented in `docs/settings_overlay.md`; this file is only the live half.
  *
  * WHY THIS EXISTS: the overlay is loaded at `ContextProxy` init and after a
  * write-through, and nowhere else — so a host never sees a change made by *another*

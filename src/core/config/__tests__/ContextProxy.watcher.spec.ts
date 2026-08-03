@@ -1,6 +1,6 @@
 // npx vitest core/config/__tests__/ContextProxy.watcher.spec.ts
 //
-// The live half of the layered overlay (docs/workspace_agent_pool.md §5): a `.shofer/`
+// The live half of the layered overlay (see docs/settings_overlay.md): a `.shofer/`
 // file edited by someone OTHER than this host — another pod on the shared volume, a
 // ConfigMap rewrite, a person with an editor — must change this host's effective
 // settings without a restart. These tests drive real temp dirs and the real watcher,

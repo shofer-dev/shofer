@@ -308,8 +308,8 @@ export class ContextProxy {
 	/**
 	 * Start watching the three `.shofer/` scopes so a change made **outside this host**
 	 * — by a person editing `~/.shofer/settings.json`, by another pod sharing the
-	 * volume, or by a ConfigMap rewrite — is applied without a restart
-	 * (docs/workspace_agent_pool.md §5).
+	 * volume, or by a ConfigMap rewrite — is applied without a restart. The scopes and
+	 * their merge order are documented in `docs/settings_overlay.md`.
 	 *
 	 * Idempotent. Each applied change fires {@link onDidChange} per changed key (so the
 	 * existing consumers — config-sync broadcast to nodes, and anything else keyed off a

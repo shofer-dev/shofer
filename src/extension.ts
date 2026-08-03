@@ -212,9 +212,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	// SHOFER_GLOBAL_DIR env still wins when set.
 	registerGlobalStorageFsPath(context.globalStorageUri.fsPath)
 
-	// Apply `.shofer/` edits made outside this host without a restart — the mechanism a
-	// multi-host workspace converges on (docs/workspace_agent_pool.md §5). Started here
-	// rather than in getInstance so a unit test that builds a proxy watches nothing.
+	// Apply `.shofer/` edits made outside this host without a restart — the mechanism
+	// several hosts sharing one workspace converge on. Started here rather than in
+	// getInstance so a unit test that builds a proxy watches nothing.
 	contextProxy.startScopeWatcher()
 	context.subscriptions.push({ dispose: () => contextProxy.dispose() })
 

@@ -94,10 +94,9 @@ export interface ExtensionHostOptions {
 	 * Where this host keeps its own state — task store, global state, machine id
 	 * (defaults to `$HOME/.vscode-mock`).
 	 *
-	 * Set it when several hosts share a filesystem, which is exactly the shape a
-	 * workspace agent pool has: N pods mounting one volume
-	 * (docs/workspace_agent_pool.md §7). The state store is SQLite, so pods sharing
-	 * one directory would be N writers on one database; each pod needs its own.
+	 * Set it when several hosts share a filesystem, which is exactly the shape a pool of
+	 * headless hosts has: N pods mounting one volume. The state store is SQLite, so pods
+	 * sharing one directory would be N writers on one database; each pod needs its own.
 	 * Ignored when {@link ephemeral} is set — that already implies a private dir.
 	 */
 	storageDir?: string

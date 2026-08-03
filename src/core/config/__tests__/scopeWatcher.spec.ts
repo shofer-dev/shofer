@@ -14,11 +14,11 @@ vi.mock("@shofer/core", async (importOriginal) => {
 })
 
 /**
- * The scope watcher is what makes "write the file, the fleet converges" true
- * (docs/workspace_agent_pool.md §5), so these tests exercise the two write shapes that
- * actually occur — an atomic temp-file rename (how `writeScopeSetting` and most editors
- * save) and a Kubernetes ConfigMap `..data` symlink swap — plus the case that used to
- * silently produce a dead watcher: a scope root that does not exist yet.
+ * The scope watcher is what makes "write the file, the fleet converges" true across
+ * several hosts sharing one filesystem, so these tests exercise the two write shapes
+ * that actually occur — an atomic temp-file rename (how `writeScopeSetting` and most
+ * editors save) and a Kubernetes ConfigMap `..data` symlink swap — plus the case that
+ * used to silently produce a dead watcher: a scope root that does not exist yet.
  */
 describe("ScopeWatcher", () => {
 	let tmp: string

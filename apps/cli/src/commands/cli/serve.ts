@@ -27,7 +27,8 @@ export interface ServeOptions {
 	/**
 	 * Where this node keeps its own state (default `$HOME/.vscode-mock`). Falls back
 	 * to `SHOFER_STATE_DIR`. Give each node a private directory when several share a
-	 * filesystem — the store is SQLite (docs/workspace_agent_pool.md §7).
+	 * filesystem — the store is SQLite, so nodes pointed at one directory would be N
+	 * writers on one database.
 	 */
 	stateDir?: string
 	/**

@@ -444,7 +444,7 @@ export class ShoferProvider
 		// A `.shofer/` settings file changed underneath this host (another pod on the
 		// shared volume, a ConfigMap rewrite, a hand edit). The overlay is already
 		// refreshed by the time this fires; re-push state so the UI shows the effective
-		// values rather than what they were at load (docs/workspace_agent_pool.md §5).
+		// values rather than what they were at load.
 		//
 		// A full init rather than per-key `postConfigUpdate`s: one file rewrite can move
 		// any number of keys, and several of them (a locked key taking over, a provider
