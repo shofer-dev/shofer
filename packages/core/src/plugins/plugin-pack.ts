@@ -27,6 +27,7 @@
  * extension-side plugin install/uninstall handlers (step 5.3).
  */
 
+import { createHash } from "crypto"
 import * as nodeFs from "fs/promises"
 import * as path from "path"
 
@@ -374,7 +375,9 @@ async function downloadArchiveBytes(url: string, options: InstallFromUrlOptions)
 	}
 
 	const oversize = () =>
-		new PluginPackError(`Plugin archive at ${url} exceeds the ${maxBytes} byte download limit. Refusing to download.`)
+		new PluginPackError(
+			`Plugin archive at ${url} exceeds the ${maxBytes} byte download limit. Refusing to download.`,
+		)
 
 	const body = response.body
 	if (!body) {
@@ -398,6 +401,66 @@ async function downloadArchiveBytes(url: string, options: InstallFromUrlOptions)
 		chunks.push(Buffer.from(value))
 	}
 	return Buffer.concat(chunks)
+}
+
+/**
+ * A **content-addressed** archive filename: `sha256-<64 hex>.shofer-plugin`. A URL
+ * whose last path segment matches carries its own integrity check — the digest is
+ * IN the name, so no side-channel and no schema change are needed to pin it.
+ */
+const CONTENT_ADDRESSED_RE = /^sha256-([0-9a-f]{64})\.shofer-plugin$/
+
+/**
+ * The sha256 a content-addressed URL pins, or `undefined` for an ordinary URL.
+ *
+ * Pinning is deliberately carried by the filename rather than a field on the
+ * plugin declaration: `pluginDeclarationEntrySchema` is `.strict()` and
+ * `parsePluginDeclaration` fails closed to an EMPTY declaration, so one unknown
+ * key would discard every plugin declaration in that scope rather than being
+ * ignored. A URL is the one place a pin can ride without touching the schema.
+ */
+export function expectedDigestFromUrl(url: string): string | undefined {
+	let last: string
+	try {
+		last = new URL(url).pathname.split("/").pop() ?? ""
+	} catch {
+		return undefined
+	}
+	const m = CONTENT_ADDRESSED_RE.exec(last)
+	return m ? m[1] : undefined
+}
+
+/** Hex sha256 of `bytes` — the form {@link expectedDigestFromUrl} returns. */
+export function archiveDigest(bytes: Buffer): string {
+	return createHash("sha256").update(bytes).digest("hex")
+}
+
+/**
+ * Download a `.shofer-plugin` archive from an http(s) URL and return its bytes,
+ * enforcing the same policy {@link installPluginFromUrl} does (https-only unless
+ * loopback or opted in, size-capped) and — when the URL is content-addressed —
+ * verifying the digest its filename pins.
+ *
+ * A mismatch throws rather than installing: a URL that starts serving different
+ * bytes under the same name is a swap, and the whole point of pinning is that
+ * this fails loudly instead of silently running new code.
+ *
+ * Exposed (where the download itself is private) because a caller may need the
+ * bytes rather than an install into a plugins dir — the declaration resolver
+ * materializes into a versioned cache directory of its own.
+ */
+export async function fetchPluginArchive(url: string, options: InstallFromUrlOptions = {}): Promise<Buffer> {
+	const bytes = await downloadArchiveBytes(url, options)
+	const expected = expectedDigestFromUrl(url)
+	if (expected) {
+		const actual = archiveDigest(bytes)
+		if (actual !== expected) {
+			throw new PluginPackError(
+				`Digest mismatch for ${url}: the URL pins sha256 ${expected} but the downloaded archive is ${actual}. Refusing to install.`,
+			)
+		}
+	}
+	return bytes
 }
 
 /**

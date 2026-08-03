@@ -1,3 +1,4 @@
+import { createHash } from "crypto"
 import * as nodeFs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
@@ -128,6 +129,9 @@ describe("resolvePluginDeclaration", () => {
 	})
 
 	afterEach(async () => {
+		// Unstub first: a leaked `fetch` stub would silently change how every
+		// later test resolves a URL source.
+		vi.unstubAllGlobals()
 		await nodeFs.rm(tmp, { recursive: true, force: true })
 	})
 
@@ -189,10 +193,70 @@ describe("resolvePluginDeclaration", () => {
 		expect(await nodeFs.readFile(path.join(result.resolved[0]!.dir, "plugin.json"), "utf-8")).toContain("arch")
 	})
 
-	it("throws PluginResolveError for a remote URL source", async () => {
+	it("resolves an http(s) URL source by downloading and unpacking it", async () => {
+		// The bytes take the same hardened unpack path as a local archive; only
+		// where they came from differs.
+		const src = await writePluginDir(path.join(tmp, "url-src"), { name: "from-url", version: "3.1.0" })
+		const archive = path.join(tmp, "from-url.shofer-plugin")
+		await packPluginToFile(src, archive)
+		const bytes = await nodeFs.readFile(archive)
+
+		const fetchImpl = vi.fn(async () => new Response(new Uint8Array(bytes))) as unknown as typeof fetch
+		vi.stubGlobal("fetch", fetchImpl)
+
+		const result = await resolvePluginDeclaration(
+			decl("from-url", { source: "https://example.com/from-url.shofer-plugin", version: "3.1.0" }),
+			cacheDir,
+		)
+		expect(result.errors).toEqual([])
+		expect(result.resolved[0]!.dir).toBe(path.join(cacheDir, "from-url@3.1.0"))
+		expect(await nodeFs.readFile(path.join(result.resolved[0]!.dir, "plugin.json"), "utf-8")).toContain("from-url")
+	})
+
+	it("verifies the digest a content-addressed URL pins, and refuses a mismatch", async () => {
+		// The pin rides in the filename because the declaration schema is strict
+		// and fails closed — an unknown `digest` key would discard every entry.
+		const src = await writePluginDir(path.join(tmp, "pinned-src"), { name: "pinned", version: "1.0.0" })
+		const archive = path.join(tmp, "pinned.shofer-plugin")
+		await packPluginToFile(src, archive)
+		const bytes = await nodeFs.readFile(archive)
+		const wrong = "0".repeat(64)
+
+		vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array(bytes))) as unknown as typeof fetch)
+
 		await expect(
 			resolvePluginDeclaration(
-				decl("remote", { source: "https://example.com/x.shofer-plugin", version: "1.0.0" }),
+				decl("pinned", {
+					source: `https://example.com/archives/sha256-${wrong}.shofer-plugin`,
+					version: "1.0.0",
+				}),
+				cacheDir,
+			),
+		).rejects.toBeInstanceOf(PluginResolveError)
+
+		// ...and accepts the archive whose digest the URL actually names.
+		const right = createHash("sha256").update(bytes).digest("hex")
+		const ok = await resolvePluginDeclaration(
+			decl("pinned", {
+				source: `https://example.com/archives/sha256-${right}.shofer-plugin`,
+				version: "1.0.0",
+			}),
+			cacheDir,
+		)
+		expect(ok.errors).toEqual([])
+		expect(ok.resolved).toHaveLength(1)
+	})
+
+	it("fails the batch when the download is unreachable", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => {
+				throw new Error("ECONNREFUSED")
+			}) as unknown as typeof fetch,
+		)
+		await expect(
+			resolvePluginDeclaration(
+				decl("gone", { source: "https://example.com/gone.shofer-plugin", version: "1.0.0" }),
 				cacheDir,
 			),
 		).rejects.toBeInstanceOf(PluginResolveError)

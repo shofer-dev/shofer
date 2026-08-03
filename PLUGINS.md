@@ -763,9 +763,19 @@ source/version/enablement lockfile.
 Each entry is `{ source, version, config?, enabled? }`:
 
 - **`source`** — a local **directory** path or a local **`.shofer-plugin`** archive
-  path resolve today. An `http(s)` URL is reserved for a later pass — the resolver
-  raises a `PluginResolveError` ("remote URL sources not yet supported") for it,
-  isolated per-declaration so it never blocks discovery of the physically-present
+  path, or an **`http(s)` URL** to such an archive resolve. A URL is downloaded
+  under the same policy as `shofer plugin install <URL>` (https-only unless the
+  host is loopback, size-capped) and unpacked through the same hardened path, so
+  manifest validation and zip-slip protection apply wherever the bytes came
+  from. A **content-addressed** URL — one whose filename is
+  `sha256-<hex>.shofer-plugin` — additionally **pins** the bytes: the resolver
+  verifies the digest and refuses a mismatch, so a URL that starts serving
+  different code fails the load instead of silently swapping it. The pin rides
+  in the filename because this schema is `.strict()` and parsing fails closed —
+  an unknown `digest` key would discard every declaration in the file, not just
+  be ignored. A source that cannot be materialized at all (missing path,
+  unreachable URL, digest mismatch) raises `PluginResolveError`, isolated
+  per-declaration so it never blocks discovery of the physically-present
   plugins.
 - **`version`** — the version the resolver materializes under.
 - **`config`** — the user's config overrides, merged with the manifest's `config`

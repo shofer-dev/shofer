@@ -14,6 +14,7 @@ import {
 	packPlugin,
 	packPluginToFile,
 	unpackPlugin,
+	expectedDigestFromUrl,
 } from "../plugin-pack.js"
 
 /** A minimal valid plugin directory under `root`. */
@@ -309,5 +310,23 @@ describe("plugin-pack (Phase 5.1)", () => {
 			)
 			expect(opted.name).toBe("demo-plugin")
 		})
+	})
+})
+
+describe("expectedDigestFromUrl", () => {
+	it("reads the sha256 a content-addressed filename pins", () => {
+		const hex = "a".repeat(64)
+		expect(expectedDigestFromUrl(`https://example.com/archives/sha256-${hex}.shofer-plugin`)).toBe(hex)
+	})
+
+	it("returns undefined for an ordinary archive URL", () => {
+		// An un-pinned URL is still installable — it just carries no integrity
+		// claim, exactly like the CLI's install-from-URL.
+		expect(expectedDigestFromUrl("https://example.com/my-plugin.shofer-plugin")).toBeUndefined()
+	})
+
+	it("returns undefined for a malformed digest and for a non-URL", () => {
+		expect(expectedDigestFromUrl("https://example.com/sha256-tooshort.shofer-plugin")).toBeUndefined()
+		expect(expectedDigestFromUrl("/local/path.shofer-plugin")).toBeUndefined()
 	})
 })

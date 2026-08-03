@@ -1191,12 +1191,21 @@ CLI commands (`shofer plugin install|list|remove`) are thin wrappers over this p
 `PluginManager`; the enabled allow-list is the same `shofer.plugins.enabledPlugins`
 the running agent reads.
 
-**Install-from-URL.** The CLI (`isPluginUrl` → `installPluginFromUrl`) downloads a
+**Install-from-URL.** The CLI (`isPluginUrl` → `installPluginFromUrl`) and the
+declaration resolver (`materializeSource`, via `fetchPluginArchive`) both download a
 direct `http(s)` `.shofer-plugin` and unpacks it through the same
 validation/zip-slip pipeline as a local archive:
 **`https` required** (unless the host is loopback or `--allow-insecure-http` is
 passed), **size-capped** (`DEFAULT_MAX_PLUGIN_DOWNLOAD_BYTES` = 64 MiB), fail-closed
 on a bad manifest. This is a direct download, not a registry lookup.
+
+A **content-addressed** URL — filename `sha256-<hex>.shofer-plugin` — also
+**pins** the bytes: `fetchPluginArchive` verifies the digest and throws on a
+mismatch, so a URL that begins serving different code fails the load rather
+than silently swapping what runs. The pin lives in the filename because
+`pluginDeclarationEntrySchema` is `.strict()` and `parsePluginDeclaration`
+fails closed to an empty declaration — an unknown `digest` key would discard
+every plugin declaration in that scope, not merely be ignored.
 
 ---
 

@@ -5,7 +5,7 @@ import { pluginManifestSchema } from "@shofer/types"
 import { z } from "zod"
 
 import { EMPTY_LOCKED_MANIFEST, isPathLocked, type LockedManifest } from "../config/layered-config.js"
-import { isPluginUrl, unpackPlugin } from "./plugin-pack.js"
+import { fetchPluginArchive, isPluginUrl, unpackPlugin } from "./plugin-pack.js"
 
 /**
  * plugin-declaration — the `.shofer/plugins.json` *declaration* of which plugins a
@@ -46,8 +46,10 @@ export const PLUGIN_DECLARATION_VERSION = 1
 
 /**
  * One plugin's declaration entry (Schema-First Persistence Rule). `source` is a
- * local directory path or a local `.shofer-plugin` archive path today (an
- * http(s) URL is reserved for a later pass and rejected by the resolver). `version` is the author-declared version the resolver
+ * local directory path, a local `.shofer-plugin` archive path, or an **http(s)
+ * URL** to such an archive. A content-addressed URL
+ * (`.../sha256-<hex>.shofer-plugin`) additionally pins the bytes: the resolver
+ * verifies the digest and refuses a mismatch. `version` is the author-declared version the resolver
  * materializes under. `config` is the user's config overrides for the plugin
  * (merged with manifest defaults downstream); `enabled` defaults to `true`.
  */
@@ -191,11 +193,13 @@ export interface ResolvePluginsResult {
 }
 
 /**
- * Thrown for a source kind the resolver does not yet support — an http(s) URL
- * (reserved for a later pass). A distinct class so a caller can present it as
- * "not yet supported" rather than a crash. This is a **hard** failure (it rejects
- * the whole batch) — deliberately loud, since the feature is an explicit stub,
- * unlike a per-plugin manifest mismatch which is skipped softly.
+ * Thrown when a declared source cannot be materialized at all — a missing local
+ * path, an unreachable URL, or an archive whose bytes do not match the digest a
+ * content-addressed URL pins. A distinct class so a caller can present it as a
+ * user error rather than a crash. This is a **hard** failure (it rejects the
+ * whole batch), unlike a per-plugin manifest mismatch which is skipped softly:
+ * a source that will not materialize is a broken declaration, and a digest
+ * mismatch specifically may be a swapped artifact.
  */
 export class PluginResolveError extends Error {
 	constructor(message: string) {
@@ -205,11 +209,6 @@ export class PluginResolveError extends Error {
 }
 
 const MANIFEST_FILENAME = "plugin.json"
-
-/** Whether `source` is a source kind the resolver cannot materialize yet (remote URL). */
-function isUnsupportedSource(source: string): boolean {
-	return isPluginUrl(source)
-}
 
 /** Whether a path exists on disk. */
 async function pathExists(target: string): Promise<boolean> {
@@ -222,13 +221,50 @@ async function pathExists(target: string): Promise<boolean> {
 }
 
 /**
- * Materialize one declared local `source` into `cacheDir` (idempotency is the
- * caller's responsibility — it is only invoked when `cacheDir` has no manifest yet).
- * A **directory** source is copied tree-wise; a **`.shofer-plugin` archive** file is
- * unpacked (via {@link unpackPlugin}, which installs as `<dest>/<name>`) and the
- * resulting directory moved to the versioned `cacheDir`.
+ * Unpack archive bytes (or a local archive path) into the versioned `cacheDir`.
+ *
+ * {@link unpackPlugin} installs as `<dest>/<manifestName>`, so it runs against a
+ * scratch staging dir which is then renamed onto `cacheDir` — that is what makes
+ * the final directory `<cacheBaseDir>/<name>@<version>` regardless of what the
+ * manifest calls itself.
+ */
+async function unpackIntoCacheDir(archive: Buffer | string, cacheDir: string): Promise<void> {
+	const staging = `${cacheDir}.staging-${Date.now()}-${Math.random().toString(36).slice(2)}`
+	try {
+		const installed = await unpackPlugin(archive, staging)
+		await nodeFs.rename(installed.dir, cacheDir)
+	} finally {
+		await nodeFs.rm(staging, { recursive: true, force: true }).catch(() => {})
+	}
+}
+
+/**
+ * Materialize one declared `source` into `cacheDir` (idempotency is the caller's
+ * responsibility — it is only invoked when `cacheDir` has no manifest yet).
+ *
+ * Three source kinds: a **directory** is copied tree-wise; a local
+ * **`.shofer-plugin` archive** is unpacked; an **http(s) URL** is downloaded and
+ * then unpacked through the very same path, so the archive hardening (manifest
+ * validation, zip-slip, link entries) applies identically no matter where the
+ * bytes came from. A content-addressed URL additionally pins the bytes by digest
+ * — {@link fetchPluginArchive} refuses a mismatch, so a URL that starts serving
+ * different code fails the load rather than silently swapping it.
  */
 async function materializeSource(source: string, cacheDir: string): Promise<void> {
+	if (isPluginUrl(source)) {
+		// Fetch BEFORE clearing the target: a failed download must not destroy an
+		// existing materialization.
+		const bytes = await fetchPluginArchive(source).catch((error) => {
+			throw new PluginResolveError(
+				`Cannot resolve plugin from "${source}": ${error instanceof Error ? error.message : String(error)}`,
+			)
+		})
+		await nodeFs.rm(cacheDir, { recursive: true, force: true })
+		await nodeFs.mkdir(path.dirname(cacheDir), { recursive: true })
+		await unpackIntoCacheDir(bytes, cacheDir)
+		return
+	}
+
 	const stat = await nodeFs.stat(source).catch(() => {
 		throw new PluginResolveError(`Plugin source not found: ${source}`)
 	})
@@ -242,16 +278,7 @@ async function materializeSource(source: string, cacheDir: string): Promise<void
 		return
 	}
 
-	// A `.shofer-plugin` archive: unpack into a scratch staging dir (unpackPlugin
-	// installs as `<staging>/<manifestName>`), then move that into the versioned
-	// cache path so the final directory is `<cacheBaseDir>/<name>@<version>`.
-	const staging = `${cacheDir}.staging-${Date.now()}-${Math.random().toString(36).slice(2)}`
-	try {
-		const installed = await unpackPlugin(source, staging)
-		await nodeFs.rename(installed.dir, cacheDir)
-	} finally {
-		await nodeFs.rm(staging, { recursive: true, force: true }).catch(() => {})
-	}
+	await unpackIntoCacheDir(source, cacheDir)
 }
 
 /**
@@ -261,10 +288,14 @@ async function materializeSource(source: string, cacheDir: string): Promise<void
  *   - Materialize `source@version` into `<cacheBaseDir>/<name>@<version>/`,
  *     **idempotently**: if that dir already has a `plugin.json` it is reused as-is
  *     (no re-copy/re-unpack).
- *   - **Local directory** source → copied; **local `.shofer-plugin` archive** → unpacked.
- *   - An **http(s) URL** → {@link PluginResolveError} ("remote URL sources not
- *     yet supported") — a hard failure that rejects the whole batch, since that
- *     source kind is an explicit later-pass stub.
+ *   - **Local directory** source → copied; **local `.shofer-plugin` archive** →
+ *     unpacked; **http(s) URL** → downloaded (https-only unless loopback,
+ *     size-capped) and unpacked through the same hardened path. A
+ *     content-addressed URL (`.../sha256-<hex>.shofer-plugin`) is verified
+ *     against that digest and a mismatch is refused.
+ *   - A source that cannot be materialized at all — missing path, unreachable
+ *     URL, digest mismatch — raises {@link PluginResolveError}, a hard failure
+ *     that rejects the whole batch.
  *   - The materialized dir's `plugin.json` is validated against
  *     {@link pluginManifestSchema} and its `name` checked against the declaration key;
  *     a missing/invalid manifest or a name mismatch **skips that one plugin** with a
@@ -281,12 +312,6 @@ export async function resolvePluginDeclaration(
 	const errors: PluginResolveWarning[] = []
 
 	for (const [name, entry] of Object.entries(decl.plugins)) {
-		if (isUnsupportedSource(entry.source)) {
-			throw new PluginResolveError(
-				`Cannot resolve plugin "${name}" from "${entry.source}": remote URL sources not yet supported.`,
-			)
-		}
-
 		const cacheDir = path.join(cacheBaseDir, `${name}@${entry.version}`)
 		const manifestPath = path.join(cacheDir, MANIFEST_FILENAME)
 
