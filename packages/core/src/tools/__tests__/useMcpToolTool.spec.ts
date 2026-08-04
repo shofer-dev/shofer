@@ -640,13 +640,62 @@ describe("useMcpToolTool", () => {
 			expect(mockTask.say).toHaveBeenCalledWith("mcp_server_request_started")
 
 			// The original tool name (with hyphens) should be passed to callTool,
-			// along with source (undefined), taskId (task.taskId), and signal (undefined)
+			// along with source (undefined), taskId (task.taskId), toolCallId
+			// (undefined — this dispatch carries no provider call id) and signal
+			// (undefined)
 			expect(callToolMock).toHaveBeenCalledWith(
 				"test-server",
 				"get-user-profile",
 				{},
 				undefined,
 				"test-task-uuid",
+				undefined,
+				undefined,
+			)
+		})
+
+		// The id identifies WHICH tool call this is on the executing side. It must
+		// travel from the callbacks bag to the hub byte-for-byte: a sanitized or
+		// dropped copy leaves the execution record unjoinable to the transcript,
+		// and nothing else in the flow would notice.
+		it("forwards the provider tool-call id from the callbacks bag, unmodified", async () => {
+			const rawToolCallId = "call:abc/1+2=3"
+			const callToolMock = vi.fn().mockResolvedValue({ content: [{ type: "text", text: "Success" }] })
+
+			mockProviderRef.deref.mockReturnValue({
+				getMcpHub: () => ({
+					getAllServers: vi.fn().mockReturnValue([{ name: "test-server", tools: [{ name: "gitlab" }] }]),
+					callTool: callToolMock,
+				}),
+				postMessageToWebview: vi.fn(),
+			})
+
+			mockAskApproval.mockResolvedValue(true)
+
+			await useMcpToolTool.handle(
+				mockTask as Task,
+				{
+					type: "tool_use",
+					name: "use_mcp_tool",
+					params: { server_name: "test-server", tool_name: "gitlab", arguments: "{}" },
+					nativeArgs: { server_name: "test-server", tool_name: "gitlab", arguments: {} },
+					partial: false,
+				} as any,
+				{
+					askApproval: mockAskApproval,
+					handleError: mockHandleError,
+					pushToolResult: mockPushToolResult,
+					toolCallId: rawToolCallId,
+				},
+			)
+
+			expect(callToolMock).toHaveBeenCalledWith(
+				"test-server",
+				"gitlab",
+				{},
+				undefined,
+				"test-task-uuid",
+				rawToolCallId,
 				undefined,
 			)
 		})

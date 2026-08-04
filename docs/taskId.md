@@ -1,8 +1,8 @@
-# Task ID Injection for MCP Tool Calls
+# Identifier Injection for MCP Tool Calls
 
 ## Purpose
 
-When Shofer makes MCP `tools/call` requests, it injects a `taskId` into the MCP protocol's `_meta` field so that downstream services (mcp-server, tools-backend) can correlate tool calls with the originating conversation for logging, metrics, and distributed tracing.
+When Shofer makes MCP `tools/call` requests, it injects two identifiers into the MCP protocol's `_meta` field so a downstream server can place the call: **which conversation it belongs to** (`vscode.taskId`) and **which of the model's tool calls it is** (`shofer.toolCallId`). The first supports logging, metrics and distributed tracing; the second lets a server that keeps its own record of executed tools match a row to the exact `tool_calls[]` entry in the transcript, rather than guessing from the tool name and timing.
 
 ## Architecture
 
@@ -10,10 +10,11 @@ When Shofer makes MCP `tools/call` requests, it injects a `taskId` into the MCP 
 flowchart TB
     subgraph HOST["VS Code Extension Host"]
         direction TB
-        T["UseMcpToolTool.ts<br/>task.taskId — UUID v7"]
-        H["McpHub.ts<br/>callTool(serverName, toolName, args, source, taskId)"]
-        REQ["MCP 'tools/call' request<br/>params.name<br/>params.arguments<br/>params._meta['vscode.taskId']"]
-        T --> H --> REQ
+        P["presentAssistantMessage.ts<br/>block.id — the provider's tool_calls[].id"]
+        T["runMcpToolCall (use-mcp-shared.ts)<br/>task.taskId — UUID v7"]
+        H["McpHub.ts<br/>callTool(server, tool, args, source, taskId, toolCallId)"]
+        REQ["MCP 'tools/call' request<br/>params.name<br/>params.arguments<br/>params._meta['vscode.taskId']<br/>params._meta['shofer.toolCallId']"]
+        P --> T --> H --> REQ
     end
 
     subgraph MCPS["mcp-server"]
@@ -60,15 +61,24 @@ Shofer injects the id under `_meta["vscode.taskId"]`. The `vscode.` prefix keeps
 - is silently ignored by MCP servers that don't read it
 - keeps the id out of the model-visible argument surface
 
+### Key holding `shofer.toolCallId`
+
+The provider's own id for the tool call — the `tool_calls[].id` the model emitted — travels under `_meta["shofer.toolCallId"]`. The `shofer.` prefix says who defines it: unlike `vscode.taskId`, no VS Code convention covers this key.
+
+**It is forwarded RAW.** Shofer sanitizes the same id elsewhere: `sanitizeToolUseId` ([`packages/core/src/utils/tool-id.ts`](../packages/core/src/utils/tool-id.ts)) maps `[^a-zA-Z0-9_-]` to `_` on the `tool_result` leg, because the provider APIs validate the id they get back against that charset. A server recording the call has no such constraint, and a record is only matchable to the transcript while both hold the identical string — so sanitizing on this leg would silently produce a key matching nothing. The two legs therefore carry deliberately different forms of one id, and the tests in [`McpHub.spec.ts`](../packages/core/src/services/mcp/__tests__/McpHub.spec.ts) and [`presentAssistantMessage-mcp-tool-call-id.spec.ts`](../packages/core/src/assistant-message/__tests__/presentAssistantMessage-mcp-tool-call-id.spec.ts) pin that apart.
+
+**Coverage.** The key is present only when the invocation originated in a native provider tool call: the dynamic `mcp_<server>_<tool>` tools, a native `use_mcp_tool` call, and `call_mcp_tool_async` (where the id names the _wrapper_ call, since that is what the model actually invoked). Anything the host synthesizes without a provider id omits the key rather than inventing a value.
+
 ## Component Reference
 
-| Component               | File                                                                                                                                                                                                    | Role                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| UseMcpToolTool / shared | [`packages/core/src/tools/UseMcpToolTool.ts`](../packages/core/src/tools/UseMcpToolTool.ts) and [`packages/core/src/tools/mcp/use-mcp-shared.ts`](../packages/core/src/tools/mcp/use-mcp-shared.ts:199) | Passes `task.taskId` to `McpHub.callTool()` via `runMcpToolCall` |
-| McpHub                  | [`packages/core/src/services/mcp/McpHub.ts`](../packages/core/src/services/mcp/McpHub.ts)                                                                                                               | Injects `_meta["vscode.taskId"]` into MCP request params         |
-| mcp-server handler      | `mcp-server/internal/handlers/mcp.go`                                                                                                                                                                   | Extracts and validates `taskId` from `_meta` in `handleToolCall` |
-| mcp-server backend      | `mcp-server/internal/services/backend.go`                                                                                                                                                               | Forwards as `task_id` to tools-backend                           |
-| IDs documentation       | `docs/IDs.md`                                                                                                                                                                                           | System-wide ID architecture overview                             |
+| Component               | File                                                                                                                                                                                                    | Role                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| presentAssistantMessage | [`packages/core/src/assistant-message/presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts)                                                                   | Passes the block's provider id to the MCP tools as `ToolCallbacks.toolCallId`             |
+| UseMcpToolTool / shared | [`packages/core/src/tools/UseMcpToolTool.ts`](../packages/core/src/tools/UseMcpToolTool.ts) and [`packages/core/src/tools/mcp/use-mcp-shared.ts`](../packages/core/src/tools/mcp/use-mcp-shared.ts:199) | Passes `task.taskId` and `toolCallId` to `McpHub.callTool()` via `runMcpToolCall`         |
+| McpHub                  | [`packages/core/src/services/mcp/McpHub.ts`](../packages/core/src/services/mcp/McpHub.ts)                                                                                                               | Injects `_meta["vscode.taskId"]` and `_meta["shofer.toolCallId"]` into MCP request params |
+| mcp-server handler      | `mcp-server/internal/handlers/mcp.go`                                                                                                                                                                   | Extracts and validates `taskId` from `_meta` in `handleToolCall`                          |
+| mcp-server backend      | `mcp-server/internal/services/backend.go`                                                                                                                                                               | Forwards as `task_id` to tools-backend                                                    |
+| IDs documentation       | `docs/IDs.md`                                                                                                                                                                                           | System-wide ID architecture overview                                                      |
 
 ## Compatibility
 
@@ -76,13 +86,9 @@ All compliant MCP servers accept the `_meta` field per the MCP specification. Se
 
 ## Gaps & Improvement Areas
 
-### Architecture diagram label
-
-The architecture diagram at line 13 labels the two extension-host boxes as `UseMcpToolTool.ts` and `McpHub.ts`. The actual `callTool` invocation with `task.taskId` happens in [`use-mcp-shared.ts`](../packages/core/src/tools/mcp/use-mcp-shared.ts:199) (called by `UseMcpToolTool`). The diagram could be updated to show `runMcpToolCall` (in `use-mcp-shared.ts`) instead of `UseMcpToolTool.ts` to accurately reflect the call chain.
-
 ### Async MCP path not covered
 
-The async MCP path (`call_mcp_tool_async` → `check_mcp_call_status` / `wait_for_mcp_call`) also passes `task.taskId` as `taskId` to `McpHub.callTool()`. This document only covers the synchronous `use_mcp_tool` path. A future update could include coverage of the async path's `taskId` flow.
+The async MCP path (`call_mcp_tool_async` → `check_mcp_call_status` / `wait_for_mcp_call`) passes the same `taskId` and `toolCallId` to `McpHub.callTool()`, but this document describes the flow in terms of the synchronous path only. A future update could walk the async path explicitly — in particular that its `toolCallId` is the wrapper tool's id, so the executed MCP tool's name and the narrated tool name differ for those calls.
 
 ### No telemetry integration
 

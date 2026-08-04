@@ -19,7 +19,7 @@ export class CallMcpToolAsyncTool extends BaseTool<"call_mcp_tool_async"> {
 	readonly name = "call_mcp_tool_async" as const
 
 	async execute(params: CallMcpToolAsyncParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { askApproval, handleError, pushToolResult } = callbacks
+		const { askApproval, handleError, pushToolResult, toolCallId } = callbacks
 
 		try {
 			// Validate required parameters
@@ -77,12 +77,16 @@ export class CallMcpToolAsyncTool extends BaseTool<"call_mcp_tool_async"> {
 			const abortController = new AbortController()
 
 			// Fire the MCP tool call WITHOUT awaiting
+			// `toolCallId` is this tool's own provider call id — the model called
+			// `call_mcp_tool_async`, not the MCP tool it names — so the brokered
+			// row joins back to the wrapper call in the transcript.
 			const mcpPromise = runMcpToolCall(task, {
 				serverName,
 				toolName: resolvedToolName,
 				args: params.arguments,
 				source: params.source,
 				executionId,
+				toolCallId,
 				signal: abortController.signal,
 			})
 

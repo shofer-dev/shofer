@@ -1,7 +1,13 @@
 import type { ToolName, ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task.js"
-import { type ToolUse, type HandleError, type PushToolResult, type AskApproval, type NativeToolArgs } from "@shofer/types"
+import {
+	type ToolUse,
+	type HandleError,
+	type PushToolResult,
+	type AskApproval,
+	type NativeToolArgs,
+} from "@shofer/types"
 import { taskLog, toolsLog } from "../logging/subsystems.js"
 import { recordToolDuration, incToolCalls, incToolErrors, classifyToolError } from "../metrics/registry.js"
 
@@ -12,6 +18,15 @@ export interface ToolCallbacks {
 	askApproval: AskApproval
 	handleError: HandleError
 	pushToolResult: PushToolResult
+	/**
+	 * The provider's own id for this tool call (`tool_calls[].id`), verbatim.
+	 *
+	 * Tools that hand the invocation to another process — the MCP tools — pass it
+	 * on so the executing side can identify the individual call. Never sanitize
+	 * it on the way through: `sanitizeToolUseId` belongs to the tool_result leg,
+	 * and a sanitized copy no longer matches the id the transcript recorded.
+	 * Absent when the invocation did not originate in a provider tool call.
+	 */
 	toolCallId?: string
 }
 

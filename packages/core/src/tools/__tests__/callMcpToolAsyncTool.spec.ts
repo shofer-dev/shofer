@@ -87,7 +87,7 @@ describe("callMcpToolAsyncTool", () => {
 		expect(task.mcpAsyncCalls!.size).toBe(0)
 	})
 
-	it("stores handle, fires Started telemetry, and forwards source to callTool", async () => {
+	it("stores handle, fires Started telemetry, and forwards source and tool-call id to callTool", async () => {
 		const task = buildMockTask()
 		let resolveCall!: (v: any) => void
 		mockCallTool.mockImplementation(
@@ -97,12 +97,25 @@ describe("callMcpToolAsyncTool", () => {
 				}),
 		)
 		const pushToolResult = vi.fn()
+		// A fire-and-forget MCP call is still one provider tool call — the id names
+		// the `call_mcp_tool_async` invocation, and must reach the hub verbatim so
+		// the brokered row can be joined back to it.
+		const rawToolCallId = "call:async/1+2"
 		await callMcpToolAsyncTool.handle(task as Task, baseBlock({ source: "project" }) as any, {
 			askApproval: vi.fn().mockResolvedValue(true),
 			handleError: vi.fn(),
 			pushToolResult,
+			toolCallId: rawToolCallId,
 		})
-		expect(mockCallTool).toHaveBeenCalledWith("srv", "echo", { x: 1 }, "project", "task-1", expect.anything())
+		expect(mockCallTool).toHaveBeenCalledWith(
+			"srv",
+			"echo",
+			{ x: 1 },
+			"project",
+			"task-1",
+			rawToolCallId,
+			expect.anything(),
+		)
 		expect(task.mcpAsyncCalls!.size).toBe(1)
 		const handle = [...task.mcpAsyncCalls!.values()][0]!
 		expect(handle.status).toBe("running")

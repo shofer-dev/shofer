@@ -56,6 +56,25 @@ import { safeWriteJson } from "../../utils/safeWriteJson.js"
 import { sanitizeMcpName, toolNamesMatch } from "../../utils/mcp-name.js"
 import { getSharedPluginManager } from "../../plugins/plugin-manager.js"
 
+/**
+ * `_meta` key carrying the id of the task a `tools/call` belongs to. The
+ * `vscode.` prefix is historical — it is the key the VS Code MCP client stamps,
+ * and servers already read it under that name.
+ */
+export const MCP_META_TASK_ID = "vscode.taskId"
+
+/**
+ * `_meta` key carrying the PROVIDER's own tool-call id for a `tools/call` — the
+ * `tool_calls[].id` the model emitted, unmodified.
+ *
+ * A server brokering the call can persist it beside the call it actually ran,
+ * which is what lets an audit of executions be joined to the transcript by
+ * identity instead of by tool name and timing. Only calls that originate in a
+ * native provider tool call have one; anything synthesized host-side omits the
+ * key rather than inventing a value.
+ */
+export const MCP_META_TOOL_CALL_ID = "shofer.toolCallId"
+
 // Discriminated union for connection states
 export type ConnectedMcpConnection = {
 	type: "connected"
@@ -2078,12 +2097,21 @@ export class McpHub {
 		)
 	}
 
+	/**
+	 * Invokes a tool on a connected MCP server.
+	 *
+	 * `taskId` and `toolCallId` are the two identifiers the server side needs to
+	 * place the call: which run it belongs to, and which of the model's tool
+	 * calls it IS. Both travel in the MCP request's `_meta` (see
+	 * {@link MCP_META_TASK_ID} / {@link MCP_META_TOOL_CALL_ID}).
+	 */
 	async callTool(
 		serverName: string,
 		toolName: string,
 		toolArguments?: Record<string, unknown>,
 		source?: "global" | "project",
 		taskId?: string,
+		toolCallId?: string,
 		signal?: AbortSignal,
 	): Promise<McpToolCallResponse> {
 		const connection = this.findConnection(serverName, source)
@@ -2111,11 +2139,24 @@ export class McpHub {
 			arguments: toolArguments,
 		}
 
-		// Inject taskId into _meta if provided (required by mcp-server for tracing)
+		// Identify the call in _meta: the task it belongs to (which servers require
+		// for tracing) and, when the call came from a provider tool call, which
+		// call it is. A key with no value is omitted rather than sent empty.
+		const meta: Record<string, string> = {}
 		if (taskId) {
-			params._meta = {
-				"vscode.taskId": taskId,
-			}
+			meta[MCP_META_TASK_ID] = taskId
+		}
+		if (toolCallId) {
+			// The RAW provider id, deliberately NOT run through `sanitizeToolUseId`.
+			// That sanitizer exists for the tool_result leg, where the API validates
+			// the id against `^[a-zA-Z0-9_-]+$`; a broker recording the call has no
+			// such constraint, and the two records are only joinable while both hold
+			// the string the model emitted. Sanitizing here would silently produce a
+			// key that matches nothing.
+			meta[MCP_META_TOOL_CALL_ID] = toolCallId
+		}
+		if (Object.keys(meta).length > 0) {
+			params._meta = meta
 		}
 
 		const mcpT0 = performance.now()

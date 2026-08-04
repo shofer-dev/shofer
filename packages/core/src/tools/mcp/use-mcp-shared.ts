@@ -204,6 +204,11 @@ export function processMcpToolContent(
  *
  * The `signal` parameter is optional; when provided it supports cooperative
  * cancellation (passed through to `McpHub.callTool`).
+ *
+ * `toolCallId` is the provider's own id for the tool call being executed, taken
+ * from the native tool-call block and passed through UNMODIFIED — see
+ * `McpHub.callTool`. It is absent for any invocation that did not come from a
+ * provider tool call.
  */
 export async function runMcpToolCall(
 	task: Task,
@@ -213,10 +218,11 @@ export async function runMcpToolCall(
 		args?: Record<string, unknown>
 		source?: "global" | "project"
 		executionId: string
+		toolCallId?: string
 		signal?: AbortSignal
 	},
 ): Promise<McpToolCallResponse | undefined> {
-	const { serverName, toolName, args, source, executionId, signal } = opts
+	const { serverName, toolName, args, source, executionId, toolCallId, signal } = opts
 
 	await task.say("mcp_server_request_started")
 
@@ -228,10 +234,11 @@ export async function runMcpToolCall(
 		toolName,
 	})
 
-	// Pass task.taskId as taskId so mcp-server can track the conversation
+	// Pass task.taskId as taskId so mcp-server can track the conversation, and
+	// the provider's tool-call id so it can identify the individual call.
 	const toolResult = await (task.providerRef.deref() as TaskProviderLike | undefined)
 		?.getMcpHub()
-		?.callTool(serverName, toolName, args, source, task.taskId, signal ?? task.abortSignal)
+		?.callTool(serverName, toolName, args, source, task.taskId, toolCallId, signal ?? task.abortSignal)
 
 	let toolResultPretty = "(No response)"
 	let images: string[] = []

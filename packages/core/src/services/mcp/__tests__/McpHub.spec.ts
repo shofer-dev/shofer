@@ -10,8 +10,9 @@ import type {
 	ConnectedMcpConnection,
 	DisconnectedMcpConnection,
 } from "../McpHub.js"
-import { ServerConfigSchema, McpHub } from "../McpHub.js"
+import { ServerConfigSchema, McpHub, MCP_META_TOOL_CALL_ID } from "../McpHub.js"
 import { setSharedPluginManager } from "../../../plugins/plugin-manager.js"
+import { sanitizeToolUseId } from "../../../utils/tool-id.js"
 
 // Mock fs/promises before importing anything that uses it
 vi.mock("fs/promises", () => ({
@@ -1162,6 +1163,48 @@ describe("McpHub", () => {
 			await expect(mcpHub.callTool("non-existent-server", "some-tool", {})).rejects.toThrow(
 				"No connection found for server: non-existent-server",
 			)
+		})
+
+		// The broker on the other side records the call under this id, and the
+		// transcript records the model's `tool_calls[].id`. They join only while
+		// both hold the SAME string — so the id must arrive verbatim, not run
+		// through `sanitizeToolUseId` (which the tool_result leg applies).
+		it("forwards the provider tool-call id in _meta, raw", async () => {
+			const mockConnection: ConnectedMcpConnection = {
+				type: "connected",
+				server: { name: "test-server", config: JSON.stringify({}), status: "connected" as const },
+				client: { request: vi.fn().mockResolvedValue({ content: [] }) } as any,
+				transport: {} as any,
+			}
+			mcpHub.connections = [mockConnection]
+
+			// Every character class sanitizeToolUseId would rewrite to "_".
+			const rawId = "call:abc/1+2=3"
+			await mcpHub.callTool("test-server", "some-tool", {}, undefined, "task-1", rawId)
+
+			const [request] = (mockConnection.client!.request as Mock).mock.calls[0]!
+			expect(request.params._meta).toEqual({
+				"vscode.taskId": "task-1",
+				"shofer.toolCallId": rawId,
+			})
+			expect(request.params._meta[MCP_META_TOOL_CALL_ID]).toBe(rawId)
+			expect(request.params._meta[MCP_META_TOOL_CALL_ID]).not.toBe(sanitizeToolUseId(rawId))
+		})
+
+		it("omits the tool-call id key when the call has no provider id", async () => {
+			const mockConnection: ConnectedMcpConnection = {
+				type: "connected",
+				server: { name: "test-server", config: JSON.stringify({}), status: "connected" as const },
+				client: { request: vi.fn().mockResolvedValue({ content: [] }) } as any,
+				transport: {} as any,
+			}
+			mcpHub.connections = [mockConnection]
+
+			await mcpHub.callTool("test-server", "some-tool", {}, undefined, "task-1")
+
+			const [request] = (mockConnection.client!.request as Mock).mock.calls[0]!
+			expect(request.params._meta).toEqual({ "vscode.taskId": "task-1" })
+			expect(MCP_META_TOOL_CALL_ID in request.params._meta).toBe(false)
 		})
 
 		describe("timeout configuration", () => {

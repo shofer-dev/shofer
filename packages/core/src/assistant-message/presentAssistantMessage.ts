@@ -366,6 +366,10 @@ export async function presentAssistantMessage(shofer: Task) {
 				askApproval,
 				handleError,
 				pushToolResult,
+				// The RAW provider id — the tool_result leg above sanitizes it for the
+				// API's id charset, but the broker must record the string the model
+				// emitted or the transcript and the execution record cannot be joined.
+				toolCallId,
 			})
 			break
 		}
@@ -1157,6 +1161,7 @@ export async function presentAssistantMessage(shofer: Task) {
 						askApproval,
 						handleError,
 						pushToolResult,
+						toolCallId,
 					})
 					break
 				case "access_mcp_resource":
@@ -1325,6 +1330,7 @@ export async function presentAssistantMessage(shofer: Task) {
 						askApproval,
 						handleError,
 						pushToolResult,
+						toolCallId,
 					})
 					break
 				case "check_mcp_call_status":

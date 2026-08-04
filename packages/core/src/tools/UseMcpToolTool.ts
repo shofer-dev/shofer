@@ -27,7 +27,7 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 	readonly name = "use_mcp_tool" as const
 
 	async execute(params: UseMcpToolParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { askApproval, handleError, pushToolResult } = callbacks
+		const { askApproval, handleError, pushToolResult, toolCallId } = callbacks
 
 		try {
 			// Validate parameters
@@ -72,6 +72,7 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 				toolName: resolvedToolName,
 				args: parsedArguments,
 				executionId,
+				toolCallId,
 			})
 
 			let toolResultPretty = "(No response)"
