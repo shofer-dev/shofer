@@ -655,6 +655,16 @@ is to run it). Suppression wins if a name is in both. Activation is not a way ar
 permissions, AI consent and dependency resolution are unchanged, and there is no way for a plugin to
 put its own name in either list.
 
+**And it can decide where the code comes from.** `SHOFER_PLUGIN_DIRS` (a `PATH`-style list of
+absolute directories) names extra roots to scan, **read-only** and **last** — after the user and
+project roots, so nothing in either can shadow a name the deployment provisioned. It exists because
+the three standard roots are all writable by the person the plugin may be there to constrain: a
+plugin under `~/.shofer/plugins` can be edited, replaced, or moved aside by anyone holding a shell in
+that home directory, and a plugin its subject can rewrite enforces nothing. A host that mounts the
+code somewhere the user cannot write, and names that path here, closes all three. Plugins found this
+way cannot be uninstalled (the directory is read-only, and the code is not the user's to delete); the
+enable toggle still applies, and `SHOFER_DISABLED_PLUGINS` still wins over everything.
+
 **AI billing is a third, separate consent.** `permissions.ai` alone is not enough: `ctx.ai` only
 becomes live after the user grants the **"uses AI (billed)"** consent in the Plugins panel (a
 distinct toggle from enable). Granted-but-unconsented gives a denying `ctx.ai` stub; consent can be

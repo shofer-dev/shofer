@@ -55,7 +55,7 @@ import { findLast } from "@shofer/core"
 import { supportPrompt } from "@shofer/types"
 import { GlobalFileNames } from "@shofer/core"
 import { Mode, defaultModeSlug, getModeBySlug } from "@shofer/core"
-import { governanceDisabledPlugins, governanceEnabledPlugins } from "@shofer/core"
+import { governanceDisabledPlugins, governanceEnabledPlugins, governancePluginDirs } from "@shofer/core"
 import { experimentDefault, EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { formatLanguage } from "@shofer/types"
 import { WebviewMessage } from "@shofer/core"
@@ -2166,6 +2166,14 @@ export class ShoferProvider
 			{ dir: path.join(this.context.extensionPath, "dist", "plugins"), scope: "bundled" as const },
 			{ dir: path.join(getGlobalShoferDirectory(), "plugins"), scope: "global" as const },
 			...(cwd ? [{ dir: path.join(cwd, ".shofer", "plugins"), scope: "project" as const }] : []),
+			// Host-provisioned plugin code (`SHOFER_PLUGIN_DIRS`) — read-only mounts a
+			// deployment points at. LAST on purpose: discovery is last-wins per name, so
+			// scanning these after the user and project roots is what stops either from
+			// shadowing a name the host provisioned. Tagged `global` rather than given a
+			// fourth PluginScope for the reason in computePluginDeclarationWiring — a new
+			// scope member ripples into the webview type and the i18n keys for no gain;
+			// what the panel actually needs to know is `readOnly`, which it gets.
+			...governancePluginDirs().map((dir) => ({ dir, scope: "global" as const, readOnly: true })),
 		]
 
 		// Part F — `.shofer/plugins.json` declarations. Read the three scopes' plugin
@@ -2909,6 +2917,8 @@ export class ShoferProvider
 			// First-party (bundled) plugins are non-uninstallable — the panel hides the
 			// uninstall affordance for them (they ship with the extension).
 			firstParty: p.firstParty,
+			// Host-provisioned into a read-only mount — likewise non-uninstallable.
+			readOnly: p.readOnly,
 			enabled: p.enabled,
 			// Surface *why* an enabled plugin is inactive (unmet dependency / cycle,
 			// design §14.3) so the Plugins panel can show it (fail-closed).

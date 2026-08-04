@@ -170,6 +170,14 @@ export type PluginScope = "bundled" | "global" | "project"
 export interface PluginDir {
 	dir: string
 	scope: PluginScope
+	/**
+	 * The directory is not writable by this process — a host-provisioned mount
+	 * (`SHOFER_PLUGIN_DIRS`), not a directory the user installs into. Plugins
+	 * discovered here are non-uninstallable: {@link PluginManager.uninstall}
+	 * would fail on the read-only filesystem, and even where it did not,
+	 * deleting host-provisioned code is not the user's call.
+	 */
+	readOnly?: boolean
 }
 
 /** Per-kind counts of a plugin's declarative contributions (for UI summaries). */
@@ -200,6 +208,12 @@ export interface DiscoveredPlugin {
 	 * `defaultEnabled` — see {@link PluginManager.resolveEnabled}.
 	 */
 	firstParty: boolean
+	/**
+	 * Discovered from a read-only, host-provisioned directory ({@link PluginDir.readOnly}).
+	 * Non-uninstallable for the same reason {@link firstParty} is — the code is not
+	 * the user's to delete — so {@link PluginManager.uninstall} refuses it.
+	 */
+	readOnly: boolean
 	/** The user's persisted intent — did they toggle this plugin on? (design §7). */
 	enabled: boolean
 	/**
@@ -462,7 +476,7 @@ export class PluginManager {
 		this.canRecordConsentRevoke = typeof this.aiConsentStore?.setAiConsentRevokedPlugins === "function"
 		const byName = new Map<string, DiscoveredPlugin>()
 
-		for (const { dir, scope } of this.pluginDirs) {
+		for (const { dir, scope, readOnly } of this.pluginDirs) {
 			let subdirs: string[]
 			try {
 				subdirs = await this.fs.listDirs(dir)
@@ -473,7 +487,7 @@ export class PluginManager {
 			for (const subdir of subdirs) {
 				const root = path.join(dir, subdir)
 				const manifestPath = path.join(root, MANIFEST_FILENAME)
-				const discovered = await this.loadPlugin(root, manifestPath, scope, enabled)
+				const discovered = await this.loadPlugin(root, manifestPath, scope, enabled, readOnly === true)
 				if (discovered) {
 					byName.set(discovered.name, discovered)
 				}
@@ -588,6 +602,7 @@ export class PluginManager {
 		manifestPath: string,
 		scope: PluginScope,
 		enabled: Set<string>,
+		readOnly: boolean,
 	): Promise<DiscoveredPlugin | undefined> {
 		if (!(await this.fs.exists(manifestPath))) {
 			return undefined
@@ -627,6 +642,7 @@ export class PluginManager {
 			manifestPath,
 			scope,
 			firstParty: scope === "bundled",
+			readOnly,
 			enabled: isEnabled,
 			// Recomputed by resolveDependencies() right after discovery; seed to the
 			// user intent so a manager inspected mid-discovery is never inconsistent.
@@ -788,6 +804,11 @@ export class PluginManager {
 	 * extension, so deleting their directory would only have them reappear on the next
 	 * build/update and is a category error. The call is a no-op (the panel also hides
 	 * the affordance); disabling is the way to turn a bundled plugin off.
+	 *
+	 * **Host-provisioned (read-only) plugins are never uninstalled either**, for the
+	 * nearer reason that the attempt would fail: their directory is a read-only mount,
+	 * so `removeDir` throws and the enable state is never updated. Refusing here turns
+	 * an EROFS deep in the fs host into one clear warning.
 	 */
 	async uninstall(name: string): Promise<void> {
 		const plugin = this.getPlugin(name)
@@ -797,6 +818,12 @@ export class PluginManager {
 		if (plugin.firstParty) {
 			warnPlugin(
 				`[plugins] "${name}" is a bundled first-party plugin and cannot be uninstalled; disable it instead.`,
+			)
+			return
+		}
+		if (plugin.readOnly) {
+			warnPlugin(
+				`[plugins] "${name}" was provisioned by the host into a read-only directory and cannot be uninstalled; disable it instead.`,
 			)
 			return
 		}

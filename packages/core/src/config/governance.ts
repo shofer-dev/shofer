@@ -1,6 +1,6 @@
 /**
- * governance — org-controlled **suppression and activation** of plugins,
- * delivered as pod ENV VARS.
+ * governance — org-controlled **suppression, activation and DELIVERY** of
+ * plugins, delivered as pod ENV VARS.
  *
  * The SaaS `resource-manager` sets these on the executor / code-server pod (the
  * same delivery channel as `SHOFER_GLOBAL_DIR`), letting an org fully define the
@@ -30,6 +30,8 @@
  * never appear in `globalSettingsSchema` or the Settings UI and cannot be
  * toggled from the webview.
  */
+
+import * as path from "path"
 
 /**
  * Plugin names the deployment has suppressed (`SHOFER_DISABLED_PLUGINS`,
@@ -67,4 +69,37 @@ export function governanceEnabledPlugins(): string[] {
 		if (trimmed) enabled.add(trimmed)
 	}
 	return [...enabled]
+}
+
+/**
+ * Directories the deployment PROVISIONED plugin code into (`SHOFER_PLUGIN_DIRS`,
+ * `path.delimiter`-separated absolute paths) — scanned in addition to the three
+ * standard roots, **read-only**, and LAST, so nothing under `~/.shofer/plugins`
+ * or a project's `.shofer/plugins` can shadow a name the host provisioned.
+ *
+ * This is the delivery half of the same story {@link governanceEnabledPlugins}
+ * tells about activation, and it exists because the standard roots are all
+ * *writable by the person the plugin may be constraining*. `~/.shofer/plugins`
+ * lives in the user's home directory: whoever holds a shell there can edit an
+ * org-mandated plugin's code, replace it with their own, or move the whole
+ * `.shofer` directory aside — and a plugin the subject can rewrite enforces
+ * nothing. A host that mounts its plugins somewhere the user cannot write, and
+ * names that path here, closes all three.
+ *
+ * Relative entries are DROPPED rather than resolved against the process cwd: a
+ * governance path resolved against whatever directory the host happened to
+ * start in is a silently different directory, and silently discovering nothing
+ * is precisely the failure this variable exists to prevent. Order is preserved
+ * (later wins on a name collision) and duplicates collapse.
+ */
+export function governancePluginDirs(): string[] {
+	const dirs: string[] = []
+	const seen = new Set<string>()
+	for (const entry of (process.env.SHOFER_PLUGIN_DIRS ?? "").split(path.delimiter)) {
+		const trimmed = entry.trim()
+		if (!trimmed || !path.isAbsolute(trimmed) || seen.has(trimmed)) continue
+		seen.add(trimmed)
+		dirs.push(trimmed)
+	}
+	return dirs
 }

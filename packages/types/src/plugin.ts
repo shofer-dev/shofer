@@ -1449,6 +1449,13 @@ export interface PluginView {
 	 * their uninstall affordance. They still follow the normal enable toggle.
 	 */
 	firstParty: boolean
+	/**
+	 * Whether the plugin came from a read-only directory the HOST provisioned
+	 * (`SHOFER_PLUGIN_DIRS`). `PluginManager.uninstall` refuses it — its directory
+	 * is a read-only mount — so a panel offering uninstall must gate on this as it
+	 * does on {@link firstParty}. The enable toggle still applies.
+	 */
+	readOnly?: boolean
 	/** The user's persisted toggle intent (design §7). */
 	enabled: boolean
 	/**

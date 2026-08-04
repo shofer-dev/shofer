@@ -1032,6 +1032,26 @@ billed-AI consent, and fail-closed dependencies all still apply. Suppression win
 name appears in both lists; `setEnabled(name, false)` records the intent but cannot switch
 it off, and says so.
 
+**Provisioned code (`PluginDir.readOnly`).** Activation says _whether_ a plugin runs;
+this says _where its code lives_, and it is a separate lever because the standard
+answer is unsafe for org policy. All three standard roots are writable by the person
+using the host: `~/.shofer/plugins` and `<cwd>/.shofer/plugins` obviously so, and the
+plugin-declaration resolver materializes a declared `source` into
+`<globalStorage>/plugins-cache/` — also under the user's home on a typical host. So a
+plugin an organization mandates can be edited, replaced with a stub, or moved aside by
+its own subject, and the digest a declaration pinned does not help: it is verified once
+at download, never against the resting copy.
+
+`SHOFER_PLUGIN_DIRS` (`governancePluginDirs()`, a `path.delimiter`-separated list of
+**absolute** directories; relative entries are dropped rather than resolved against the
+process cwd) names roots the host provisioned. They are appended **last**, and discovery
+is last-wins per plugin name, so a same-named plugin in a user-writable root cannot
+shadow one the deployment supplied. Each is marked `readOnly`, which makes
+`uninstall()` refuse it — the directory is a read-only mount, so the removal would fail
+anyway, and the code is not the user's to delete. Nothing else changes: enable state,
+permissions, AI consent and dependency resolution behave exactly as for any other
+plugin, and `SHOFER_DISABLED_PLUGINS` still wins over everything.
+
 **Dependencies fail-closed.** An enabled plugin whose declared `dependencies`
 (plugin names) are not all enabled+present is itself treated as **disabled** — none
 of its contributions register. `PluginManager.resolveDependencies()` (run after

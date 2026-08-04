@@ -1,4 +1,6 @@
-import { governanceDisabledPlugins, governanceEnabledPlugins } from "../governance.js"
+import * as path from "path"
+
+import { governanceDisabledPlugins, governanceEnabledPlugins, governancePluginDirs } from "../governance.js"
 
 /**
  * The built-ins ship as bundled plugins, so an org suppressing them means exactly one
@@ -75,5 +77,54 @@ describe("governanceEnabledPlugins", () => {
 	it("does not repeat a name listed twice", () => {
 		process.env[LIST_ENV] = "temporal-runner,temporal-runner"
 		expect(governanceEnabledPlugins()).toEqual(["temporal-runner"])
+	})
+})
+
+/**
+ * Delivery: the directories a host provisioned plugin code into. These exist because
+ * every standard plugin root is writable by the person a mandated plugin may be
+ * constraining, so the parsing rules matter for the same reason the two above do —
+ * a list that silently reads as empty means the org's plugin is simply not there,
+ * and nothing says so.
+ */
+describe("governancePluginDirs", () => {
+	const LIST_ENV = "SHOFER_PLUGIN_DIRS"
+	let saved: string | undefined
+
+	beforeEach(() => {
+		saved = process.env[LIST_ENV]
+		delete process.env[LIST_ENV]
+	})
+
+	afterEach(() => {
+		if (saved === undefined) delete process.env[LIST_ENV]
+		else process.env[LIST_ENV] = saved
+	})
+
+	it("scans nothing beyond the standard roots when unset", () => {
+		expect(governancePluginDirs()).toEqual([])
+	})
+
+	it("accepts a delimiter-separated list, tolerating spacing and empties", () => {
+		process.env[LIST_ENV] = ["/opt/shofer-plugins", " /etc/shofer/plugins ", ""].join(path.delimiter)
+		expect(governancePluginDirs()).toEqual(["/opt/shofer-plugins", "/etc/shofer/plugins"])
+	})
+
+	it("preserves order, because discovery is last-wins on a name collision", () => {
+		process.env[LIST_ENV] = ["/etc/shofer/plugins", "/opt/shofer-plugins"].join(path.delimiter)
+		expect(governancePluginDirs()).toEqual(["/etc/shofer/plugins", "/opt/shofer-plugins"])
+	})
+
+	it("drops a relative entry rather than resolving it against the process cwd", () => {
+		// Resolving it would silently name a different directory depending on where the
+		// host was started — and silently discovering nothing is the failure this
+		// variable exists to prevent.
+		process.env[LIST_ENV] = ["plugins", "./plugins", "/opt/shofer-plugins"].join(path.delimiter)
+		expect(governancePluginDirs()).toEqual(["/opt/shofer-plugins"])
+	})
+
+	it("does not repeat a directory listed twice", () => {
+		process.env[LIST_ENV] = ["/opt/shofer-plugins", "/opt/shofer-plugins"].join(path.delimiter)
+		expect(governancePluginDirs()).toEqual(["/opt/shofer-plugins"])
 	})
 })

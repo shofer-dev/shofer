@@ -172,6 +172,16 @@ merge would silently shadow it. The one deliberate exception: a locked provider
 profile still accepts a locally-entered API key (the secret overlay), so a user
 can supply their own credential for an org-shipped keyless profile.
 
+**A locked `plugins` entry locks the DECLARATION, not the code.** The global scope
+being read-only settles which plugins a workspace runs and with what config, but the
+resolver materializes a declared `source` into `<globalStorage>/plugins-cache/` — a
+writable path under the user's home on a typical host, exactly like the `~/.shofer/
+plugins` root beside it. A host that needs the code itself to be tamper-proof
+provisions it instead into a read-only directory named by `SHOFER_PLUGIN_DIRS`, which
+is scanned last and cannot be shadowed ([`PLUGINS.md`](../PLUGINS.md) §
+"A deployment can decide both, by env"). Locking and provisioning answer different
+questions and a deployment enforcing org policy needs both.
+
 ### Live reload — the scope watcher
 
 The overlay is not only read at start. Every host watches the three scopes'
