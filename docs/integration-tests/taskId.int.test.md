@@ -80,13 +80,20 @@ task.taskId`.
 5. **Assert:** Downstream services see the same `task_id` before
    and after restart.
 
-### 8. Access MCP resource also passes taskId
+### 8. Access MCP resource carries NO taskId — by omission, not by design
+
+`McpHub.readResource()` sends `params: { uri }` and no `_meta` at all, so a
+`resources/read` is unattributed. Only `callTool` injects the keys.
 
 1. Trigger `access_mcp_resource` from a Shofer task.
-2. **Assert:** The `McpHub.readResource()` call (or equivalent shared
-   path) includes `task.taskId` as `taskId`.
-3. **Assert:** The `resources/read` request to `mcp-server` carries the
-   `_meta["shofer.dev/taskId"]`.
+2. **Assert:** the `resources/read` request carries no `_meta`.
+
+This scenario exists to pin the **current** behaviour, not to bless it: a
+resource read is a real thing an agent did, and nothing records which task did
+it. Whether to attribute reads as well as calls is an open question — if it is
+answered yes, this scenario inverts and `mcp-server` gains a reader for the key
+on that path. Until then, an assertion that reads DO carry the task id would
+fail, which is why the earlier version of this scenario was wrong.
 
 ### 9. Standalone mode: taskId still required
 
