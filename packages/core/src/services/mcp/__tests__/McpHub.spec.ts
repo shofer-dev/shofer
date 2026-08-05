@@ -10,7 +10,7 @@ import type {
 	ConnectedMcpConnection,
 	DisconnectedMcpConnection,
 } from "../McpHub.js"
-import { ServerConfigSchema, McpHub, MCP_META_TOOL_CALL_ID } from "../McpHub.js"
+import { ServerConfigSchema, McpHub, MCP_META_TASK_ID, MCP_META_TOOL_CALL_ID } from "../McpHub.js"
 import { setSharedPluginManager } from "../../../plugins/plugin-manager.js"
 import { sanitizeToolUseId } from "../../../utils/tool-id.js"
 
@@ -1184,8 +1184,8 @@ describe("McpHub", () => {
 
 			const [request] = (mockConnection.client!.request as Mock).mock.calls[0]!
 			expect(request.params._meta).toEqual({
-				"vscode.taskId": "task-1",
-				"shofer.toolCallId": rawId,
+				"shofer.dev/taskId": "task-1",
+				"shofer.dev/toolCallId": rawId,
 			})
 			expect(request.params._meta[MCP_META_TOOL_CALL_ID]).toBe(rawId)
 			expect(request.params._meta[MCP_META_TOOL_CALL_ID]).not.toBe(sanitizeToolUseId(rawId))
@@ -1203,8 +1203,47 @@ describe("McpHub", () => {
 			await mcpHub.callTool("test-server", "some-tool", {}, undefined, "task-1")
 
 			const [request] = (mockConnection.client!.request as Mock).mock.calls[0]!
-			expect(request.params._meta).toEqual({ "vscode.taskId": "task-1" })
+			expect(request.params._meta).toEqual({ "shofer.dev/taskId": "task-1" })
 			expect(MCP_META_TOOL_CALL_ID in request.params._meta).toBe(false)
+		})
+
+		// Omitting beats sending "": a receiver can then tell "this call has no
+		// provider id" from "the id was lost on the way here".
+		it("omits _meta entirely when there is nothing to say", async () => {
+			const mockConnection: ConnectedMcpConnection = {
+				type: "connected",
+				server: { name: "test-server", config: JSON.stringify({}), status: "connected" as const },
+				client: { request: vi.fn().mockResolvedValue({ content: [] }) } as any,
+				transport: {} as any,
+			}
+			mcpHub.connections = [mockConnection]
+
+			await mcpHub.callTool("test-server", "some-tool", {})
+
+			const [request] = (mockConnection.client!.request as Mock).mock.calls[0]!
+			expect("_meta" in request.params).toBe(false)
+		})
+
+		// The keys are a WIRE contract with whatever brokers the call, and MCP
+		// (2025-06-18) only treats a key as namespaced when a slash separates the
+		// dotted prefix from the name. `vscode.taskId` had no slash, so the spec
+		// read the whole string as a bare name — a namespace in spelling only.
+		// This is the one place the literal spelling is asserted; everything else
+		// goes through the constants and would happily follow a rename.
+		it("uses prefixed, spec-conformant _meta keys", () => {
+			expect(MCP_META_TASK_ID).toBe("shofer.dev/taskId")
+			expect(MCP_META_TOOL_CALL_ID).toBe("shofer.dev/toolCallId")
+
+			// label = starts with a letter, ends alphanumeric, hyphens inside.
+			const label = String.raw`[a-zA-Z]([a-zA-Z0-9-]*[a-zA-Z0-9])?`
+			const prefixedKey = new RegExp(String.raw`^${label}(\.${label})*/[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$`)
+			for (const key of [MCP_META_TASK_ID, MCP_META_TOOL_CALL_ID]) {
+				expect(key).toMatch(prefixedKey)
+				// Reserved for MCP: any prefix whose second-to-last label is
+				// `mcp` or `modelcontextprotocol`.
+				const labels = key.split("/")[0]!.split(".")
+				expect(["mcp", "modelcontextprotocol"]).not.toContain(labels[labels.length - 2])
+			}
 		})
 
 		describe("timeout configuration", () => {

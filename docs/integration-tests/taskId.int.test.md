@@ -10,7 +10,7 @@ tool that echoes the received `task_id` back in its response body.
 ## Feature Under Test
 
 Shofer injects `task.taskId` (UUID v7) as `taskId` into MCP
-`tools/call` requests via `_meta["vscode.taskId"]`. Downstream
+`tools/call` requests via `_meta["shofer.dev/taskId"]`. Downstream
 services (`mcp-server`, `tools-backend`) extract and propagate it for
 logging, metrics, and distributed tracing. See
 [`docs/taskId.md`](../taskId.md).
@@ -24,9 +24,9 @@ logging, metrics, and distributed tracing. See
 2. **Assert:** `McpHub.callTool()` is invoked with `taskId ===
 task.taskId`.
 3. **Assert:** The MCP request params include
-   `_meta["vscode.taskId"]` equal to `task.taskId`.
+   `_meta["shofer.dev/taskId"]` equal to `task.taskId`.
 4. **Assert:** `mcp-server` receives and extracts the value from
-   `params._meta["vscode.taskId"]`.
+   `params._meta["shofer.dev/taskId"]`.
 5. **Assert:** `tools-backend` receives `task_id` in the request
    body matching the original `task.taskId`.
 
@@ -41,9 +41,9 @@ task.taskId`.
 ### 3. mcp-server rejects calls missing taskId
 
 1. Send a `tools/call` request to `mcp-server` with `_meta` absent or
-   `vscode.taskId` missing/empty.
+   `shofer.dev/taskId` missing/empty.
 2. **Assert:** `mcp-server` returns HTTP 400 with error
-   `"vscode.taskId is required in _meta"`.
+   `"shofer.dev/taskId is required in _meta"`.
 3. **Assert:** The Shofer task surfaces the error as a tool failure.
 
 ### 4. taskId survives serialize/deserialize round-trip
@@ -51,7 +51,7 @@ task.taskId`.
 1. Serialize the MCP `tools/call` request to JSON (as it traverses the
    JSON-RPC transport).
 2. Deserialize on the `mcp-server` side.
-3. **Assert:** `params._meta["vscode.taskId"]` is preserved
+3. **Assert:** `params._meta["shofer.dev/taskId"]` is preserved
    faithfully (same UUID string, no case change, no truncation).
 
 ### 5. taskId is stable across multiple tool calls in the same task
@@ -86,12 +86,12 @@ task.taskId`.
 2. **Assert:** The `McpHub.readResource()` call (or equivalent shared
    path) includes `task.taskId` as `taskId`.
 3. **Assert:** The `resources/read` request to `mcp-server` carries the
-   `_meta["vscode.taskId"]`.
+   `_meta["shofer.dev/taskId"]`.
 
 ### 9. Standalone mode: taskId still required
 
 1. Run `mcp-server` in standalone mode (`STANDALONE_MODE=true`).
-2. Send a `tools/call` request with valid `vscode.taskId` in
+2. Send a `tools/call` request with valid `shofer.dev/taskId` in
    `_meta`.
 3. **Assert:** The call succeeds; `workspaceId` is optional in standalone
    mode but `taskId` is still mandatory.

@@ -57,11 +57,26 @@ import { sanitizeMcpName, toolNamesMatch } from "../../utils/mcp-name.js"
 import { getSharedPluginManager } from "../../plugins/plugin-manager.js"
 
 /**
- * `_meta` key carrying the id of the task a `tools/call` belongs to. The
- * `vscode.` prefix is historical — it is the key the VS Code MCP client stamps,
- * and servers already read it under that name.
+ * The `shofer.dev/` prefix both `_meta` keys below carry.
+ *
+ * MCP (2025-06-18, "General fields → `_meta`") splits a key into an optional
+ * PREFIX and a name, and defines a prefix as "a series of labels separated by
+ * dots, followed by a slash". **The slash is what makes it a prefix.** Without
+ * one — as in the earlier `vscode.taskId` / `shofer.toolCallId` — the spec reads
+ * the entire dotted string as the *name*: legal, because names may contain dots,
+ * but namespaced in spelling only, obtaining none of the collision avoidance the
+ * mechanism exists for.
+ *
+ * `shofer.dev` is this project's own domain (`package.json` `homepage`), and it
+ * sits safely outside MCP's reserved space, which covers any prefix ending
+ * `…mcp.<label>/` or `…modelcontextprotocol.<label>/`.
  */
-export const MCP_META_TASK_ID = "vscode.taskId"
+const MCP_META_PREFIX = "shofer.dev/"
+
+/**
+ * `_meta` key carrying the id of the task a `tools/call` belongs to.
+ */
+export const MCP_META_TASK_ID = `${MCP_META_PREFIX}taskId`
 
 /**
  * `_meta` key carrying the PROVIDER's own tool-call id for a `tools/call` — the
@@ -71,9 +86,10 @@ export const MCP_META_TASK_ID = "vscode.taskId"
  * which is what lets an audit of executions be joined to the transcript by
  * identity instead of by tool name and timing. Only calls that originate in a
  * native provider tool call have one; anything synthesized host-side omits the
- * key rather than inventing a value.
+ * key rather than inventing a value — a receiver can then tell "not applicable"
+ * from "lost", which an empty string would erase.
  */
-export const MCP_META_TOOL_CALL_ID = "shofer.toolCallId"
+export const MCP_META_TOOL_CALL_ID = `${MCP_META_PREFIX}toolCallId`
 
 // Discriminated union for connection states
 export type ConnectedMcpConnection = {
