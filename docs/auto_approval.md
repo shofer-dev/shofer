@@ -5,6 +5,15 @@ the decision flow, the available categories/toggles, and which tools fall under 
 
 Source: [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts)
 
+**Where the toggles come from.** `checkAutoApproval()` reads them through
+`ContextProxy` like any other setting, so on a VS Code host they are what the user
+set in the Settings UI, and on **any** host they are overridden by the layered
+`.shofer/settings.json` scopes. A headless host (`shofer serve`, `--print`) has no
+user to have set them, so it seeds a default posture at startup — auto-approve
+everything, or (with `shofer serve --interactive`) nothing — but only for the keys
+no scope supplies. Configuration wins; the flag is the default. See
+[`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag).
+
 ---
 
 ## Decision Flow
@@ -56,7 +65,7 @@ flowchart TD
 Step 1 above is not a convenience: `isAutoApprovableAsk` short-circuits
 `Task.ask()` **synchronously**, without entering `pWaitFor` — so it never drains
 the message queue and never handles a `messageResponse`. `ShoferAsk` is
-partitioned across four *state* categorizers, and the auto-approvable set is an
+partitioned across four _state_ categorizers, and the auto-approvable set is an
 **orthogonal policy predicate** layered on top of that partition, not a fifth
 member of it:
 

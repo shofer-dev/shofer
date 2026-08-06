@@ -32,11 +32,16 @@ export interface ServeOptions {
 	 */
 	stateDir?: string
 	/**
-	 * Interactive approvals. Default (false) is **non-interactive**: the node
-	 * auto-approves every tool (there is no local user to ask). With `--interactive`
-	 * the node instead surfaces approvals — `autoApprovalEnabled` is off, so
-	 * dangerous tools raise an `ask` over ShoferApi that the driving controller
-	 * brokers to its user and answers via `respondToAsk`.
+	 * Interactive approvals — the **default** posture, not the final one. Off
+	 * (default) is non-interactive: the node auto-approves every tool (there is no
+	 * local user to ask). With `--interactive` the node instead surfaces approvals —
+	 * `autoApprovalEnabled` is off, so dangerous tools raise an `ask` over ShoferApi
+	 * that the driving controller brokers to its user and answers via `respondToAsk`.
+	 *
+	 * The node's own layered `.shofer/settings.json` **overrides** this flag per key
+	 * (`autoApprovalEnabled`, the `alwaysAllow*` toggles, `allowedCommands`,
+	 * `deniedCommands`); the flag decides only the keys no scope supplies. The
+	 * startup banner prints the resolved posture and its source.
 	 */
 	interactive?: boolean
 }
@@ -125,7 +130,12 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 			(hasOverride
 				? `API config: pinned to ${provider} (CLI override)`
 				: "API config: per-task from controller") +
-			` · approvals: ${options.interactive ? "interactive (brokered to controller)" : "auto-approve"}`,
+			// The posture is resolved, not assumed: `--interactive` only supplies the
+			// DEFAULT, and the node's own `.shofer/` config overrides it. Printing the
+			// resolved summary (rather than echoing the flag) is what makes a
+			// config-driven posture visible — a node silently gating, or silently
+			// un-gating, every stake is the failure this line exists to prevent.
+			` · approvals: ${extHost.approvalPosture.summary}`,
 	)
 
 	// Live per-task activity on stderr. Headless mode stubs console.log/warn/info to

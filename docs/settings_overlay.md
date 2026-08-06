@@ -156,6 +156,20 @@ shadowed on the next read — so surfaces ask
 `ContextProxy.isManagedByFileLayer(key)` and present such a value read-only with
 its source rather than offering an edit that does nothing.
 
+**The same rule binds hosts, not only UI surfaces.** The scope-file read path lives
+in `@shofer/core`
+([`layered-settings-file.ts`](../packages/core/src/config/layered-settings-file.ts),
+merging via [`layered-config.ts`](../packages/core/src/config/layered-config.ts)
+over roots from [`scope-roots.ts`](../packages/core/src/config/scope-roots.ts)) so
+that a host outside the extension can ask the same question and get the same
+answer. `ContextProxy` is one caller; the CLI host is the other — before it seeds a
+headless node's tool-approval settings it reads the overlay and **omits** every key
+a scope already supplies, precisely because a seeded value would be shadowed here
+_and_ would be written through into `~/.shofer/settings.json` on the way (see
+[`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag)).
+The host-side [`layeredSettingsLoader.ts`](../src/core/config/layeredSettingsLoader.ts)
+now owns only the **write** path (`writeScopeSetting`, `seedScopeSettingsFile`).
+
 The `ContextProxy` maintains an in-memory cache (`stateCache` + `secretCache`) for
 fast access and lazily syncs with the backing stores. Every extension read of a
 setting or secret goes through it (the "Typed Settings Rule" in

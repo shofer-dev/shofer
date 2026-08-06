@@ -2,6 +2,9 @@
 
 import { EventEmitter } from "events"
 import fs from "fs"
+import fsp from "fs/promises"
+import os from "os"
+import path from "path"
 
 import type { ExtensionMessage, WebviewMessage, ShoferExtensionApi } from "@shofer/types"
 
@@ -297,6 +300,108 @@ describe("ExtensionHost", () => {
 						(call[1] as WebviewMessage).type === "updateSettings",
 				)
 				expect(updateSettingsCall).toBeDefined()
+			})
+
+			/**
+			 * Approval posture on the wire. `markWebviewReady` is the single place the
+			 * host's seed reaches the extension, so these assertions are what actually
+			 * pin a served node's behaviour — not the seed object in isolation.
+			 */
+			describe("approval posture", () => {
+				/** The `updateSettings` payload emitted by `markWebviewReady`. */
+				function capturedSettings(host: ExtensionHost): Record<string, unknown> {
+					const emitSpy = vi.spyOn(host, "emit")
+					host.markWebviewReady()
+					const call = emitSpy.mock.calls.find(
+						(c) =>
+							c[0] === "webviewMessage" &&
+							typeof c[1] === "object" &&
+							c[1] !== null &&
+							(c[1] as WebviewMessage).type === "updateSettings",
+					)
+					expect(call).toBeDefined()
+					return ((call?.[1] as WebviewMessage).updatedSettings ?? {}) as Record<string, unknown>
+				}
+
+				it("non-interactive still auto-approves everything when config says nothing", () => {
+					const settings = capturedSettings(createTestHost({ nonInteractive: true }))
+
+					expect(settings).toMatchObject({
+						autoApprovalEnabled: true,
+						alwaysAllowReadOnly: true,
+						alwaysAllowReadOnlyOutsideWorkspace: true,
+						alwaysAllowWrite: true,
+						alwaysAllowWriteOutsideWorkspace: true,
+						alwaysAllowWriteProtected: true,
+						alwaysAllowMcp: true,
+						alwaysAllowModeSwitch: true,
+						alwaysAllowSubtasks: true,
+						alwaysAllowExecute: true,
+						allowedCommands: ["*"],
+					})
+				})
+
+				it("interactive still surfaces everything when config says nothing", () => {
+					const settings = capturedSettings(createTestHost({ nonInteractive: false }))
+
+					expect(settings.autoApprovalEnabled).toBe(false)
+					expect(settings).not.toHaveProperty("alwaysAllowExecute")
+					expect(settings).not.toHaveProperty("allowedCommands")
+				})
+
+				it("drops a config-supplied posture key from the seed rather than overriding it", async () => {
+					const globalScope = path.join(await fsp.mkdtemp(path.join(os.tmpdir(), "shofer-host-")), ".shofer")
+					await fsp.mkdir(globalScope, { recursive: true })
+					await fsp.writeFile(
+						path.join(globalScope, "settings.json"),
+						JSON.stringify({ autoApprovalEnabled: false, alwaysAllowExecute: false }),
+						"utf8",
+					)
+
+					const previousGlobalDir = process.env.SHOFER_GLOBAL_DIR
+					process.env.SHOFER_GLOBAL_DIR = globalScope
+					const homedirSpy = vi
+						.spyOn(os, "homedir")
+						.mockReturnValue(await fsp.mkdtemp(path.join(os.tmpdir(), "shofer-home-")))
+
+					try {
+						const host = createTestHost({ nonInteractive: true })
+						await callPrivate<Promise<void>>(host, "applyApprovalPostureFromConfig")
+
+						const settings = capturedSettings(host)
+
+						// Not sent at all: the layered overlay already wins in
+						// ContextProxy.getValue, and sending them would write the host's
+						// default through into the operator's own settings.json.
+						expect(settings).not.toHaveProperty("autoApprovalEnabled")
+						expect(settings).not.toHaveProperty("alwaysAllowExecute")
+						// Keys the config says nothing about keep the seed's value.
+						expect(settings.alwaysAllowWrite).toBe(true)
+						expect(settings.allowedCommands).toEqual(["*"])
+
+						expect(host.approvalPosture.configuredKeys).toEqual([
+							"autoApprovalEnabled",
+							"alwaysAllowExecute",
+						])
+						expect(host.approvalPosture.summary).toContain("from config")
+					} finally {
+						homedirSpy.mockRestore()
+						if (previousGlobalDir === undefined) {
+							delete process.env.SHOFER_GLOBAL_DIR
+						} else {
+							process.env.SHOFER_GLOBAL_DIR = previousGlobalDir
+						}
+					}
+				})
+
+				it("reports the default posture before any config is read", () => {
+					expect(createTestHost({ nonInteractive: true }).approvalPosture.summary).toBe(
+						"auto-approve (default)",
+					)
+					expect(createTestHost({ nonInteractive: false }).approvalPosture.summary).toBe(
+						"interactive, brokered to controller (default)",
+					)
+				})
 			})
 
 			it("should force terminalShellIntegrationDisabled when terminalShell is provided", () => {

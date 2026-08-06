@@ -116,3 +116,20 @@
   benefit. (For the record, the Node floor is not what holds undici back:
   undici 7 needs only Node `>=20.18.1`, below the declared `>=20.19.2`. Only
   undici **8** needs Node `>=22.19.0`.)
+
+- **A headless host's seeded approval posture is still persisted, and can shadow
+  a policy added later.** `ExtensionHost` omits every approval key a `.shofer/`
+  scope supplies, so an operator's config is authoritative and is never
+  overwritten. But a key **no** scope supplies is still seeded, and the seed
+  travels through `ContextProxy.setValue`, which write-throughs to the user
+  scope's `~/.shofer/settings.json`. So a node with a persistent home that first
+  ran with no approval config materialises `autoApprovalEnabled: true` (etc.)
+  into its _user_ scope; if the operator later sets that key in the **global**
+  scope without locking it, the unlocked merge (project > user > global) keeps
+  the persisted seed winning. The workaround exists and is the intended one —
+  name the key in the global scope's `locked.json`, which inverts the merge and
+  makes the global value final — but "an unlocked global policy can be shadowed
+  by a value the host itself wrote" is a sharp edge worth removing. The clean fix
+  is an ephemeral settings-delivery path (a seed that populates `globalState`
+  without write-through), which does not exist today; adding one touches every
+  CLI-seeded setting, not just approvals, so it was left out of scope.

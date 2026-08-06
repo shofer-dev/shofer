@@ -122,9 +122,12 @@ pnpm --filter @shofer/cli dev --print --output-format stream-json "List files"
 ```
 
 **Auto-approval in print mode:**
-All tool categories are auto-approved (read, write, execute, MCP, browser,
-subtasks, mode switches, protected files). This makes `--print` safe for
-scripting — the agent never blocks waiting for user input.
+All tool categories are auto-approved by default (read, write, execute, MCP,
+browser, subtasks, mode switches, protected files). This makes `--print` safe for
+scripting — the agent never blocks waiting for user input. This is a **seeded
+default**: any approval key the workspace's layered `.shofer/settings.json` sets
+overrides it — see
+[`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag).
 
 ### 3. Stdin Stream Mode (`--stdin-prompt-stream`)
 
@@ -410,7 +413,20 @@ necessary because `tsx`'s ESM loader intercepts resolution before in-memory
 
 In non-interactive (print/stdin-stream) mode, the [`AskDispatcher`](../apps/cli/src/agent/ask-dispatcher.ts)
 auto-approves all interactive asks (tool, command, MCP, followup). In
-`--require-approval` mode, it prompts for y/n confirmation via readline.
+`--require-approval` mode, it prompts for y/n confirmation via readline. A host
+driven by a remote controller (`shofer serve`) sets `brokerInteractiveAsks`, which
+short-circuits both: the ask is left outstanding for the controller to answer via
+`respondToAsk`.
+
+### Approval posture
+
+Whether an ask _arises_ is decided earlier, by the settings the host seeds at
+startup — resolved by [`approval-posture.ts`](../apps/cli/src/agent/approval-posture.ts)
+and applied in `ExtensionHost.activate()`. The seed is a **default**: any approval
+key the node's layered `.shofer/settings.json` supplies wins and is not seeded at
+all, so the operator's file is authoritative and is never overwritten by the host's
+default. A node whose config says nothing keeps the behaviour documented above.
+See [`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag).
 
 ### File Change Tracking
 

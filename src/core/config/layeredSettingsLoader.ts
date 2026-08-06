@@ -1,33 +1,34 @@
 import fs from "fs/promises"
 import * as path from "path"
 
-import { globalSettingsSchema } from "@shofer/types"
 import {
 	EMPTY_LOCKED_MANIFEST,
 	isPathLocked,
+	loadLayeredOverlay,
 	loadLockedManifestFromDisk,
-	mergeLayeredConfig,
 	resolveScopeRoots,
-	type LayeredSettings,
 	type LockedManifest,
 	type ScopeRootInputs,
 	type ScopeRoots,
 } from "@shofer/core"
 
-// Scope-root resolution and the locked-manifest read live in `@shofer/core`
-// (shared with the portable services, e.g. McpHub); re-exported here so the
-// host-side config modules keep one import site.
-export { resolveScopeRoots, type ScopeRootInputs, type ScopeRoots }
+// Scope-root resolution, the locked-manifest read, and the scope-file READ path
+// all live in `@shofer/core` — shared with the portable services (McpHub) and with
+// the CLI host, which must resolve the same overlay before it seeds a served node's
+// approval posture. Re-exported here so the host-side config modules keep one
+// import site.
+export { loadLayeredOverlay, resolveScopeRoots, type ScopeRootInputs, type ScopeRoots }
 
 /**
- * layeredSettingsLoader — the **host-side** (filesystem) half of the layered
- * `.shofer/` configuration overlay (todos/config-cleanup.md Part E3).
+ * layeredSettingsLoader — the **host-side WRITE** half of the layered `.shofer/`
+ * configuration overlay (todos/config-cleanup.md Part E3).
  *
- * The pure merge engine ({@link mergeLayeredConfig}) lives in `@shofer/core` and
- * knows nothing about disk or scope roots. This module supplies the missing
- * host concerns: resolving the three scope roots, reading each scope's
- * `settings.json` (and the global scope's `locked.json`), parsing them
- * **Schema-First / fail-closed**, and handing the parsed layers to the engine.
+ * The read path — resolving the three scope roots, parsing each scope's
+ * `settings.json` **Schema-First / fail-closed**, and merging them under the global
+ * scope's `locked.json` — lives entirely in `@shofer/core`
+ * (`config/layered-settings-file.ts`, `config/scope-roots.ts`,
+ * `config/layered-config.ts`) and is re-exported above, because the CLI host needs
+ * the identical answer. This module supplies what only a writing host needs.
  *
  * The read path is deliberately **additive**: a scope with no
  * `.shofer/settings.json` contributes an empty layer, so when no files exist
@@ -49,48 +50,6 @@ export { resolveScopeRoots, type ScopeRootInputs, type ScopeRoots }
 
 /** The per-scope settings filename inside `.shofer/`. */
 const SETTINGS_FILE = "settings.json"
-
-/**
- * Read and parse one scope's `settings.json`, failing closed: a missing file,
- * unreadable path, malformed JSON, or schema-invalid content all yield `{}`
- * (Schema-First Persistence Rule). Unknown/extra keys are stripped by the
- * partial schema rather than aborting the whole scope.
- */
-async function readScopeSettings(root: string | undefined): Promise<LayeredSettings> {
-	if (!root) {
-		return {}
-	}
-
-	let raw: string
-	try {
-		raw = await fs.readFile(path.join(root, SETTINGS_FILE), "utf8")
-	} catch {
-		return {}
-	}
-
-	try {
-		const parsed = globalSettingsSchema.partial().safeParse(JSON.parse(raw))
-		return parsed.success ? (parsed.data as LayeredSettings) : {}
-	} catch {
-		return {}
-	}
-}
-
-/**
- * Load the merged layered overlay from disk for the given scope roots. Returns
- * the effective `.shofer/settings.json` overlay (a partial `ShoferSettings`);
- * `{}` when no scope has a readable settings file.
- */
-export async function loadLayeredOverlay(roots: ScopeRoots): Promise<LayeredSettings> {
-	const [global, user, project, manifest] = await Promise.all([
-		readScopeSettings(roots.global),
-		readScopeSettings(roots.user),
-		readScopeSettings(roots.project),
-		loadLockedManifestFromDisk(roots.global),
-	])
-
-	return mergeLayeredConfig({ global, user, project }, manifest)
-}
 
 /**
  * Read the global scope's `locked.json` (the sole lock authority). Exposed so

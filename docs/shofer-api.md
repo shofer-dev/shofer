@@ -231,9 +231,20 @@ connects with `ShoferHttpClient`. Every option is a CLI flag (defined in
 | `--base-url <url>`       | –                                                | Provider base URL (e.g. `http://llm-router:3000/v1`).                                                                                                                                                                                                                                                                                                                                                                                    |
 | `-t, --token <token>`    | `$SHOFER_NODE_TOKEN`                             | Bearer token required on every `/api/v1/*` call. Omit for an open (dev) worker. **Machine trust** (authenticates the controller, not the end user).                                                                                                                                                                                                                                                                                      |
 | `--require-user-auth`    | off _(proposed)_                                 | **User-identity enforcement (launch-time only).** When on, the worker trusts a **validated end-user identity** injected upstream (Istio `RequestAuthentication` → header — see _User-identity enforcement_) and **blocks** any ShoferApi call whose user is not the task's owner. Operator-set at launch like `--provider`; **no in-session user or agent can change it.** The `--token` worker bearer is unaffected and still required. |
-| `--interactive`          | off                                              | **Approval mode.** Off = non-interactive: the worker **auto-approves every tool** (no local user to ask). On = the worker surfaces approvals — `autoApprovalEnabled` is off, so a dangerous tool raises an `ask` over ShoferApi that the controller brokers to its user via `respondToAsk`.                                                                                                                                              |
+| `--interactive`          | off                                              | **Default approval posture** (not the final one — see below). Off = non-interactive: the worker **auto-approves every tool** (no local user to ask). On = the worker surfaces approvals — `autoApprovalEnabled` is off, so a dangerous tool raises an `ask` over ShoferApi that the controller brokers to its user via `respondToAsk`.                                                                                                   |
 | `-q, --quiet`            | off                                              | Suppress the per-task activity log on stderr.                                                                                                                                                                                                                                                                                                                                                                                            |
 | `-d, --debug`            | off                                              | Debug logging to `~/.shofer/cli-debug.log`.                                                                                                                                                                                                                                                                                                                                                                                              |
+
+**The worker's own configuration overrides `--interactive`.** The flag supplies a
+_default_ posture; the approval keys it seeds (`autoApprovalEnabled`, the
+`alwaysAllow*` toggles, `allowedCommands`, `deniedCommands`) are ordinary
+`settings.json` keys, so any `.shofer/` scope the worker resolves takes them over —
+per key, with the usual project > user > global merge and `locked.json` inversion.
+Only the keys no scope supplies come from the flag, so a worker whose config says
+nothing behaves exactly as this table describes. The startup banner prints the
+resolved posture and its source (`approvals: auto-approve (default)` vs
+`approvals: from config (…)`). See
+[`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag).
 
 **Ask brokering (contract).** A served worker has no local stdin user, so it **never
 resolves interactive asks locally** — tool/command/MCP approvals _and_ `followup`
@@ -242,8 +253,11 @@ questions are left outstanding for the controller to surface and answer via
 worker policy and are still handled on the worker.) A controller that drives a served
 worker MUST answer brokered asks, or the task blocks: approvals with
 `yesButtonClicked`/`noButtonClicked`, a `followup` with `messageResponse` + `text`.
-`--interactive` only decides whether _approvals arise at all_ (auto-approve vs
-surface); `followup` questions are brokered in either mode.
+The approval posture (`--interactive`, as overridden by the worker's config) only
+decides whether _approvals arise at all_ (auto-approve vs surface); `followup`
+questions are brokered in either mode, and an ask that is not auto-approved always
+stays outstanding for the controller — configuration never causes the worker to
+answer one itself.
 
 One task's round trip over the HTTP/SSE binding, ask brokering included:
 

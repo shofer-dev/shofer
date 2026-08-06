@@ -34,6 +34,13 @@ import type { User } from "@/lib/sdk/index.js"
 import { getProviderSettings } from "@/lib/utils/provider.js"
 import { createEphemeralStorageDir } from "@/lib/storage/index.js"
 
+import {
+	applyConfiguredApprovalPosture,
+	defaultApprovalSeed,
+	resolveApprovalPosture,
+	resolveCliScopeRoots,
+	type ApprovalPosture,
+} from "./approval-posture.js"
 import type { WaitingForInputEvent, TaskCompletedEvent } from "./events.js"
 import type { AgentStateInfo } from "./agent-state.js"
 import { ExtensionClient } from "./extension-client.js"
@@ -165,6 +172,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	private _isReady = false
 	private messageListener: ((message: ExtensionMessage) => void) | null = null
 	private initialSettings: ShoferSettings
+	private _approvalPosture: ApprovalPosture
 
 	// Console suppression.
 	private originalConsole: {
@@ -286,25 +294,14 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			),
 		}
 
-		this.initialSettings = this.options.nonInteractive
-			? {
-					autoApprovalEnabled: true,
-					alwaysAllowReadOnly: true,
-					alwaysAllowReadOnlyOutsideWorkspace: true,
-					alwaysAllowWrite: true,
-					alwaysAllowWriteOutsideWorkspace: true,
-					alwaysAllowWriteProtected: true,
-					alwaysAllowMcp: true,
-					alwaysAllowModeSwitch: true,
-					alwaysAllowSubtasks: true,
-					alwaysAllowExecute: true,
-					allowedCommands: ["*"],
-					...baseSettings,
-				}
-			: {
-					autoApprovalEnabled: false,
-					...baseSettings,
-				}
+		// The approval posture starts as the built-in seed and is narrowed in
+		// `activate()` by whatever the node's own `.shofer/` config supplies — see
+		// `approval-posture.ts` for why configuration wins by OMISSION rather than
+		// by override. Until that runs (and for hosts that never call `activate()`),
+		// the seed is the posture, which is the pre-existing behaviour verbatim.
+		const nonInteractive = !!this.options.nonInteractive
+		this.initialSettings = { ...defaultApprovalSeed(nonInteractive), ...baseSettings }
+		this._approvalPosture = applyConfiguredApprovalPosture(defaultApprovalSeed(nonInteractive), {}, nonInteractive)
 
 		if (this.options.reasoningEffort && this.options.reasoningEffort !== "unspecified") {
 			if (this.options.reasoningEffort === "disabled") {
@@ -444,6 +441,14 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		;(global as Record<string, unknown>).vscode = this.vscode
 		;(global as Record<string, unknown>).__extensionHost = this
 
+		// Resolve the approval posture BEFORE the extension bundle loads. The seed is
+		// delivered from `markWebviewReady()`, which the shim calls synchronously once
+		// the extension resolves its webview — there is no await point there, so the
+		// (async) config read must already have happened. Doing it here, right after the
+		// mock context exists, also means the scope roots are derived from the very
+		// context `ContextProxy` will later resolve its own from.
+		await this.applyApprovalPostureFromConfig()
+
 		// Write a real vscode-mock.js file to a temp directory so Node can
 		// physically resolve it. In-memory cache entries and _load monkey-patches
 		// do not survive the ESM loader used by tsx — only a real on-disk file
@@ -511,6 +516,56 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		cliLogger.debug("waiting for isReady...")
 		await pWaitFor(() => this._isReady, { interval: 100, timeout: 10_000 })
 		cliLogger.debug("isReady=true")
+	}
+
+	/**
+	 * The posture this host will actually run with, and where it came from. Read by
+	 * `shofer serve` for its startup banner so a node whose approvals come from
+	 * configuration never looks, in its logs, like one running the flag's default.
+	 *
+	 * Meaningful only after {@link activate}; before that it reports the seed.
+	 */
+	public get approvalPosture(): ApprovalPosture {
+		return this._approvalPosture
+	}
+
+	/**
+	 * Fold the node's own layered `.shofer/` configuration into the seeded approval
+	 * posture, then **drop** from {@link initialSettings} every posture key the
+	 * config supplies.
+	 *
+	 * Dropping — rather than overwriting the seed with the config value — is the
+	 * point: `ContextProxy` serves the layered overlay ahead of `globalState`, so a
+	 * seeded value for a configured key would be shadowed on read *and* would be
+	 * written through into the operator's own `settings.json` on the way. See
+	 * `approval-posture.ts` for the full reasoning.
+	 *
+	 * Never throws: a config that cannot be read leaves the seed in place, which is
+	 * exactly what a node with no config has always run with.
+	 */
+	private async applyApprovalPostureFromConfig(): Promise<void> {
+		const nonInteractive = !!this.options.nonInteractive
+		const roots = resolveCliScopeRoots({
+			globalStorageFsPath: this.vscode?.context?.globalStorageUri?.fsPath,
+			workspacePath: this.options.workspacePath,
+		})
+
+		this._approvalPosture = await resolveApprovalPosture({
+			nonInteractive,
+			roots,
+			seed: defaultApprovalSeed(nonInteractive),
+		})
+
+		for (const key of this._approvalPosture.configuredKeys) {
+			delete this.initialSettings[key]
+		}
+
+		if (this._approvalPosture.configuredKeys.length > 0) {
+			cliLogger.debug("approval posture from .shofer config", {
+				keys: this._approvalPosture.configuredKeys,
+				summary: this._approvalPosture.summary,
+			})
+		}
 	}
 
 	public registerWebviewProvider(_viewId: string, _provider: WebviewViewProvider): void {}

@@ -182,6 +182,71 @@ is scanned last and cannot be shadowed ([`PLUGINS.md`](../PLUGINS.md) §
 "A deployment can decide both, by env"). Locking and provisioning answer different
 questions and a deployment enforcing org policy needs both.
 
+### Headless hosts: the approval posture is configuration, not a flag
+
+A host with no local user has to decide up front which tools auto-approve, so the
+CLI host seeds an approval posture at startup: `shofer serve` (and every other
+non-interactive CLI mode) seeds `autoApprovalEnabled: true`, every `alwaysAllow*`
+toggle it sets, and `allowedCommands: ["*"]`; `shofer serve --interactive` seeds
+`autoApprovalEnabled: false` and nothing else, so each dangerous tool raises an
+`ask` the controller brokers.
+
+That seed is a **default, not an override**. The keys it covers —
+`autoApprovalEnabled`, `alwaysAllowReadOnly`,
+`alwaysAllowReadOnlyOutsideWorkspace`, `alwaysAllowWrite`,
+`alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected`,
+`alwaysAllowMcp`, `alwaysAllowModeSwitch`, `alwaysAllowSubtasks`,
+`alwaysAllowExecute`, `allowedCommands`, `deniedCommands` — are ordinary
+`settings.json` keys, so any scope may set them and **the scope wins**:
+
+- A posture key **any scope supplies** is not seeded at all. The host omits it
+  rather than sending a value, because the overlay already wins in
+  `ContextProxy.getValue` (a seeded value would be shadowed on read) _and_
+  because the seed is delivered as a settings write, which writes through to
+  `~/.shofer/settings.json` — seeding a configured key would overwrite the
+  operator's own file with the host's default.
+- A posture key **no scope supplies** is seeded exactly as above, so a node whose
+  configuration says nothing behaves precisely as it did before configuration was
+  consulted: plain `shofer serve` auto-approves everything, `--interactive`
+  surfaces everything.
+- Which scope wins among the three is the ordinary merge (above): unlocked keys
+  resolve project > user > global, and a key the global scope names in
+  `locked.json` is global-final. **Lock the key** when an org policy must not be
+  overridable by the node's user or project scope — that is the only thing that
+  makes it final.
+
+```mermaid
+flowchart TD
+    START["ExtensionHost.activate()"] --> SEED["defaultApprovalSeed(nonInteractive)<br/>the flag's posture"]
+    SEED --> READ["loadLayeredOverlay(scope roots)<br/>global · user · project"]
+    READ --> Q{"key present<br/>in the overlay?"}
+    Q -->|yes| OMIT["omit from the seed<br/>→ the scope value is the posture"]
+    Q -->|no| KEEP["keep in the seed<br/>→ the flag's value is the posture"]
+    OMIT --> SEND["updateSettings — only the kept keys"]
+    KEEP --> SEND
+    SEND --> BANNER["banner: 'approvals: …'<br/>effective posture + source"]
+```
+
+`shofer serve` prints the resolved posture and its source once at startup, e.g.
+`approvals: auto-approve (default)` versus
+`approvals: from config (autoApprovalEnabled=false, execute gated, 2 keys from .shofer config)`.
+A node whose approvals came from a file must never look, in its logs, like one
+running the flag's default.
+
+Resolution lives in
+[`approval-posture.ts`](../apps/cli/src/agent/approval-posture.ts) and reads the
+scopes through the same `@shofer/core` loader `ContextProxy` uses
+([`layered-settings-file.ts`](../packages/core/src/config/layered-settings-file.ts)),
+so the two cannot disagree about what a scope file says. It fails **open to the
+seed**: a scope root that cannot be read is treated as a config that says nothing,
+never as a silent change of posture.
+
+What the seed does _not_ change is what happens to an ask it did not pre-approve.
+On a served node those stay outstanding and are brokered to the controlling
+client over ShoferApi (`--interactive` or not — see
+[`shofer-api.md`](shofer-api.md#running-shofer-serve)); nothing on the node
+answers them.
+
 ### Live reload — the scope watcher
 
 The overlay is not only read at start. Every host watches the three scopes'
