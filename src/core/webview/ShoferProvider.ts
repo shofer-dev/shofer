@@ -151,6 +151,7 @@ import { TaskHistoryStore } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { buildPluginHostImportMap } from "./pluginHostImportMap"
+import { lastCompletionResult, unknownModeError } from "./pluginAgentResult"
 import { PluginPanelManager } from "./PluginPanelManager"
 import { REQUESTY_BASE_URL } from "@shofer/core"
 import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
@@ -2416,22 +2417,81 @@ export class ShoferProvider
 	 * arrives as an opening message with no context. Failing here is loud, and
 	 * the caller can decide to start over deliberately.
 	 */
-	private async resumePluginSession(sessionId: string, prompt: string): Promise<Task> {
+	private async resumePluginSession(sessionId: string, prompt: string, mode?: string): Promise<Task> {
+		// A task is only "warm" while its LOOP is still running. Being on the
+		// stack is not that test: `attempt_completion` sets `abort` and leaves the
+		// instance in place, so a finished stake is found here and would be handed
+		// a queued message nothing will ever drain — the caller then waits on a
+		// task that has already stopped, forever. This is exactly the shape a
+		// contract re-prompt takes (the answer failed, so the task HAS completed),
+		// which is why the guard is the loop's liveness and not the lookup.
 		const live = this.shoferStack.find((t) => t.taskId === sessionId)
-		if (live) {
-			// The warm path, and the one a contract re-prompt actually takes: the
-			// task is still on the stack, so the message queue delivers into the
-			// running loop's next drain.
+		if (live && !live.abort && !live.abandoned) {
 			live.messageQueueService.addMessage(prompt)
 			return live
 		}
 
 		// Cold: the session finished (a completed stake being re-asked). Rehydrate
-		// from history so the conversation is intact, then deliver the prompt.
+		// from history so the conversation is intact, then deliver the prompt as
+		// that conversation's next user message — the same two steps
+		// `ShoferApiAgent.sendMessage` takes for a task the host is no longer
+		// running (`api.resumeTask` then `api.sendMessage`).
 		const { historyItem } = await this.getTaskWithId(sessionId)
 		const task = await this.createTaskWithHistoryItem(historyItem)
+		// Re-apply the MODE's provider profile. Rehydration restores the mode (and
+		// so the tool set) but not necessarily the profile — a headless host
+		// deliberately skips restoring provider settings from history, because a
+		// stale persisted profile must not override the node's runtime flags. The
+		// consequence for a resumed session is that it silently drops onto the
+		// node's DEFAULT model: verified live, a contract re-prompt continued the
+		// right conversation with the right tools on the wrong model. So the same
+		// resolution `createTask` performs for a fresh task is performed again
+		// here — one rule, both entry points.
+		await this.applyModeApiConfig(task, mode)
+		// Queue FIRST. Rehydration raises a `resume_task` / `resume_completed_task`
+		// ask, and `Task.ask()` DRAINS a queued message to answer exactly those —
+		// so with the queue already populated the prompt becomes the resumed
+		// conversation's next message with no extra turn and no race.
 		task.messageQueueService.addMessage(prompt)
+		// The one ordering that misses: the resume ask reached its waiting state
+		// before the queue was populated, so its drain already ran and found
+		// nothing. Nothing else will drain it, so answer it directly with the
+		// same text.
+		if (task.resumableAsk) {
+			task.messageQueueService.dequeueMessage()
+			await task.submitUserMessage(prompt)
+		}
 		return task
+	}
+
+	/**
+	 * Point `task` at the provider profile `mode` is associated with, if any.
+	 *
+	 * Per-task only — the global active profile is untouched, exactly as
+	 * `createTask`'s `initialApiConfigName` seeding is. A mode with no
+	 * association, or a profile that will not load, leaves the task on whatever
+	 * it already had rather than failing the run: the association is a
+	 * refinement of the node's default, not a precondition for running at all.
+	 */
+	private async applyModeApiConfig(task: Task, mode: string | undefined): Promise<void> {
+		if (!mode) {
+			return
+		}
+		const name = await this.resolveModeApiConfigName(mode)
+		if (!name) {
+			return
+		}
+		try {
+			const profile = await this.providerSettingsManager.getProfile({ name })
+			if (profile?.apiProvider) {
+				task.updateApiConfiguration(profile)
+			}
+		} catch (error) {
+			this.log(
+				`[applyModeApiConfig] Failed to load API profile "${name}" for mode "${mode}"; ` +
+					`keeping the task's current configuration: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
 	}
 
 	private buildPluginAgentProvider(): PluginAgentProvider {
@@ -2480,14 +2540,24 @@ export class ShoferProvider
 			// §14: awaitable, cancellable job control. Starts a task and returns a handle whose
 			// result() settles on the task's completion/abort, with task-scoped events + cancel.
 			spawn: async (prompt, opts): Promise<PluginTaskHandle> => {
+				// An unknown mode is REFUSED, never demoted. `createTask` would
+				// happily seed a slug nothing defines, and the task would then run
+				// with the fallback mode's tool set and the fallback mode's API
+				// profile — a different agent, on a different model, reporting
+				// success. The caller asked for a specific one; say so instead.
+				if (opts?.mode) {
+					await this.assertModeExists(opts.mode)
+				}
 				// `completionSchema` reshapes the task's `attempt_completion` tool so a
 				// provider with constrained decoding enforces the caller's output
 				// contract at decode time. `mode` picks the tool set the task starts
-				// with. Both must be threaded here: a plugin passing them into a host
-				// that dropped them would see a task that ignores its contract and
-				// reports success, which is the failure the contract exists to catch.
+				// with — and, through `resolveModeApiConfigName`, the provider profile
+				// its LLM calls go to. Both must be threaded here: a plugin passing
+				// them into a host that dropped them would see a task that ignores its
+				// contract and reports success, which is the failure the contract
+				// exists to catch.
 				const task = opts?.sessionId
-					? await this.resumePluginSession(opts.sessionId, prompt)
+					? await this.resumePluginSession(opts.sessionId, prompt, opts?.mode)
 					: await this.createTask(prompt, opts?.images, undefined, {
 							...(opts?.completionSchema ? { completionSchema: opts.completionSchema } : {}),
 							...(opts?.mode ? { initialMode: opts.mode } : {}),
@@ -2504,7 +2574,15 @@ export class ShoferProvider
 				}
 				const onCompleted = () => {
 					cleanup()
-					settle?.({ taskId, status: "completed", metadata })
+					// The ANSWER, not just the fact of an answer. `attempt_completion`
+					// renders its result as the task's last `completion_result` say
+					// before it emits TaskCompleted, so the message is already on the
+					// task when this runs — read in memory rather than from history,
+					// which would race the persist. Without this a caller that awaits
+					// `result()` learns only that the agent finished, and anything
+					// downstream binding the answer (a Slang `-> @out`, an output
+					// contract) sees `undefined` and can only ever fail.
+					settle?.({ taskId, status: "completed", output: lastCompletionResult(task), metadata })
 				}
 				const onAborted = () => {
 					cleanup()
@@ -3575,6 +3653,24 @@ export class ShoferProvider
 		}
 
 		await this.postInitState()
+	}
+
+	/**
+	 * Throw unless `mode` names a mode this node actually defines.
+	 *
+	 * The mode list is the EFFECTIVE one — plugin-contributed, org-bundle and
+	 * user modes all arrive through `customModes` — so on a headless node this
+	 * is exactly what the mounted config bundle declares. See
+	 * `pluginAgentResult.ts` for why a spawn is refused rather than demoted.
+	 */
+	private async assertModeExists(mode: Mode): Promise<void> {
+		const customModes = await this.customModesManager.getCustomModes()
+		if (!getModeBySlug(mode, customModes)) {
+			throw unknownModeError(
+				mode,
+				customModes.map((m) => m.slug),
+			)
+		}
 	}
 
 	/**

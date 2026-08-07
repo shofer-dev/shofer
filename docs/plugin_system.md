@@ -1377,13 +1377,16 @@ model).
 
 ---
 
-## 14. Proposed: Agent-Control API for Workflow / Runner Plugins
+## 14. Agent-Control API for Workflow / Runner Plugins
 
-> **Status: proposed, not yet shipped.** §1–§12 are implemented; this section specifies the
-> small, additive changes that let a plugin **drive** the agent as a durable unit of work —
-> workflow, integration, and **runner** plugins (e.g. a Temporal activity
-> worker). The additions ride the seams §5.11/§7 already
-> define and expose a **scoped** capability, never the raw `ShoferExtensionApi`.
+> **Status: `ctx.agent.spawn` / `cancel` and the whole `PluginTaskHandle` /
+> `PluginTaskResult` surface below are SHIPPED** (`packages/types/src/plugin.ts`, host seam in
+> `ShoferProvider.buildPluginAgentProvider`), including `mode`, `completionSchema` and `sessionId`
+> on the spawn options. What is **not** shipped is §14.2's `unattended` / `approvalPolicy` pair and
+> §14.3's non-HTTP `permissions.network` generalization; both are marked in place. This section lets
+> a plugin **drive** the agent as a durable unit of work — workflow, integration, and **runner**
+> plugins (e.g. a Temporal activity worker). It rides the seams §5.11/§7 already define and exposes
+> a **scoped** capability, never the raw `ShoferExtensionApi`.
 
 ### 14.1 Motivation
 
@@ -1409,12 +1412,20 @@ interface PluginAgentControl {
 		prompt: string,
 		opts?: {
 			images?: string[]
+			// Shipped. Picks the tool set AND the provider profile (see below);
+			// a slug the host does not define is refused, not substituted.
 			mode?: string
 			metadata?: Record<string, unknown>
-			// Headless execution: the task has no interactive approver, so an un-granted
+			// Shipped: a JSON Schema the answer must conform to — threaded into the
+			// task's `attempt_completion` tool, not sent as a provider response_format.
+			completionSchema?: Record<string, unknown>
+			// Shipped: continue an existing session (a prior task's id) instead of
+			// starting cold, which is what makes a contract re-prompt a continuation.
+			sessionId?: string
+			// NOT SHIPPED. Headless execution: the task has no interactive approver, so an un-granted
 			// approval must NOT park on ask() — it resolves as Deny (tool fails, task continues).
 			unattended?: boolean
-			// What the task is pre-authorized to do (granted ⇒ auto-approve; miss ⇒ auto-deny).
+			// NOT SHIPPED. What the task is pre-authorized to do (granted ⇒ auto-approve; miss ⇒ auto-deny).
 			// Expressed in Shofer's existing auto-approval vocabulary so checkAutoApproval()
 			// consumes it unchanged. See the arkware.ai SaaS design doc, §5.6
 			// "Runner-task approval" — it lives in that integrator's repo, not here.
@@ -1433,11 +1444,39 @@ interface TaskHandle {
 }
 
 interface TaskResult {
+	taskId: string
 	status: "completed" | "aborted" | "error"
-	output?: string // e.g. the attempt_completion summary
-	metadata?: Record<string, unknown> // structured artifacts (MR url, etc.)
+	output?: string // the attempt_completion result, verbatim
+	metadata?: Record<string, unknown> // the `metadata` passed to spawn, echoed back
 }
 ```
+
+- **`mode` is load-bearing, and an unknown one is refused.** The slug picks the task's TOOL SET
+  _and_, through the host's per-mode API-configuration association (`modeApiConfigs`), the
+  **provider profile** its LLM calls go to — the host only consults that association for a task
+  created WITH a mode, so a runner that omits it gets the node's default model whatever the
+  configuration says. A slug the host does not define makes `spawn` **reject** (with an error whose
+  `name` is `PLUGIN_UNKNOWN_MODE_ERROR`) and start no task; substituting the default mode would hand
+  the caller a different agent, on a different model, reporting success.
+- **`output` is the task's answer, not a status line.** It is the `attempt_completion` result as the
+  agent rendered it — read from the task's last `completion_result` message when it settles. A
+  caller awaiting `result()` has no chat to read, so a host that declined to set this would leave
+  the whole point of `spawn` (as opposed to `notify`) unreachable. It is absent, not empty, when the
+  task ended without declaring an answer.
+- **`taskId` is also the SESSION handle.** Passing it back as `opts.sessionId` continues that
+  conversation instead of starting a cold one, which is what makes an output-contract re-prompt
+  cheap and correct. Resuming a session whose loop has ENDED — the normal case for a re-prompt,
+  since the task completed before its answer was judged — rehydrates the conversation from history
+  and delivers the new prompt as its next user message. Being on the host's task stack is not
+  evidence that a loop is running: `attempt_completion` leaves the instance in place with `abort`
+  set, so a resume that only checked for the instance would hand a message to a task that had
+  already stopped, and the caller would wait forever.
+- **Send `mode` on a resume as well as on a cold spawn.** Rehydration restores the mode's TOOL SET
+  from history, but a headless host deliberately does not restore provider settings from history (a
+  stale persisted profile must not override the node's runtime flags) — so a resume that carries no
+  mode continues on the node's DEFAULT model: the right conversation, the right tools, the wrong
+  model. With the mode present the host re-applies that mode's profile to the resumed task, per
+  task, exactly as it seeds a fresh one.
 
 - **Scoped, not raw.** Mirrors how `ctx.ai` hands out a scoped `ApiHandler` (never raw keys): the
   plugin gets task _control_, not the task stack or `ShoferExtensionApi`. This is what keeps it a proper
@@ -1499,9 +1538,9 @@ already "high trust," on par with `permissions.lifecycle` / `permissions.ai`.
 The rest of the runner/workflow surface is **already shipped**: `ctx.registerService`
 ([§5.12](#512-host-capabilities-ctx)) hosts the long-lived worker (Live-Memory-precedented);
 `ctx.agent.notify` already does spawn/queue/interrupt inbound delivery; `onEvent` + lifecycle hooks
-observe; `ctx.config` / `ctx.storage` back config + idempotency state. So a runner/workflow plugin is
-**~85% shipped** — §14.2–§14.3 are the delta. The first consumer and worked example is a
-**Temporal worker plugin**.
+observe; `ctx.config` / `ctx.storage` back config + idempotency state. With `spawn`/`cancel` and the
+task handle now shipped too, the remaining delta is the unattended-approval pair and the socket-egress
+declaration. The first consumer and worked example is a **Temporal worker plugin**.
 
 ---
 

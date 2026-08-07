@@ -370,11 +370,14 @@ class Parser {
 				this.peek().value === "mode" &&
 				this.tokens[this.pos + 1]?.type === TokenType.Colon
 			) {
-				// Shofer extension: 'mode: "slug"' in agent config
+				// Shofer extension: 'mode: "slug"' in agent config. Declared on
+				// AgentMeta rather than smuggled through an `any` cast — both
+				// backends dispatch on it (the native one seeds the Task's
+				// `initialMode`, the Temporal one sends it to the worker), so a
+				// typo in either reader has to be a compile error.
 				this.advance() // "mode"
 				this.expect(TokenType.Colon)
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic metadata bag from upstream slang grammar
-				;(meta as any).mode = this.expect(TokenType.String).value
+				meta.mode = this.expect(TokenType.String).value
 			} else if (
 				this.check(TokenType.Ident) &&
 				this.peek().value === "requires" &&

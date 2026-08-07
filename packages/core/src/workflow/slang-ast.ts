@@ -112,6 +112,25 @@ export interface AgentMeta {
 	 * into this same field.
 	 */
 	apiConfiguration?: string
+	/**
+	 * Slang `mode:` — the agent mode each of this agent's stakes runs in.
+	 *
+	 * The mode is not decoration: it selects the Task's TOOL SET, its role
+	 * definition, and — through the host's per-mode API-configuration
+	 * association (`modeApiConfigs`) — which provider profile the Task's LLM
+	 * calls go to. So `agent Reviewer { mode: "reviewer" }` and
+	 * `agent Coder { mode: "code" }` in one flow can legitimately run on two
+	 * different models from the same profile set, which is the whole reason a
+	 * profile SET exists rather than a single pinned model.
+	 *
+	 * A mode the host does not define is an ERROR, not a fallback: silently
+	 * demoting to the default mode gives the agent a different tool set and a
+	 * different model than the spec asked for, and nothing says so.
+	 *
+	 * Absent means "the host's own current mode", which on a headless node is
+	 * whatever its configuration activated.
+	 */
+	mode?: string
 	tools?: string[]
 	/**
 	 * Slang `requires:` — a boolean expression over worker capability TAGS,

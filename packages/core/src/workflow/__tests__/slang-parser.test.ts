@@ -136,7 +136,9 @@ describe("parseSlang", () => {
 		const agents = agentsOf(flow)
 		expect(agents).toHaveLength(1)
 		expect(agents[0]!.name).toBe("TestAgent")
-		expect((agents[0]!.meta as { mode?: string }).mode).toBe("code")
+		// `mode` is a declared field on AgentMeta, not a bag entry: both backends
+		// dispatch on it, so a typo in either reader must be a compile error.
+		expect(agents[0]!.meta.mode).toBe("code")
 		expect(agents[0]!.meta.role).toBe("Test role")
 
 		// Constraints

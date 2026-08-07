@@ -630,7 +630,22 @@ export interface PluginAgent {
 export interface PluginAgentSpawnOptions {
 	/** Optional images to seed the task with. */
 	images?: string[]
-	/** Agent mode slug to start the task in (defaults to the host's current mode). */
+	/**
+	 * Agent mode slug to start the task in (defaults to the host's current mode).
+	 *
+	 * The mode decides two things, not one: the task's TOOL SET, and — through
+	 * the host's per-mode API-configuration association — WHICH PROVIDER PROFILE
+	 * its LLM calls go to. That second half is what lets one node run a cheap
+	 * model for one mode and a strong one for another out of a single profile
+	 * set, and the host only consults the association for a task that arrived
+	 * WITH a mode. A caller that drops this option therefore gets the node's
+	 * default model no matter what the configuration says.
+	 *
+	 * A slug the host does not define is REFUSED — `spawn` rejects with an error
+	 * whose `name` is {@link PLUGIN_UNKNOWN_MODE_ERROR} and no task is started.
+	 * Substituting the default mode would hand back a different agent, on a
+	 * different model, reporting success.
+	 */
 	mode?: string
 	/** Opaque metadata echoed back on {@link PluginTaskResult.metadata}; the host never interprets it. */
 	metadata?: Record<string, unknown>
@@ -662,6 +677,18 @@ export interface PluginAgentSpawnOptions {
 }
 
 /**
+ * The `name` of the error {@link PluginAgent.spawn} rejects with when
+ * {@link PluginAgentSpawnOptions.mode} names a mode the host does not define.
+ *
+ * A well-known constant rather than a message to match on, because the callers
+ * that need to recognise it are making a RETRY decision: an unknown mode is a
+ * configuration fault that no number of attempts will fix, and a runner that
+ * cannot tell it from a transient failure will burn its whole retry budget on
+ * it before reporting something misleading.
+ */
+export const PLUGIN_UNKNOWN_MODE_ERROR = "PluginUnknownModeError"
+
+/**
  * A handle to a task started via {@link PluginAgent.spawn} (design §14). Awaitable result,
  * task-scoped event subscription, and cancellation — the primitives a runner needs to drive
  * an agent run as a durable job (e.g. a Temporal activity).
@@ -680,7 +707,15 @@ export interface PluginTaskHandle {
 export interface PluginTaskResult {
 	readonly taskId: string
 	readonly status: "completed" | "aborted" | "error"
-	/** Best-effort final output (e.g. the `attempt_completion` summary), if available. */
+	/**
+	 * The task's final answer — the `attempt_completion` result, verbatim.
+	 *
+	 * This is the whole point of awaiting a spawned task rather than firing one:
+	 * a caller with no chat to read learns nothing else about what the agent
+	 * produced. Absent when the task ended without declaring an answer (an
+	 * abort, or a loop that stopped some other way), which a caller must be able
+	 * to tell apart from an empty answer.
+	 */
 	readonly output?: string
 	/** The `metadata` passed to {@link PluginAgent.spawn}, echoed back. */
 	readonly metadata?: Record<string, unknown>

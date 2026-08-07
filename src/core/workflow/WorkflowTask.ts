@@ -67,6 +67,7 @@ import type {
 	OutputSchema,
 } from "@shofer/core"
 import { exprAsNumber, contractToJsonSchema } from "@shofer/core"
+import { defaultModeSlug } from "@shofer/core"
 import { aggregateRatings } from "@shofer/core"
 
 // ─── Adapter: upstream AST → WorkflowTask needs ───
@@ -1051,7 +1052,7 @@ export class WorkflowTask extends Task {
 			return
 		}
 
-		const mode = (agentDecl.meta as any)?.mode || "code"
+		const mode = agentDecl.meta?.mode || defaultModeSlug
 
 		try {
 			workflowLog.info(
