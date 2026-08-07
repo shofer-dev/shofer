@@ -22,6 +22,7 @@ import { ApiStream } from "./_deps.js"
 
 import { getModels } from "./fetchers/modelCache.js"
 import { OpenRouterHandler } from "./openrouter.js"
+import { humanTextOfLastMessage } from "../../utils/user-message.js"
 
 export class ShoferHandler extends OpenRouterHandler {
 	constructor(options: ApiHandlerOptions) {
@@ -97,8 +98,23 @@ export class ShoferHandler extends OpenRouterHandler {
 		// with HTTP 400, which is the correct behaviour — we want to know.
 		const taskId = metadata!.taskId
 
+		// The human's own words in this request's last message, recovered from the
+		// block Shofer marked when it assembled the turn (`utils/user-message`).
+		// `undefined` for a tool-result round or an environment refresh, which is
+		// the honest answer: those turns contain nothing the human typed.
+		//
+		// It travels as a SIBLING of `task_id`, never inside `messages`: llm-router
+		// records it as labelled metadata beside the verbatim content, so its
+		// transcript reader looks up a field instead of pattern-matching the
+		// `<user_message>` / `<environment_details>` markup out of the prompt. The
+		// prompt itself is untouched — llm-router strips both router-internal
+		// fields before forwarding upstream, and `messages` is byte-for-byte what
+		// it was.
+		const humanText = humanTextOfLastMessage(messages)
+
 		// Patch the OpenAI client so every downstream `chat.completions.create`:
-		//  1. carries `task_id` (llm-router requires it), and
+		//  1. carries `task_id` (llm-router requires it) and, when this turn has
+		//     one, `human_text`, and
 		//  2. (streaming only) has its chain-of-thought surfaced. GLM/DeepSeek/Moonshot/
 		//     Qwen stream thinking as `delta.reasoning_content` (the direct OpenAI-
 		//     compatible convention), which llm-router forwards verbatim — but the
@@ -109,7 +125,7 @@ export class ShoferHandler extends OpenRouterHandler {
 		const originalCreate = this["client"].chat.completions.create.bind(this["client"].chat.completions)
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		this["client"].chat.completions.create = ((params: any, options?: any) => {
-			const body = { task_id: taskId, ...params }
+			const body = { task_id: taskId, ...(humanText ? { human_text: humanText } : {}), ...params }
 			const result = originalCreate(body, options)
 			// Non-streaming (completePrompt) needs no transform — pass it through.
 			if (!params?.stream) return result

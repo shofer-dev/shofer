@@ -99,6 +99,7 @@ import { OutputInterceptor } from "../terminal/OutputInterceptor.js"
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@shofer/types"
 import { getWorkspacePath } from "../path/path.js"
 import { sanitizeToolUseId } from "../utils/tool-id.js"
+import { humanMessageBlock } from "../utils/user-message.js"
 import { getTaskDirectoryPath } from "../utils/storage.js"
 import { BlobStore, DEFAULT_BLOB_CAP_BYTES } from "../blob-store/BlobStore.js"
 import {
@@ -3716,14 +3717,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			const imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
 
-			// Task starting
-			await this._runTaskLoop([
-				{
-					type: "text",
-					text: `<user_message>\n${task}\n</user_message>`,
-				},
-				...imageBlocks,
-			]).catch((error) => {
+			// Task starting. `String(task)` rather than `task ?? ""`: an
+			// image-only start has always put the literal "undefined" inside the
+			// wrapper, and that text is part of the prompt the model reads.
+			await this._runTaskLoop([humanMessageBlock(String(task)), ...imageBlocks]).catch((error) => {
 				// Swallow loop rejection when the task was intentionally abandoned/aborted
 				// during delegation or user cancellation to prevent unhandled rejections.
 				if (this.abandoned === true || this.abortReason === "user_cancelled") {
@@ -4037,12 +4034,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 				// 2. The user's actual text will be sent as its own role=user
 				//    message by initiateTaskLoop → recursivelyMakeShoferRequests.
-				const userContent: Anthropic.Messages.ContentBlockParam[] = [
-					{
-						type: "text",
-						text: `<user_message>\n${responseText}\n</user_message>`,
-					},
-				]
+				const userContent: Anthropic.Messages.ContentBlockParam[] = [humanMessageBlock(responseText)]
 
 				if (responseImages && responseImages.length > 0) {
 					userContent.push(...formatResponse.imageBlocks(responseImages))
@@ -8022,12 +8014,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// UI (via the say() above) but silently dropped from the LLM payload, so
 		// a vision model never sees it. Mirrors startTask() and the ask-response
 		// path, which both append formatResponse.imageBlocks(...).
-		this._runTaskLoop([
-			{ type: "text", text: `<user_message>\n${queued.text}\n</user_message>` },
-			...formatResponse.imageBlocks(queued.images),
-		]).catch((err) => {
-			taskLog.error(`[Task] Failed to restart task loop:`, err)
-		})
+		this._runTaskLoop([humanMessageBlock(queued.text), ...formatResponse.imageBlocks(queued.images)]).catch(
+			(err) => {
+				taskLog.error(`[Task] Failed to restart task loop:`, err)
+			},
+		)
 	}
 
 	/**

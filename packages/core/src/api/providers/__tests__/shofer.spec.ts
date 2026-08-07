@@ -45,9 +45,14 @@ vi.mock("../fetchers/modelCache", () => ({
 	}),
 }))
 
+import type { Anthropic } from "@anthropic-ai/sdk"
+
 import { ShoferHandler, normalizeReasoningStream } from "../shofer.js"
+import { OpenRouterHandler } from "../openrouter.js"
 import { getModels } from "../fetchers/modelCache.js"
 import type { ApiHandlerOptions } from "../_deps.js"
+import { convertToOpenAiMessages } from "../../transform/openai-format.js"
+import { humanMessageBlock } from "../../../utils/user-message.js"
 
 /** Build an async-iterable stream from a fixed list of chunks. */
 async function* streamOf(chunks: unknown[]) {
@@ -104,6 +109,100 @@ describe("ShoferHandler model resolution", () => {
 				apiKey: "shofer",
 			}),
 		)
+	})
+})
+
+describe("ShoferHandler request stamping", () => {
+	const options = {
+		apiModelId: "zhipu/glm-5.2",
+		shoferBaseUrl: "http://localhost:30081/v1",
+		shoferApiKey: "shofer",
+	} as ApiHandlerOptions
+
+	const envDetails: Anthropic.Messages.TextBlockParam = {
+		type: "text",
+		text: "<environment_details>\n# Current Time\n2026-08-07\n</environment_details>",
+	}
+
+	/**
+	 * Drives ONLY the client patch under test. The inherited OpenRouter
+	 * `createMessage` is replaced by a stub that performs the one call the
+	 * ShoferHandler intercepts — with the REAL Anthropic→OpenAI conversion, so
+	 * the captured `messages` are the ones a live request would carry.
+	 */
+	async function capture(messages: Anthropic.Messages.MessageParam[]): Promise<Record<string, unknown>> {
+		const captured: Record<string, unknown>[] = []
+		const stub = async function* (
+			this: { client: { chat: { completions: { create: (body: Record<string, unknown>) => Promise<void> } } } },
+			systemPrompt: string,
+			msgs: Anthropic.Messages.MessageParam[],
+		) {
+			await this.client.chat.completions.create({
+				model: "zhipu/glm-5.2",
+				messages: [{ role: "system", content: systemPrompt }, ...convertToOpenAiMessages(msgs)],
+			})
+			yield* []
+		}
+		const spy = vi.spyOn(OpenRouterHandler.prototype, "createMessage").mockImplementation(stub as never)
+		try {
+			const handler = new ShoferHandler(options)
+			Object.assign(handler, {
+				client: {
+					chat: {
+						completions: {
+							create: async (body: Record<string, unknown>) => {
+								captured.push(body)
+							},
+						},
+					},
+				},
+			})
+			for await (const chunk of handler.createMessage("SYSTEM", messages, { taskId: "task-1" })) {
+				void chunk
+			}
+		} finally {
+			spy.mockRestore()
+		}
+		return captured[0]!
+	}
+
+	it("sends the human's words as a sibling field, leaving the prompt byte-identical", async () => {
+		const body = await capture([{ role: "user", content: [humanMessageBlock("List my VMs."), envDetails] }])
+
+		expect(body.task_id).toBe("task-1")
+		expect(body.human_text).toBe("List my VMs.")
+
+		// THE assertion that must fail if the model's prompt ever changes: the
+		// wrapper and the environment-details block are still there, still their
+		// own parts, still spelled exactly as before. `human_text` is metadata
+		// ABOUT this prompt, never a substitute for it.
+		expect(body.messages).toEqual([
+			{ role: "system", content: "SYSTEM" },
+			{
+				role: "user",
+				content: [
+					{ type: "text", text: "<user_message>\nList my VMs.\n</user_message>" },
+					{ type: "text", text: "<environment_details>\n# Current Time\n2026-08-07\n</environment_details>" },
+				],
+			},
+		])
+	})
+
+	it("omits human_text on a turn the human did not speak in", async () => {
+		const body = await capture([
+			{ role: "user", content: [humanMessageBlock("List my VMs.")] },
+			{ role: "assistant", content: [{ type: "text", text: "listing" }] },
+			{
+				role: "user",
+				content: [
+					{ type: "tool_result", tool_use_id: "call_1", content: "2 VMs" },
+					envDetails,
+				] as Anthropic.Messages.ContentBlockParam[],
+			},
+		])
+
+		expect(body.task_id).toBe("task-1")
+		expect("human_text" in body).toBe(false)
 	})
 })
 
