@@ -86,6 +86,15 @@ The full method set (see the source for exact signatures):
 | `getTaskSnapshot(taskId)` → `TaskSnapshot \| undefined`                   | The task's state so far — see [Task snapshots](#task-snapshots-attaching-to-a-running-task). `undefined` when the host owns no such task.                                                                                                   |
 | `subscribe(listener)` → `unsubscribe`                                     | Subscribe to the agent event stream ([`ServerEvent`](#event-model)).                                                                                                                                                                        |
 
+**The single-open-task invariant survives this, and is worth stating exactly**,
+because it reads like the opposite: at most one task is OPEN on the provider's
+stack, so "the current task" is never ambiguous. Backgrounding keeps that — the
+displaced task is popped, it simply is not killed on the way out. What the
+invariant never meant is "one task per host"; the webview enforces it by
+aborting because there the person asking for the new chat is the one who was
+watching the old one, and no remote controller is left waiting on a reply that
+will never come.
+
 **Every method is task-addressed, and a host holds MANY tasks.** One `shofer serve`
 node routinely hosts several independent conversations, each created and driven by its
 own controller through the same API. So `createTask` and `resumeTask` make room for the

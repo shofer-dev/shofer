@@ -5742,8 +5742,18 @@ export class ShoferProvider
 			}
 		}
 
-		// Single-open-task invariant: enforce for user-initiated top-level tasks
-		// unless keepCurrentTask is specified (for parallel task creation)
+		// Single-open-task invariant: at most one task is open on the stack, so
+		// `getCurrentTask()` is unambiguous. Enforced here for USER-INITIATED
+		// top-level tasks, where clearing means replacing — the person asking for
+		// the new chat is the one who was watching the old one, so aborting it
+		// costs nobody anything.
+		//
+		// `keepCurrentTask` says the caller has already made room without killing
+		// (`backgroundCurrentTask`), which is how every non-webview entry point
+		// works: on a headless node the task being displaced belongs to a
+		// different conversation and a different controller. The invariant still
+		// holds there — one task on the stack — it is only the abort that is
+		// wrong. Do not "restore" an unconditional abort here.
 		if (!parentTask && !options.keepCurrentTask) {
 			try {
 				await this.removeShoferFromStack()

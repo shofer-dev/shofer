@@ -1,4 +1,29 @@
 // npx vitest run __tests__/single-open-invariant.spec.ts
+//
+// The single-open-task invariant is about the STACK, not about killing:
+// `shoferStack` models the one chat a user is looking at, so at most one task
+// may be open on it and `getCurrentTask()` must be unambiguous. Every case here
+// pins that property.
+//
+// What differs is HOW room is made, and it differs by who is asking:
+//
+//   - A user-initiated create (the webview's New Chat, `ShoferProvider.createTask`)
+//     means "replace what I was doing", so the popped task is ABORTED. Nobody is
+//     waiting on it — the person who was is the one asking for the new one.
+//   - A create through `ShoferExtensionApi` is NOT that. It is the entry point
+//     every non-webview caller shares (the HTTP/SSE AgentApi, the CLI, IPC, the
+//     public API), and on a headless `shofer serve` node many independent
+//     conversations are driven through it at once, each by its own remote
+//     controller. There, the task on the stack belongs to somebody else, and
+//     aborting it destroyed a live conversation mid-turn: its controller saw a
+//     `taskAborted` with reason `abandoned` and then nothing, because the agent
+//     composing its reply had ceased to exist. So that path BACKGROUNDS instead
+//     — popped off the stack (invariant intact, one open task), still running,
+//     still addressable by id through `TaskManager`.
+//
+// The invariant is therefore asserted as the property it protects, not as a call
+// to `removeShoferFromStack`; pinning the mechanism is what made a
+// multi-conversation host look like a violation.
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { ShoferProvider } from "../core/webview/ShoferProvider"
@@ -135,12 +160,14 @@ describe("Single-open-task invariant", () => {
 		expect(addShoferToStack).toHaveBeenCalledTimes(1)
 	})
 
-	it("IPC StartNewTask path closes current before new task", async () => {
+	it("API create path clears the stack by backgrounding, never by aborting", async () => {
 		const removeShoferFromStack = vi.fn().mockResolvedValue(undefined)
+		const backgroundCurrentTask = vi.fn().mockReturnValue(undefined)
 		const createTask = vi.fn().mockResolvedValue({ taskId: "ipc-1" })
 		const provider = {
 			context: {} as any,
 			removeShoferFromStack,
+			backgroundCurrentTask,
 			postInitState: vi.fn().mockResolvedValue(undefined),
 			postMessageToWebview: vi.fn(),
 			createTask,
@@ -165,7 +192,15 @@ describe("Single-open-task invariant", () => {
 		})
 
 		expect(taskId).toBe("ipc-1")
-		expect(removeShoferFromStack).toHaveBeenCalledTimes(1)
+		// One open task: whatever was on the stack came off before the new one
+		// went on.
+		expect(backgroundCurrentTask).toHaveBeenCalledTimes(1)
+		// And it came off ALIVE. A caller here is one of many driving this host;
+		// the task it displaces is another conversation, not a finished one.
+		expect(removeShoferFromStack).not.toHaveBeenCalled()
 		expect(createTask).toHaveBeenCalled()
+		// The instruction travels with the create, or `createTask`'s own
+		// enforcement would abort whatever the pop left behind.
+		expect(createTask.mock.calls[0]![3]).toMatchObject({ keepCurrentTask: true })
 	})
 })

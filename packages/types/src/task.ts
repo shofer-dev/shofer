@@ -196,8 +196,14 @@ export interface CreateTaskOptions {
 	 */
 	openInStack?: boolean
 	/**
-	 * When true, skip the single-open-task invariant (don't remove/abort the current task).
-	 * Used for parallel task creation where multiple tasks run simultaneously.
+	 * When true, `createTask` does not abort the current task to make room.
+	 *
+	 * This does NOT relax the single-open-task invariant — the caller is
+	 * asserting it has already made room without killing anything
+	 * (`ShoferProvider.backgroundCurrentTask`: popped off the stack, still
+	 * running, still addressable by id). Used for parallel task creation, and by
+	 * every non-webview entry point, where the displaced task belongs to another
+	 * conversation rather than to the caller.
 	 */
 	keepCurrentTask?: boolean
 	/**
