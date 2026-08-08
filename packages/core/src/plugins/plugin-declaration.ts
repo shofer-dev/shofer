@@ -31,10 +31,11 @@ import { fetchPluginArchive, isPluginUrl, unpackPlugin } from "./plugin-pack.js"
  *      **bytes are never committed to `.shofer/`** — only the declaration is), so
  *      `.shofer/` stays text-only, reproducible, and zip/overlay-able.
  *
- * This module is **standalone**: it is NOT yet wired into `ShoferProvider` /
- * `PluginManager` (that is the next pass). The host will consume
- * {@link resolvePluginDeclaration}'s output to seed `pluginDirs` /
- * `pluginConfigs` / enablement. Node-only (uses `node:fs`/`node:path` and the
+ * This module is the pure half: the host wiring lives in the host's
+ * `src/core/config/pluginDeclarationLoader.ts`, which `ShoferProvider` drives
+ * (`loadPluginDeclarations` + `computePluginDeclarationWiring`) to seed
+ * `pluginDirs` / `pluginConfigs` / enablement from
+ * {@link resolvePluginDeclaration}'s output. Node-only (uses `node:fs`/`node:path` and the
  * `unpackPlugin` archive path, like `plugin-pack.ts`) — it imports no `vscode`.
  */
 

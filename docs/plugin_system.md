@@ -5,11 +5,12 @@ single package format that is a strict **superset of MCP** — one plugin can af
 the UI, system prompt, tools, modes, hooks, background services, and lifecycle, not
 just expose callable functions.
 
-Everything described here is implemented and shipped, **except** the additive changes in
-[§14 Proposed](#14-proposed-agent-control-api-for-workflow--runner-plugins) (a scoped agent-control
-API for long-running workflow/runner plugins — the enabling work for a Temporal
-worker plugin) and the deferred hosted remote plugin **registry**
-([§13 Deferred](#13-deferred)).
+Everything described here is implemented and shipped, **except** two scoped
+remainders inside [§14](#14-agent-control-api-for-workflow--runner-plugins) —
+the `unattended` / `approvalPolicy` pair (§14.2) and the non-HTTP
+`permissions.network` generalization (§14.3), both marked in place; the
+§14 `ctx.agent.spawn` / `PluginTaskHandle` surface itself **is** shipped — and
+the deferred hosted remote plugin **registry** ([§13 Deferred](#13-deferred)).
 
 For **authoring** a plugin (manifest fields, build invocations, step-by-step
 walkthroughs) see the author-facing guide **[`../PLUGINS.md`](../PLUGINS.md)**. This
@@ -31,7 +32,7 @@ duplicate the how-to.
 11. [UI Integration](#11-ui-integration)
 12. [Comparison with OpenCode and Claude Code](#12-comparison-with-opencode-and-claude-code)
 13. [Deferred](#13-deferred)
-14. [Proposed: Agent-Control API for Workflow/Runner Plugins](#14-proposed-agent-control-api-for-workflow--runner-plugins)
+14. [Agent-Control API for Workflow/Runner Plugins](#14-agent-control-api-for-workflow--runner-plugins)
 
 ---
 
@@ -799,8 +800,8 @@ the host is unchanged.
     `PluginAiProvider`, wired in `ShoferProvider.getPluginManager` against the
     provider's task stack / message queue. `notify` is deliberately **fire-and-forget**;
     for an awaitable, cancellable _job_ surface (`spawn → TaskHandle`, `cancel`, structured
-    result) needed by workflow/runner plugins, see the proposed
-    [§14](#14-proposed-agent-control-api-for-workflow--runner-plugins).
+    result) needed by workflow/runner plugins, see
+    [§14](#14-agent-control-api-for-workflow--runner-plugins).
 
 The four delivery modes and their no-target fallbacks:
 
