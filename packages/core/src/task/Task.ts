@@ -4273,14 +4273,25 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.emitFinalTokenUsageUpdate()
 
 		// Derive abort reason: completed (post-attempt_completion cleanup),
-		// error (streaming failure), abandoned (force-abandoned), or user (default).
+		// error (streaming failure), user (somebody asked for this), or abandoned
+		// (force-abandoned).
+		//
+		// `user_cancelled` is checked BEFORE `abandoned` on purpose. The cancel
+		// path also sets `abandoned` — as an internal stop signal, so residual
+		// loops exit — but the two say opposite things on the wire: `user` means
+		// a person ended this deliberately, `abandoned` means the host discarded
+		// the instance out from under whoever was waiting. A controller acts on
+		// that difference (one is a normal end, the other is a lost turn to
+		// report), so the deliberate act must win the classification.
 		const abortReasonValue: "user" | "completed" | "error" | "abandoned" = this.didExecuteAttemptCompletion
 			? "completed"
 			: this.abortReason === "streaming_failed"
 				? "error"
-				: this.abandoned
-					? "abandoned"
-					: "user"
+				: this.abortReason === "user_cancelled"
+					? "user"
+					: this.abandoned
+						? "abandoned"
+						: "user"
 		this.emit(ShoferEventName.TaskAborted, { reason: abortReasonValue })
 
 		// Lifecycle `afterTaskComplete` observer (design §6.9). This is the single task

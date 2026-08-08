@@ -887,6 +887,37 @@ export class ShoferProvider
 		return task
 	}
 
+	/**
+	 * Moves the current task off the stack and into the background, KEEPING it
+	 * alive and addressable: popped without aborting, then registered with the
+	 * `TaskManager` so `sendMessage`/`resumeTask` can still find its live
+	 * instance by id.
+	 *
+	 * This is the correct way for a caller that is starting or focusing ANOTHER
+	 * task to make room for it. `removeShoferFromStack()` is not: it aborts the
+	 * popped task as abandoned, which is right when the task being cleared is
+	 * the one the user just finished with, and catastrophic when it belongs to
+	 * somebody else — on a `shofer serve` node every controller-driven
+	 * conversation is created through the same provider, so clearing the stack
+	 * destroyed an unrelated conversation mid-turn.
+	 *
+	 * Registration is best-effort: a host whose `TaskManager` has not finished
+	 * restoring still gets the task backgrounded rather than killed.
+	 */
+	backgroundCurrentTask(): Task | undefined {
+		const task = this.popFromStackWithoutAborting()
+		if (task) {
+			try {
+				this.taskManager.registerBackgroundTask(task)
+			} catch (e) {
+				this.log(
+					`[ShoferProvider#backgroundCurrentTask] could not register ${task.taskId} as a background task: ${e instanceof Error ? e.message : String(e)}`,
+				)
+			}
+		}
+		return task
+	}
+
 	getTaskStackSize(): number {
 		return this.shoferStack.length
 	}
@@ -1711,7 +1742,7 @@ export class ShoferProvider
 						`(caller stack: ${new Error().stack?.split("\n").slice(2, 6).join(" | ")})`,
 				)
 				if (options?.keepCurrentTask) {
-					this.popFromStackWithoutAborting()
+					this.backgroundCurrentTask()
 				} else {
 					await this.removeShoferFromStack()
 				}
@@ -1733,10 +1764,11 @@ export class ShoferProvider
 		}
 
 		if (!isRehydratingCurrentTask) {
-			// If keepCurrentTask is true (parallel task switching), pop without aborting
-			// Otherwise, use removeShoferFromStack which aborts the current task
+			// If keepCurrentTask is true (parallel task switching), background the
+			// current task — off the stack, still running, still addressable by id.
+			// Otherwise, use removeShoferFromStack which aborts the current task.
 			if (options?.keepCurrentTask) {
-				this.popFromStackWithoutAborting()
+				this.backgroundCurrentTask()
 			} else {
 				await this.removeShoferFromStack()
 			}

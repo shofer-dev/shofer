@@ -336,13 +336,26 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 			provider = this.sidebarProvider
 		}
 
-		await provider.removeShoferFromStack()
+		// Make room for the new task WITHOUT destroying whatever the host is
+		// already running. This entry point is how every non-webview caller
+		// starts a task — including a controller driving a `shofer serve` node,
+		// where many independent conversations share one provider — so the task
+		// currently on the stack is somebody else's work, not a finished chat
+		// this one supersedes. Aborting it (`removeShoferFromStack`) killed a
+		// conversation mid-turn: the victim's controller saw a `taskAborted`
+		// with reason `abandoned` and then silence, because the agent composing
+		// its reply no longer existed. Backgrounding keeps it running and keeps
+		// it addressable by id, which is what `sendMessage`/`resumeTask` need.
+		provider.backgroundCurrentTask()
 		await provider.postInitState()
 		await provider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 		await provider.postMessageToWebview({ type: "invoke", invoke: "newChat", text, images })
 
 		const options: CreateTaskOptions = {
 			consecutiveMistakeLimit: Number.MAX_SAFE_INTEGER,
+			// The stack was just cleared without aborting; `createTask`'s own
+			// single-open-task enforcement must not re-abort what is left.
+			keepCurrentTask: true,
 			...(taskId ? { taskId } : {}),
 			...(initialMode ? { initialMode } : {}),
 		}
@@ -384,7 +397,10 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 		await this.waitForWebviewLaunch(5_000)
 
 		const { historyItem } = await this.sidebarProvider.getTaskWithId(taskId)
-		await this.sidebarProvider.createTaskWithHistoryItem(historyItem)
+		// `keepCurrentTask` for the same reason `createTask` backgrounds rather
+		// than aborts: resuming one conversation must not abandon another that
+		// happens to be the host's current task.
+		await this.sidebarProvider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })
 
 		if (this.sidebarProvider.viewLaunched) {
 			await this.sidebarProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
@@ -415,15 +431,33 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 	}
 
 	public async cancelTask(taskId: string) {
-		// The provider cancels the task it currently holds, so addressing a task
-		// that is not the current one is a no-op rather than a silent cancel of
-		// somebody else's work.
+		// Cancelling is task-ADDRESSED, like sendMessage. The provider's own
+		// cancelTask() only knows the task it currently holds, which was enough
+		// while a host ran one task at a time; it no longer is — starting or
+		// resuming a task backgrounds the previous one rather than killing it, so
+		// the conversation a user hits Stop on is routinely NOT the current one.
+		// Ignoring that request would have been a silent no-op: the caller is told
+		// the cancel succeeded and the agent keeps running.
 		const current = this.sidebarProvider.getCurrentTask()
-		if (current && current.taskId !== taskId) {
-			this.log(`[API#cancelTask] ${taskId} is not the current task; ignoring`)
+		if (!current || current.taskId === taskId) {
+			await this.sidebarProvider.cancelTask()
 			return
 		}
-		await this.sidebarProvider.cancelTask()
+
+		const background = this.sidebarProvider.taskManager.getManagedTaskInstance(taskId)
+		if (!background || background.abort || background.abandoned) {
+			this.log(`[API#cancelTask] no live instance for ${taskId}; nothing to cancel`)
+			return
+		}
+
+		// Abort the background instance directly. `abortReason` is what makes this
+		// read as a USER cancellation on the wire (`taskAborted` reason `user`)
+		// rather than an eviction (`abandoned`) — the two mean different things to
+		// a controller and must not be conflated. No rehydration follows, because
+		// this task is not on the stack and has no view to restore.
+		background.abortReason = "user_cancelled"
+		background.cancelCurrentRequest()
+		await background.abortTask()
 	}
 
 	public async sendMessage(taskId: string, message: string, images?: string[]) {

@@ -203,6 +203,15 @@ figure out what happened:
 - `TaskCompleted`: `{ rating: CompletionRating, isSubtask: boolean }`
 - `TaskAborted`: `{ reason: "user" | "completed" | "error" | "abandoned" }`
 
+`reason` is derived in `abortTask` and the ORDER of that derivation is part of
+the contract: a `user_cancelled` abort reports `"user"` even though the cancel
+path also sets `abandoned` internally (as a stop signal, so residual loops
+exit). The two mean opposite things to a remote consumer — `user` is a
+deliberate end, `abandoned` is the host discarding an instance out from under
+whoever was waiting — so the deliberate act wins the classification, and a
+controller can treat `abandoned` as a lost turn without misreading every Stop
+click as one.
+
 `TaskManager`'s aborted handler dispatches on `reason`:
 
 | reason        | Resulting lifecycle                                           |

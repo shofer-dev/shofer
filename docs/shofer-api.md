@@ -86,6 +86,20 @@ The full method set (see the source for exact signatures):
 | `getTaskSnapshot(taskId)` → `TaskSnapshot \| undefined`                   | The task's state so far — see [Task snapshots](#task-snapshots-attaching-to-a-running-task). `undefined` when the host owns no such task.                                                                                                   |
 | `subscribe(listener)` → `unsubscribe`                                     | Subscribe to the agent event stream ([`ServerEvent`](#event-model)).                                                                                                                                                                        |
 
+**Every method is task-addressed, and a host holds MANY tasks.** One `shofer serve`
+node routinely hosts several independent conversations, each created and driven by its
+own controller through the same API. So `createTask` and `resumeTask` make room for the
+task they are about to focus by **backgrounding** the host's current one — popped off
+the provider's task stack, still running, still addressable by id — never by aborting
+it. `cancelTask` is addressed the same way: it cancels the named task whether that task
+is the focused one or a backgrounded one.
+
+The distinction shows up on the stream, and consumers depend on it: a `taskAborted`
+with reason `user` is a deliberate cancellation, while `abandoned` means the host
+discarded that task's instance out from under whoever was waiting on it. A controller
+reading `abandoned` should treat the turn as lost, not as churn to wait through — the
+agent composing the reply no longer exists, and nothing rebuilds a turn.
+
 #### Reverse data channel
 
 Any **plugin-owned** per-task feature for a **remote (shadow) task**: the controller

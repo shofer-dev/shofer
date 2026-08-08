@@ -30,6 +30,9 @@ describe("ShoferExtensionApi.startNewTask — plugin task placement", () => {
 			on: vi.fn(),
 			cwd: "/test/workspace",
 			removeShoferFromStack: vi.fn().mockResolvedValue(undefined),
+			// The API makes room for the new task by BACKGROUNDING the current one
+			// (still running, still addressable), never by aborting it.
+			backgroundCurrentTask: vi.fn().mockReturnValue(undefined),
 			postInitState: vi.fn().mockResolvedValue(undefined),
 			postMessageToWebview: vi.fn().mockResolvedValue(undefined),
 			createTask,
