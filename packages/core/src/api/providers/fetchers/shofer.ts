@@ -54,6 +54,10 @@ const shoferModelSchema = z
 				image_input: z.boolean().optional(),
 				tool_calling: z.boolean().optional(),
 				prompt_cache: z.boolean().optional(),
+				// The router's word for "this model thinks". It is what makes
+				// `shouldUseReasoningEffort` (@shofer/types) answer true, and hence
+				// what makes an effort selection reach the wire at all.
+				reasoning: z.boolean().optional(),
 			})
 			.passthrough()
 			.optional(),
@@ -117,6 +121,12 @@ export async function getShoferModels(baseUrl?: string, apiKey?: string): Promis
 				outputPrice: perMillion(model.pricing?.completion),
 				...(cacheReadsPrice !== undefined && { cacheReadsPrice }),
 				...(cacheWritesPrice !== undefined && { cacheWritesPrice }),
+				// Only the positive case is expressed: absent/false leaves the flag
+				// off ModelInfo entirely, which is how the rest of the stack spells
+				// "the catalog says nothing" (`supportsReasoningEffort: false` and an
+				// absent flag are equivalent to `shouldUseReasoningEffort`, and an
+				// absent one does not claim knowledge the router did not give us).
+				...(model.capabilities?.reasoning === true && { supportsReasoningEffort: true }),
 				description: model.description,
 			}
 

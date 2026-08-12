@@ -4,9 +4,11 @@
  * `/v1/chat/completions` call.
  *
  * This provider is designed for connecting Shofer to a locally-running
- * llm-router instance via `--base-url`.  It behaves identically to OpenRouter
- * except that every `createMessage` call stamps the request body with
- * `metadata.taskId` (the per-task UUID v7 identifier) as `task_id`.
+ * llm-router instance via `--base-url`.  It behaves like OpenRouter except for
+ * the three fields llm-router owns on the request body: `task_id`
+ * (`metadata.taskId`, the per-task UUID v7 identifier, required), `human_text`
+ * (the human's own words on turns that have them) and `reasoning` (the router's
+ * thinking directive — see {@link shoferReasoningDirective}).
  *
  * Conversation IDs are per-session (per task), not per-provider-instance,
  * because a single provider/handler is shared across all concurrent tasks.
@@ -112,6 +114,11 @@ export class ShoferHandler extends OpenRouterHandler {
 		// it was.
 		const humanText = humanTextOfLastMessage(messages)
 
+		// The thinking directive for this request, derived from the user's settings
+		// rather than from what the model catalog happens to know (see
+		// {@link shoferReasoningDirective}).
+		const reasoning = shoferReasoningDirective(this.options)
+
 		// Patch the OpenAI client so every downstream `chat.completions.create`:
 		//  1. carries `task_id` (llm-router requires it) and, when this turn has
 		//     one, `human_text`, and
@@ -125,7 +132,22 @@ export class ShoferHandler extends OpenRouterHandler {
 		const originalCreate = this["client"].chat.completions.create.bind(this["client"].chat.completions)
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		this["client"].chat.completions.create = ((params: any, options?: any) => {
-			const body = { task_id: taskId, ...(humanText ? { human_text: humanText } : {}), ...params }
+			// `reasoning` on this wire is OURS alone. The inherited OpenRouter path
+			// may also compute one (once a model advertises `supportsReasoningEffort`,
+			// and unconditionally as `{ exclude: true }` for Gemini 2.5 Pro ids), but
+			// that object speaks OpenRouter's vocabulary — `exclude`, no `enabled` —
+			// which llm-router does not accept, and it is computed from the catalog
+			// rather than from the user's explicit choice. So drop it and substitute
+			// the directive derived below; when we derive none, the field is absent
+			// entirely and the router applies the provider default.
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const { reasoning: _openRouterReasoning, ...rest } = (params ?? {}) as any
+			const body = {
+				task_id: taskId,
+				...(humanText ? { human_text: humanText } : {}),
+				...rest,
+				...(reasoning ? { reasoning } : {}),
+			}
 			const result = originalCreate(body, options)
 			// Non-streaming (completePrompt) needs no transform — pass it through.
 			if (!params?.stream) return result
@@ -137,6 +159,63 @@ export class ShoferHandler extends OpenRouterHandler {
 
 		yield* super.createMessage(systemPrompt, messages, metadata)
 	}
+}
+
+/**
+ * llm-router's reasoning directive, as accepted on `POST /v1/chat/completions`
+ * beside `messages` (see llm-router's PROTOCOL.md for the authoritative shape).
+ * Every member is optional; the router applies the calling provider's default
+ * for whatever the directive leaves unsaid.
+ */
+export type ShoferReasoningDirective = {
+	enabled?: boolean
+	effort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "none"
+	max_tokens?: number
+}
+
+/**
+ * Translate Shofer's reasoning settings into llm-router's directive.
+ *
+ * Two properties of the router make this a deliberate translation rather than a
+ * pass-through of the OpenRouter shape the parent handler builds:
+ *
+ * 1. **Off must be EXPLICIT on the wire.** The router turns thinking ON by
+ *    default for several upstream providers, so omitting the field means
+ *    "provider default", i.e. thinking. `enableReasoningEffort === false` must
+ *    therefore SEND `{ enabled: false }`, and it does so unconditionally —
+ *    independent of `supportsReasoningEffort` on the model. Gating the off
+ *    switch on the catalog would make "no thinking" contingent on the catalog
+ *    knowing the model thinks, which is exactly backwards: a model whose
+ *    capability flag is missing is the case where thinking arrives unasked. The
+ *    router ignores the directive for a model that cannot think, so sending it
+ *    costs nothing.
+ * 2. **The vocabularies differ.** Shofer's user-facing setting carries a
+ *    `"disable"` sentinel (`reasoningEffortSettingValues` in `@shofer/types`)
+ *    that the router does not know; it maps onto the router's `"none"`. Every
+ *    other value — `minimal`/`low`/`medium`/`high`/`xhigh`/`none` — is spelled
+ *    identically on both sides and passes through unchanged.
+ *
+ * Precedence, highest first: the explicit off switch, then a selected effort
+ * (carrying `max_tokens` alongside when a thinking budget is also set), then a
+ * budget on its own. Nothing set yields `undefined` — the field is omitted and
+ * the provider's own default stands.
+ */
+export function shoferReasoningDirective(options: ApiHandlerOptions): ShoferReasoningDirective | undefined {
+	if (options.enableReasoningEffort === false) return { enabled: false }
+
+	const budget = options.modelMaxThinkingTokens
+	const effort = options.reasoningEffort
+
+	if (effort) {
+		return {
+			effort: effort === "disable" ? "none" : effort,
+			...(budget !== undefined && { max_tokens: budget }),
+		}
+	}
+
+	if (budget !== undefined) return { max_tokens: budget }
+
+	return undefined
 }
 
 /**

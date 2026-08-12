@@ -206,6 +206,107 @@ describe("ShoferHandler request stamping", () => {
 	})
 })
 
+describe("ShoferHandler reasoning directive", () => {
+	const baseOptions = {
+		apiModelId: "zhipu/glm-5.2",
+		shoferBaseUrl: "http://localhost:30081/v1",
+		shoferApiKey: "shofer",
+	}
+
+	/**
+	 * Capture the body that reaches llm-router for a given settings shape.
+	 * `parentParams` stands in for whatever the inherited OpenRouter handler put
+	 * into the completion params — including its own OpenRouter-shaped `reasoning`.
+	 */
+	async function captureWith(
+		settings: Partial<ApiHandlerOptions>,
+		parentParams: Record<string, unknown> = {},
+	): Promise<Record<string, unknown>> {
+		const captured: Record<string, unknown>[] = []
+		const stub = async function* (this: {
+			client: { chat: { completions: { create: (body: Record<string, unknown>) => Promise<void> } } }
+		}) {
+			await this.client.chat.completions.create({ model: "zhipu/glm-5.2", messages: [], ...parentParams })
+			yield* []
+		}
+		const spy = vi.spyOn(OpenRouterHandler.prototype, "createMessage").mockImplementation(stub as never)
+		try {
+			const handler = new ShoferHandler({ ...baseOptions, ...settings } as ApiHandlerOptions)
+			Object.assign(handler, {
+				client: {
+					chat: {
+						completions: {
+							create: async (body: Record<string, unknown>) => {
+								captured.push(body)
+							},
+						},
+					},
+				},
+			})
+			for await (const chunk of handler.createMessage("SYSTEM", [], { taskId: "task-1" })) void chunk
+		} finally {
+			spy.mockRestore()
+		}
+		return captured[0]!
+	}
+
+	it("sends an explicit off switch when reasoning is disabled", async () => {
+		// The router defaults thinking ON for several upstreams, so silence is not
+		// "off" — the directive has to be on the wire.
+		expect(await captureWith({ enableReasoningEffort: false })).toMatchObject({
+			reasoning: { enabled: false },
+		})
+	})
+
+	it("sends the off switch even when the catalog never advertised reasoning", async () => {
+		// No model info is consulted at all: turning thinking off must not depend on
+		// the router's catalog knowing this model thinks.
+		const body = await captureWith({ enableReasoningEffort: false, apiModelId: "arkware/unknown-model" })
+		expect(body.reasoning).toEqual({ enabled: false })
+	})
+
+	it("sends the selected effort", async () => {
+		expect((await captureWith({ reasoningEffort: "low" })).reasoning).toEqual({ effort: "low" })
+	})
+
+	it("maps the settings-only 'disable' sentinel onto the router's 'none'", async () => {
+		expect((await captureWith({ reasoningEffort: "disable" })).reasoning).toEqual({ effort: "none" })
+	})
+
+	it("carries a thinking budget alongside a selected effort", async () => {
+		expect((await captureWith({ reasoningEffort: "high", modelMaxThinkingTokens: 4096 })).reasoning).toEqual({
+			effort: "high",
+			max_tokens: 4096,
+		})
+	})
+
+	it("sends a budget-only directive when only the thinking budget is set", async () => {
+		expect((await captureWith({ modelMaxThinkingTokens: 2048 })).reasoning).toEqual({ max_tokens: 2048 })
+	})
+
+	it("omits the field entirely when nothing is configured", async () => {
+		expect("reasoning" in (await captureWith({}))).toBe(false)
+	})
+
+	it("wins over a reasoning object computed by the inherited OpenRouter path", async () => {
+		const body = await captureWith(
+			{ enableReasoningEffort: false },
+			{ reasoning: { effort: "high" }, include_reasoning: true },
+		)
+
+		expect(body.reasoning).toEqual({ enabled: false })
+		// Sibling params the parent set are untouched — only `reasoning` is ours.
+		expect(body.include_reasoning).toBe(true)
+	})
+
+	it("drops the parent's OpenRouter-vocabulary reasoning when we derive none", async () => {
+		// `{ exclude: true }` is a shape llm-router does not accept; omitting the
+		// field is what "provider default" means on this wire.
+		const body = await captureWith({}, { reasoning: { exclude: true } })
+		expect("reasoning" in body).toBe(false)
+	})
+})
+
 describe("normalizeReasoningStream (Shofer Router)", () => {
 	it("mirrors delta.reasoning_content into delta.reasoning (GLM/DeepSeek convention)", async () => {
 		const out = await collect(

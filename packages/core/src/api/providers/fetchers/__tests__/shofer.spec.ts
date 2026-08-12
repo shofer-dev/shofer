@@ -87,6 +87,32 @@ describe("getShoferModels", () => {
 		expect(info!.supportsPromptCache).toBe(false)
 	})
 
+	it("maps capabilities.reasoning onto supportsReasoningEffort", async () => {
+		mockedAxios.get.mockResolvedValue({
+			data: { data: [{ ...glm, capabilities: { ...glm.capabilities, reasoning: true } }] },
+		})
+
+		// Without this flag `shouldUseReasoningEffort` refuses every settings-only
+		// selection, so an effort chosen in settings never reaches the wire.
+		expect((await getShoferModels())["zhipu/glm-5.1"]!.supportsReasoningEffort).toBe(true)
+	})
+
+	it("leaves supportsReasoningEffort absent when the router does not claim reasoning", async () => {
+		mockedAxios.get.mockResolvedValue({ data: { data: [glm] } })
+
+		const info = (await getShoferModels())["zhipu/glm-5.1"]!
+		expect("supportsReasoningEffort" in info).toBe(false)
+	})
+
+	it("leaves supportsReasoningEffort absent when the router says reasoning: false", async () => {
+		mockedAxios.get.mockResolvedValue({
+			data: { data: [{ ...glm, capabilities: { ...glm.capabilities, reasoning: false } }] },
+		})
+
+		const info = (await getShoferModels())["zhipu/glm-5.1"]!
+		expect("supportsReasoningEffort" in info).toBe(false)
+	})
+
 	it("returns {} on network error (does not throw)", async () => {
 		mockedAxios.get.mockRejectedValue(new Error("ECONNREFUSED"))
 		await expect(getShoferModels()).resolves.toEqual({})
