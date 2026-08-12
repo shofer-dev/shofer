@@ -10,6 +10,32 @@
  */
 
 import { apiLog, i18n } from "../_deps.js"
+import { unwrapErrorChain } from "./retryable-error.js"
+
+/**
+ * The message of the DEEPEST distinct link of the error's `cause` chain.
+ *
+ * An SDK transport failure says "Connection error." and nothing else; the layer
+ * that actually refused — a DNS resolver, a kernel refusing a connect, an
+ * intercepting proxy rejecting the `CONNECT` tunnel — reports the reason
+ * several `cause` hops down. Surfacing it turns an unactionable one-liner into
+ * a diagnosis.
+ *
+ * Returns `undefined` when the chain adds nothing the top-level message does
+ * not already say.
+ */
+function describeRootCause(error: unknown, topMessage: string): string | undefined {
+	const chain = unwrapErrorChain(error)
+
+	for (let i = chain.length - 1; i > 0; i--) {
+		const message = (chain[i] as { message?: unknown } | null)?.message
+		if (typeof message === "string" && message.length > 0 && !topMessage.includes(message)) {
+			return message
+		}
+	}
+
+	return undefined
+}
 
 /**
  * Handles API provider errors and transforms them into user-friendly messages
@@ -65,13 +91,20 @@ export function handleProviderError(
 		// This is specific to OpenAI-compatible SDKs
 		if (msg.includes("Cannot convert argument to a ByteString")) {
 			wrapped = new Error(i18n.t("common:errors.api.invalidKeyInvalidChars"))
+		} else if (options?.messageTransformer) {
+			wrapped = new Error(options.messageTransformer(msg))
 		} else {
-			// Apply custom transformer if provided, otherwise use default format
-			const finalMessage = options?.messageTransformer
-				? options.messageTransformer(msg)
-				: `${providerName} ${messagePrefix} error: ${msg}`
-			wrapped = new Error(finalMessage)
+			const rootCause = describeRootCause(error, msg)
+			wrapped = new Error(
+				`${providerName} ${messagePrefix} error: ${msg}` + (rootCause ? ` (cause: ${rootCause})` : ""),
+			)
 		}
+
+		// Preserve the ORIGINAL error as `cause`. The retry classifier
+		// (`isNonRetryableApiError`) reads the nested transport failure to tell a
+		// permanent refusal from a transient one, and it only ever sees this
+		// wrapper — dropping the chain here would blind it.
+		;(wrapped as Error & { cause?: unknown }).cause = error
 
 		// Preserve HTTP status and structured details for retry/backoff + UI
 		// These fields are used by Task.backoffAndAnnounce() and ChatRow/ErrorRow

@@ -141,6 +141,7 @@ import { getHost } from "@shofer/types"
 import { getEnvironmentDetails } from "../environment/getEnvironmentDetails.js"
 import { checkContextWindowExceededError } from "../context/context-management/context-error-handling.js"
 import { isNonRetryableApiError } from "../api/providers/utils/retryable-error.js"
+import { ApiRetryBudgetExceededError, resolveMaxConsecutiveApiFailures } from "./api-retry-budget.js"
 import { processUserContentMentions } from "../mentions/processUserContentMentions.js"
 import { getMessagesSinceLastSummary, summarizeConversation, getEffectiveApiHistory } from "../condense/index.js"
 import { MessageQueueService } from "../message-queue/MessageQueueService.js"
@@ -890,6 +891,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Streaming
 	isWaitingForFirstChunk = false
 	isStreaming = false
+	/**
+	 * CONSECUTIVE failed model API requests — the counter behind the retry bound
+	 * (`api-retry-budget.ts`). Incremented wherever the loop is about to retry
+	 * automatically, and reset to 0 the moment a request completes successfully,
+	 * so a blip mid-task costs nothing and only a condition that is not clearing
+	 * up can reach the ceiling.
+	 */
+	private consecutiveApiFailures = 0
 	currentStreamingContentIndex = 0
 	/**
 	 * Assistant turns this task has run — incremented once per API request. Surfaced to
@@ -5838,6 +5847,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								break
 							}
 
+							// THE BOUND (see `api-retry-budget.ts`) — the safety net
+							// for the failures the classifier above cannot recognise.
+							// Either the first-chunk handler already exhausted the
+							// budget and threw (in which case the count is done), or
+							// this mid-stream failure is the one to count.
+							const budgetExceeded =
+								error instanceof ApiRetryBudgetExceededError ? error : await this.noteApiFailure(error)
+
+							if (budgetExceeded) {
+								taskLog.error(`[Task#${this.taskId}.${this.instanceId}] ${budgetExceeded.message}`)
+								// Say it as well as log it: a headless controller sees
+								// the task abort and must be able to read WHY.
+								await this.say("error", budgetExceeded.message)
+								this.abortReason = "streaming_failed"
+								await this.abortTask()
+								break
+							}
+
 							// Stream failed - log the error and retry with the same content
 							// The existing rate limiting will prevent rapid retries
 							taskLog.error(
@@ -7423,6 +7450,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					throw error
 				}
 
+				// THE BOUND (see `api-retry-budget.ts`): the classifier above only
+				// knows the failures we have seen. A connection error carries no
+				// evidence either way, so the loop is stopped on COUNT — enough
+				// consecutive failures with no successful request in between and
+				// the task fails loudly, quoting the provider's own error, rather
+				// than retrying behind an exponential backoff indefinitely.
+				const budgetExceeded = await this.noteApiFailure(error)
+				if (budgetExceeded) {
+					taskLog.error(`[Task#${this.taskId}.${this.instanceId}] ${budgetExceeded.message}`)
+					throw budgetExceeded
+				}
+
 				// Apply shared exponential backoff and countdown UX
 				await this.backoffAndAnnounce(retryAttempt, error)
 
@@ -7475,6 +7514,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// )
 			yield chunk
 		}
+
+		// The stream drained without error — this is the ONE place where a
+		// request is observably successful end to end (a first chunk proves
+		// nothing; a stream can still die mid-flight), so it is where the
+		// consecutive-failure streak behind the retry bound is cleared.
+		this.resetApiFailureStreak()
 
 		// Record successful LLM API call.
 		recordLlmDuration(_llmProvider, _llmModelId, performance.now() - _llmT0)
@@ -7529,6 +7574,36 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		} catch {
 			/* best effort */
 		}
+	}
+
+	/**
+	 * Count one failed API request against the retry BOUND and report whether the
+	 * budget is now exhausted.
+	 *
+	 * Called from every site that is about to retry AUTOMATICALLY — the
+	 * first-chunk handler in {@link attemptApiRequest} and the mid-stream handler
+	 * in `recursivelyMakeShoferRequests`. The interactive path is deliberately
+	 * not counted: it asks the user instead of looping, so it cannot hang.
+	 *
+	 * @returns the error to fail with when the budget is exhausted, otherwise
+	 * `undefined` (keep retrying).
+	 */
+	private async noteApiFailure(error: unknown): Promise<ApiRetryBudgetExceededError | undefined> {
+		this.consecutiveApiFailures++
+
+		const state = await this.providerRef.deref()?.getState()
+		const limit = resolveMaxConsecutiveApiFailures(state?.maxConsecutiveApiFailures)
+
+		if (this.consecutiveApiFailures < limit) {
+			return undefined
+		}
+
+		return new ApiRetryBudgetExceededError(this.consecutiveApiFailures, limit, error)
+	}
+
+	/** A request completed: the failure streak, if any, is over. */
+	private resetApiFailureStreak(): void {
+		this.consecutiveApiFailures = 0
 	}
 
 	// Shared exponential backoff for retries (first-chunk and mid-stream)

@@ -616,6 +616,30 @@ cost limiting, set `defaultCostLimit` to `null` — **not** `maxUsd: 0`, which t
 `z.number().positive()` schema rejects. See
 [`cost-calculation-and-limits.md`](cost-calculation-and-limits.md) for details.
 
+### `maxConsecutiveApiFailures`
+
+```jsonc
+{
+	"maxConsecutiveApiFailures": 6,
+}
+```
+
+Ceiling on **consecutive** failed model API requests before a task gives up and
+surfaces the provider's error. Default `6`; a value below `1` falls back to the
+default — there is deliberately no "unlimited".
+
+The task loop auto-retries a failed request with exponential backoff (base
+`requestDelaySeconds`, capped at 600s). Failures it can recognise as permanent —
+a 401, a 403, an intercepting proxy refusing the `CONNECT` tunnel — abort on the
+first attempt. Everything else is indistinguishable from a transient blip on the
+error alone, so this bound stops the loop on **count**: without it, a provider
+the agent simply cannot reach retries for hours and presents as a hang rather
+than a failure.
+
+Only failures with no successful request in between are counted; any request
+that completes clears the streak, so a mid-task network blip costs nothing. At
+the default the give-up lands roughly five minutes in.
+
 ### `disabledTools`
 
 ```jsonc

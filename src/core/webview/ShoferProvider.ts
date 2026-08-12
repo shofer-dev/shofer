@@ -5351,6 +5351,11 @@ export class ShoferProvider
 			ttsSpeed: stateValues.ttsSpeed ?? 1.0,
 			soundVolume: stateValues.soundVolume,
 			writeDelayMs: stateValues.writeDelayMs ?? DEFAULT_WRITE_DELAY_MS,
+			// Retry policy. Both are read by `Task` off this state — a value the
+			// user configured and this object omits is a setting that silently
+			// does nothing (`requestDelaySeconds` was exactly that).
+			requestDelaySeconds: stateValues.requestDelaySeconds,
+			maxConsecutiveApiFailures: stateValues.maxConsecutiveApiFailures,
 			terminalShellIntegrationTimeout:
 				stateValues.terminalShellIntegrationTimeout ?? Terminal.defaultShellIntegrationTimeout,
 			terminalShellIntegrationDisabled: stateValues.terminalShellIntegrationDisabled ?? true,

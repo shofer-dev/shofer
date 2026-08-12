@@ -88,6 +88,15 @@ export const globalSettingsSchema = z.object({
 	alwaysAllowBrowser: z.boolean().optional(),
 	writeDelayMs: z.number().min(0).optional(),
 	requestDelaySeconds: z.number().optional(),
+	/**
+	 * Ceiling on CONSECUTIVE failed model API requests before a task gives up and
+	 * surfaces the provider's error. Counts only failures with no successful
+	 * request in between; a value below 1 falls back to the default (6), because
+	 * "unlimited" is the defect this bound removes — an unreachable provider
+	 * otherwise retries behind an exponential backoff for hours and presents as a
+	 * hang.
+	 */
+	maxConsecutiveApiFailures: z.number().int().min(1).optional(),
 	alwaysAllowMcp: z.boolean().optional(),
 	alwaysAllowUncategorized: z.boolean().optional(),
 	alwaysAllowModeSwitch: z.boolean().optional(),

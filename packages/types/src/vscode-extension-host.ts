@@ -414,6 +414,7 @@ export type ExtensionState = Pick<
 	| "includeCurrentCost"
 	| "maxGitStatusFiles"
 	| "requestDelaySeconds"
+	| "maxConsecutiveApiFailures"
 	| "disabledTools"
 	| "defaultCostLimit"
 	| "archivedTaskRetentionDays"

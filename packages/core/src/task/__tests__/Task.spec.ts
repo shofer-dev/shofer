@@ -763,6 +763,138 @@ describe("Shofer", () => {
 				)
 			})
 
+			describe("consecutive API failure bound", () => {
+				/**
+				 * The defect these cover: a provider the worker cannot reach fails
+				 * with a status-less connection error, which the classifier cannot
+				 * call permanent, so the auto-approval retry loop backs off
+				 * exponentially and retries forever — a hang, not a failure.
+				 *
+				 * The bound counts consecutive failures and gives up loudly. The
+				 * classifier (fast path) still short-circuits the shapes it knows,
+				 * on the FIRST attempt.
+				 */
+				const failingStream = (error: Error) =>
+					// eslint-disable-next-line require-yield
+					(async function* (): AsyncGenerator<ApiStreamChunk> {
+						throw error
+					})()
+
+				const succeedingStream = () =>
+					(async function* (): AsyncGenerator<ApiStreamChunk> {
+						yield { type: "text", text: "ok" }
+					})()
+
+				const makeTask = (maxConsecutiveApiFailures: number) => {
+					const shofer = new Task({
+						provider: mockProvider,
+						apiConfiguration: mockApiConfig,
+						task: "test task",
+						startTask: false,
+					})
+					vi.spyOn(shofer as any, "getSystemPrompt").mockResolvedValue("mock system prompt")
+
+					mockProvider.getState = vi.fn().mockResolvedValue({
+						autoApprovalEnabled: true,
+						requestDelaySeconds: 1,
+						maxConsecutiveApiFailures,
+						mcpEnabled: false,
+						apiConfiguration: mockApiConfig,
+						customModes: BUILTIN_MODES,
+					})
+
+					return shofer
+				}
+
+				const drain = async (stream: AsyncGenerator<ApiStreamChunk>) => {
+					const chunks: ApiStreamChunk[] = []
+					for await (const chunk of stream) {
+						chunks.push(chunk)
+					}
+					return chunks
+				}
+
+				it("gives up after the configured number of consecutive connection failures, quoting the provider error", async () => {
+					const shofer = makeTask(3)
+
+					// The exact wrapper text a provider produces for an unreachable
+					// model endpoint — no status field anywhere on it.
+					const connectionError = new Error("OpenRouter completion error: Connection error.")
+					const createMessageSpy = vi
+						.spyOn(shofer.api, "createMessage")
+						.mockImplementation(() => failingStream(connectionError))
+
+					await expect(drain(shofer.attemptApiRequest(0))).rejects.toThrow(
+						/failed 3 times in a row \(limit 3\); giving up/,
+					)
+
+					// The provider's own error is quoted, not swallowed: a headless
+					// controller has to be able to see WHY.
+					await expect(drain(shofer.attemptApiRequest(0))).rejects.toThrow(
+						/Last error: OpenRouter completion error: Connection error\./,
+					)
+
+					// Three attempts for the first give-up; the second call starts
+					// from an already-exhausted streak and stops immediately.
+					expect(createMessageSpy).toHaveBeenCalledTimes(4)
+				})
+
+				it("resets the streak when a request completes successfully", async () => {
+					const shofer = makeTask(3)
+
+					const connectionError = new Error("OpenRouter completion error: Connection error.")
+					let call = 0
+					// fail, fail, succeed | fail, fail, succeed — with the limit at 3
+					// this only survives if the successful request cleared the count.
+					const createMessageSpy = vi.spyOn(shofer.api, "createMessage").mockImplementation(() => {
+						call++
+						return call === 3 || call === 6 ? succeedingStream() : failingStream(connectionError)
+					})
+
+					expect(await drain(shofer.attemptApiRequest(0))).toEqual([{ type: "text", text: "ok" }])
+					expect(await drain(shofer.attemptApiRequest(0))).toEqual([{ type: "text", text: "ok" }])
+					expect(createMessageSpy).toHaveBeenCalledTimes(6)
+				})
+
+				it("fails a 401 on the FIRST attempt, without consuming the budget", async () => {
+					const shofer = makeTask(3)
+
+					const authError = Object.assign(new Error("OpenRouter completion error: No auth credentials"), {
+						status: 401,
+					})
+					const createMessageSpy = vi
+						.spyOn(shofer.api, "createMessage")
+						.mockImplementation(() => failingStream(authError))
+					const saySpy = vi.spyOn(shofer, "say")
+
+					await expect(drain(shofer.attemptApiRequest(0))).rejects.toThrow(/No auth credentials/)
+
+					expect(createMessageSpy).toHaveBeenCalledTimes(1)
+					// No backoff countdown was announced — it never entered the loop.
+					expect(saySpy.mock.calls.filter((c) => c[0] === "api_req_retry_delayed")).toHaveLength(0)
+				})
+
+				it("fails a proxy-denied CONNECT on the FIRST attempt (classifier, not bound)", async () => {
+					const shofer = makeTask(3)
+
+					// The squid-refusal chain: status-less at the top, the 403 only
+					// in undici's message three `cause` hops down.
+					const undiciAborted = Object.assign(new Error("Proxy response (403) !== 200 when HTTP Tunneling"), {
+						name: "AbortError",
+						code: "UND_ERR_ABORTED",
+					})
+					const proxyRefusal = Object.assign(new Error("OpenRouter completion error: Connection error."), {
+						cause: new TypeError("fetch failed", { cause: undiciAborted }),
+					})
+					const createMessageSpy = vi
+						.spyOn(shofer.api, "createMessage")
+						.mockImplementation(() => failingStream(proxyRefusal))
+
+					await expect(drain(shofer.attemptApiRequest(0))).rejects.toThrow(/Connection error/)
+					expect(createMessageSpy).toHaveBeenCalledTimes(1)
+				})
+			})
+
 			describe("processUserContentMentions", () => {
 				it("should process mentions in user_message tags", async () => {
 					const [shofer, task] = Task.create({

@@ -112,6 +112,23 @@ export const FORCED_CONTEXT_REDUCTION_PERCENT = 75
 /** Max automatic retries for context-window-exceeded errors before giving up. */
 export const MAX_CONTEXT_WINDOW_RETRIES = 3
 
+/**
+ * Default ceiling on CONSECUTIVE failed model API requests before a task gives
+ * up (setting: `maxConsecutiveApiFailures`). Counts failures with no successful
+ * request in between, so a blip mid-task costs nothing; only an unrecoverable
+ * condition reaches the ceiling.
+ *
+ * 6 is chosen against the backoff schedule, which is exponential from
+ * `requestDelaySeconds` (default 10s) and capped at
+ * {@link MAX_EXPONENTIAL_BACKOFF_SECONDS}: five waits of 10+20+40+80+160s put
+ * the give-up at roughly five minutes — long enough to ride out a real provider
+ * outage or a rolling restart, short enough that a permanent misconfiguration
+ * (an unreachable provider, a proxy denying the host) is reported while someone
+ * is still watching. Every attempt is itself retried by the provider SDK, so
+ * the real number of network attempts is a small multiple of this.
+ */
+export const MAX_CONSECUTIVE_API_FAILURES = 6
+
 /** Deadline (ms) to wait for the MCP hub to be ready before skipping the
  * enabled-tool-count warning. */
 export const MCP_READY_DEADLINE_MS = 12_000
