@@ -1,4 +1,4 @@
-import { type ShoferExtensionApi, ShoferEventName } from "@shofer/types"
+import { type ShoferExtensionApi, ShoferEventName, pickClientTunableSettings } from "@shofer/types"
 
 import type {
 	ShoferApi,
@@ -81,7 +81,17 @@ export class ShoferApiAgent implements ShoferApi {
 		// Apply the client's per-task API Configuration only when this host has no
 		// local CLI override (`allowClientConfig`). `mode` is applied regardless of
 		// that gate: it selects behaviour, not credentials.
-		const apiConfiguration = this.options.allowClientConfig ? input.apiConfiguration : undefined
+		//
+		// A pinned host is not fully deaf, though. The pin protects credentials and
+		// model identity; it was never meant to freeze how the pinned model
+		// BEHAVES, and an all-or-nothing gate made the whole `apiConfiguration`
+		// parameter dead on every deployed worker (they all pass `--provider`), so
+		// a controller could not turn reasoning off for a latency-sensitive turn.
+		// `CLIENT_TUNABLE_PROVIDER_SETTINGS` is the behaviour-only subset that
+		// survives the pin — the same distinction `mode` already relies on.
+		const apiConfiguration = this.options.allowClientConfig
+			? input.apiConfiguration
+			: pickClientTunableSettings(input.apiConfiguration)
 		return this.api.createTask({ ...input, apiConfiguration })
 	}
 

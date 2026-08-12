@@ -88,7 +88,7 @@ export interface HttpServerOptions {
  *   GET  /api/v1/event               → SSE event stream (worker-wide: ALL tasks)
  *   GET  /api/v1/task/:id/event      → SSE event stream filtered to ONE task
  *   GET  /api/v1/task/:id/snapshot   → 200 TaskSnapshot | 404 (attach backfill)
- *   POST /api/v1/task                → { prompt, mode, taskId?, apiConfiguration? } → { taskId }
+ *   POST /api/v1/task                → { prompt, mode, taskId?, apiConfiguration?, title? } → { taskId }
  *   POST /api/v1/task/:id/message    → { message }
  *   POST /api/v1/task/:id/cancel
  *   POST /api/v1/task/:id/ask        → { askResponse, text?, images?, askId?, mode? } (interactive approval)
@@ -184,9 +184,13 @@ export function createRequestHandler(
 				prompt: body.prompt,
 				mode: body.mode,
 				taskId: body.taskId as string | undefined,
-				// Per-task API Configuration shipped by the controller. Honored only
-				// when this node has no local CLI override (gated in ShoferApiAgent).
+				// Per-task API Configuration shipped by the controller. A local CLI
+				// override narrows this to the behaviour-only subset rather than
+				// dropping it wholesale (gated in ShoferApiAgent).
 				apiConfiguration: body.apiConfiguration as ProviderSettings | undefined,
+				// Supplying a title LOCKS it: the task cannot rename itself, and
+				// `set_task_title` leaves its tool list.
+				title: typeof body.title === "string" ? body.title : undefined,
 			})
 			return send(res, 201, result)
 		}

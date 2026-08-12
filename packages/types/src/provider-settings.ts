@@ -515,6 +515,53 @@ export const providerSettingsSchema = z.object({
 
 export type ProviderSettings = z.infer<typeof providerSettingsSchema>
 
+/**
+ * The settings a CONTROLLER may set per task even when the node pins its own
+ * provider (`shofer serve --provider/--model/--api-key/--base-url`).
+ *
+ * The pin exists to stop a remote controller swapping the node's CREDENTIALS
+ * and identity — which provider, which key, which base URL, which model. It was
+ * never meant to freeze how the pinned model BEHAVES, and `mode` already
+ * crosses that line for the same reason: it selects behaviour, not credentials.
+ *
+ * These keys are that same category. Reasoning in particular is the one a
+ * realtime caller must control: a thinking model emits reasoning before its
+ * first assistant token, which is dead air on a phone call and irrelevant to a
+ * batch job — the same deployed worker wants it off for one and on for the
+ * other, so it cannot be a deploy-time constant.
+ *
+ * Anything NOT listed here stays pinned. Adding a key is a deliberate act:
+ * it must be behaviour, never a credential, an endpoint, or a model identity.
+ */
+export const CLIENT_TUNABLE_PROVIDER_SETTINGS = [
+	"enableReasoningEffort",
+	"reasoningEffort",
+	"modelMaxThinkingTokens",
+	"modelTemperature",
+	"verbosity",
+] as const satisfies readonly (keyof ProviderSettings)[]
+
+export type ClientTunableProviderSetting = (typeof CLIENT_TUNABLE_PROVIDER_SETTINGS)[number]
+
+/**
+ * Narrow a controller-supplied configuration to {@link CLIENT_TUNABLE_PROVIDER_SETTINGS}.
+ *
+ * Returns `undefined` when nothing tunable was supplied, so a caller can keep
+ * treating "no client config" as absent rather than as an empty override.
+ */
+export const pickClientTunableSettings = (settings: ProviderSettings | undefined): ProviderSettings | undefined => {
+	if (!settings) {
+		return undefined
+	}
+	const picked: Record<string, unknown> = {}
+	for (const key of CLIENT_TUNABLE_PROVIDER_SETTINGS) {
+		if (settings[key] !== undefined) {
+			picked[key] = settings[key]
+		}
+	}
+	return Object.keys(picked).length > 0 ? (picked as ProviderSettings) : undefined
+}
+
 export const providerSettingsWithIdSchema = providerSettingsSchema.extend({ id: z.string().optional() })
 
 export const discriminatedProviderSettingsWithIdSchema = providerSettingsSchemaDiscriminated.and(

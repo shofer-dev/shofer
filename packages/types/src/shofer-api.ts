@@ -138,6 +138,19 @@ export interface CreateTaskInput {
 	apiConfiguration?: ProviderSettings
 	/** Image data URIs to seed the task with, same shape as {@link AskResponse.images}. */
 	images?: string[]
+	/**
+	 * The task's title, set by the controller that created it.
+	 *
+	 * Supplying it LOCKS the title the same way `new_task`'s `title` does: the
+	 * agent's `set_task_title` tool is omitted from the tool list entirely, so
+	 * it cannot rename a task whose name its controller owns. A controller that
+	 * displays tasks under its own labels (a phone call, a pipeline stage) wants
+	 * this — both to keep the label stable and to keep one always-available tool
+	 * out of a latency-sensitive turn.
+	 *
+	 * Omit it and the task names itself, exactly as before.
+	 */
+	title?: string
 }
 
 /** A reply to an outstanding `ask` (interactive tool approval / follow-up). */

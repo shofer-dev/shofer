@@ -77,14 +77,14 @@ The full method set (see the source for exact signatures):
 
 #### Control plane
 
-| Method                                                                    | Purpose                                                                                                                                                                                                                                     |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createTask({ prompt, mode, taskId?, apiConfiguration? })` → `{ taskId }` | Start a task. `mode` (**required**) is the mode slug it runs in. `apiConfiguration` ships the controller's resolved [API Configuration](#per-task-api-configuration) so a remote task runs on the same provider/model the front-end picked. |
-| `sendMessage(taskId, message)`                                            | Send a follow-up message to a running task.                                                                                                                                                                                                 |
-| `cancelTask(taskId)`                                                      | Abort a task.                                                                                                                                                                                                                               |
-| `respondToAsk(taskId, AskResponse)`                                       | Answer an outstanding `ask` (interactive tool approval / follow-up). The reverse of the `ask` events on the stream, so a remote task's approvals round-trip like a local one's.                                                             |
-| `getTaskSnapshot(taskId)` → `TaskSnapshot \| undefined`                   | The task's state so far — see [Task snapshots](#task-snapshots-attaching-to-a-running-task). `undefined` when the host owns no such task.                                                                                                   |
-| `subscribe(listener)` → `unsubscribe`                                     | Subscribe to the agent event stream ([`ServerEvent`](#event-model)).                                                                                                                                                                        |
+| Method                                                                            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createTask({ prompt, mode, taskId?, apiConfiguration?, title? })` → `{ taskId }` | Start a task. `mode` (**required**) is the mode slug it runs in. `apiConfiguration` ships the controller's resolved [API Configuration](#per-task-api-configuration) so a remote task runs on the same provider/model the front-end picked. `title` names the task AND locks the name: the agent's `set_task_title` tool is omitted entirely, which a controller that owns the label (a phone call, a pipeline stage) wants — and which keeps one always-available tool out of a latency-sensitive turn. |
+| `sendMessage(taskId, message)`                                                    | Send a follow-up message to a running task.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `cancelTask(taskId)`                                                              | Abort a task.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `respondToAsk(taskId, AskResponse)`                                               | Answer an outstanding `ask` (interactive tool approval / follow-up). The reverse of the `ask` events on the stream, so a remote task's approvals round-trip like a local one's.                                                                                                                                                                                                                                                                                                                          |
+| `getTaskSnapshot(taskId)` → `TaskSnapshot \| undefined`                           | The task's state so far — see [Task snapshots](#task-snapshots-attaching-to-a-running-task). `undefined` when the host owns no such task.                                                                                                                                                                                                                                                                                                                                                                |
+| `subscribe(listener)` → `unsubscribe`                                             | Subscribe to the agent event stream ([`ServerEvent`](#event-model)).                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 **The single-open-task invariant survives this, and is worth stating exactly**,
 because it reads like the opposite: at most one task is OPEN on the provider's
@@ -190,11 +190,26 @@ worker needs no provider setup of its own. This is what lets a controller point 
 at a shared endpoint (e.g. an `llm-router` service reachable from both hosts).
 
 **Manual override.** Start the worker with any of `--provider` / `--model` / `--api-key` /
-`--base-url` and it pins to that config: the incoming per-task `apiConfiguration` is
-ignored and the worker's own config always wins. With none of those flags, the worker defers
-to the controller (per task). The gate is computed once at boot (`serve.ts` →
-`allowClientConfig`) and enforced in `ShoferApiAgent.createTask`; the in-process Local
-adapter never receives a remote config (it reads the provider's live config directly).
+`--base-url` and it pins to that config: the incoming per-task `apiConfiguration` no longer
+chooses the provider, model, endpoint or key, and the worker's own config wins. With none of
+those flags, the worker defers to the controller entirely (per task). The gate is computed
+once at boot (`serve.ts` → `allowClientConfig`) and enforced in `ShoferApiAgent.createTask`;
+the in-process Local adapter never receives a remote config (it reads the provider's live
+config directly).
+
+**A pin covers credentials, not behaviour.** `CLIENT_TUNABLE_PROVIDER_SETTINGS`
+(`@shofer/types`) is the subset a controller may still set on a pinned worker —
+`enableReasoningEffort`, `reasoningEffort`, `modelMaxThinkingTokens`, `modelTemperature`,
+`verbosity` — narrowed by `pickClientTunableSettings`. Everything else is dropped.
+
+The distinction is the one `mode` already relies on: the pin exists so a remote controller
+cannot swap a worker's credentials or identity, not so a deployment can freeze how the
+pinned model behaves. Reasoning is the case that forces it. A thinking model emits reasoning
+before its first assistant token, which is exactly the wrong shape for a realtime caller
+(a voice turn is dead air until text arrives) and exactly the right one for a batch job —
+and the same deployed worker serves both, so it cannot be a deploy-time constant. Sending
+only pinned fields leaves `apiConfiguration` `undefined` rather than an empty object, so a
+host still distinguishes "no client config" from "an override that happens to be empty".
 
 ### Where plugins fit
 
@@ -221,7 +236,7 @@ GET  /api/v1/whoami               { version } (authed; one-shot liveness+auth)
 GET  /api/v1/event                SSE event stream (worker-wide: ALL tasks) → subscribe()
 GET  /api/v1/task/:id/event       SSE event stream filtered to ONE task   → subscribe() + filter
 GET  /api/v1/task/:id/snapshot    TaskSnapshot (404 = not this host's task) → getTaskSnapshot()
-POST /api/v1/task                 { prompt, mode, taskId?, apiConfiguration? } → createTask()
+POST /api/v1/task                 { prompt, mode, taskId?, apiConfiguration?, title? } → createTask()
 POST /api/v1/task/:id/message     { message }                 → sendMessage()
 POST /api/v1/task/:id/cancel                                  → cancelTask()
 POST /api/v1/task/:id/ask         AskResponse                 → respondToAsk()
@@ -248,7 +263,7 @@ connects with `ShoferHttpClient`. Every option is a CLI flag (defined in
 | `--host <host>`          | `127.0.0.1`                                      | Bind address. **Use `0.0.0.0` to accept traffic from outside the process** (e.g. in a container).                                                                                                                                                                                                                                                                                                                                        |
 | `-w, --workspace <path>` | cwd                                              | Workspace directory. Custom modes are read from `<workspace>/.shofer/shofermodes`.                                                                                                                                                                                                                                                                                                                                                       |
 | `-e, --extension <path>` | auto (`ROO_EXTENSION_PATH` → sibling `src/dist`) | Path to the built extension bundle (`extension.js`).                                                                                                                                                                                                                                                                                                                                                                                     |
-| `--provider <provider>`  | `openrouter`                                     | LLM provider. Any of `--provider/--model/--api-key/--base-url` **pins** the worker to that config (per-task `apiConfiguration` from the controller is then ignored).                                                                                                                                                                                                                                                                     |
+| `--provider <provider>`  | `openrouter`                                     | LLM provider. Any of `--provider/--model/--api-key/--base-url` **pins** the worker's credentials and model (a controller's per-task `apiConfiguration` is then narrowed to `CLIENT_TUNABLE_PROVIDER_SETTINGS` — reasoning/temperature/verbosity — rather than dropped wholesale).                                                                                                                                                        |
 | `-m, --model <model>`    | provider default                                 | Model id. The `shofer` provider has **no** default model — pass one or task creation errors.                                                                                                                                                                                                                                                                                                                                             |
 | `-k, --api-key <key>`    | –                                                | Provider API key.                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `--base-url <url>`       | –                                                | Provider base URL (e.g. `http://llm-router:3000/v1`).                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -292,7 +307,7 @@ sequenceDiagram
     participant T as Task on the worker
 
     C->>N: GET /api/v1/whoami — liveness + auth + version
-    C->>N: POST /api/v1/task {prompt, mode, taskId?, apiConfiguration?} → createTask()
+    C->>N: POST /api/v1/task {prompt, mode, taskId?, apiConfiguration?, title?} → createTask()
     N-->>C: { taskId }
     C->>N: GET /api/v1/task/:id/event — SSE, subscribe() filtered to this task
     N->>T: run the agent loop

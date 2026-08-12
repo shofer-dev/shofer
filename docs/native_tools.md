@@ -746,7 +746,7 @@ Sets a short, descriptive title for the current task/conversation. Use this earl
 
 No approval prompt needed — this is a non-destructive meta-operation.
 
-**Parent-locked titles:** if this task was spawned with [`new_task`](#new_task)'s `title` parameter, its title is locked (`HistoryItem.nameLocked`). In that case `set_task_title` is **not offered to the task at all** — it is omitted from the tool list (`getNativeTools({ titleLocked: true })`). As a defense-in-depth backstop, the tool also refuses with an error if it is somehow invoked. The lock is re-applied on rehydration, so it survives restarts.
+**Locked titles:** if this task was spawned with [`new_task`](#new_task)'s `title` parameter, or created over the AgentApi with `createTask`'s `title`, its title is locked (`HistoryItem.nameLocked`). In that case `set_task_title` is **not offered to the task at all** — it is omitted from the tool list (`getNativeTools({ titleLocked: true })`). As a defense-in-depth backstop, the tool also refuses with an error if it is somehow invoked. The lock is re-applied on rehydration, so it survives restarts.
 
 **User-renamed titles:** `HistoryItem.titleSource` records who last set the title — `default` (untitled), `agent` (this tool), or `user` (a deliberate human rename). When it is `user`, `set_task_title` refuses to overwrite it (the agent keeps its own `agent`/`default` titles current, but never clobbers a human rename). A successful call stamps `titleSource: "agent"`; a user rename via `renameManagedTask` stamps `"user"`. Unlike `nameLocked`, the tool stays offered — the source is checked at call time.
 

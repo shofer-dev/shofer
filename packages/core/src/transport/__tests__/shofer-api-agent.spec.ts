@@ -65,6 +65,52 @@ describe("ShoferApiAgent", () => {
 		)
 	})
 
+	it("createTask keeps BEHAVIOUR settings through a CLI override, dropping credentials", async () => {
+		const api = makeApi()
+		await new ShoferApiAgent(api).createTask({
+			prompt: "hi",
+			mode: "code",
+			apiConfiguration: {
+				// credentials + identity — pinned by the host, must not survive
+				apiProvider: "openai",
+				apiModelId: "gpt-4o",
+				openAiApiKey: "sk-secret",
+				openAiBaseUrl: "https://elsewhere.example",
+				// behaviour — the caller's to choose per task
+				enableReasoningEffort: false,
+				reasoningEffort: "low",
+				modelMaxThinkingTokens: 0,
+			} as never,
+		})
+		expect(spies(api).createTask).toHaveBeenCalledWith(
+			expect.objectContaining({
+				apiConfiguration: {
+					enableReasoningEffort: false,
+					reasoningEffort: "low",
+					modelMaxThinkingTokens: 0,
+				},
+			}),
+		)
+	})
+
+	it("createTask leaves apiConfiguration undefined when a pinned host is sent only credentials", async () => {
+		const api = makeApi()
+		await new ShoferApiAgent(api).createTask({
+			prompt: "hi",
+			mode: "code",
+			apiConfiguration: { apiProvider: "openai", openAiApiKey: "sk-secret" } as never,
+		})
+		// Nothing tunable was supplied, so the host must see "no client config"
+		// rather than an empty object that would read as an override.
+		expect(spies(api).createTask).toHaveBeenCalledWith(expect.objectContaining({ apiConfiguration: undefined }))
+	})
+
+	it("createTask forwards a controller-supplied title (which locks the name)", async () => {
+		const api = makeApi()
+		await new ShoferApiAgent(api).createTask({ prompt: "hi", mode: "code", title: "Call with Maria" })
+		expect(spies(api).createTask).toHaveBeenCalledWith(expect.objectContaining({ title: "Call with Maria" }))
+	})
+
 	it("sendMessage rehydrates the addressed task, then delivers to it", async () => {
 		const api = makeApi()
 		await new ShoferApiAgent(api).sendMessage("t1", "go", ["img"])
