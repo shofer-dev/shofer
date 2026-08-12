@@ -60,6 +60,9 @@ export const generateSystemPrompt = async (provider: ShoferProvider, message: We
 			enableSubfolderRules: enableSubfolderRules ?? true,
 			newTaskRequireTodos: getHost().config.get<boolean>(Package.name, "newTaskRequireTodos", false),
 			isStealthModel: modelInfo?.isStealthModel,
+			// The preview must show the prompt the configuration actually
+			// produces — including the conversational (tool-free) variant.
+			toolCallingEnabled: apiConfiguration?.toolCallingEnabled,
 		},
 		undefined, // todoList
 		undefined, // modelId

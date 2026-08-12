@@ -314,6 +314,15 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 		includeAllToolsWithRestrictions,
 	} = options
 
+	// A conversational turn (`toolCallingEnabled === false`) has no tool plane at
+	// all. Gating here rather than at each metadata literal means every consumer
+	// — the main request, condensation, context-window recovery — sees the same
+	// empty list, and no tool definition is ever assembled (nor any plugin tool
+	// collected) for a turn that cannot call one.
+	if (apiConfiguration?.toolCallingEnabled === false) {
+		return { tools: [] }
+	}
+
 	const mcpHub = provider.getMcpHub()
 
 	// Category II managers are reached through their host registries (Chunk B): the

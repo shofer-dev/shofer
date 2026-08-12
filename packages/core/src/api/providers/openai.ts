@@ -159,9 +159,9 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				stream: true as const,
 				...(isGrokXAI ? {} : { stream_options: { include_usage: true } }),
 				...(reasoning && reasoning),
-				tools: this.convertToolsForOpenAI(metadata?.tools),
-				tool_choice: metadata?.tool_choice,
-				parallel_tool_calls: metadata?.parallelToolCalls ?? true,
+				// Tool params are omitted entirely on a conversational turn
+				// (`toolCallingEnabled === false`) — see `openAiToolParams`.
+				...this.openAiToolParams(metadata),
 			}
 
 			// Add max_tokens if needed
@@ -226,10 +226,9 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				messages: deepseekReasoner
 					? convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
 					: [systemMessage, ...convertToOpenAiMessages(messages)],
-				// Tools are always present (minimum ALWAYS_AVAILABLE_TOOLS)
-				tools: this.convertToolsForOpenAI(metadata?.tools),
-				tool_choice: metadata?.tool_choice,
-				parallel_tool_calls: metadata?.parallelToolCalls ?? true,
+				// Tool params are omitted entirely on a conversational turn
+				// (`toolCallingEnabled === false`) — see `openAiToolParams`.
+				...this.openAiToolParams(metadata),
 			}
 
 			// Add max_tokens if needed
@@ -352,10 +351,9 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				...(isGrokXAI ? {} : { stream_options: { include_usage: true } }),
 				reasoning_effort: modelInfo.reasoningEffort as "low" | "medium" | "high" | undefined,
 				temperature: undefined,
-				// Tools are always present (minimum ALWAYS_AVAILABLE_TOOLS)
-				tools: this.convertToolsForOpenAI(metadata?.tools),
-				tool_choice: metadata?.tool_choice,
-				parallel_tool_calls: metadata?.parallelToolCalls ?? true,
+				// Tool params are omitted entirely on a conversational turn
+				// (`toolCallingEnabled === false`) — see `openAiToolParams`.
+				...this.openAiToolParams(metadata),
 			}
 
 			// O3 family models do not support the deprecated max_tokens parameter
@@ -386,10 +384,9 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				],
 				reasoning_effort: modelInfo.reasoningEffort as "low" | "medium" | "high" | undefined,
 				temperature: undefined,
-				// Tools are always present (minimum ALWAYS_AVAILABLE_TOOLS)
-				tools: this.convertToolsForOpenAI(metadata?.tools),
-				tool_choice: metadata?.tool_choice,
-				parallel_tool_calls: metadata?.parallelToolCalls ?? true,
+				// Tool params are omitted entirely on a conversational turn
+				// (`toolCallingEnabled === false`) — see `openAiToolParams`.
+				...this.openAiToolParams(metadata),
 			}
 
 			// O3 family models do not support the deprecated max_tokens parameter

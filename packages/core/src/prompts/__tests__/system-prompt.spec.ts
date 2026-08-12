@@ -496,6 +496,66 @@ describe("SYSTEM_PROMPT", () => {
 		expect(prompt).toContain("OBJECTIVE")
 	})
 
+	describe("toolCallingEnabled === false (conversational prompt)", () => {
+		const buildPrompt = (toolCallingEnabled?: boolean) =>
+			SYSTEM_PROMPT(
+				mockContext,
+				"/test/path",
+				false,
+				undefined, // mcpHub
+				undefined, // diffStrategy
+				defaultModeSlug, // mode
+				undefined, // customModePrompts
+				BUILTIN_MODES, // customModes
+				undefined, // globalCustomInstructions
+				experiments,
+				undefined, // language
+				undefined, // shoferIgnoreInstructions
+				{
+					todoListEnabled: true,
+					useAgentRules: true,
+					newTaskRequireTodos: false,
+					...(toolCallingEnabled === undefined ? {} : { toolCallingEnabled }),
+				},
+			)
+
+		it("keeps the role definition and the system information", async () => {
+			const prompt = await buildPrompt(false)
+
+			expect(prompt).toContain(BUILTIN_MODES[0]!.roleDefinition)
+			expect(prompt).toContain("SYSTEM INFORMATION")
+		})
+
+		it("omits every tool-mediated section", async () => {
+			const prompt = await buildPrompt(false)
+
+			// TOOL USE — the mandate that makes a conversational reply impossible.
+			expect(prompt).not.toContain("You must call at least one tool")
+			expect(prompt).not.toContain("TOOL USE")
+			expect(prompt).not.toContain("Tool Use Guidelines")
+			// OBJECTIVE / RULES both name the completion tool.
+			expect(prompt).not.toContain("attempt_completion")
+			expect(prompt).not.toContain("OBJECTIVE")
+			expect(prompt).not.toContain("RULES")
+			expect(prompt).not.toContain("CAPABILITIES")
+			expect(prompt).not.toContain("MODES")
+			// Markdown formatting — clickable path references, meaningless in speech.
+			expect(prompt).not.toContain("MARKDOWN RULES")
+		})
+
+		it("leaves the default prompt unchanged for true and undefined", async () => {
+			const [enabled, unset] = await Promise.all([buildPrompt(true), buildPrompt(undefined)])
+
+			expect(enabled).toEqual(unset)
+			for (const prompt of [enabled, unset]) {
+				expect(prompt).toContain("You must call at least one tool")
+				expect(prompt).toContain("CAPABILITIES")
+				expect(prompt).toContain("OBJECTIVE")
+				expect(prompt).toContain("RULES")
+			}
+		})
+	})
+
 	afterAll(() => {
 		vi.restoreAllMocks()
 	})

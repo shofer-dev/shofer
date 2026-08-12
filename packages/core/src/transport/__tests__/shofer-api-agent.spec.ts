@@ -93,6 +93,24 @@ describe("ShoferApiAgent", () => {
 		)
 	})
 
+	it("createTask keeps toolCallingEnabled through a CLI override", async () => {
+		const api = makeApi()
+		await new ShoferApiAgent(api).createTask({
+			prompt: "hi",
+			mode: "code",
+			apiConfiguration: {
+				apiProvider: "openai",
+				openAiApiKey: "sk-secret",
+				// A realtime caller's turn is plain streamed text — a behaviour
+				// choice per task, not a credential the pin protects.
+				toolCallingEnabled: false,
+			} as never,
+		})
+		expect(spies(api).createTask).toHaveBeenCalledWith(
+			expect.objectContaining({ apiConfiguration: { toolCallingEnabled: false } }),
+		)
+	})
+
 	it("createTask leaves apiConfiguration undefined when a pinned host is sent only credentials", async () => {
 		const api = makeApi()
 		await new ShoferApiAgent(api).createTask({

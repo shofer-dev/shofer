@@ -117,6 +117,7 @@ import {
 import { formatResponse } from "../prompts/responses.js"
 import { SYSTEM_PROMPT } from "../prompts/system.js"
 import { buildNativeToolsArrayWithRestrictions } from "./build-tools.js"
+import { emitTaskCompleted } from "./emit-task-completed.js"
 import { MAX_SUBTASK_RESULT_LENGTH } from "../tools/NewTaskTool.js"
 
 // plugin lifecycle hooks (design §6.9)
@@ -3166,6 +3167,28 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		})
 	}
 
+	/**
+	 * True when this task runs CONVERSATIONAL turns — no tools, and a complete
+	 * text-only assistant reply IS the turn (see `toolCallingEnabled` in
+	 * `ProviderSettings`). The task's OWN configuration is authoritative: a task
+	 * may run on a per-task profile that differs from the host-global settings.
+	 */
+	public get toolCallingDisabled(): boolean {
+		return this.apiConfiguration?.toolCallingEnabled === false
+	}
+
+	/**
+	 * The provider settings the tool builder should see.
+	 *
+	 * The tool-build call sites read the HOST-GLOBAL settings, but whether a task
+	 * has a tool plane at all is a property of the TASK. Fold this task's flag
+	 * over the global one so a conversational task never receives tools just
+	 * because the host default has them on.
+	 */
+	private toolBuildSettings(apiConfiguration: ProviderSettings | undefined): ProviderSettings | undefined {
+		return this.toolCallingDisabled ? { ...(apiConfiguration ?? {}), toolCallingEnabled: false } : apiConfiguration
+	}
+
 	public async submitUserMessage(
 		text: string,
 		images?: string[],
@@ -3299,7 +3322,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				mode,
 				customModes: state?.customModes,
 				experiments: state?.experiments,
-				apiConfiguration,
+				apiConfiguration: this.toolBuildSettings(apiConfiguration),
 				disabledTools: state?.disabledTools,
 				modelInfo,
 				includeAllToolsWithRestrictions: false,
@@ -4767,6 +4790,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// For now a task never 'completes'. This will only happen if
 				// the user hits max requests and denies resetting the count.
 				break
+			} else if (this.toolCallingDisabled) {
+				// A conversational task has no tools to be nudged towards, and
+				// the inner loop already ended the turn (completed, or continued
+				// with a queued message). Re-prompting here would ask for a tool
+				// that was never sent.
+				break
 			} else {
 				nextUserContent = [{ type: "text", text: formatResponse.noToolsUsed() }]
 			}
@@ -4960,7 +4989,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				}
 			}
 
-			const environmentDetails = await getEnvironmentDetails(this, currentIncludeFileDetails)
+			// Environment details describe a workspace the agent can only act on
+			// through tools — the file listing, the terminals, the todo reminder.
+			// A conversational turn has none of those, so the whole block is
+			// latency and context tokens spent on something unusable. Skipped
+			// explicitly rather than degraded to an empty string by accident.
+			const environmentDetails = this.toolCallingDisabled
+				? ""
+				: await getEnvironmentDetails(this, currentIncludeFileDetails)
 
 			// Remove any existing environment_details blocks before adding fresh ones.
 			// This prevents duplicate environment details when resuming tasks,
@@ -4980,8 +5016,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			})
 
 			// Add environment details as its own text block, separate from tool
-			// results.
-			const finalUserContent = [...contentWithoutEnvDetails, { type: "text" as const, text: environmentDetails }]
+			// results. A conversational turn generates none, and an empty text
+			// block is rejected outright by some providers.
+			const finalUserContent = environmentDetails
+				? [...contentWithoutEnvDetails, { type: "text" as const, text: environmentDetails }]
+				: [...contentWithoutEnvDetails]
 			// Only add user message to conversation history if:
 			// 1. This is the first attempt (retryAttempt === 0), AND
 			// 2. The original userContent was not empty (empty signals delegation resume where
@@ -6271,7 +6310,48 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						`[DIAG recursivelyMakeShoferRequests] Tool usage check: didToolUse=${didToolUse}, consecutiveNoToolUseCount=${this.consecutiveNoToolUseCount}`,
 					)
 
-					if (!didToolUse) {
+					if (!didToolUse && this.toolCallingDisabled) {
+						// CONVERSATIONAL TURN. This task has no tool plane, so a
+						// complete text-only reply is not a mistake — it is the
+						// deliverable, and it has already been streamed to the
+						// caller. Nudging it with `noToolsUsed()` would demand a
+						// tool that was never sent and would burn the mistake
+						// budget on correct behaviour.
+						//
+						// Terminal-State Queue-Drain Rule: check the queue BEFORE
+						// declaring terminal state. A message queued while the
+						// agent was speaking continues the conversation — it is
+						// the next user turn, not a new task.
+						const queued = this.messageQueueService.isEmpty()
+							? undefined
+							: this.messageQueueService.dequeueMessage()
+
+						if (queued) {
+							taskLog.info(
+								`[Task#${this.taskId}] Conversational turn: draining queued message instead of completing`,
+							)
+							await this.say("user_feedback", queued.text ?? "", queued.images)
+							this.userMessageContent.push({
+								type: "text",
+								text: `<user_message>\n${queued.text ?? ""}\n</user_message>`,
+							})
+							this.userMessageContent.push(...formatResponse.imageBlocks(queued.images))
+						} else {
+							// Self-Declared Terminal State Rule: no `ask`, no
+							// approval. The text was already said, so nothing is
+							// re-rendered as a completion_result — emitting the
+							// event and aborting the loop is the whole terminal
+							// step. The task stays resumable (`resumeTask` /
+							// `sendMessage`), exactly as an attempt_completion-
+							// completed task does.
+							// `well` — the agent answered as asked. There is no
+							// self-assessment to read here (that is a parameter of
+							// the `attempt_completion` tool this task does not have).
+							emitTaskCompleted(this, "well")
+							this.abort = true
+							return true
+						}
+					} else if (!didToolUse) {
 						// Increment consecutive no-tool-use counter
 						this.consecutiveNoToolUseCount++
 
@@ -6525,6 +6605,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			ctx?.require_todos ?? getHost().config.get<boolean>(Package.name, "newTaskRequireTodos", false)
 		const effectiveIncludeSystemInfo = ctx?.include_system_info ?? true
 		const effectiveIncludeMcp = ctx?.include_mcp ?? true
+		// A conversational task gets the minimal (tool-free) prompt variant.
+		const effectiveToolCallingEnabled = !this.toolCallingDisabled
 
 		// H15: Build a cache key covering every stable input to the system
 		// prompt.  Peer notifications + subtask constraints are appended
@@ -6550,6 +6632,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			effectiveRequireTodos,
 			effectiveIncludeSystemInfo,
 			effectiveIncludeMcp,
+			// Two different prompts; a task with tools off must never reuse a
+			// cached tools-on prompt (or vice versa).
+			effectiveToolCallingEnabled,
 			JSON.stringify(this.agentToolGroups ?? null),
 			JSON.stringify(this.agentContext ?? null),
 			apiConfiguration?.todoListEnabled ?? true,
@@ -6623,6 +6708,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					includeSkills: effectiveIncludeSkills,
 					includeSystemInfo: effectiveIncludeSystemInfo,
 					includeMcp: effectiveIncludeMcp,
+					// No tool plane ⇒ the minimal conversational prompt.
+					toolCallingEnabled: effectiveToolCallingEnabled,
 				},
 				undefined, // todoList
 				this.api.getModel().id,
@@ -6841,7 +6928,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			mode,
 			customModes: state?.customModes,
 			experiments: state?.experiments,
-			apiConfiguration,
+			apiConfiguration: this.toolBuildSettings(apiConfiguration),
 			disabledTools: state?.disabledTools,
 			modelInfo,
 			includeAllToolsWithRestrictions: false,
@@ -6897,7 +6984,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				mode,
 				customModes: state?.customModes,
 				experiments: state?.experiments,
-				apiConfiguration,
+				apiConfiguration: this.toolBuildSettings(apiConfiguration),
 				disabledTools: state?.disabledTools,
 				modelInfo,
 				includeAllToolsWithRestrictions: false,
@@ -7299,7 +7386,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				mode,
 				customModes: state?.customModes,
 				experiments: state?.experiments,
-				apiConfiguration,
+				apiConfiguration: this.toolBuildSettings(apiConfiguration),
 				disabledTools: state?.disabledTools,
 				modelInfo: this.api.getModel().info,
 				includeAllToolsWithRestrictions: supportsAllowedFunctionNames,

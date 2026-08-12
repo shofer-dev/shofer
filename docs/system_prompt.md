@@ -54,6 +54,43 @@ flowchart TB
     G11 -.-> S11
 ```
 
+## The conversational variant (`toolCallingEnabled === false`)
+
+`generatePrompt` assembles a second, minimal prompt when the task's
+`ProviderSettings.toolCallingEnabled` is `false` — the setting that makes a turn
+conversational: no tools are sent to the model, and a complete text-only reply
+IS the turn (`Task.recursivelyMakeShoferRequests` completes the task instead of
+re-prompting with `formatResponse.noToolsUsed()`). This is what a realtime
+voice/phone caller drives, where the deliverable of a turn is streamed prose.
+
+It keeps four things:
+
+| Kept                      | Gate                                                              |
+| ------------------------- | ----------------------------------------------------------------- |
+| `roleDefinition`          | always                                                            |
+| `skillsSection`           | `include_skills`                                                  |
+| `getSystemInfoSection()`  | `include_system_info`                                             |
+| `addCustomInstructions()` | `include_mode_rules` / `include_user_rules` / `include_agents_md` |
+
+Everything else is omitted, and not merely as dead weight — each mandates
+tool-mediated, non-conversational behaviour that is wrong for an agent whose
+output may be spoken aloud:
+
+| Omitted                         | Why it is wrong without tools                                                 |
+| ------------------------------- | ----------------------------------------------------------------------------- |
+| `markdownFormattingSection()`   | Clickable ``[`path`](path:line)`` references — meaningless in speech          |
+| `getSharedToolUseSection()`     | "You must call at least one tool per assistant response"                      |
+| `getToolUseGuidelinesSection()` | A decision procedure for choosing tools there are none of                     |
+| `getCapabilitiesSection()`      | Describes an inventory the model was not given                                |
+| `getModesSection()`             | Switching modes is itself a tool call                                         |
+| `getRulesSection()`             | "NOT engage in a back and forth conversation", `environment_details` handling |
+| `getObjectiveSection()`         | "Use the `attempt_completion` tool to present the result"                     |
+
+The flag reaches the prompt as `SystemPromptSettings.toolCallingEnabled`,
+threaded by `Task.getSystemPrompt` from the task's `apiConfiguration`, and it
+participates in the system-prompt cache key — a task with tools off never reuses
+a cached tools-on prompt.
+
 ## Section Details
 
 ### 1. `roleDefinition` (Mode Persona)

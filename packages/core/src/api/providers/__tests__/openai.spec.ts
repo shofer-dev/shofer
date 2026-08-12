@@ -90,6 +90,44 @@ describe("OpenAiHandler", () => {
 		mockCreate.mockClear()
 	})
 
+	describe("tool parameters", () => {
+		const messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: "Hello!" }]
+
+		it("omits tools, tool_choice and parallel_tool_calls when the turn has no tools", async () => {
+			// A conversational turn (`toolCallingEnabled === false`) sends an empty
+			// tool array. `tool_choice`/`parallel_tool_calls` are only valid
+			// alongside a non-empty `tools`, so all three must be absent.
+			for await (const _ of handler.createMessage("sys", messages, { taskId: "t", tools: [] } as any)) {
+				// drain
+			}
+
+			const body = mockCreate.mock.calls[0]![0]
+			expect(body).not.toHaveProperty("tools")
+			expect(body).not.toHaveProperty("tool_choice")
+			expect(body).not.toHaveProperty("parallel_tool_calls")
+		})
+
+		it("sends them when the turn has tools", async () => {
+			const tools = [
+				{ type: "function", function: { name: "read_file", description: "d", parameters: { type: "object" } } },
+			]
+
+			for await (const _ of handler.createMessage("sys", messages, {
+				taskId: "t",
+				tools,
+				tool_choice: "auto",
+				parallelToolCalls: true,
+			} as any)) {
+				// drain
+			}
+
+			const body = mockCreate.mock.calls[0]![0]
+			expect(body.tools).toHaveLength(1)
+			expect(body.tool_choice).toBe("auto")
+			expect(body.parallel_tool_calls).toBe(true)
+		})
+	})
+
 	describe("constructor", () => {
 		it("should initialize with provided options", () => {
 			expect(handler).toBeInstanceOf(OpenAiHandler)
@@ -640,9 +678,6 @@ describe("OpenAiHandler", () => {
 					stream: true,
 					stream_options: { include_usage: true },
 					temperature: 0,
-					tools: undefined,
-					tool_choice: undefined,
-					parallel_tool_calls: true,
 				},
 				{ path: "/models/chat/completions" },
 			)
@@ -689,9 +724,6 @@ describe("OpenAiHandler", () => {
 						{ role: "system", content: systemPrompt },
 						{ role: "user", content: "Hello!" },
 					],
-					tools: undefined,
-					tool_choice: undefined,
-					parallel_tool_calls: true,
 				},
 				{ path: "/models/chat/completions" },
 			)

@@ -51,6 +51,37 @@ export abstract class BaseProvider implements ApiHandler {
 	}
 
 	/**
+	 * The OpenAI-shaped tool parameters for one request — or NOTHING at all.
+	 *
+	 * A turn can legitimately carry no tools: `toolCallingEnabled === false`
+	 * makes the turn conversational and the tool array empty. The parameters
+	 * must then be OMITTED rather than sent as `undefined`/`true`, because
+	 * `tool_choice` and `parallel_tool_calls` are only valid alongside a
+	 * non-empty `tools`, and sending them bare is a 400 from most OpenAI-
+	 * compatible endpoints.
+	 *
+	 * Spread the result into the request body so absent keys never serialize.
+	 */
+	protected openAiToolParams(metadata?: ApiHandlerCreateMessageMetadata): {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		tools?: any[]
+		tool_choice?: ApiHandlerCreateMessageMetadata["tool_choice"]
+		parallel_tool_calls?: boolean
+	} {
+		const tools = this.convertToolsForOpenAI(metadata?.tools)
+
+		if (!tools || tools.length === 0) {
+			return {}
+		}
+
+		return {
+			tools,
+			tool_choice: metadata?.tool_choice,
+			parallel_tool_calls: metadata?.parallelToolCalls ?? true,
+		}
+	}
+
+	/**
 	 * Converts tool schemas to be compatible with OpenAI's strict mode by:
 	 * - Ensuring all properties are in the required array (strict mode requirement)
 	 * - Converting nullable types (["type", "null"]) to non-nullable ("type")

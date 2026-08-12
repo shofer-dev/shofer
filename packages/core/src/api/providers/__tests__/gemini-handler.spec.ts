@@ -28,11 +28,35 @@ describe("GeminiHandler backend support", () => {
 		const handler = new GeminiHandler(options)
 		const stub = vi.fn().mockReturnValue((async function* () {})())
 		handler["client"].models.generateContentStream = stub
-		await handler.createMessage("instr", [] as any).next()
+		await handler
+			.createMessage(
+				"instr",
+				[] as any,
+				{
+					taskId: "t",
+					tools: [
+						{
+							type: "function",
+							function: { name: "read_file", description: "d", parameters: { type: "object" } },
+						},
+					],
+				} as any,
+			)
+			.next()
 		const config = stub.mock.calls[0]![0].config
-		// createMessage always uses function declarations only
-		// (tools are always present from ALWAYS_AVAILABLE_TOOLS)
+		// createMessage only ever uses function declarations.
 		expect(config.tools).toEqual([{ functionDeclarations: expect.any(Array) }])
+	})
+
+	it("createMessage sends no tools at all for a conversational turn", async () => {
+		// `toolCallingEnabled === false` reaches the provider as an empty tool
+		// array; an empty `functionDeclarations` block is rejected by the API,
+		// so the config must carry no `tools` key.
+		const handler = new GeminiHandler({ apiProvider: "gemini" } as ApiHandlerOptions)
+		const stub = vi.fn().mockReturnValue((async function* () {})())
+		handler["client"].models.generateContentStream = stub
+		await handler.createMessage("instr", [] as any, { taskId: "t", tools: [] } as any).next()
+		expect(stub.mock.calls[0]![0].config.tools).toBeUndefined()
 	})
 
 	it("completePrompt passes config overrides without tools when URL context and grounding disabled", async () => {

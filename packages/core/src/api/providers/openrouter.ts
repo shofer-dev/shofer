@@ -313,6 +313,8 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			}
 		}
 
+		const toolsForRequest = this.convertToolsForOpenAI(metadata?.tools)
+
 		// https://openrouter.ai/docs/transforms
 		const completionParams: OpenRouterChatCompletionParams = {
 			model: modelId,
@@ -332,8 +334,13 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 					},
 				}),
 			...(reasoning && { reasoning }),
-			tools: this.convertToolsForOpenAI(metadata?.tools),
-			tool_choice: metadata?.tool_choice,
+			// Spread, not assigned: a conversational turn (`toolCallingEnabled
+			// === false`) sends no `tools`/`tool_choice` keys at all rather than
+			// an explicit `undefined`. OpenRouter never sent
+			// `parallel_tool_calls`, so this does not use `openAiToolParams`.
+			...(toolsForRequest && toolsForRequest.length > 0
+				? { tools: toolsForRequest, tool_choice: metadata?.tool_choice }
+				: {}),
 		}
 
 		// Add Anthropic beta header for fine-grained tool streaming when using Anthropic models

@@ -199,8 +199,18 @@ config directly).
 
 **A pin covers credentials, not behaviour.** `CLIENT_TUNABLE_PROVIDER_SETTINGS`
 (`@shofer/types`) is the subset a controller may still set on a pinned worker —
-`enableReasoningEffort`, `reasoningEffort`, `modelMaxThinkingTokens`, `modelTemperature`,
-`verbosity` — narrowed by `pickClientTunableSettings`. Everything else is dropped.
+`toolCallingEnabled`, `enableReasoningEffort`, `reasoningEffort`,
+`modelMaxThinkingTokens`, `modelTemperature`, `verbosity` — narrowed by
+`pickClientTunableSettings`. Everything else is dropped.
+
+`toolCallingEnabled: false` makes the task CONVERSATIONAL: no tools are sent, the
+system prompt drops every tool-mediated section
+([`system_prompt.md`](system_prompt.md)), environment details are skipped, and a
+complete text-only assistant reply IS the turn — it completes the task (a
+`TaskCompleted` event, the task still resumable via `sendMessage`) instead of
+being re-prompted for a tool call. A queued message is drained first, continuing
+the conversation. This is the shape a realtime voice caller needs, and it is per
+task: the same worker serves conversational and agentic tasks side by side.
 
 The distinction is the one `mode` already relies on: the pin exists so a remote controller
 cannot swap a worker's credentials or identity, not so a deployment can freeze how the
@@ -263,7 +273,7 @@ connects with `ShoferHttpClient`. Every option is a CLI flag (defined in
 | `--host <host>`          | `127.0.0.1`                                      | Bind address. **Use `0.0.0.0` to accept traffic from outside the process** (e.g. in a container).                                                                                                                                                                                                                                                                                                                                        |
 | `-w, --workspace <path>` | cwd                                              | Workspace directory. Custom modes are read from `<workspace>/.shofer/shofermodes`.                                                                                                                                                                                                                                                                                                                                                       |
 | `-e, --extension <path>` | auto (`ROO_EXTENSION_PATH` → sibling `src/dist`) | Path to the built extension bundle (`extension.js`).                                                                                                                                                                                                                                                                                                                                                                                     |
-| `--provider <provider>`  | `openrouter`                                     | LLM provider. Any of `--provider/--model/--api-key/--base-url` **pins** the worker's credentials and model (a controller's per-task `apiConfiguration` is then narrowed to `CLIENT_TUNABLE_PROVIDER_SETTINGS` — reasoning/temperature/verbosity — rather than dropped wholesale).                                                                                                                                                        |
+| `--provider <provider>`  | `openrouter`                                     | LLM provider. Any of `--provider/--model/--api-key/--base-url` **pins** the worker's credentials and model (a controller's per-task `apiConfiguration` is then narrowed to `CLIENT_TUNABLE_PROVIDER_SETTINGS` — tool calling / reasoning / temperature / verbosity — rather than dropped wholesale).                                                                                                                                     |
 | `-m, --model <model>`    | provider default                                 | Model id. The `shofer` provider has **no** default model — pass one or task creation errors.                                                                                                                                                                                                                                                                                                                                             |
 | `-k, --api-key <key>`    | –                                                | Provider API key.                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `--base-url <url>`       | –                                                | Provider base URL (e.g. `http://llm-router:3000/v1`).                                                                                                                                                                                                                                                                                                                                                                                    |

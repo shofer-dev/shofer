@@ -189,6 +189,21 @@ const baseProviderSettingsSchema = z.object({
 	rateLimitSeconds: z.number().optional(),
 	consecutiveMistakeLimit: z.number().min(0).optional(),
 
+	/**
+	 * Whether the agent is given a tool plane at all.
+	 *
+	 * Undefined/true is the agentic loop: tools are sent, the system prompt
+	 * mandates a tool call per assistant response, and a text-only reply is
+	 * nudged back with `formatResponse.noToolsUsed()`.
+	 *
+	 * `false` makes the turn CONVERSATIONAL: no tools are sent, the system
+	 * prompt drops every tool-mediated section, and a complete text-only reply
+	 * IS the turn (it completes the task instead of being re-prompted). This is
+	 * what a realtime voice/phone caller needs — the deliverable of its turn is
+	 * the streamed prose itself.
+	 */
+	toolCallingEnabled: z.boolean().optional(),
+
 	// Model reasoning.
 	enableReasoningEffort: z.boolean().optional(),
 	reasoningEffort: reasoningEffortSettingSchema.optional(),
@@ -530,10 +545,15 @@ export type ProviderSettings = z.infer<typeof providerSettingsSchema>
  * batch job — the same deployed worker wants it off for one and on for the
  * other, so it cannot be a deploy-time constant.
  *
+ * `toolCallingEnabled` is the same argument one step further: a realtime caller
+ * needs a turn whose deliverable is plain streamed text, and every tool the
+ * agent could call costs a protocol round-trip that caller never uses.
+ *
  * Anything NOT listed here stays pinned. Adding a key is a deliberate act:
  * it must be behaviour, never a credential, an endpoint, or a model identity.
  */
 export const CLIENT_TUNABLE_PROVIDER_SETTINGS = [
+	"toolCallingEnabled",
 	"enableReasoningEffort",
 	"reasoningEffort",
 	"modelMaxThinkingTokens",

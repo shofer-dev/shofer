@@ -122,21 +122,26 @@ export class GeminiHandler extends BaseProvider implements SingleCompletionHandl
 			.map((message) => convertAnthropicMessageToGemini(message, { includeThoughtSignatures, toolIdToName }))
 			.flat()
 
-		// Tools are always present (minimum ALWAYS_AVAILABLE_TOOLS).
 		// Google built-in tools (Grounding, URL Context) are mutually exclusive
 		// with function declarations in the Gemini API, so we always use
 		// function declarations when tools are provided.
-		const tools: GenerateContentConfig["tools"] = [
-			{
-				/* eslint-disable @typescript-eslint/no-explicit-any */
-				functionDeclarations: (metadata?.tools ?? []).map((tool) => ({
-					name: (tool as any).function.name,
-					description: (tool as any).function.description,
-					parametersJsonSchema: (tool as any).function.parameters,
-				})),
-				/* eslint-enable @typescript-eslint/no-explicit-any */
-			},
-		]
+		//
+		// A conversational turn (`toolCallingEnabled === false`) provides none,
+		// and the config must then carry no `tools` at all — a declaration
+		// block with an empty `functionDeclarations` is rejected.
+		const tools: GenerateContentConfig["tools"] = metadata?.tools?.length
+			? [
+					{
+						/* eslint-disable @typescript-eslint/no-explicit-any */
+						functionDeclarations: metadata.tools.map((tool) => ({
+							name: (tool as any).function.name,
+							description: (tool as any).function.description,
+							parametersJsonSchema: (tool as any).function.parameters,
+						})),
+						/* eslint-enable @typescript-eslint/no-explicit-any */
+					},
+				]
+			: []
 
 		// Determine temperature respecting model capabilities and defaults:
 		// - If supportsTemperature is explicitly false, ignore user overrides

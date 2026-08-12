@@ -1,4 +1,9 @@
-import { getApiProtocol } from "../provider-settings.js"
+import {
+	CLIENT_TUNABLE_PROVIDER_SETTINGS,
+	getApiProtocol,
+	pickClientTunableSettings,
+	providerSettingsSchema,
+} from "../provider-settings.js"
 
 describe("getApiProtocol", () => {
 	describe("Anthropic-style providers", () => {
@@ -77,5 +82,30 @@ describe("getApiProtocol", () => {
 			expect(getApiProtocol("vertex", "claude-3-opus")).toBe("anthropic")
 			expect(getApiProtocol("vertex", "ClAuDe-InStAnT")).toBe("anthropic")
 		})
+	})
+})
+
+describe("toolCallingEnabled", () => {
+	it("is part of the provider-settings schema", () => {
+		expect(providerSettingsSchema.parse({ toolCallingEnabled: false }).toolCallingEnabled).toBe(false)
+		expect(providerSettingsSchema.parse({}).toolCallingEnabled).toBeUndefined()
+	})
+
+	it("is client-tunable — it is behaviour, not a credential", () => {
+		expect(CLIENT_TUNABLE_PROVIDER_SETTINGS).toContain("toolCallingEnabled")
+	})
+
+	it("survives the credential pin via pickClientTunableSettings", () => {
+		expect(
+			pickClientTunableSettings({
+				apiProvider: "openai",
+				openAiApiKey: "sk-secret",
+				toolCallingEnabled: false,
+			}),
+		).toEqual({ toolCallingEnabled: false })
+	})
+
+	it("is absent from the narrowed config when the caller did not set it", () => {
+		expect(pickClientTunableSettings({ apiProvider: "openai" })).toBeUndefined()
 	})
 })

@@ -115,6 +115,7 @@ reads are cheap; the persisted source of truth for them is `providers.json`
 - `rateLimitSeconds` — API rate limiting
 - `consecutiveMistakeLimit` — error repetition guard
 - `todoListEnabled` — per-profile toggle
+- `toolCallingEnabled` — per-profile toggle; `false` makes turns conversational (no tools; see [`system_prompt.md`](system_prompt.md))
 
 ### 1d. Runtime Merge (ContextProxy)
 

@@ -95,10 +95,16 @@ async function generatePrompt(
 	const includeSystemInfo = settings?.includeSystemInfo ?? true
 	const includeMcp = settings?.includeMcp ?? true
 
+	// A conversational turn (`toolCallingEnabled === false`) is given no tools at
+	// all, so every tool-mediated section of the prompt is not merely redundant
+	// but actively wrong for it — see the branch below.
+	const toolCallingEnabled = settings?.toolCallingEnabled !== false
+
 	const [modesSection, rawSkillsSection] = await Promise.all([
 		// Mode overrides are read through the host `state` capability (VS Code reads
 		// `globalState`; a headless host returns none) — no `context` needed here.
-		getModesSection(),
+		// Switching modes is itself a tool call, so a conversational turn omits it.
+		toolCallingEnabled ? getModesSection() : Promise.resolve(""),
 		getSkillsSection(skillsManager, mode as string),
 	])
 	const skillsSection = includeSkills ? rawSkillsSection : ""
@@ -109,9 +115,43 @@ async function generatePrompt(
 	// Enumerate workspace submodules (recursively, including nested ones) for the
 	// SYSTEM INFORMATION section, with URL/branch resolved from each submodule's
 	// immediate superproject `.gitmodules`. Degrades to no block when git or
-	// `.gitmodules` is unavailable.
-	const submoduleList = await listSubmodules(cwd)
+	// `.gitmodules` is unavailable. Skipped outright when that section is not
+	// rendered — the enumeration shells out to git, and its only consumer is
+	// `getSystemInfoSection`.
+	const submoduleList = includeSystemInfo ? await listSubmodules(cwd) : []
 	const submoduleInfos = submoduleList.length > 0 ? submoduleList : undefined
+
+	const customInstructionsSection = await addCustomInstructions(
+		baseInstructions,
+		globalCustomInstructions || "",
+		cwd,
+		mode,
+		{
+			language: language ?? formatLanguage(getHost().env.language),
+			shoferIgnoreInstructions,
+			settings,
+		},
+	)
+
+	if (!toolCallingEnabled) {
+		// CONVERSATIONAL PROMPT. The turn's deliverable is the streamed prose
+		// itself — there is no tool plane behind it and the text may be spoken
+		// aloud — so only the sections that survive without tools are kept:
+		// the role definition, the skills listing (still gated by
+		// `includeSkills`), system information (gated by `includeSystemInfo`)
+		// and the user's own custom instructions.
+		//
+		// Everything else is omitted because each mandates tool-mediated,
+		// non-conversational behaviour: TOOL USE ("You must call at least one
+		// tool per assistant response"), the tool-use guidelines and
+		// CAPABILITIES prose, the modes listing (switching is a tool call),
+		// RULES ("NOT engage in a back and forth conversation"), OBJECTIVE
+		// ("use the attempt_completion tool") and markdown formatting
+		// (clickable `[`path`](path:line)` references, meaningless in speech).
+		return `${roleDefinition}
+${skillsSection ? `\n${skillsSection}\n` : ""}${includeSystemInfo ? `\n${getSystemInfoSection(cwd, submoduleInfos)}\n` : ""}
+${customInstructionsSection}`
+	}
 
 	const basePrompt = `${roleDefinition}
 
@@ -130,11 +170,7 @@ ${includeSystemInfo ? `\n${getSystemInfoSection(cwd, submoduleInfos)}` : ""}
 
 ${getObjectiveSection()}
 
-${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
-	language: language ?? formatLanguage(getHost().env.language),
-	shoferIgnoreInstructions,
-	settings,
-})}`
+${customInstructionsSection}`
 
 	return basePrompt
 }

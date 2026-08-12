@@ -39,4 +39,16 @@ export interface SystemPromptSettings {
 	includeSkills?: boolean
 	includeSystemInfo?: boolean
 	includeMcp?: boolean
+	/**
+	 * Whether the agent has a tool plane this turn (`ProviderSettings.toolCallingEnabled`).
+	 *
+	 * `false` selects the CONVERSATIONAL prompt: role definition, skills and
+	 * system info only. Every tool-mediated section is omitted, because each of
+	 * them mandates behaviour that is wrong for an agent whose reply is prose
+	 * (and may be spoken aloud) — "you must call at least one tool", "use the
+	 * attempt_completion tool", "NOT engage in a back and forth conversation",
+	 * clickable `[`path`](path:line)` references. Undefined/true ⇒ the full
+	 * agentic prompt, unchanged.
+	 */
+	toolCallingEnabled?: boolean
 }

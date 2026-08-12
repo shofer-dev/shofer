@@ -1,8 +1,8 @@
-import { ShoferEventName, type HistoryItem, type CompletionRating } from "@shofer/types"
+import { type HistoryItem, type CompletionRating } from "@shofer/types"
 import { getHost } from "@shofer/types"
-import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task.js"
+import { emitTaskCompleted } from "../task/emit-task-completed.js"
 import { formatResponse } from "../prompts/responses.js"
 import { Package } from "../shared/package.js"
 import { type ToolUse } from "@shofer/types"
@@ -404,17 +404,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	}
 
 	private emitTaskCompleted(task: Task, rating: CompletionRating): void {
-		taskLog.info(`[AttemptCompletionTool.emitTaskCompleted] Emitting TaskCompleted event, taskId=${task.taskId}`)
-		// Force final token usage update before emitting TaskCompleted.
-		// This ensures the latest stats are captured regardless of throttle timer.
-		task.emitFinalTokenUsageUpdate()
-
-		TelemetryService.instance.captureTaskCompleted(task.taskId)
-		task.emit(ShoferEventName.TaskCompleted, task.taskId, task.getTokenUsage(), task.toolUsage, {
-			rating,
-			isSubtask: !!task.parentTaskId,
-		})
-		taskLog.info(`[AttemptCompletionTool.emitTaskCompleted] TaskCompleted event emitted, taskId=${task.taskId}`)
+		emitTaskCompleted(task, rating)
 	}
 }
 
