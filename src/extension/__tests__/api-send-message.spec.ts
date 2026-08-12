@@ -38,8 +38,8 @@ describe("API - sendMessage (task-addressed)", () => {
 		taskId,
 		abandoned: false,
 		abort: false,
-		resumableAsk: undefined,
 		messageQueueService: { addMessage: vi.fn(), dequeueMessage: vi.fn() },
+		startFromHistory: vi.fn(),
 		submitUserMessage: vi.fn().mockResolvedValue(undefined),
 		...over,
 	})
@@ -125,8 +125,11 @@ describe("API - sendMessage (task-addressed)", () => {
 	 * "the addressed instance is aborted" is the ordinary next-turn-of-a-
 	 * conversation case, not an error. Dropping the message stranded every
 	 * follow-up; resuming first and sending after (the transport's old
-	 * sequencing) lost the resume ask to whoever watches asks. Delivery
-	 * rehydrates, QUEUE-FIRST, so the message itself answers that ask.
+	 * sequencing) lost the resume ask to whoever watches asks.
+	 *
+	 * Delivery rehydrates DORMANT (`startTask: false`), queues, and only then
+	 * starts the resume — so `resumeTaskFromHistory` finds the message already
+	 * there and takes it as the resumption instead of publishing an ask.
 	 */
 	describe("finished or cold task", () => {
 		it.each([
@@ -143,26 +146,32 @@ describe("API - sendMessage (task-addressed)", () => {
 
 			await api.sendMessage("t1", "and tomorrow?")
 
-			expect(createTaskWithHistoryItem).toHaveBeenCalledWith({ id: "t1" }, { keepCurrentTask: true })
+			expect(createTaskWithHistoryItem).toHaveBeenCalledWith(
+				{ id: "t1" },
+				{ keepCurrentTask: true, startTask: false },
+			)
 			expect(fresh.messageQueueService.addMessage).toHaveBeenCalledWith("and tomorrow?", undefined)
-			// No ask outstanding yet — `Task.ask()`'s own drain will answer it.
-			expect(fresh.submitUserMessage).not.toHaveBeenCalled()
+			expect(fresh.startFromHistory).toHaveBeenCalled()
 		})
 
-		it("answers an already-outstanding resume ask directly", async () => {
+		it("queues BEFORE starting the resume, so no resume ask is ever raised", async () => {
 			getManagedTaskInstance.mockReturnValue(liveTask("t1", { abort: true }))
 			getTaskWithId.mockResolvedValue({ historyItem: { id: "t1" } })
-			const fresh = rehydrated("t1", {
-				resumableAsk: { ts: 1, type: "ask", ask: "resume_completed_task" },
-			})
+			const fresh = rehydrated("t1")
 			createTaskWithHistoryItem.mockResolvedValue(fresh)
 
 			await api.sendMessage("t1", "and tomorrow?", ["img"])
 
-			// Taken back out of the queue so it is delivered exactly once.
+			// The ordering IS the fix: rehydration that starts itself races the
+			// message in, and the lost race publishes an ask that a headless ask
+			// dispatcher then prints, declines, and charges to the retry budget.
 			expect(fresh.messageQueueService.addMessage).toHaveBeenCalledWith("and tomorrow?", ["img"])
-			expect(fresh.messageQueueService.dequeueMessage).toHaveBeenCalled()
-			expect(fresh.submitUserMessage).toHaveBeenCalledWith("and tomorrow?", ["img"])
+			expect(fresh.messageQueueService.addMessage.mock.invocationCallOrder[0]).toBeLessThan(
+				fresh.startFromHistory.mock.invocationCallOrder[0]!,
+			)
+			// Nothing is delivered a second time through the ask channel.
+			expect(fresh.submitUserMessage).not.toHaveBeenCalled()
+			expect(fresh.messageQueueService.dequeueMessage).not.toHaveBeenCalled()
 		})
 	})
 })

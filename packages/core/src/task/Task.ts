@@ -3929,13 +3929,48 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			this.isInitialized = true
 
-			this.diagLog(
-				`[DIAG resumeTaskFromHistory] about to ask(${askType}), taskId=${this.taskId}.${this.instanceId}, queueSize=${this.messageQueueService.messages.length}`,
-			)
-			const { response, text, images } = await this.ask(askType) // Calls `postInitState`.
-			this.diagLog(
-				`[DIAG resumeTaskFromHistory] ask returned: response=${response}, text=${text?.substring(0, 100)}, hasImages=${!!(images && images.length > 0)}`,
-			)
+			// A QUEUED MESSAGE IS THE RESUMPTION — do not ask whether to resume.
+			//
+			// `Task.ask()` would drain the queue to answer this ask, and that is
+			// still the right behaviour for a message that arrives while the ask is
+			// outstanding. But it drains only AFTER `addToShoferMessages` has
+			// published the ask, so the ask is already on the message stream and
+			// already dispatched: a headless node's ask dispatcher prints it, spends
+			// the `--retry` budget and declines it, before the drain runs. Answering
+			// it a moment later makes that harmless but not free — the published ask
+			// costs a persist, a `postStateToWebview`, a `getState()` for the
+			// auto-approval decision and a `pWaitFor` round trip, on the
+			// latency-critical first hop of every follow-up turn in a live
+			// conversation.
+			//
+			// So when the message is ALREADY there at rehydration time, take it as
+			// the answer directly and raise nothing. This is what a caller
+			// rehydrating a task expressly to deliver a message wants, and it is
+			// exactly what the drain would have synthesised.
+			const queuedResumption = this.messageQueueService.isEmpty()
+				? undefined
+				: this.messageQueueService.dequeueMessage()
+
+			let response: ShoferAskResponse
+			let text: string | undefined
+			let images: string[] | undefined
+
+			if (queuedResumption) {
+				this.diagLog(
+					`[DIAG resumeTaskFromHistory] queued message answers the resume; skipping ask(${askType}), taskId=${this.taskId}.${this.instanceId}`,
+				)
+				response = "messageResponse"
+				text = queuedResumption.text
+				images = queuedResumption.images
+			} else {
+				this.diagLog(
+					`[DIAG resumeTaskFromHistory] about to ask(${askType}), taskId=${this.taskId}.${this.instanceId}, queueSize=${this.messageQueueService.messages.length}`,
+				)
+				;({ response, text, images } = await this.ask(askType)) // Calls `postInitState`.
+				this.diagLog(
+					`[DIAG resumeTaskFromHistory] ask returned: response=${response}, text=${text?.substring(0, 100)}, hasImages=${!!(images && images.length > 0)}`,
+				)
+			}
 
 			let responseText: string | undefined
 			let responseImages: string[] | undefined

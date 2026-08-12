@@ -497,15 +497,19 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 	 * Deliver a message to a task this host is no longer running: rehydrate from
 	 * history, then make the message that conversation's next user turn.
 	 *
-	 * QUEUE FIRST — this is the whole point of the method. Rehydration raises a
-	 * `resume_task` / `resume_completed_task` ask, and `Task.ask()` DRAINS a
-	 * queued message to answer exactly those. With the queue already populated
-	 * the follow-up becomes the resumed conversation's next message, with no
-	 * extra turn and no race. Resuming FIRST and sending after (which is what
-	 * `ShoferApiAgent.sendMessage` used to do) loses that race routinely: the
-	 * resume ask is raised and answered by whoever is watching asks — in a
-	 * headless CLI node, the ask dispatcher, which spends the `--retry` budget
-	 * and then declines it — before the message ever arrives.
+	 * QUEUE BEFORE START — this is the whole point of the method, and the
+	 * ordering is load-bearing rather than opportunistic. `resumeTaskFromHistory`
+	 * takes a queued message AS the resumption and raises no ask at all, so the
+	 * queue must be populated before it runs: hence `startTask: false` here and
+	 * an explicit `startFromHistory()` after the message is in. Letting
+	 * rehydration start itself and racing the message in afterwards is what
+	 * published a resume ask on every follow-up turn — dispatched, declined by a
+	 * headless node's ask handler, and only then answered by the drain, at the
+	 * cost of a persist, a state broadcast, a `getState()` and a `pWaitFor` on
+	 * the first hop of a live conversation.
+	 *
+	 * Resuming FIRST and sending after (which is what `ShoferApiAgent.sendMessage`
+	 * used to do) loses the same race, one step earlier.
 	 *
 	 * This mirrors `ShoferProvider.resumePluginSession`, which reached the same
 	 * conclusion for the plugin-agent entry point.
@@ -524,16 +528,12 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 
 		// `keepCurrentTask` for the same reason `createTask` backgrounds rather
 		// than aborts: continuing one conversation must not abandon another.
-		const task = await this.sidebarProvider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })
+		const task = await this.sidebarProvider.createTaskWithHistoryItem(historyItem, {
+			keepCurrentTask: true,
+			startTask: false,
+		})
 		task.messageQueueService.addMessage(message, images)
-
-		// The one ordering that misses: the resume ask reached its waiting state
-		// before the queue was populated, so its drain already ran and found
-		// nothing. Nothing else will drain it, so answer it directly.
-		if (task.resumableAsk) {
-			task.messageQueueService.dequeueMessage()
-			await task.submitUserMessage(message, images)
-		}
+		task.startFromHistory()
 	}
 
 	/**

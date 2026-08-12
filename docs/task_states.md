@@ -194,6 +194,44 @@ flowchart TD
 restoration having completed; it throws if the flag isn't set, eliminating
 order-of-initialization bugs.
 
+## Resuming
+
+`Task.startFromHistory()` → `resumeTaskFromHistory()` drives a rehydrated task's
+first turn. It picks the ask from the persisted lifecycle —
+`resume_completed_task` when `initialState.lifecycle === "completed"`,
+`resume_task` otherwise — and runs the agent loop on the answer.
+
+**A queued message replaces that ask entirely.** When
+`messageQueueService` is non-empty at this point, the head is dequeued and taken
+as the resumption (`messageResponse` + its text and images) and NO ask is
+raised. The message is the resumption: a caller that rehydrated the task
+expressly to deliver it has already answered the question the ask would pose.
+
+`Task.ask()` would also drain the queue to answer a resume ask, and that remains
+correct for a message arriving while the ask is outstanding. But it drains only
+AFTER publishing, so the ask reaches the message stream and is dispatched — on a
+headless node the CLI's ask handler prints it, spends its `--retry` budget and
+declines it — before the drain runs. Answering it a moment later makes that
+harmless, not free: the published ask costs a persist, a `postStateToWebview`, a
+`getState()` for the auto-approval decision and a `pWaitFor` round trip, all on
+the first hop of a follow-up turn.
+
+**So the ordering at the call site is load-bearing.** A caller delivering a
+message to a finished task rehydrates DORMANT, queues, and only then starts:
+
+```ts
+const task = await provider.createTaskWithHistoryItem(historyItem, {
+	keepCurrentTask: true,
+	startTask: false,
+})
+task.messageQueueService.addMessage(message, images)
+task.startFromHistory()
+```
+
+Letting rehydration start itself and racing the message in afterwards is what
+publishes the ask. `API.sendMessage` (`src/extension/api.ts`) is the reference
+implementation.
+
 ## Self-Contained Lifecycle Events
 
 `TaskCompleted` and `TaskAborted` carry the data needed to interpret them

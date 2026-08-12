@@ -80,7 +80,7 @@ The full method set (see the source for exact signatures):
 | Method                                                                            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `createTask({ prompt, mode, taskId?, apiConfiguration?, title? })` → `{ taskId }` | Start a task. `mode` (**required**) is the mode slug it runs in. `apiConfiguration` ships the controller's resolved [API Configuration](#per-task-api-configuration) so a remote task runs on the same provider/model the front-end picked. `title` names the task AND locks the name: the agent's `set_task_title` tool is omitted entirely, which a controller that owns the label (a phone call, a pipeline stage) wants — and which keeps one always-available tool out of a latency-sensitive turn. |
-| `sendMessage(taskId, message)`                                                    | Send a follow-up message to a task. Rehydrates it queue-first when it is finished or cold, so a completed conversation continues without a separate `resumeTask`.                                                                                                                                                                                                                                                                                                                                        |
+| `sendMessage(taskId, message)`                                                    | Send a follow-up message to a task. Rehydrates it when it is finished or cold — queued before the resume starts, so no resume ask is raised and a completed conversation continues without a separate `resumeTask`.                                                                                                                                                                                                                                                                                      |
 | `cancelTask(taskId)`                                                              | Abort a task.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `respondToAsk(taskId, AskResponse)`                                               | Answer an outstanding `ask` (interactive tool approval / follow-up). The reverse of the `ask` events on the stream, so a remote task's approvals round-trip like a local one's.                                                                                                                                                                                                                                                                                                                          |
 | `getTaskSnapshot(taskId)` → `TaskSnapshot \| undefined`                           | The task's state so far — see [Task snapshots](#task-snapshots-attaching-to-a-running-task). `undefined` when the host owns no such task.                                                                                                                                                                                                                                                                                                                                                                |
@@ -117,16 +117,21 @@ tears the completed instance down, and that teardown is silent (`task_states.md`
 written.
 
 **A follow-up to a finished task is `sendMessage`, on its own.** Delivery owns
-the rehydration and does it QUEUE-FIRST, so the message itself answers the
-`resume_task` / `resume_completed_task` ask that rehydration raises. Do NOT call
-`resumeTask` first: that raises the resume ask with nothing queued to answer it,
-and it is then answered by whoever watches asks — on a headless node the CLI ask
-dispatcher, which spends the `--retry` budget and then declines. `resumeTask`
-remains for its own purpose, making a task addressable without sending anything.
+the rehydration and orders it so **no resume ask is ever raised**: the task is
+rehydrated dormant (`startTask: false`), the message is queued, and only then is
+the resume started — so `resumeTaskFromHistory` finds the message already there
+and takes it AS the resumption (`task_states.md` §Resuming). Do NOT call
+`resumeTask` first. That starts the resume with nothing queued, so an ask IS
+published, and it is then answered by whoever watches asks — on a headless node
+the CLI ask dispatcher, which spends the `--retry` budget and declines it. That
+ask costs a persist, a state broadcast, a `getState()` and a `pWaitFor` round
+trip on the first hop of the turn, which is the one hop a live voice
+conversation feels. `resumeTask` remains for its own purpose: making a task
+addressable without sending anything.
 
 The follow-up's event sequence is therefore `taskCreated` (the rehydrated
 instance) → `taskStarted` → `message`s → `taskCompleted`, with no `taskAborted`
-anywhere in it.
+and no resume ask anywhere in it.
 
 #### Reverse data channel
 
