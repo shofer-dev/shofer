@@ -2365,7 +2365,41 @@ export class ShoferProvider
 		// Load code plugins asynchronously — must NOT block task start (owner decision
 		// #8). Discovery (declarative) is done; code-plugin hooks begin firing once
 		// each finishes loading. Failures are warned + isolated inside activateCodePlugins.
-		void manager.activateCodePlugins()
+		//
+		// The MCP hub's plugin-contributed servers are connected on the far side of
+		// that activation, and BOTH halves of the ordering are load-bearing:
+		//
+		//   - The hub reads contributions ONCE, in its constructor, from the shared
+		//     plugin manager — which this method installs lazily, usually after the hub
+		//     was built. A host with a Plugins panel papers over that on the next
+		//     enable/disable (`resyncAfterPluginChange`); a HEADLESS host has no panel,
+		//     no `.shofer/mcp.json` edit and no workspace-folder change, so without a
+		//     re-sync here a plugin's `contributes.mcpServers` child is simply never
+		//     spawned while the plugin itself looks perfectly loaded.
+		//   - Waiting for ACTIVATION, rather than re-syncing the moment the manager
+		//     exists, is what makes a contributed server's `${env:…}` interpolation
+		//     resolve. `activateCodePlugins` awaits each plugin's `initialize` AND its
+		//     registered services' `start`, which is where a plugin publishes the
+		//     process env its own server is declared against. Spawning first won that
+		//     race often enough to be observed both ways on one image, and losing it is
+		//     silent: the child receives the literal `${env:NAME}` string.
+		//
+		// A server declared in a config FILE against a plugin's runtime env still races,
+		// and cannot be fixed here — config is read before any plugin runs. The plugin's
+		// own `contributes.mcpServers` is the route with an ordering guarantee.
+		void manager
+			.activateCodePlugins()
+			.then(() => McpServerManager.getInstance(this.context, this))
+			.then(async (hub) => {
+				// The hub's own initial connect must finish first, or the re-sync races it.
+				await hub.waitUntilReady()
+				await hub.refreshProjectMcpServers()
+			})
+			.catch((error) =>
+				this.log(
+					`Failed to re-sync plugin-contributed MCP servers: ${error instanceof Error ? error.message : String(error)}`,
+				),
+			)
 		return manager
 	}
 

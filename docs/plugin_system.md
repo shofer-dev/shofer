@@ -851,16 +851,38 @@ caller is waiting on the answer, so a throw (or an unknown plugin / missing
 **Broadcast requests.** Core sometimes needs a fact that a _feature_ owns without knowing
 which plugin — if any — provides it. `pluginRegistry.requestAll(method, params)` asks
 every plugin the same question and returns the answers; a plugin that does not recognise
-the method throws, which counts as "no answer" rather than an error. Three conventions are
+the method throws, which counts as "no answer" rather than an error. Four conventions are
 in use:
 
-| Question                   | Answer                                                        | Nobody answers                               |
-| -------------------------- | ------------------------------------------------------------- | -------------------------------------------- |
-| `"task-stats"`             | `{ insertions, deletions }`                                   | A completed task gets no `+`/`−` badge.      |
-| `"resolve-task-cwd"`       | `{ cwd }` or `{ error }`                                      | The task runs in the workspace.              |
-| `"resolve-task-placement"` | `{ dispatched: { taskId, address?, token? } }` or `{ error }` | The task runs in-process, exactly as before. |
+| Question                     | Answer                                                        | Nobody answers                                          |
+| ---------------------------- | ------------------------------------------------------------- | ------------------------------------------------------- |
+| `"task-stats"`               | `{ insertions, deletions }`                                   | A completed task gets no `+`/`−` badge.                 |
+| `"resolve-task-cwd"`         | `{ cwd }` or `{ error }`                                      | The task runs in the workspace.                         |
+| `"resolve-task-placement"`   | `{ dispatched: { taskId, address?, token? } }` or `{ error }` | The task runs in-process, exactly as before.            |
+| `"resolve-mcp-call-headers"` | `{ headers }`                                                 | The MCP call carries only its connection's own headers. |
 
-The last two are the **placement seam**, and both share one rule: an `{ error }` answer
+`"resolve-mcp-call-headers"` is asked once per MCP **tool call**, with the server's name,
+scope, transport, URL and the task id — enough for a resolver to decide whether this is a
+server it should hand anything to at all. It exists because a transport's headers are
+bound once, at connect, from static config, while the connection is shared by every task
+the host runs: a value belonging to the RUN has no other way onto the wire. The resolved
+headers reach the transport's `fetch` through an `AsyncLocalStorage`, which is what keeps
+concurrent calls on one connection from seeing each other's
+([`call-headers.ts`](../packages/core/src/services/mcp/call-headers.ts)). Two rules follow
+from what a header IS here:
+
+- **No `{ error }` channel, deliberately.** A header is additive; a resolver that cannot
+  produce one must degrade to the call it would have made anyway, so failing the tool call
+  would invent an outage the seam exists to avoid. "Nothing to add" is `{ headers: {} }`.
+- **Headers the transport owns are refused** — content negotiation, the MCP session and
+  protocol identifiers, the SSE resumption cursor — because overriding one breaks the
+  protocol rather than annotating the call. Two plugins claiming the same header name: the
+  first answer wins and the rest are warned about, since letting registration order pick
+  which credential goes out is the worse failure. `stdio` servers are never asked (a pipe
+  has no headers; such a server reads the task id from `_meta` instead).
+
+`"resolve-task-cwd"` and `"resolve-task-placement"` are the **placement seam**, and both
+share the opposite rule: an `{ error }` answer
 aborts task creation, because a plugin that recognised the question and failed is not the
 same as one that stayed silent — running the task locally anyway would put the agent
 somewhere the user did not choose. A claimed task is created on another host; core does

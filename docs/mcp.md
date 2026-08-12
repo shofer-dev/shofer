@@ -146,6 +146,7 @@ Before connection, [`injectVariables()`](../packages/core/src/utils/config.ts) e
     - For each enabled server, calls [`connectToServer()`](../packages/core/src/services/mcp/McpHub.ts) (line 703).
 
 3. [`connectToServer()`](../packages/core/src/services/mcp/McpHub.ts) (line 703):
+
     - Creates an MCP SDK [`Client`](https://github.com/modelcontextprotocol/typescript-sdk) with name `"Shofer"`.
     - Builds the appropriate transport (`StdioClientTransport`, `SSEClientTransport`, or `StreamableHTTPClientTransport`).
     - For `stdio`: starts the child process and pipes `stderr` for error logging.
@@ -153,6 +154,25 @@ Before connection, [`injectVariables()`](../packages/core/src/utils/config.ts) e
     - Registers `onerror` and `onclose` handlers that update `server.status` to `"disconnected"` and notify the webview.
     - Calls `client.connect(transport)`.
     - On success, fetches `tools/list` and `resources/list` (line 961).
+
+4. **Plugin-contributed servers arrive on a re-sync — after the plugins ACTIVATE, not on
+   that constructor read.** The shared plugin manager is built lazily by
+   [`ShoferProvider.getPluginManager()`](../src/core/webview/ShoferProvider.ts), typically
+   after the hub exists, so the constructor's `getContributedMcpServers()` usually sees
+   nothing. The provider therefore chains
+   [`refreshProjectMcpServers()`](../packages/core/src/services/mcp/McpHub.ts) onto
+   `activateCodePlugins()` — the same re-sync an enable/disable in the Plugins panel
+   triggers, at the one moment every host passes through. Both halves matter:
+    - Without the re-sync, a headless host (`shofer serve`, a worker) has no panel, no
+      `mcp.json` edit and no workspace-folder change, so the child is never spawned while
+      the plugin itself looks perfectly loaded.
+    - Without waiting for **activation**, a contributed server's `${env:…}` interpolation
+      may resolve to the literal placeholder: `activateCodePlugins()` awaits each plugin's
+      `initialize` and its registered services' `start`, which is where a plugin publishes
+      the process env its own server is declared against. A server declared in a config
+      FILE against a plugin's runtime env still races and cannot be fixed here — config is
+      read before any plugin runs, so the plugin's own `contributes.mcpServers` is the only
+      route with an ordering guarantee.
 
 ### File Watching
 
@@ -251,6 +271,17 @@ sequenceDiagram
 
 ### Key Details
 
+- **Per-call headers:** before the request goes out, `callTool` broadcasts
+  `"resolve-mcp-call-headers"` to the plugins and runs the request with whatever they
+  answered ([`call-headers.ts`](../packages/core/src/services/mcp/call-headers.ts)). This
+  is the only way a value belonging to the RUN reaches the wire: a transport's headers are
+  bound once, at connect, from static config, and the connection is hub-scoped — it serves
+  every task the host executes. The headers travel from the call site to the transport's
+  `fetch` through an `AsyncLocalStorage`, because the SDK exposes no per-request header API
+  and mutating the shared `requestInit` would race concurrent calls. No plugin answering
+  leaves the request exactly as it was; `stdio` servers are not asked. The answer contract
+  (no error channel, reserved headers, first-answer-wins) is in
+  [`plugin_system.md`](plugin_system.md) § "Broadcast requests".
 - **Timeout:** Each server's `timeout` config (default 60s) governs `client.request()`.
 - **Cancellation:** The task's `AbortSignal` is passed through, so stopping a task cancels in-flight MCP calls.
 - **Fuzzy tool matching:** [`toolNamesMatch()`](../packages/core/src/utils/mcp-name.ts) (line 188) treats `-` and `_` as equivalent so that model mangling of hyphens doesn't cause "tool not found" errors.
@@ -308,9 +339,18 @@ Resources are also listed at connect time via [`fetchResourcesList()`](../packag
 
 For each MCP tool, the group is resolved by [`fetchToolsList()`](../packages/core/src/services/mcp/McpHub.ts):
 
-1. **User override** — `toolGroups[toolName]` in the server config (project or global).
-2. **Server-declared** — `tool.group` from the server's tool definition.
-3. **Default** — `"uncategorized"`.
+1. **User override** — `toolGroups[toolName]` in the WRITABLE config file for the server's
+   source (`~/.shofer/mcp.json` for global, `<workspace>/.shofer/mcp.json` for project).
+   This is where the tool-toggle and group-assign paths write, so it has to win.
+2. **Server-declared, in whatever scope defined it** — the `toolGroups` on the connection's
+   own effective config. Read from the CONNECTION, not from that file, because a server may
+   have come from a scope the file does not contain: the org-global
+   `$SHOFER_GLOBAL_DIR/mcp.json` (which is how every server reaches a worker) or a plugin's
+   `contributes.mcpServers`. Reading only the writable file dropped their groups, so their
+   tools resolved `uncategorized` — and on a headless host that turns every call into an
+   approval ask nobody is there to answer. `disabledTools` resolves the same way.
+3. **Tool-declared** — `tool.group` from the server's tool definition.
+4. **Default** — `"uncategorized"`.
 
 ### Auto-Approval
 
@@ -369,6 +409,7 @@ MCP tool execution sends real-time status updates:
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | [`McpHub.ts`](../packages/core/src/services/mcp/McpHub.ts)                                        | Central hub: connections, tool discovery, execution                            |
 | [`McpServerManager.ts`](../src/services/mcp/McpServerManager.ts)                                  | Singleton lifecycle, provider notification                                     |
+| [`call-headers.ts`](../packages/core/src/services/mcp/call-headers.ts)                            | Per-call transport headers: the plugin broadcast and the async-context carrier |
 | [`mcpLogger.ts`](../packages/core/src/services/mcp/mcpLogger.ts)                                  | Output-channel logger                                                          |
 | [`UseMcpToolTool.ts`](../packages/core/src/tools/UseMcpToolTool.ts)                               | `use_mcp_tool` handler and native MCP tool executor                            |
 | [`accessMcpResourceTool.ts`](../packages/core/src/tools/accessMcpResourceTool.ts)                 | `access_mcp_resource` handler                                                  |

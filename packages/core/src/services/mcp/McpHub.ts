@@ -55,6 +55,7 @@ import { loadLockedManifestFromDisk, resolveScopeRoots, type ScopeRoots } from "
 import { safeWriteJson } from "../../utils/safeWriteJson.js"
 import { sanitizeMcpName, toolNamesMatch } from "../../utils/mcp-name.js"
 import { getSharedPluginManager } from "../../plugins/plugin-manager.js"
+import { fetchWithMcpCallHeaders, resolveMcpCallHeaders, withMcpCallHeaders } from "./call-headers.js"
 
 /**
  * The `shofer.dev/` prefix both `_meta` keys below carry.
@@ -1049,6 +1050,11 @@ export class McpHub {
 					requestInit: {
 						headers: configInjected.headers,
 					},
+					// The connection's headers are the ones above, fixed here for its whole
+					// life. `fetchWithMcpCallHeaders` adds the PER-CALL ones a plugin
+					// resolved for the tool call this request belongs to (call-headers.ts);
+					// with no plugin answering it is the global `fetch`.
+					fetch: fetchWithMcpCallHeaders,
 				})
 
 				// Set up Streamable HTTP specific error handling
@@ -1103,6 +1109,11 @@ export class McpHub {
 				global.EventSource = ReconnectingEventSource as unknown as typeof EventSource
 				transport = new SSEClientTransport(new URL(configInjected.url), {
 					...sseOptions,
+					// Same per-call seam as streamable-http. It reaches only the POST leg
+					// (the SSE stream is opened through `eventSourceInit.fetch` above and
+					// belongs to the connection, not to any one call) — which is exactly
+					// the leg a `tools/call` request rides.
+					fetch: fetchWithMcpCallHeaders,
 					eventSourceInit: reconnectingEventSourceOptions,
 				})
 
@@ -1308,40 +1319,52 @@ export class McpHub {
 
 			// Determine the actual source of the server
 			const actualSource = connection.server.source || "global"
-			let configPath: string
-			let disabledToolsList: string[] = []
-			let toolGroupsConfig: Record<string, string> = {}
 
-			// Read from the appropriate config file based on the actual source
+			// The server's own EFFECTIVE definition — whichever scope it actually came
+			// from. Reading the writable file alone was wrong for every server that is
+			// not IN it: a worker's servers arrive in the org-global scope
+			// (`$SHOFER_GLOBAL_DIR/mcp.json`) or from a plugin's
+			// `contributes.mcpServers`, both merged into the connection but neither
+			// present in `~/.shofer/mcp.json` — so their declared `toolGroups` were
+			// dropped and every one of their tools resolved `uncategorized`. On a
+			// headless worker that turns each call into an approval ask nobody is there
+			// to answer, which reads as the run hanging.
+			let declared: Record<string, any> = {}
 			try {
-				let serverConfigData: Record<string, any> = {}
-				if (actualSource === "project") {
-					// Get project MCP config path
-					const projectMcpPath = await this.getProjectMcpPath()
-					if (projectMcpPath) {
-						configPath = projectMcpPath
-						const content = await fs.readFile(configPath, "utf-8")
-						serverConfigData = JSON.parse(content)
-					}
-				} else {
-					// Get global MCP settings path
-					configPath = await this.getMcpSettingsFilePath()
-					const content = await fs.readFile(configPath, "utf-8")
-					serverConfigData = JSON.parse(content)
-				}
-				if (serverConfigData) {
-					disabledToolsList = serverConfigData.mcpServers?.[serverName]?.disabledTools || []
-					toolGroupsConfig = serverConfigData.mcpServers?.[serverName]?.toolGroups || {}
+				declared = JSON.parse(connection.server.config) as Record<string, any>
+			} catch {
+				// A connection always carries a config it was built from; an unparseable
+				// one leaves the declared layer empty rather than failing the listing.
+			}
+
+			// The user's own override layer, which must still WIN: the toggle/assign
+			// paths write it there (`updateServerToolList`, `setToolGroup`) and then
+			// re-list, so this read is what makes those take effect. Absent for a
+			// server the user has never touched.
+			let override: Record<string, any> = {}
+			try {
+				const configPath =
+					actualSource === "project" ? await this.getProjectMcpPath() : await this.getMcpSettingsFilePath()
+				if (configPath) {
+					const parsed = JSON.parse(await fs.readFile(configPath, "utf-8"))
+					override = parsed?.mcpServers?.[serverName] ?? {}
 				}
 			} catch (error) {
 				mcpSysLog.error(`Failed to read tool configuration for ${serverName}:`, error)
-				// Continue with empty configs
+				// Continue with the declared layer alone.
+			}
+
+			const disabledToolsList: string[] = override.disabledTools ?? declared.disabledTools ?? []
+			const toolGroupsConfig: Record<string, string> = {
+				...(declared.toolGroups ?? {}),
+				...(override.toolGroups ?? {}),
 			}
 
 			// Resolve per-tool group assignments. Priority order:
-			//   1. User-supplied override in mcp.json (`toolGroups[toolName]`)
-			//   2. Server-declared `tool.group`
-			//   3. Default `uncategorized`
+			//   1. User-supplied override in the writable mcp.json (`toolGroups[toolName]`)
+			//   2. The server's own declaration, in whatever scope defined it
+			//   3. Server-declared `tool.group`
+			//   4. Default `uncategorized`
 			// Auto-approval is gated by group, not by a per-tool flag.
 			const resolveGroup = (raw: unknown): McpTool["group"] => {
 				const parsed = toolGroupsSchema.safeParse(raw)
@@ -2120,6 +2143,12 @@ export class McpHub {
 	 * place the call: which run it belongs to, and which of the model's tool
 	 * calls it IS. Both travel in the MCP request's `_meta` (see
 	 * {@link MCP_META_TASK_ID} / {@link MCP_META_TOOL_CALL_ID}).
+	 *
+	 * `taskId` also drives the per-call HEADER seam: before the request goes out,
+	 * plugins are asked what headers THIS call should carry (`call-headers.ts`),
+	 * which is how a value belonging to the run rather than to the host reaches a
+	 * connection whose own headers were fixed when it connected. Nobody answering
+	 * leaves the request exactly as it was.
 	 */
 	async callTool(
 		serverName: string,
@@ -2141,9 +2170,16 @@ export class McpHub {
 		}
 
 		let timeout: number
+		// Unparseable config falls back to `stdio`, which the header seam skips: a
+		// resolver must not be asked to hand a credential to a server we could not
+		// even read the URL of. The parse failure is already logged below.
+		let serverType: "stdio" | "sse" | "streamable-http" = "stdio"
+		let serverUrl: string | undefined
 		try {
 			const parsedConfig = ServerConfigSchema.parse(JSON.parse(connection.server.config))
 			timeout = (parsedConfig.timeout ?? 60) * 1000
+			serverType = parsedConfig.type
+			serverUrl = parsedConfig.type === "stdio" ? undefined : parsedConfig.url
 		} catch (error) {
 			mcpSysLog.error("Failed to parse server config for timeout:", error)
 			// Default to 60 seconds if parsing fails
@@ -2175,22 +2211,38 @@ export class McpHub {
 			params._meta = meta
 		}
 
+		// The per-call transport headers, if any plugin supplies them for this
+		// server (call-headers.ts). Resolved from the SAME task id `_meta` carries,
+		// because that is what makes them the RUN's headers rather than the host's.
+		// Never throws and never fails the call: no answer means the request goes
+		// out with exactly the connection's own headers.
+		const callHeaders = await resolveMcpCallHeaders({
+			serverName: connection.server.name,
+			source: connection.server.source ?? "global",
+			type: serverType,
+			url: serverUrl,
+			toolName,
+			taskId,
+		})
+
 		const mcpT0 = performance.now()
 		// One [MCP] line per call (start + finish) so the per-task "Logs" tab shows
 		// MCP activity; this path runs inside the task's tool dispatch and is
 		// attributed to the owning task via the ambient log context.
 		mcpSysLog.info(`▶ ${serverName}/${toolName}`)
 		try {
-			const result = await connection.client.request(
-				{
-					method: "tools/call",
-					params,
-				},
-				CallToolResultSchema,
-				{
-					timeout,
-					...(signal ? { signal } : {}),
-				},
+			const result = await withMcpCallHeaders(callHeaders, () =>
+				connection.client.request(
+					{
+						method: "tools/call",
+						params,
+					},
+					CallToolResultSchema,
+					{
+						timeout,
+						...(signal ? { signal } : {}),
+					},
+				),
 			)
 			const dur = performance.now() - mcpT0
 			recordMcpDuration(serverName, toolName, dur)

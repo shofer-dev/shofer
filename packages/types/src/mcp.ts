@@ -205,3 +205,54 @@ export function countEnabledMcpTools(servers: McpServer[]): EnabledMcpToolsCount
 
 	return { enabledToolCount: toolCount, enabledServerCount: serverCount }
 }
+
+/**
+ * The `"resolve-mcp-call-headers"` plugin broadcast — asked once per MCP tool
+ * call, so a plugin can supply transport headers for **that** call.
+ *
+ * Core knows a tool call is about to leave for a server; it does not know that
+ * some deployments give a RUN a short-lived credential the server wants to see.
+ * A transport's headers are bound once, at connect, from static config, and one
+ * connection serves every task the host ever runs — so a per-run value has no
+ * way in. Hence the question: every plugin is offered it and the answers are
+ * merged (see `resolveMcpCallHeaders` in `@shofer/core`).
+ *
+ * The question carries everything a resolver needs to decide **whether this is
+ * a server it should hand a credential to at all** — a plugin must never answer
+ * blind, since an answer is a secret sent to whatever URL that server names.
+ * `source` and `url` are how a resolver tells a host-injected server from one a
+ * user wrote into their own `.shofer/mcp.json`.
+ */
+export interface McpCallHeadersQuestion {
+	/** The MCP server the call is addressed to, as named in its config. */
+	serverName: string
+	/** Which scope defined the server: `global` (org/user `mcp.json`) or `project`. */
+	source: "global" | "project"
+	/** The server's transport. Only the HTTP transports can carry headers. */
+	type: "stdio" | "sse" | "streamable-http"
+	/** The server's URL, for the HTTP transports; absent for `stdio`. */
+	url?: string
+	/** The tool being called. */
+	toolName: string
+	/** The run the call belongs to — the same id `_meta['shofer.dev/taskId']` carries. */
+	taskId?: string
+}
+
+/**
+ * A plugin's answer to {@link McpCallHeadersQuestion}: the headers to add to
+ * this one request.
+ *
+ * There is deliberately **no error channel** here, unlike the
+ * `"resolve-task-placement"` / `"resolve-task-cwd"` answers. Those exist to make
+ * a plugin's failure fail the operation, because silently running the task
+ * somewhere else is the outcome the seam exists to prevent. A header is the
+ * opposite: it is additive attribution, and a resolver that cannot produce one
+ * must degrade to the call going out exactly as it did before the plugin
+ * existed. So "no headers" is spelled `{ headers: {} }`, and a plugin that does
+ * not recognise the question throws — which the broadcast reads as no answer.
+ */
+export const mcpCallHeadersAnswerSchema = z.object({
+	headers: z.record(z.string()),
+})
+
+export type McpCallHeadersAnswer = z.infer<typeof mcpCallHeadersAnswerSchema>

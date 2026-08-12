@@ -494,6 +494,27 @@ const result = await api.request("diff", { id }) // answered where the task runs
 await api.request("local:show-diff", result, { mutates: false }) // rendered here
 ```
 
+**The host asks too.** `handleRequest` also receives Shofer's own **broadcast questions** —
+core needs a fact that a _feature_ owns, and asks every plugin rather than knowing which one
+provides it. Throw for a method you do not recognise; that is what marks you silent. The
+questions and their answer shapes are tabulated in
+[`docs/plugin_system.md`](docs/plugin_system.md) (§ "Broadcast requests"); one worth
+knowing about here is `"resolve-mcp-call-headers"`, asked before every MCP tool call:
+
+```ts
+async handleRequest(method, params) {
+	if (method !== "resolve-mcp-call-headers") throw new Error("not mine")
+	const q = params as { serverName: string; source: "global" | "project"; taskId?: string }
+	// Answer only for a server you actually recognise — a header is a credential
+	// handed to whatever URL that server names. "Nothing to add" is `{ headers: {} }`;
+	// there is no error channel, because the call must go out either way.
+	return isMine(q) ? { headers: { Authorization: `Bearer ${tokenFor(q.taskId)}` } } : { headers: {} }
+}
+```
+
+This is the seam for anything that belongs to the RUN rather than to the host: a transport's
+own headers are fixed when it connects, and one connection serves every task.
+
 ---
 
 ## 6. UI contributions

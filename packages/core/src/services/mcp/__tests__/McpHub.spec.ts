@@ -12,6 +12,8 @@ import type {
 } from "../McpHub.js"
 import { ServerConfigSchema, McpHub, MCP_META_TASK_ID, MCP_META_TOOL_CALL_ID } from "../McpHub.js"
 import { setSharedPluginManager } from "../../../plugins/plugin-manager.js"
+import { pluginRegistry } from "../../../plugins/plugin-registry.js"
+import { RESOLVE_MCP_CALL_HEADERS, currentMcpCallHeaders } from "../call-headers.js"
 import { sanitizeToolUseId } from "../../../utils/tool-id.js"
 
 // Mock fs/promises before importing anything that uses it
@@ -1159,6 +1161,80 @@ describe("McpHub", () => {
 			)
 		})
 
+		// The badge a run presents to the platform tools plane is per-RUN, while this
+		// connection is per-HUB and serves every run the host executes — so it cannot
+		// ride the connection's own headers. `callTool` asks the plugins instead, and
+		// runs the request inside whatever they answered (`call-headers.ts`).
+		it("asks plugins for per-call headers and runs the request inside them", async () => {
+			const mockConnection: ConnectedMcpConnection = {
+				type: "connected",
+				server: {
+					name: "justceo",
+					config: JSON.stringify({ type: "streamable-http", url: "http://tools.example/mcp" }),
+					status: "connected" as const,
+					source: "global" as const,
+				},
+				client: {
+					request: vi.fn().mockImplementation(async () => {
+						// Asserted from INSIDE the request: this is the context the
+						// transport's fetch reads the header out of.
+						expect(currentMcpCallHeaders()).toEqual({ Authorization: "Bearer badge-1" })
+						return { content: [] }
+					}),
+				} as any,
+				transport: {} as any,
+			}
+			const asked: unknown[] = []
+			await pluginRegistry.register({
+				name: "header-provider",
+				async handleRequest(method: string, params: unknown) {
+					if (method !== RESOLVE_MCP_CALL_HEADERS) throw new Error("not mine")
+					asked.push(params)
+					return { headers: { Authorization: "Bearer badge-1" } }
+				},
+			})
+			// After the register await: the hub's own async initialization would
+			// otherwise resolve in between and replace the connection list.
+			mcpHub.connections = [mockConnection]
+			try {
+				await mcpHub.callTool("justceo", "gitlab", {}, undefined, "task-1")
+			} finally {
+				pluginRegistry.unregister("header-provider")
+			}
+
+			expect(mockConnection.client!.request).toHaveBeenCalled()
+			// The question names the server precisely enough for a resolver to refuse
+			// one it does not recognise — a credential must never go out blind.
+			expect(asked).toEqual([
+				{
+					serverName: "justceo",
+					source: "global",
+					type: "streamable-http",
+					url: "http://tools.example/mcp",
+					toolName: "gitlab",
+					taskId: "task-1",
+				},
+			])
+		})
+
+		it("runs the request in no header context when no plugin answers", async () => {
+			const mockConnection: ConnectedMcpConnection = {
+				type: "connected",
+				server: { name: "test-server", config: JSON.stringify({}), status: "connected" as const },
+				client: {
+					request: vi.fn().mockImplementation(async () => {
+						expect(currentMcpCallHeaders()).toBeUndefined()
+						return { content: [] }
+					}),
+				} as any,
+				transport: {} as any,
+			}
+			mcpHub.connections = [mockConnection]
+
+			await mcpHub.callTool("test-server", "some-tool", {}, undefined, "task-1")
+			expect(mockConnection.client!.request).toHaveBeenCalled()
+		})
+
 		it("should throw error if server not found", async () => {
 			await expect(mcpHub.callTool("non-existent-server", "some-tool", {})).rejects.toThrow(
 				"No connection found for server: non-existent-server",
@@ -2200,6 +2276,95 @@ describe("McpHub", () => {
 
 			const projectCall = spy.mock.calls.find((c) => c[1] === "project")
 			expect((projectCall![0] as any).srv.command).toBe("file-cmd")
+		})
+
+		// The manager is installed LAZILY, so on most hosts — and on every headless
+		// one — it lands after the hub was built. The hub's constructor read is
+		// therefore never the one that matters; the re-sync is (ShoferProvider
+		// installs the manager and calls it, which is what makes a plugin's declared
+		// MCP server spawn on a worker at all).
+		it("picks up a plugin manager installed AFTER the hub was constructed", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ mcpServers: {} }))
+
+			const hub = new McpHub(mockProvider as unknown as TaskProviderLike)
+			await hub.waitUntilReady()
+			const spy = vi.spyOn(hub, "updateServerConnections").mockResolvedValue(undefined)
+
+			setSharedPluginManager({
+				getContributedMcpServers: () => [
+					{ pluginName: "gmail", name: "gmail", config: { type: "stdio", command: "node" } },
+				],
+			} as any)
+			await hub.refreshProjectMcpServers()
+
+			const projectCall = spy.mock.calls.find((c) => c[1] === "project")
+			expect(projectCall![0]).toHaveProperty("gmail")
+		})
+
+		// A worker's servers arrive in the ORG-GLOBAL scope file or from a plugin's
+		// manifest — merged into the connection, but absent from the writable
+		// `~/.shofer/mcp.json` the group lookup used to read. Their `toolGroups`
+		// were therefore dropped and every tool resolved `uncategorized`, which on a
+		// headless host turns each call into an approval ask nobody can answer.
+		it("honours toolGroups declared by a server that is not in the writable file", async () => {
+			// The writable file knows nothing about this server.
+			vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ mcpServers: {} }))
+
+			const hub = new McpHub(mockProvider as unknown as TaskProviderLike)
+			await hub.waitUntilReady()
+			hub.connections = [
+				{
+					type: "connected",
+					server: {
+						name: "justceo",
+						status: "connected" as const,
+						source: "global" as const,
+						config: JSON.stringify({
+							type: "streamable-http",
+							url: "http://tools.example/mcp",
+							disabledTools: ["noisy"],
+							toolGroups: { gitlab: "execute" },
+						}),
+					},
+					client: {
+						request: vi.fn().mockResolvedValue({ tools: [{ name: "gitlab" }, { name: "noisy" }] }),
+					} as any,
+					transport: {} as any,
+				},
+			]
+
+			const tools = await (hub as any).fetchToolsList("justceo", "global")
+			expect(tools.find((t: any) => t.name === "gitlab").group).toBe("execute")
+			expect(tools.find((t: any) => t.name === "noisy").enabledForPrompt).toBe(false)
+		})
+
+		it("lets the writable file's own override win over the declared group", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(
+				JSON.stringify({ mcpServers: { justceo: { toolGroups: { gitlab: "read" } } } }),
+			)
+
+			const hub = new McpHub(mockProvider as unknown as TaskProviderLike)
+			await hub.waitUntilReady()
+			hub.connections = [
+				{
+					type: "connected",
+					server: {
+						name: "justceo",
+						status: "connected" as const,
+						source: "global" as const,
+						config: JSON.stringify({
+							type: "streamable-http",
+							url: "http://tools.example/mcp",
+							toolGroups: { gitlab: "execute" },
+						}),
+					},
+					client: { request: vi.fn().mockResolvedValue({ tools: [{ name: "gitlab" }] }) } as any,
+					transport: {} as any,
+				},
+			]
+
+			const tools = await (hub as any).fetchToolsList("justceo", "global")
+			expect(tools[0].group).toBe("read")
 		})
 
 		it("contributes nothing when no plugin manager is wired", async () => {
