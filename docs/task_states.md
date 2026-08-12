@@ -201,7 +201,19 @@ inside the event payload — consumers no longer need to look up the task to
 figure out what happened:
 
 - `TaskCompleted`: `{ rating: CompletionRating, isSubtask: boolean }`
-- `TaskAborted`: `{ reason: "user" | "completed" | "error" | "abandoned" }`
+- `TaskAborted`: `{ reason: "user" | "error" | "abandoned" }`
+
+**A task that already completed is torn down SILENTLY — no `TaskAborted` at
+all.** `abortTask` still derives `"completed"` internally (it is the reason
+passed to the `afterTaskComplete` plugin notification) but does not emit the
+event for it. A completed instance is nevertheless torn down later — a follow-up
+message rehydrates the task, and rehydration aborts the instance that finished —
+and announcing that teardown made every multi-turn conversation look like it
+ended mid-turn: `TaskAborted` is a terminal signal to everything that receives
+it, so a controller ended the turn on it, the CLI ended the run, and evals
+scored it a failure. `Task.completedTerminalState` (set by `emitTaskCompleted`,
+so it covers every completion shape) plus the legacy
+`didExecuteAttemptCompletion` flag are what mark the instance terminal.
 
 `reason` is derived in `abortTask` and the ORDER of that derivation is part of
 the contract: a `user_cancelled` abort reports `"user"` even though the cancel
@@ -214,12 +226,12 @@ click as one.
 
 `TaskManager`'s aborted handler dispatches on `reason`:
 
-| reason        | Resulting lifecycle                                           |
-| ------------- | ------------------------------------------------------------- |
-| `"user"`      | `paused`                                                      |
-| `"abandoned"` | `paused`                                                      |
-| `"completed"` | no-op (already moved to `completed` by the completed handler) |
-| `"error"`     | no-op (already moved to `error`)                              |
+| reason        | Resulting lifecycle                                         |
+| ------------- | ----------------------------------------------------------- |
+| `"user"`      | `paused`                                                    |
+| `"abandoned"` | `paused`                                                    |
+| `"error"`     | no-op (already moved to `error`)                            |
+| `"completed"` | unreachable — the event is not emitted for a completed task |
 
 ## Gaps & Areas for Improvement
 

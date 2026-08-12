@@ -20,6 +20,10 @@ import type { Task } from "./Task.js"
  */
 export function emitTaskCompleted(task: Task, rating: CompletionRating): void {
 	taskLog.info(`[emitTaskCompleted] Emitting TaskCompleted event, taskId=${task.taskId}`)
+	// Mark the instance terminal BEFORE the event, so any teardown triggered by a
+	// listener already sees a completed task and reports its abort as cleanup
+	// rather than as an abort (see `Task.completedTerminalState`).
+	task.completedTerminalState = true
 	// Force a final token usage update before emitting TaskCompleted so the
 	// latest stats are captured regardless of the throttle timer.
 	task.emitFinalTokenUsageUpdate()

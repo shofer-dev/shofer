@@ -954,6 +954,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	didAlreadyUseTool = false
 	didToolFailInCurrentTurn = false
 	didExecuteAttemptCompletion = false
+	/**
+	 * True once this instance reached its OWN terminal state and emitted
+	 * `TaskCompleted` — set by `emitTaskCompleted`, so it covers every
+	 * completion shape (`attempt_completion` and the conversational turn of a
+	 * `toolCallingEnabled === false` task alike).
+	 *
+	 * It exists because a completed instance is still torn down later — a
+	 * follow-up message rehydrates the task, and rehydration aborts the old
+	 * instance. That abort is CLEANUP, not an abort, and `abortTask` must not
+	 * announce it as one: a controller watching the event stream treats any
+	 * `TaskAborted` as the turn's terminal event.
+	 */
+	completedTerminalState = false
 	didCompleteReadingStream = false
 	private _started = false
 	// No streaming parser is required.
@@ -4315,16 +4328,32 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// the instance out from under whoever was waiting. A controller acts on
 		// that difference (one is a normal end, the other is a lost turn to
 		// report), so the deliberate act must win the classification.
-		const abortReasonValue: "user" | "completed" | "error" | "abandoned" = this.didExecuteAttemptCompletion
-			? "completed"
-			: this.abortReason === "streaming_failed"
-				? "error"
-				: this.abortReason === "user_cancelled"
-					? "user"
-					: this.abandoned
-						? "abandoned"
-						: "user"
-		this.emit(ShoferEventName.TaskAborted, { reason: abortReasonValue })
+		const abortReasonValue: "user" | "completed" | "error" | "abandoned" =
+			this.completedTerminalState || this.didExecuteAttemptCompletion
+				? "completed"
+				: this.abortReason === "streaming_failed"
+					? "error"
+					: this.abortReason === "user_cancelled"
+						? "user"
+						: this.abandoned
+							? "abandoned"
+							: "user"
+
+		// A task that already completed is TORN DOWN here, not aborted, so no
+		// `TaskAborted` is announced for it. The event is a terminal signal to
+		// every consumer that receives it — a controller ends the turn on it, the
+		// CLI ends the run, evals score it as a failure — and "the completed
+		// instance was later discarded" is not that. It is precisely what a
+		// follow-up message does: `sendMessage` on a finished task rehydrates it,
+		// and rehydration aborts the old instance, so announcing this abort made
+		// every multi-turn conversation look like it ended mid-turn.
+		//
+		// Nothing downstream loses information: `TaskManager.onAborted` already
+		// no-ops on `reason: "completed"`, and the plugin `afterTaskComplete`
+		// notification below still fires with the completed reason.
+		if (abortReasonValue !== "completed") {
+			this.emit(ShoferEventName.TaskAborted, { reason: abortReasonValue })
+		}
 
 		// Lifecycle `afterTaskComplete` observer (design §6.9). This is the single task
 		// teardown site — it fires both for a normal completion (post-attempt_completion

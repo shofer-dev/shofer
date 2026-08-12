@@ -129,11 +129,15 @@ describe("ShoferApiAgent", () => {
 		expect(spies(api).createTask).toHaveBeenCalledWith(expect.objectContaining({ title: "Call with Maria" }))
 	})
 
-	it("sendMessage rehydrates the addressed task, then delivers to it", async () => {
+	it("sendMessage delivers straight through, without resuming first", async () => {
 		const api = makeApi()
 		await new ShoferApiAgent(api).sendMessage("t1", "go", ["img"])
-		expect(spies(api).resumeTask).toHaveBeenCalledWith("t1")
 		expect(spies(api).sendMessage).toHaveBeenCalledWith("t1", "go", ["img"])
+		// Resuming first RAISES a resume ask with nothing queued to answer it, so
+		// it is answered by whoever watches asks (on a headless node, the CLI ask
+		// dispatcher — which spends the `--retry` budget and then declines) before
+		// the message ever arrives. Delivery owns the rehydration now.
+		expect(spies(api).resumeTask).not.toHaveBeenCalled()
 	})
 
 	it("sendMessage still delivers when the task needs no rehydration", async () => {

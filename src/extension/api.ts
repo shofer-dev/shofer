@@ -480,11 +480,60 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 		const task =
 			this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ??
 			(current?.taskId === taskId ? current : undefined)
-		if (!task || task.abandoned || task.abort) {
-			this.log(`[API#sendMessage] no live task instance for ${taskId}; message dropped`)
+
+		// Warm: the instance is still running this conversation.
+		if (task && !task.abandoned && !task.abort) {
+			await task.submitUserMessage(message, images)
 			return
 		}
-		await task.submitUserMessage(message, images)
+
+		// Cold or FINISHED. A completed task has `abort === true` — both completion
+		// shapes set it — so this is the ordinary "next turn of a conversation"
+		// path, not an error, and the message must not be dropped.
+		await this.resumeAndDeliver(taskId, message, images)
+	}
+
+	/**
+	 * Deliver a message to a task this host is no longer running: rehydrate from
+	 * history, then make the message that conversation's next user turn.
+	 *
+	 * QUEUE FIRST — this is the whole point of the method. Rehydration raises a
+	 * `resume_task` / `resume_completed_task` ask, and `Task.ask()` DRAINS a
+	 * queued message to answer exactly those. With the queue already populated
+	 * the follow-up becomes the resumed conversation's next message, with no
+	 * extra turn and no race. Resuming FIRST and sending after (which is what
+	 * `ShoferApiAgent.sendMessage` used to do) loses that race routinely: the
+	 * resume ask is raised and answered by whoever is watching asks — in a
+	 * headless CLI node, the ask dispatcher, which spends the `--retry` budget
+	 * and then declines it — before the message ever arrives.
+	 *
+	 * This mirrors `ShoferProvider.resumePluginSession`, which reached the same
+	 * conclusion for the plugin-agent entry point.
+	 */
+	private async resumeAndDeliver(taskId: string, message: string, images?: string[]): Promise<void> {
+		let historyItem: HistoryItem
+		try {
+			;({ historyItem } = await this.sidebarProvider.getTaskWithId(taskId))
+		} catch (error) {
+			this.log(
+				`[API#sendMessage] no live instance and no history for ${taskId}; message dropped: ` +
+					`${error instanceof Error ? error.message : String(error)}`,
+			)
+			return
+		}
+
+		// `keepCurrentTask` for the same reason `createTask` backgrounds rather
+		// than aborts: continuing one conversation must not abandon another.
+		const task = await this.sidebarProvider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })
+		task.messageQueueService.addMessage(message, images)
+
+		// The one ordering that misses: the resume ask reached its waiting state
+		// before the queue was populated, so its drain already ran and found
+		// nothing. Nothing else will drain it, so answer it directly.
+		if (task.resumableAsk) {
+			task.messageQueueService.dequeueMessage()
+			await task.submitUserMessage(message, images)
+		}
 	}
 
 	/**

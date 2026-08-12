@@ -22,6 +22,8 @@ describe("API - sendMessage (task-addressed)", () => {
 	let mockLog: ReturnType<typeof vi.fn>
 	let getManagedTaskInstance: ReturnType<typeof vi.fn>
 	let getCurrentTask: ReturnType<typeof vi.fn>
+	let getTaskWithId: ReturnType<typeof vi.fn>
+	let createTaskWithHistoryItem: ReturnType<typeof vi.fn>
 
 	const liveTask = (taskId: string, over: Record<string, unknown> = {}) => ({
 		taskId,
@@ -31,11 +33,24 @@ describe("API - sendMessage (task-addressed)", () => {
 		...over,
 	})
 
+	/** A freshly rehydrated instance, as `createTaskWithHistoryItem` returns one. */
+	const rehydrated = (taskId: string, over: Record<string, unknown> = {}) => ({
+		taskId,
+		abandoned: false,
+		abort: false,
+		resumableAsk: undefined,
+		messageQueueService: { addMessage: vi.fn(), dequeueMessage: vi.fn() },
+		submitUserMessage: vi.fn().mockResolvedValue(undefined),
+		...over,
+	})
+
 	beforeEach(() => {
 		mockOutputChannel = { appendLine: vi.fn() } as unknown as vscode.OutputChannel
 		mockPostMessageToWebview = vi.fn().mockResolvedValue(undefined)
 		getManagedTaskInstance = vi.fn().mockReturnValue(undefined)
 		getCurrentTask = vi.fn().mockReturnValue(undefined)
+		getTaskWithId = vi.fn().mockRejectedValue(new Error("Task not found"))
+		createTaskWithHistoryItem = vi.fn()
 
 		mockProvider = {
 			context: {} as vscode.ExtensionContext,
@@ -43,6 +58,8 @@ describe("API - sendMessage (task-addressed)", () => {
 			on: vi.fn(),
 			getCurrentTaskStack: vi.fn().mockReturnValue([]),
 			getCurrentTask,
+			getTaskWithId,
+			createTaskWithHistoryItem,
 			taskManager: { getManagedTaskInstance },
 			viewLaunched: true,
 		} as unknown as ShoferProvider
@@ -92,26 +109,60 @@ describe("API - sendMessage (task-addressed)", () => {
 		await api.sendMessage("t-other", "hello")
 
 		expect(task.submitUserMessage).not.toHaveBeenCalled()
-		expect(mockLog).toHaveBeenCalledWith(expect.stringContaining("no live task instance for t-other"))
+		expect(getTaskWithId).toHaveBeenCalledWith("t-other")
 	})
 
-	it("drops the message when the host knows no such task", async () => {
+	it("drops the message when the host knows no such task at all", async () => {
 		await api.sendMessage("nope", "hello")
 
-		expect(mockLog).toHaveBeenCalledWith(expect.stringContaining("no live task instance for nope"))
+		expect(createTaskWithHistoryItem).not.toHaveBeenCalled()
+		expect(mockLog).toHaveBeenCalledWith(expect.stringContaining("no live instance and no history for nope"))
 		expect(mockPostMessageToWebview).not.toHaveBeenCalled()
 	})
 
-	it.each([
-		["abandoned", { abandoned: true }],
-		["aborted", { abort: true }],
-	])("drops the message when the addressed task is %s", async (_label, over) => {
-		const task = liveTask("t1", over)
-		getManagedTaskInstance.mockReturnValue(task)
+	/**
+	 * A COMPLETED task has `abort === true` — both completion shapes set it — so
+	 * "the addressed instance is aborted" is the ordinary next-turn-of-a-
+	 * conversation case, not an error. Dropping the message stranded every
+	 * follow-up; resuming first and sending after (the transport's old
+	 * sequencing) lost the resume ask to whoever watches asks. Delivery
+	 * rehydrates, QUEUE-FIRST, so the message itself answers that ask.
+	 */
+	describe("finished or cold task", () => {
+		it.each([
+			["completed (abort)", { abort: true } as Record<string, unknown>],
+			["abandoned", { abandoned: true } as Record<string, unknown>],
+			["gone entirely", undefined],
+		])("rehydrates and queues the message when the instance is %s", async (_label, over) => {
+			if (over) {
+				getManagedTaskInstance.mockReturnValue(liveTask("t1", over))
+			}
+			getTaskWithId.mockResolvedValue({ historyItem: { id: "t1" } })
+			const fresh = rehydrated("t1")
+			createTaskWithHistoryItem.mockResolvedValue(fresh)
 
-		await api.sendMessage("t1", "hello")
+			await api.sendMessage("t1", "and tomorrow?")
 
-		expect(task.submitUserMessage).not.toHaveBeenCalled()
-		expect(mockLog).toHaveBeenCalledWith(expect.stringContaining("no live task instance for t1"))
+			expect(createTaskWithHistoryItem).toHaveBeenCalledWith({ id: "t1" }, { keepCurrentTask: true })
+			expect(fresh.messageQueueService.addMessage).toHaveBeenCalledWith("and tomorrow?", undefined)
+			// No ask outstanding yet — `Task.ask()`'s own drain will answer it.
+			expect(fresh.submitUserMessage).not.toHaveBeenCalled()
+		})
+
+		it("answers an already-outstanding resume ask directly", async () => {
+			getManagedTaskInstance.mockReturnValue(liveTask("t1", { abort: true }))
+			getTaskWithId.mockResolvedValue({ historyItem: { id: "t1" } })
+			const fresh = rehydrated("t1", {
+				resumableAsk: { ts: 1, type: "ask", ask: "resume_completed_task" },
+			})
+			createTaskWithHistoryItem.mockResolvedValue(fresh)
+
+			await api.sendMessage("t1", "and tomorrow?", ["img"])
+
+			// Taken back out of the queue so it is delivered exactly once.
+			expect(fresh.messageQueueService.addMessage).toHaveBeenCalledWith("and tomorrow?", ["img"])
+			expect(fresh.messageQueueService.dequeueMessage).toHaveBeenCalled()
+			expect(fresh.submitUserMessage).toHaveBeenCalledWith("and tomorrow?", ["img"])
+		})
 	})
 })

@@ -80,7 +80,7 @@ The full method set (see the source for exact signatures):
 | Method                                                                            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `createTask({ prompt, mode, taskId?, apiConfiguration?, title? })` → `{ taskId }` | Start a task. `mode` (**required**) is the mode slug it runs in. `apiConfiguration` ships the controller's resolved [API Configuration](#per-task-api-configuration) so a remote task runs on the same provider/model the front-end picked. `title` names the task AND locks the name: the agent's `set_task_title` tool is omitted entirely, which a controller that owns the label (a phone call, a pipeline stage) wants — and which keeps one always-available tool out of a latency-sensitive turn. |
-| `sendMessage(taskId, message)`                                                    | Send a follow-up message to a running task.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `sendMessage(taskId, message)`                                                    | Send a follow-up message to a task. Rehydrates it queue-first when it is finished or cold, so a completed conversation continues without a separate `resumeTask`.                                                                                                                                                                                                                                                                                                                                        |
 | `cancelTask(taskId)`                                                              | Abort a task.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `respondToAsk(taskId, AskResponse)`                                               | Answer an outstanding `ask` (interactive tool approval / follow-up). The reverse of the `ask` events on the stream, so a remote task's approvals round-trip like a local one's.                                                                                                                                                                                                                                                                                                                          |
 | `getTaskSnapshot(taskId)` → `TaskSnapshot \| undefined`                           | The task's state so far — see [Task snapshots](#task-snapshots-attaching-to-a-running-task). `undefined` when the host owns no such task.                                                                                                                                                                                                                                                                                                                                                                |
@@ -108,6 +108,25 @@ with reason `user` is a deliberate cancellation, while `abandoned` means the hos
 discarded that task's instance out from under whoever was waiting on it. A controller
 reading `abandoned` should treat the turn as lost, not as churn to wait through — the
 agent composing the reply no longer exists, and nothing rebuilds a turn.
+
+**Nothing routine emits `taskAborted`.** In particular, continuing a finished
+conversation does not: `sendMessage` to a completed task rehydrates it, which
+tears the completed instance down, and that teardown is silent (`task_states.md`
+§Self-Contained Lifecycle Events). A controller may therefore treat any
+`taskAborted` as the turn's terminal event, which is exactly how they are
+written.
+
+**A follow-up to a finished task is `sendMessage`, on its own.** Delivery owns
+the rehydration and does it QUEUE-FIRST, so the message itself answers the
+`resume_task` / `resume_completed_task` ask that rehydration raises. Do NOT call
+`resumeTask` first: that raises the resume ask with nothing queued to answer it,
+and it is then answered by whoever watches asks — on a headless node the CLI ask
+dispatcher, which spends the `--retry` budget and then declines. `resumeTask`
+remains for its own purpose, making a task addressable without sending anything.
+
+The follow-up's event sequence is therefore `taskCreated` (the rehydrated
+instance) → `taskStarted` → `message`s → `taskCompleted`, with no `taskAborted`
+anywhere in it.
 
 #### Reverse data channel
 
@@ -565,18 +584,18 @@ The payload for each event is typed via Zod schemas in
 
 #### Task Lifecycle
 
-| Event                                                   | Payload                                                  | Description                                                                             |
-| ------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| [`taskStarted`](../packages/types/src/events.ts:18)     | `[taskId: string]`                                       | Task has started executing.                                                             |
-| [`taskCompleted`](../packages/types/src/events.ts:19)   | `[taskId, tokenUsage, toolUsage, { rating, isSubtask }]` | Task finished successfully.                                                             |
-| [`taskAborted`](../packages/types/src/events.ts:21)     | `[taskId, { reason }]`                                   | Task was aborted. `reason` is one of `"user"`, `"completed"`, `"error"`, `"abandoned"`. |
-| [`taskError`](../packages/types/src/events.ts:20)       | `[taskId, errorType]`                                    | Task encountered an error.                                                              |
-| [`taskFocused`](../packages/types/src/events.ts:22)     | `[taskId: string]`                                       | Task gained focus.                                                                      |
-| [`taskUnfocused`](../packages/types/src/events.ts:23)   | `[taskId: string]`                                       | Task lost focus.                                                                        |
-| [`taskActive`](../packages/types/src/events.ts:24)      | `[taskId: string]`                                       | Task is actively running.                                                               |
-| [`taskInteractive`](../packages/types/src/events.ts:25) | `[taskId: string]`                                       | Task is awaiting user interaction (ask/approval).                                       |
-| [`taskResumable`](../packages/types/src/events.ts:26)   | `[taskId: string]`                                       | Task can be resumed.                                                                    |
-| [`taskIdle`](../packages/types/src/events.ts:27)        | `[taskId: string]`                                       | Task is idle.                                                                           |
+| Event                                                   | Payload                                                  | Description                                                                                                                 |
+| ------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| [`taskStarted`](../packages/types/src/events.ts:18)     | `[taskId: string]`                                       | Task has started executing.                                                                                                 |
+| [`taskCompleted`](../packages/types/src/events.ts:19)   | `[taskId, tokenUsage, toolUsage, { rating, isSubtask }]` | Task finished successfully.                                                                                                 |
+| [`taskAborted`](../packages/types/src/events.ts:21)     | `[taskId, { reason }]`                                   | Task was aborted. `reason` is one of `"user"`, `"error"`, `"abandoned"` — a COMPLETED task is torn down without this event. |
+| [`taskError`](../packages/types/src/events.ts:20)       | `[taskId, errorType]`                                    | Task encountered an error.                                                                                                  |
+| [`taskFocused`](../packages/types/src/events.ts:22)     | `[taskId: string]`                                       | Task gained focus.                                                                                                          |
+| [`taskUnfocused`](../packages/types/src/events.ts:23)   | `[taskId: string]`                                       | Task lost focus.                                                                                                            |
+| [`taskActive`](../packages/types/src/events.ts:24)      | `[taskId: string]`                                       | Task is actively running.                                                                                                   |
+| [`taskInteractive`](../packages/types/src/events.ts:25) | `[taskId: string]`                                       | Task is awaiting user interaction (ask/approval).                                                                           |
+| [`taskResumable`](../packages/types/src/events.ts:26)   | `[taskId: string]`                                       | Task can be resumed.                                                                                                        |
+| [`taskIdle`](../packages/types/src/events.ts:27)        | `[taskId: string]`                                       | Task is idle.                                                                                                               |
 
 #### Subtask Lifecycle
 

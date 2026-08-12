@@ -180,4 +180,46 @@ describe("conversational turns (toolCallingEnabled === false)", () => {
 		expect(completed).not.toHaveBeenCalled()
 		expect(vi.mocked(getEnvironmentDetails)).toHaveBeenCalled()
 	})
+
+	/**
+	 * The follow-up turn of a conversation REHYDRATES the task, and rehydration
+	 * aborts the instance that just finished. That abort is teardown, and a
+	 * `TaskAborted` announcing it is read by every consumer as the turn's
+	 * terminal event — a controller ends the turn on it, the CLI ends the run,
+	 * evals score it a failure. So a completed instance is torn down silently,
+	 * whichever way it completed.
+	 */
+	describe("teardown of a completed instance", () => {
+		const abortSilently = async (task: Task) => {
+			const aborted = vi.fn()
+			task.on(ShoferEventName.TaskAborted, aborted)
+			vi.spyOn(task, "dispose").mockImplementation(() => {})
+			await task.abortTask(true)
+			return aborted
+		}
+
+		it("emits no TaskAborted after a conversational completion", async () => {
+			const task = makeTask(false)
+			await task.recursivelyMakeShoferRequests([{ type: "text", text: "hi" }], false)
+			expect(task.completedTerminalState).toBe(true)
+
+			expect(await abortSilently(task)).not.toHaveBeenCalled()
+		})
+
+		it("emits no TaskAborted after an attempt_completion completion", async () => {
+			const task = makeTask(undefined)
+			// What the attempt_completion path leaves on the instance.
+			task.didExecuteAttemptCompletion = true
+
+			expect(await abortSilently(task)).not.toHaveBeenCalled()
+		})
+
+		it("still announces a genuine abandonment", async () => {
+			const task = makeTask(undefined)
+
+			const aborted = await abortSilently(task)
+
+			expect(aborted).toHaveBeenCalledWith({ reason: "abandoned" })
+		})
+	})
 })

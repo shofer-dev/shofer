@@ -95,11 +95,15 @@ export class ShoferApiAgent implements ShoferApi {
 		return this.api.createTask({ ...input, apiConfiguration })
 	}
 
-	async sendMessage(taskId: string, message: string, images?: string[]): Promise<void> {
-		// Ensure the addressed task has a live instance (rehydrates from the task
-		// store after a host restart; no-op when it is already live), then deliver.
-		await this.api.resumeTask(taskId).catch(() => {})
-		await this.api.sendMessage(taskId, message, images)
+	sendMessage(taskId: string, message: string, images?: string[]): Promise<void> {
+		// Straight through. This used to `resumeTask` first, to give the addressed
+		// task a live instance before delivering — but rehydration RAISES a resume
+		// ask, and resuming with nothing queued to answer it hands that ask to
+		// whoever watches asks (on a headless node, the CLI ask dispatcher, which
+		// spends the `--retry` budget and then declines). Delivery owns the
+		// rehydration now, and does it queue-first so the message itself answers
+		// the resume ask. Sequencing them here could only re-open that race.
+		return this.api.sendMessage(taskId, message, images)
 	}
 
 	cancelTask(taskId: string): Promise<void> {
