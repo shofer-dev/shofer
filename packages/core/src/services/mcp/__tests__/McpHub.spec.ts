@@ -10,7 +10,7 @@ import type {
 	ConnectedMcpConnection,
 	DisconnectedMcpConnection,
 } from "../McpHub.js"
-import { ServerConfigSchema, McpHub, MCP_META_TASK_ID, MCP_META_TOOL_CALL_ID } from "../McpHub.js"
+import { ServerConfigSchema, McpHub, MCP_META_TASK_ID, MCP_META_TOOL_CALL_ID, MCP_META_TOOL_GROUP } from "../McpHub.js"
 import { setSharedPluginManager } from "../../../plugins/plugin-manager.js"
 import { pluginRegistry } from "../../../plugins/plugin-registry.js"
 import { RESOLVE_MCP_CALL_HEADERS, currentMcpCallHeaders } from "../call-headers.js"
@@ -2365,6 +2365,86 @@ describe("McpHub", () => {
 
 			const tools = await (hub as any).fetchToolsList("justceo", "global")
 			expect(tools[0].group).toBe("read")
+		})
+
+		// A server whose catalog is DYNAMIC cannot be described by a static
+		// `toolGroups` map in anyone's mcp.json — the platform tools plane adds
+		// tools without the runtime's config being rewritten — so it declares each
+		// tool's group in-band. That declaration must ride in `_meta`: the SDK
+		// parses tools/list through a plain `z.object`, which strips a top-level
+		// `group`, so the field a server would naively send never arrives and every
+		// tool resolves `uncategorized`. On a headless node that is not a cosmetic
+		// default — it parks every call on an approval nobody can answer.
+		it("reads a server's in-band group declaration from _meta", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ mcpServers: {} }))
+
+			const hub = new McpHub(mockProvider as unknown as TaskProviderLike)
+			await hub.waitUntilReady()
+			hub.connections = [
+				{
+					type: "connected",
+					server: {
+						name: "justceo",
+						status: "connected" as const,
+						source: "global" as const,
+						// No `toolGroups`: this is the platform's injected entry verbatim.
+						config: JSON.stringify({ type: "streamable-http", url: "http://tools.example/mcp" }),
+					},
+					client: {
+						request: vi.fn().mockResolvedValue({
+							tools: [
+								{ name: "k3s_ops", _meta: { [MCP_META_TOOL_GROUP]: "read" } },
+								{ name: "pipeline_create", _meta: { [MCP_META_TOOL_GROUP]: "write" } },
+								{ name: "mystery" },
+								{ name: "bogus", _meta: { [MCP_META_TOOL_GROUP]: "not-a-group" } },
+							],
+						}),
+					} as any,
+					transport: {} as any,
+				},
+			]
+
+			const tools = await (hub as any).fetchToolsList("justceo", "global")
+			const group = (name: string) => tools.find((t: any) => t.name === name).group
+			expect(group("k3s_ops")).toBe("read")
+			expect(group("pipeline_create")).toBe("write")
+			// Declaring nothing, or declaring nonsense, still resolves to the
+			// fallback — never to a permissive guess.
+			expect(group("mystery")).toBe("uncategorized")
+			expect(group("bogus")).toBe("uncategorized")
+		})
+
+		// The user's own assignment stays authoritative over what the server says
+		// about itself — the toggle/assign UI writes the writable file and re-lists.
+		it("lets the writable file's override win over the server's _meta declaration", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(
+				JSON.stringify({ mcpServers: { justceo: { toolGroups: { k3s_ops: "execute" } } } }),
+			)
+
+			const hub = new McpHub(mockProvider as unknown as TaskProviderLike)
+			await hub.waitUntilReady()
+			hub.connections = [
+				{
+					type: "connected",
+					server: {
+						name: "justceo",
+						status: "connected" as const,
+						source: "global" as const,
+						config: JSON.stringify({ type: "streamable-http", url: "http://tools.example/mcp" }),
+					},
+					client: {
+						request: vi
+							.fn()
+							.mockResolvedValue({
+								tools: [{ name: "k3s_ops", _meta: { [MCP_META_TOOL_GROUP]: "read" } }],
+							}),
+					} as any,
+					transport: {} as any,
+				},
+			]
+
+			const tools = await (hub as any).fetchToolsList("justceo", "global")
+			expect(tools[0].group).toBe("execute")
 		})
 
 		it("contributes nothing when no plugin manager is wired", async () => {

@@ -1,7 +1,7 @@
 # Tool Categories
 
 **Status:** Implemented  
-**Last Updated:** 2026-05-04
+**Last Updated:** 2026-08-12
 
 ## Overview
 
@@ -25,7 +25,7 @@ Shofer uses a single unified ToolGroup system as the **single source of truth** 
 | 6   | `mode`          | Mode switching                                       | `switch_mode`                                                                                     |
 | 7   | `subtasks`      | Background / delegated task management               | `check_task_status`, `wait_for_task`, `cancel_tasks`, `answer_subtask_question`                   |
 | 8   | `questions`     | User-facing questions and follow-ups                 | `ask_followup_question`                                                                           |
-| 9   | `uncategorized` | Fallback for tools without explicit classification   | (empty by default; MCP tools without a `group` field land here)                                   |
+| 9   | `uncategorized` | Fallback for tools without explicit classification   | (empty by default; MCP tools that declare no group land here)                                     |
 
 ## Where Each Tool Gets Its Group
 
@@ -40,7 +40,7 @@ flowchart TD
 
     MCPT["MCP server tool"] --> M1{"toolGroups override<br/>in mcp.json?"}
     M1 -->|yes| GROUP
-    M1 -->|no| M2{"group field in the<br/>server's tool definition?"}
+    M1 -->|no| M2{"_meta shofer.dev/toolGroup<br/>on the tool?"}
     M2 -->|yes| GROUP
     M2 -->|no| M3["default: uncategorized"]
     M3 --> GROUP
@@ -100,20 +100,35 @@ Browser tools (`browser_*`) are registered as an MCP server (not via a `toolGrou
 MCP tools are classified via a three-tier priority system (highest first):
 
 1. **User Configuration** — `toolGroups` map in `mcp.json`
-2. **Server Declaration** — `group` field in the server's tool definition
+2. **Server Declaration** — `_meta["shofer.dev/toolGroup"]` on the tool
 3. **Default Fallback** — `uncategorized`
 
-**Server-side declaration:**
+**Server-side declaration** — in `_meta`, which is where MCP sanctions custom
+metadata:
 
 ```json
 {
   "tools": [
-    { "name": "get_pull_request", "description": "...", "inputSchema": {...}, "group": "read" },
-    { "name": "create_issue", "description": "...", "inputSchema": {...}, "group": "write" },
-    { "name": "run_workflow", "description": "...", "inputSchema": {...}, "group": "execute" }
+    { "name": "get_pull_request", "inputSchema": {...}, "_meta": { "shofer.dev/toolGroup": "read" } },
+    { "name": "create_issue", "inputSchema": {...}, "_meta": { "shofer.dev/toolGroup": "write" } },
+    { "name": "run_workflow", "inputSchema": {...}, "_meta": { "shofer.dev/toolGroup": "execute" } }
   ]
 }
 ```
+
+**It has to be `_meta`, and a top-level `group` field cannot replace it.** The
+MCP SDK parses `tools/list` through `ToolSchema`, a plain `z.object`, and zod
+strips every key the schema does not declare — so a top-level `group` is deleted
+before `McpHub` ever sees it. That is not a cosmetic loss: the tool then
+resolves `uncategorized`, and on a headless host (`shofer serve`), whose posture
+must not auto-approve that group, **every call to it parks on a
+`use_mcp_server` approval nobody is there to answer**. `_meta` is part of
+`ToolSchema`, so it survives the parse.
+
+Which tier a server should use follows from whether its catalog is static: a
+fixed set of tools can be described by a `toolGroups` map in the config that
+declares the server, but a server whose catalog is **dynamic** (tools added
+without anyone rewriting a config file) can only declare in-band, in `_meta`.
 
 **User-side override** (`~/.shofer/mcp.json` or `.shofer/mcp.json`):
 
@@ -173,7 +188,7 @@ These tools bypass mode filtering entirely, defined in the [`ALWAYS_AVAILABLE_TO
 
 ### MCP tools without group
 
-Tools without an explicit `group` field default to `"uncategorized"` (see `McpHub.fetchToolsList`). The `mcp` gateway **implies** the `uncategorized` group for visibility, so ungrouped MCP tools remain visible in any mode that has the `mcp` gateway (backward compatible). Their _auto-approval_ is still gated by `alwaysAllowUncategorized` — visibility does not loosen the approval requirement. Only tools explicitly reassigned to a different group (e.g. `"browser"`, `"read"`, `"write"`) are gated by that group's inclusion in the mode.
+Tools with no `_meta["shofer.dev/toolGroup"]` (and no `toolGroups` entry) default to `"uncategorized"` (see `McpHub.fetchToolsList`). The `mcp` gateway **implies** the `uncategorized` group for visibility, so ungrouped MCP tools remain visible in any mode that has the `mcp` gateway (backward compatible). Their _auto-approval_ is still gated by `alwaysAllowUncategorized` — visibility does not loosen the approval requirement. Only tools explicitly reassigned to a different group (e.g. `"browser"`, `"read"`, `"write"`) are gated by that group's inclusion in the mode.
 
 For example, a mode with `tools: ["read", "mcp"]` exposes:
 

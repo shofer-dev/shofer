@@ -209,10 +209,11 @@ When `use_mcp_tool` appears in the tool list, it serves as an explicit wrapper. 
 
 ### Tool Discovery on the Wire
 
-[`fetchToolsList()`](../packages/core/src/services/mcp/McpHub.ts) (line 1057) sends the MCP `tools/list` request and annotates each tool with:
+[`fetchToolsList()`](../packages/core/src/services/mcp/McpHub.ts) sends the MCP `tools/list` request and annotates each tool with:
 
 - `enabledForPrompt`: `false` if the tool name is in `disabledTools`.
-- `group`: resolved from user override → server-declared → default `"uncategorized"`.
+- `group`: resolved from user override → the connection's `toolGroups` → the tool's own
+  `_meta["shofer.dev/toolGroup"]` → default `"uncategorized"`.
 
 ### Per-Group Visibility Filtering
 
@@ -349,7 +350,12 @@ For each MCP tool, the group is resolved by [`fetchToolsList()`](../packages/cor
    `contributes.mcpServers`. Reading only the writable file dropped their groups, so their
    tools resolved `uncategorized` — and on a headless host that turns every call into an
    approval ask nobody is there to answer. `disabledTools` resolves the same way.
-3. **Tool-declared** — `tool.group` from the server's tool definition.
+3. **Tool-declared, in band** — `_meta["shofer.dev/toolGroup"]` on the tool itself. It must be
+   `_meta` and not a top-level `group` field: the SDK parses `tools/list` through `ToolSchema`,
+   a plain `z.object`, which strips every key it does not declare, so a top-level one is deleted
+   before this code sees it. `_meta` is in that schema. This is the only tier available to a
+   server whose catalog is DYNAMIC — no config file can enumerate tools that did not exist when
+   it was written.
 4. **Default** — `"uncategorized"`.
 
 ### Auto-Approval

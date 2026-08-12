@@ -92,6 +92,23 @@ export const MCP_META_TASK_ID = `${MCP_META_PREFIX}taskId`
  */
 export const MCP_META_TOOL_CALL_ID = `${MCP_META_PREFIX}toolCallId`
 
+/**
+ * `_meta` key by which a SERVER declares the {@link ToolGroup} of a tool it
+ * advertises in `tools/list`. The only key here that travels server → client.
+ *
+ * It has to live in `_meta`, and a plain top-level `group` field cannot replace
+ * it, because such a field **does not survive the parse**: the SDK validates
+ * `tools/list` against `ToolSchema`, a plain `z.object`, and zod strips unknown
+ * keys — so a server's `"group": "read"` was deleted before this file ever saw
+ * it. The result was silent and total: every tool of every server resolved
+ * `uncategorized`, and on a headless node — whose posture must NOT auto-approve
+ * that group, since it is by definition the tools nobody classified — every
+ * single call parked on a `use_mcp_server` approval with nobody present to
+ * answer it. `_meta` is declared in `ToolSchema` itself, which is exactly why
+ * the spec reserves it for metadata like this.
+ */
+export const MCP_META_TOOL_GROUP = `${MCP_META_PREFIX}toolGroup`
+
 // Discriminated union for connection states
 export type ConnectedMcpConnection = {
 	type: "connected"
@@ -1363,7 +1380,7 @@ export class McpHub {
 			// Resolve per-tool group assignments. Priority order:
 			//   1. User-supplied override in the writable mcp.json (`toolGroups[toolName]`)
 			//   2. The server's own declaration, in whatever scope defined it
-			//   3. Server-declared `tool.group`
+			//   3. Server-declared `_meta["shofer.dev/toolGroup"]`
 			//   4. Default `uncategorized`
 			// Auto-approval is gated by group, not by a per-tool flag.
 			const resolveGroup = (raw: unknown): McpTool["group"] => {
@@ -1371,11 +1388,14 @@ export class McpHub {
 				return parsed.success ? parsed.data : undefined
 			}
 			const tools: McpTool[] = (response?.tools || []).map((tool) => {
-				// `group` is a Shofer extension field, not part of the SDK's Tool schema
-				// (SDK >=1.26 types Tool strictly, so read it via a structural cast).
+				// Tier 3 is read from `_meta` and NOT from a top-level `group`: the
+				// SDK parses this response through `ToolSchema`, whose plain
+				// `z.object` strips every key it does not declare, so a top-level
+				// one never arrives (see MCP_META_TOOL_GROUP). `_meta` is in that
+				// schema, so it does.
 				const group: McpTool["group"] =
 					resolveGroup(toolGroupsConfig[tool.name]) ??
-					resolveGroup((tool as { group?: unknown }).group) ??
+					resolveGroup(tool._meta?.[MCP_META_TOOL_GROUP]) ??
 					"uncategorized"
 
 				return {

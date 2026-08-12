@@ -52,13 +52,22 @@ import { loadLayeredOverlay, resolveScopeRoots, type LayeredSettings, type Scope
 
 /**
  * The settings keys that constitute a node's tool-approval posture: the master
- * gate, every per-group `alwaysAllow*` toggle the headless seed sets, and the
- * command allow/deny lists that qualify `alwaysAllowExecute`.
+ * gate, every per-group `alwaysAllow*` toggle, and the command allow/deny lists
+ * that qualify `alwaysAllowExecute`.
  *
  * This is the exact set the host may seed AND the exact set config may take over.
  * Keeping one list means a key can never be seeded-but-not-overridable (the
  * original defect) or overridable-but-never-seeded (a silent behaviour change on
  * nodes with no config).
+ *
+ * **Membership here is not the same as being in the seed.** A key listed here
+ * that {@link defaultApprovalSeed} does not set is one configuration may govern
+ * and the host will never default ON — the last three, plus `deniedCommands`.
+ * They belong here anyway, because this list is also what the startup banner
+ * counts: a key omitted from it is honoured on read (`ContextProxy` serves the
+ * overlay ahead of `globalState`) but reported as though the node were running
+ * the flag's default, which is precisely the misreading the summary exists to
+ * prevent.
  */
 export const APPROVAL_POSTURE_KEYS = [
 	"autoApprovalEnabled",
@@ -73,6 +82,11 @@ export const APPROVAL_POSTURE_KEYS = [
 	"alwaysAllowExecute",
 	"allowedCommands",
 	"deniedCommands",
+	// Configurable, never seeded — see defaultApprovalSeed's "what it does NOT
+	// seed, and why" note.
+	"alwaysAllowBrowser",
+	"alwaysAllowUncategorized",
+	"alwaysAllowFollowupQuestions",
 ] as const satisfies readonly (keyof ShoferSettings)[]
 
 /** A settings key that participates in the approval posture. */
@@ -104,6 +118,23 @@ export interface ApprovalPosture {
  * the master gate is seeded in the interactive case — the per-group toggles are
  * inert while `autoApprovalEnabled` is false, and seeding them would needlessly
  * overwrite the operator's file for keys the flag does not actually decide.
+ *
+ * ## What it does NOT seed, and why
+ *
+ * Three `alwaysAllow*` toggles are absent from the non-interactive seed on
+ * purpose. "Everything" here means every DECLARED capability, not everything:
+ *
+ *   - `alwaysAllowUncategorized` — `uncategorized` is not a capability, it is
+ *     the absence of a declaration. Seeding it would auto-approve exactly the
+ *     tools nobody classified, which is strictly worse than seeding `write`:
+ *     a posture that deliberately gates `write` would still be bypassed by any
+ *     mutating tool whose server forgot to declare a group. The right fix for a
+ *     tool that parks a headless run is to CLASSIFY it, never to widen this.
+ *   - `alwaysAllowFollowupQuestions` — its effect is to answer a question with
+ *     a suggestion after a timeout. A headless node has no one to ask, but that
+ *     is a reason to relay the question, not to fabricate an answer.
+ *   - `alwaysAllowBrowser` — not seeded today; a headless node's browser tools
+ *     therefore prompt. Configuration can turn it on.
  */
 export function defaultApprovalSeed(nonInteractive: boolean): Partial<ShoferSettings> {
 	if (!nonInteractive) {

@@ -205,6 +205,35 @@ describe("approval posture", () => {
 				expect(APPROVAL_POSTURE_KEYS).toContain(key)
 			}
 		})
+
+		// The seed is "auto-approve every declared capability", not "auto-approve
+		// everything". `uncategorized` is the absence of a declaration, so seeding
+		// it would approve exactly the tools nobody classified — bypassing a
+		// posture that deliberately gates `write`, since a mutating tool whose
+		// server declared no group lands there. A headless run that parks on such
+		// a tool is fixed by CLASSIFYING the tool, never by widening this.
+		it("never seeds the uncategorized group, however headless the node", () => {
+			expect(defaultApprovalSeed(true)).not.toHaveProperty("alwaysAllowUncategorized")
+			expect(defaultApprovalSeed(false)).not.toHaveProperty("alwaysAllowUncategorized")
+		})
+
+		// A key configuration may set must still be COUNTED as configured, or the
+		// startup banner reports a node running from a file as one running the
+		// flag's default — the exact misreading the summary exists to prevent.
+		it("tracks the toggles it never seeds, so a configured value is still reported", () => {
+			for (const key of ["alwaysAllowUncategorized", "alwaysAllowBrowser", "alwaysAllowFollowupQuestions"]) {
+				expect(APPROVAL_POSTURE_KEYS).toContain(key)
+			}
+			const posture = applyConfiguredApprovalPosture(
+				defaultApprovalSeed(true),
+				{ alwaysAllowUncategorized: false },
+				true,
+			)
+			expect(posture.configuredKeys).toContain("alwaysAllowUncategorized")
+			expect(posture.effective.alwaysAllowUncategorized).toBe(false)
+			// Never seeded, so there is nothing to strip and the seed is untouched.
+			expect(posture.seed).toEqual(defaultApprovalSeed(true))
+		})
 	})
 
 	describe("resolveCliScopeRoots", () => {
