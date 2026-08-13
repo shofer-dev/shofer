@@ -2498,12 +2498,16 @@ export class ShoferProvider
 		}
 
 		// Cold: the session finished (a completed stake being re-asked). Rehydrate
-		// from history so the conversation is intact, then deliver the prompt as
-		// that conversation's next user message — the same two steps
-		// `ShoferApiAgent.sendMessage` takes for a task the host is no longer
-		// running (`api.resumeTask` then `api.sendMessage`).
+		// DORMANT, queue, then start — the same deterministic ordering
+		// `API.resumeAndDeliver` uses for the AgentApi entry point. Rehydrating
+		// with the default fire-and-forget start raced the queue: when the resume
+		// ask won, it was published to the message stream and dispatched (a
+		// headless node's ask handler spends the `--retry` budget declining it)
+		// before the drain could answer it. With the queue populated before
+		// `startFromHistory()`, `resumeTaskFromHistory` takes the queued message
+		// AS the resumption and raises no ask at all.
 		const { historyItem } = await this.getTaskWithId(sessionId)
-		const task = await this.createTaskWithHistoryItem(historyItem)
+		const task = await this.createTaskWithHistoryItem(historyItem, { startTask: false })
 		// Re-apply the MODE's provider profile. Rehydration restores the mode (and
 		// so the tool set) but not necessarily the profile — a headless host
 		// deliberately skips restoring provider settings from history, because a
@@ -2512,21 +2516,11 @@ export class ShoferProvider
 		// node's DEFAULT model: verified live, a contract re-prompt continued the
 		// right conversation with the right tools on the wrong model. So the same
 		// resolution `createTask` performs for a fresh task is performed again
-		// here — one rule, both entry points.
+		// here — one rule, both entry points. Applied while the task is still
+		// dormant, so the loop never runs a request on the wrong profile.
 		await this.applyModeApiConfig(task, mode)
-		// Queue FIRST. Rehydration raises a `resume_task` / `resume_completed_task`
-		// ask, and `Task.ask()` DRAINS a queued message to answer exactly those —
-		// so with the queue already populated the prompt becomes the resumed
-		// conversation's next message with no extra turn and no race.
 		task.messageQueueService.addMessage(prompt)
-		// The one ordering that misses: the resume ask reached its waiting state
-		// before the queue was populated, so its drain already ran and found
-		// nothing. Nothing else will drain it, so answer it directly with the
-		// same text.
-		if (task.resumableAsk) {
-			task.messageQueueService.dequeueMessage()
-			await task.submitUserMessage(prompt)
-		}
+		task.startFromHistory()
 		return task
 	}
 
