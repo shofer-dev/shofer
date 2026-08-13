@@ -352,12 +352,17 @@ Mode-specific skills take precedence over generic skills with the same name.
 | **Scope**           | All three scopes (global / user / project) |
 | **Write-protected** | Yes (inside `.shofer/`)                    |
 
-The file home for the non-secret `globalSettings` keys. Read Schema-First /
-fail-closed (invalid content ⇒ empty layer) and merged across scopes per the
-locked-vs-default rule. Never holds secrets — a provider profile is referenced by
-name/id only. `ContextProxy` write-through mirrors a settings change into the
-**user** scope's `~/.shofer/settings.json`. See
-[`configuration.md`](configuration.md#layered-shofer-configuration).
+The file home for the non-secret `globalSettings` keys. Read Schema-First and
+fail-closed **per key** — a value the schema rejects costs that key alone, the
+rest of the file still applies, and the drop is reported through the host
+notifier — while a file that is not JSON, or whose top level is not an object,
+voids the layer (also reported). Merged across scopes per the locked-vs-default
+rule. Never holds secrets — a provider profile is referenced by name/id only.
+`ContextProxy` write-through mirrors a settings change into the **user** scope's
+`~/.shofer/settings.json`. The machine-readable form of the schema, for writers
+outside TypeScript, is [`schemas/shofer-settings.json`](../schemas/shofer-settings.json).
+See [`configuration.md`](configuration.md#layered-shofer-configuration) and
+[`settings_overlay.md`](settings_overlay.md#1e-reading-a-scope-file-per-key-fail-closed).
 
 ---
 

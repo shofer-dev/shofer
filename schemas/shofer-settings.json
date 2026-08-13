@@ -1,0 +1,999 @@
+{
+	"type": "object",
+	"properties": {
+		"currentApiConfigName": {
+			"type": "string"
+		},
+		"listApiConfigMeta": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"apiProvider": {
+						"type": "string",
+						"enum": [
+							"openrouter",
+							"vercel-ai-gateway",
+							"litellm",
+							"requesty",
+							"unbound",
+							"poe",
+							"shofer",
+							"ollama",
+							"lmstudio",
+							"vscode-lm",
+							"openai",
+							"fake-ai",
+							"mock",
+							"anthropic",
+							"bedrock",
+							"baseten",
+							"deepseek",
+							"fireworks",
+							"gemini",
+							"gemini-cli",
+							"mistral",
+							"moonshot",
+							"dashscope",
+							"minimax",
+							"openai-codex",
+							"openai-native",
+							"qwen-code",
+							"sambanova",
+							"vertex",
+							"xai",
+							"xiaomi",
+							"zai",
+							"cerebras",
+							"chutes",
+							"deepinfra",
+							"doubao",
+							"featherless",
+							"groq",
+							"huggingface",
+							"io-intelligence"
+						]
+					},
+					"modelId": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"id",
+					"name"
+				],
+				"additionalProperties": true
+			}
+		},
+		"pinnedApiConfigs": {
+			"type": "object",
+			"additionalProperties": {
+				"type": "boolean"
+			}
+		},
+		"lastShownAnnouncementId": {
+			"type": "string"
+		},
+		"customInstructions": {
+			"type": "string"
+		},
+		"taskHistory": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"rootTaskId": {
+						"type": "string"
+					},
+					"parentTaskId": {
+						"type": "string"
+					},
+					"number": {
+						"type": "number"
+					},
+					"ts": {
+						"type": "number"
+					},
+					"createdAt": {
+						"type": "number"
+					},
+					"task": {
+						"type": "string"
+					},
+					"tokensIn": {
+						"type": "number"
+					},
+					"tokensOut": {
+						"type": "number"
+					},
+					"cacheWrites": {
+						"type": "number"
+					},
+					"cacheReads": {
+						"type": "number"
+					},
+					"totalCost": {
+						"type": "number"
+					},
+					"size": {
+						"type": "number"
+					},
+					"workspace": {
+						"type": "string"
+					},
+					"cwd": {
+						"type": "string"
+					},
+					"mode": {
+						"type": "string"
+					},
+					"apiConfigName": {
+						"type": "string"
+					},
+					"costLimit": {
+						"type": "object",
+						"properties": {
+							"maxUsd": {
+								"type": "number",
+								"exclusiveMinimum": 0
+							},
+							"action": {
+								"type": "string",
+								"enum": [
+									"pause",
+									"abort",
+									"kill"
+								]
+							}
+						},
+						"required": [
+							"maxUsd",
+							"action"
+						],
+						"additionalProperties": true
+					},
+					"delegatedToId": {
+						"type": "string"
+					},
+					"childIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"awaitingChildId": {
+						"type": "string"
+					},
+					"completedByChildId": {
+						"type": "string"
+					},
+					"completionResultSummary": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"nameLocked": {
+						"type": "boolean"
+					},
+					"titleSource": {
+						"type": "string",
+						"enum": [
+							"default",
+							"user",
+							"agent"
+						]
+					},
+					"lastActiveTs": {
+						"type": "number"
+					},
+					"taskState": {
+						"type": "object",
+						"properties": {
+							"lifecycle": {
+								"type": "string",
+								"enum": [
+									"idle",
+									"running",
+									"waiting_input",
+									"waiting",
+									"paused",
+									"completed",
+									"error"
+								]
+							},
+							"rating": {
+								"type": "string",
+								"enum": [
+									"poor",
+									"well",
+									"excellent"
+								]
+							}
+						},
+						"required": [
+							"lifecycle"
+						],
+						"additionalProperties": true
+					},
+					"backgroundChildIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"isBackground": {
+						"type": "boolean"
+					},
+					"peerIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"loadedSkills": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"archived": {
+						"type": "boolean"
+					},
+					"archivedAt": {
+						"type": "number"
+					},
+					"pinned": {
+						"type": "boolean"
+					},
+					"insertions": {
+						"type": "number"
+					},
+					"deletions": {
+						"type": "number"
+					},
+					"activeTimeMs": {
+						"type": "number"
+					},
+					"isWorkflow": {
+						"type": "boolean"
+					},
+					"slangSource": {
+						"type": "string"
+					},
+					"flowState": {
+						"type": "object",
+						"additionalProperties": {}
+					}
+				},
+				"required": [
+					"id",
+					"number",
+					"ts",
+					"task",
+					"tokensIn",
+					"tokensOut",
+					"totalCost"
+				],
+				"additionalProperties": true
+			}
+		},
+		"dismissedUpsells": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		},
+		"imageGenerationProvider": {
+			"type": "string",
+			"enum": [
+				"openrouter"
+			]
+		},
+		"openRouterImageApiKey": {
+			"type": "string"
+		},
+		"openRouterImageGenerationSelectedModel": {
+			"type": "string"
+		},
+		"customCondensingPrompt": {
+			"type": "string"
+		},
+		"autoApprovalEnabled": {
+			"type": "boolean"
+		},
+		"alwaysAllowReadOnly": {
+			"type": "boolean"
+		},
+		"alwaysAllowReadOnlyOutsideWorkspace": {
+			"type": "boolean"
+		},
+		"alwaysAllowWrite": {
+			"type": "boolean"
+		},
+		"alwaysAllowWriteOutsideWorkspace": {
+			"type": "boolean"
+		},
+		"alwaysAllowWriteProtected": {
+			"type": "boolean"
+		},
+		"alwaysAllowBrowser": {
+			"type": "boolean"
+		},
+		"writeDelayMs": {
+			"type": "number",
+			"minimum": 0
+		},
+		"requestDelaySeconds": {
+			"type": "number"
+		},
+		"maxConsecutiveApiFailures": {
+			"type": "integer",
+			"minimum": 1
+		},
+		"alwaysAllowMcp": {
+			"type": "boolean"
+		},
+		"alwaysAllowUncategorized": {
+			"type": "boolean"
+		},
+		"alwaysAllowModeSwitch": {
+			"type": "boolean"
+		},
+		"alwaysAllowSubtasks": {
+			"type": "boolean"
+		},
+		"alwaysAllowExecute": {
+			"type": "boolean"
+		},
+		"alwaysAllowFollowupQuestions": {
+			"type": "boolean"
+		},
+		"followupAutoApproveTimeoutMs": {
+			"type": "number"
+		},
+		"allowedCommands": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		},
+		"deniedCommands": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		},
+		"allowedReadPaths": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		},
+		"allowedWritePaths": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		},
+		"commandExecutionTimeout": {
+			"type": "number"
+		},
+		"commandTimeoutAllowlist": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		},
+		"preventCompletionWithOpenTodos": {
+			"type": "boolean"
+		},
+		"settingsWriteScope": {
+			"type": "string",
+			"enum": [
+				"user",
+				"project"
+			]
+		},
+		"newTaskRequireTodos": {
+			"type": "boolean"
+		},
+		"enableCodeActions": {
+			"type": "boolean"
+		},
+		"maximumIndexedFilesForFileSearch": {
+			"type": "number"
+		},
+		"apiRequestTimeout": {
+			"type": "number"
+		},
+		"vsCodeLmModelSelector": {
+			"type": "object",
+			"properties": {
+				"vendor": {
+					"type": "string"
+				},
+				"family": {
+					"type": "string"
+				}
+			},
+			"additionalProperties": true
+		},
+		"debug": {
+			"type": "boolean"
+		},
+		"debugProxyEnabled": {
+			"type": "boolean"
+		},
+		"debugProxyServerUrl": {
+			"type": "string"
+		},
+		"debugProxyTlsInsecure": {
+			"type": "boolean"
+		},
+		"allowedMaxRequests": {
+			"type": [
+				"number",
+				"null"
+			]
+		},
+		"allowedMaxCost": {
+			"type": [
+				"number",
+				"null"
+			]
+		},
+		"autoCondenseContext": {
+			"type": "boolean"
+		},
+		"autoCondenseContextPercent": {
+			"type": "number"
+		},
+		"includeCurrentTime": {
+			"type": "boolean"
+		},
+		"includeCurrentCost": {
+			"type": "boolean"
+		},
+		"maxGitStatusFiles": {
+			"type": "number"
+		},
+		"includeDiagnosticMessages": {
+			"type": "boolean"
+		},
+		"maxDiagnosticMessages": {
+			"type": "number"
+		},
+		"ttsEnabled": {
+			"type": "boolean"
+		},
+		"ttsSpeed": {
+			"type": "number"
+		},
+		"soundEnabled": {
+			"type": "boolean"
+		},
+		"soundVolume": {
+			"type": "number"
+		},
+		"maxOpenTabsContext": {
+			"type": "number"
+		},
+		"maxWorkspaceFiles": {
+			"type": "number"
+		},
+		"showShoferIgnoredFiles": {
+			"type": "boolean"
+		},
+		"enableSubfolderRules": {
+			"type": "boolean"
+		},
+		"useAgentRules": {
+			"type": "boolean"
+		},
+		"maxImageFileSize": {
+			"type": "number"
+		},
+		"maxTotalImageSize": {
+			"type": "number"
+		},
+		"terminalOutputPreviewSize": {
+			"type": "string",
+			"enum": [
+				"small",
+				"medium",
+				"large"
+			]
+		},
+		"terminalShellIntegrationTimeout": {
+			"type": "number"
+		},
+		"terminalShellIntegrationDisabled": {
+			"type": "boolean"
+		},
+		"terminalCommandDelay": {
+			"type": "number"
+		},
+		"terminalPowershellCounter": {
+			"type": "boolean"
+		},
+		"terminalZshClearEolMark": {
+			"type": "boolean"
+		},
+		"terminalZshOhMy": {
+			"type": "boolean"
+		},
+		"terminalZshP10k": {
+			"type": "boolean"
+		},
+		"terminalZdotdir": {
+			"type": "boolean"
+		},
+		"execaShellPath": {
+			"type": "string"
+		},
+		"diagnosticsEnabled": {
+			"type": "boolean"
+		},
+		"rateLimitSeconds": {
+			"type": "number"
+		},
+		"experiments": {
+			"type": "object",
+			"properties": {
+				"preventFocusDisruption": {
+					"type": "boolean"
+				},
+				"imageGeneration": {
+					"type": "boolean"
+				},
+				"runSlashCommand": {
+					"type": "boolean"
+				},
+				"customTools": {
+					"type": "boolean"
+				},
+				"showToolInputOutput": {
+					"type": "boolean"
+				},
+				"webviewLivenessMonitor": {
+					"type": "boolean"
+				},
+				"disableMistakeLimitChecks": {
+					"type": "boolean"
+				}
+			},
+			"additionalProperties": true
+		},
+		"language": {
+			"type": "string",
+			"enum": [
+				"ca",
+				"de",
+				"en",
+				"es",
+				"fr",
+				"hi",
+				"id",
+				"it",
+				"ja",
+				"ko",
+				"nl",
+				"pl",
+				"pt-BR",
+				"ru",
+				"tr",
+				"vi",
+				"zh-CN",
+				"zh-TW"
+			]
+		},
+		"telemetrySetting": {
+			"type": "string",
+			"enum": [
+				"unset",
+				"enabled",
+				"disabled"
+			]
+		},
+		"mcpEnabled": {
+			"type": "boolean"
+		},
+		"mode": {
+			"type": "string"
+		},
+		"customModes": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"slug": {
+						"type": "string",
+						"pattern": "^[a-zA-Z0-9-]+(:[a-zA-Z0-9-]+)?$"
+					},
+					"name": {
+						"type": "string",
+						"minLength": 1
+					},
+					"roleDefinition": {
+						"type": "string",
+						"minLength": 1
+					},
+					"whenToUse": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"customInstructions": {
+						"type": "string"
+					},
+					"tools": {
+						"type": "array",
+						"items": {
+							"anyOf": [
+								{
+									"type": "string",
+									"enum": [
+										"read",
+										"write",
+										"execute",
+										"browser",
+										"mcp",
+										"mode",
+										"subtasks",
+										"questions",
+										"uncategorized"
+									]
+								},
+								{
+									"type": "array",
+									"minItems": 2,
+									"maxItems": 2,
+									"items": [
+										{
+											"type": "string",
+											"enum": [
+												"read",
+												"write",
+												"execute",
+												"browser",
+												"mcp",
+												"mode",
+												"subtasks",
+												"questions",
+												"uncategorized"
+											]
+										},
+										{
+											"type": "object",
+											"properties": {
+												"fileRegex": {
+													"type": "string"
+												},
+												"description": {
+													"type": "string"
+												}
+											},
+											"additionalProperties": true
+										}
+									]
+								},
+								{
+									"type": "object",
+									"additionalProperties": {
+										"type": "object",
+										"properties": {
+											"allowed": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											},
+											"denied": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											}
+										},
+										"additionalProperties": true
+									}
+								}
+							]
+						}
+					},
+					"tools_allowed": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"tools_denied": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"source": {
+						"type": "string",
+						"enum": [
+							"global",
+							"project",
+							"plugin"
+						]
+					},
+					"pluginName": {
+						"type": "string"
+					},
+					"private": {
+						"type": "boolean"
+					},
+					"provider": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"slug",
+					"name",
+					"roleDefinition"
+				],
+				"additionalProperties": true
+			}
+		},
+		"customModePrompts": {
+			"type": "object",
+			"additionalProperties": {
+				"anyOf": [
+					{
+						"not": {}
+					},
+					{
+						"type": "object",
+						"properties": {
+							"roleDefinition": {
+								"type": "string"
+							},
+							"whenToUse": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							},
+							"customInstructions": {
+								"type": "string"
+							}
+						},
+						"additionalProperties": true
+					}
+				]
+			}
+		},
+		"customSupportPrompts": {
+			"type": "object",
+			"additionalProperties": {
+				"anyOf": [
+					{
+						"not": {}
+					},
+					{
+						"type": "string"
+					}
+				]
+			}
+		},
+		"enhancementApiConfigId": {
+			"type": "string"
+		},
+		"includeTaskHistoryInEnhance": {
+			"type": "boolean"
+		},
+		"historyPreviewCollapsed": {
+			"type": "boolean"
+		},
+		"reasoningBlockCollapsed": {
+			"type": "boolean"
+		},
+		"enterBehavior": {
+			"type": "string",
+			"enum": [
+				"send",
+				"newline"
+			]
+		},
+		"profileThresholds": {
+			"type": "object",
+			"additionalProperties": {
+				"type": "number"
+			}
+		},
+		"hasOpenedModeSelector": {
+			"type": "boolean"
+		},
+		"lastModeExportPath": {
+			"type": "string"
+		},
+		"lastModeImportPath": {
+			"type": "string"
+		},
+		"lastSettingsExportPath": {
+			"type": "string"
+		},
+		"lastTaskExportPath": {
+			"type": "string"
+		},
+		"lastImageSavePath": {
+			"type": "string"
+		},
+		"disabledTools": {
+			"type": "array",
+			"items": {
+				"type": "string",
+				"enum": [
+					"execute_command",
+					"read_file",
+					"read_command_output",
+					"read_output_channel",
+					"write_to_file",
+					"apply_diff",
+					"edit",
+					"search_and_replace",
+					"search_replace",
+					"edit_file",
+					"apply_patch",
+					"grep_search",
+					"list_files",
+					"use_mcp_tool",
+					"access_mcp_resource",
+					"ask_followup_question",
+					"attempt_completion",
+					"switch_mode",
+					"new_task",
+					"update_todo_list",
+					"run_slash_command",
+					"skills",
+					"generate_image",
+					"custom_tool",
+					"create_directory",
+					"create_new_workspace",
+					"file",
+					"fetch_web_page",
+					"find_files",
+					"get_errors",
+					"get_project_setup_info",
+					"insert_edit",
+					"list_code_usages",
+					"read_project_structure",
+					"rename_symbol",
+					"view_image",
+					"lsp_search",
+					"set_task_title",
+					"give_feedback",
+					"check_task_status",
+					"wait_for_task",
+					"list_background_tasks",
+					"cancel_tasks",
+					"answer_subtask_question",
+					"sleep",
+					"sed",
+					"call_mcp_tool_async",
+					"check_mcp_call_status",
+					"wait_for_mcp_call",
+					"send_message_to_task",
+					"wait_for_message"
+				]
+			}
+		},
+		"defaultCostLimit": {
+			"anyOf": [
+				{
+					"type": "object",
+					"properties": {
+						"maxUsd": {
+							"type": "number",
+							"exclusiveMinimum": 0
+						},
+						"action": {
+							"type": "string",
+							"enum": [
+								"pause",
+								"abort",
+								"kill"
+							]
+						}
+					},
+					"required": [
+						"maxUsd",
+						"action"
+					],
+					"additionalProperties": true
+				},
+				{
+					"type": "null"
+				}
+			]
+		},
+		"archivedTaskRetentionDays": {
+			"anyOf": [
+				{
+					"type": "integer",
+					"minimum": 0
+				},
+				{
+					"type": "null"
+				}
+			]
+		},
+		"maxParallelTasks": {
+			"anyOf": [
+				{
+					"type": "integer",
+					"minimum": 0
+				},
+				{
+					"type": "null"
+				}
+			]
+		},
+		"enableLlmProviderIntegration": {
+			"type": "boolean"
+		},
+		"shoferBlobCapBytes": {
+			"type": "integer",
+			"minimum": 0
+		},
+		"shoferMcpMaxResponseBytes": {
+			"type": "integer",
+			"minimum": 0
+		},
+		"logLevel": {
+			"type": "string",
+			"enum": [
+				"debug",
+				"info",
+				"warn",
+				"error",
+				"fatal"
+			]
+		},
+		"logCategories": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		},
+		"captchaSolverMaxAttempts": {
+			"type": "integer",
+			"minimum": 1
+		},
+		"captchaSolverMaxRounds": {
+			"type": "integer",
+			"minimum": 1
+		},
+		"captchaSolverTimeoutSec": {
+			"type": "integer",
+			"minimum": 10
+		},
+		"pluginConfigs": {
+			"type": "object",
+			"additionalProperties": {
+				"type": "object",
+				"additionalProperties": {}
+			}
+		}
+	},
+	"additionalProperties": true,
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://github.com/shofer-dev/shofer/blob/main/schemas/shofer-settings.json",
+	"title": "Shofer Layered Settings (.shofer/settings.json)",
+	"description": "Schema for a single `.shofer/settings.json` scope file, generated from `globalSettingsSchema.partial()` — the schema Shofer itself parses each scope file with. Every key is optional; a key that is present must satisfy its constraints, and unknown keys are ignored rather than rejected."
+}

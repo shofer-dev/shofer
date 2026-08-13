@@ -23,8 +23,11 @@ export * from "./task-history/index.js"
 export {
 	loadLayeredOverlay,
 	loadLayeredScopes,
+	parseScopeSettings,
 	readScopeSettingsFile,
 	SCOPE_SETTINGS_FILE,
+	type ParsedScopeSettings,
+	type RejectedSetting,
 } from "./config/layered-settings-file.js"
 export { resolveScopeRoots, type ScopeRootInputs, type ScopeRoots } from "./config/scope-roots.js"
 export {

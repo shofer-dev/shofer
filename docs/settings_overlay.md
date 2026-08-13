@@ -183,6 +183,49 @@ runtime source of truth the rest of the extension sees.
 > that does NOT survive restarts. See the [Code-Server Pre-Configuration](#code-server-pre-configuration)
 > section for strategies.
 
+### 1e. Reading a scope file — per-key fail-closed
+
+[`readScopeSettingsFile`](../packages/core/src/config/layered-settings-file.ts)
+parses one scope's `settings.json` with `globalSettingsSchema.partial()`. Because
+`.partial()` only makes keys **optional**, a key that is PRESENT with a value the
+schema rejects still fails — and the granularity of that failure is the whole
+point of this section.
+
+| Input                                          | Result                                                       | Reported                       |
+| ---------------------------------------------- | ------------------------------------------------------------ | ------------------------------ |
+| No file / unreadable path                      | `{}` — the scope contributes nothing                         | No (an absent scope is normal) |
+| Valid file                                     | Every key                                                    | No                             |
+| Unknown key (a newer Shofer's)                 | Stripped by `z.object`; every other key applies              | No (not an operator error)     |
+| A key whose VALUE the schema rejects           | That key alone is dropped; **every other key still applies** | **Yes — `Notifier.error`**     |
+| Not JSON, or a top level that is not an object | `{}` — the whole layer is voided (no per-key salvage exists) | **Yes — `Notifier.error`**     |
+
+`parseScopeSettings(text)` is the pure, filesystem-free form of that table, and is
+exported for callers and tests that want the rejections as data
+(`{ settings, rejected, voidedReason }`).
+
+**Why not void the file on any bad value.** A scope file is a set of independent
+overrides, not an atomic document, so discarding all of them does not fall back to
+"nothing" — it falls back to Shofer's built-in defaults, which are generally
+_less_ restrictive than what the scope wrote. For the org-global scope that made
+"fail closed" fail **open**: one mistyped number silently dropped every restriction
+the org had set, and nothing logged or displayed, so the symptom (a setting with no
+effect) pointed nowhere near the cause (a different key entirely).
+
+**Why partial application is nevertheless safe.** Keeping part of a document nobody
+wrote in full has its own hazard — an operator can believe a setting is in force
+when it was thrown away — so every drop goes to `getHost().notifier.error(…)`,
+naming the file and the keys. An error toast in VS Code; a recorded message on a
+headless host. The report is de-duplicated per scope root, so a watcher firing
+repeatedly does not spam, and a root whose file becomes clean is forgotten, so a
+problem that reappears is reported again.
+
+The write side of the same contract lives outside this repo, in whichever system
+authors a scope file. `schemas/shofer-settings.json` — generated from
+`globalSettingsSchema.partial()` by `pnpm --filter @shofer/types generate:schema`
+and held to it by a drift test — is the machine-readable form such a writer
+validates against, so a value this reader would refuse can be refused earlier,
+where the person who typed it is still present.
+
 ---
 
 ## 2. Mode Configuration Storage
