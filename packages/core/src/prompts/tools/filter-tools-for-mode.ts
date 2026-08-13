@@ -406,14 +406,14 @@ export function getAvailableToolsInGroup(
  * checked against the mode's declared groups — a tool is only visible when the
  * mode carries both `mcp` AND the tool's own group. This mirrors the per-group
  * control applied to native tools, so a mode with `tools: ["read", "mcp"]`
- * exposes only the MCP tools classified as `read` (plus the ungrouped ones).
+ * exposes only the MCP tools classified as `read`.
  *
- * Ungrouped tools resolve to `"uncategorized"`, and the `mcp` gateway implies
- * `"uncategorized"` for visibility — so ungrouped MCP tools remain visible in
- * any mode that has the gateway (backward compatible). Their *auto-approval* is
- * still gated by `alwaysAllowUncategorized` (visibility ≠ auto-execution). Only
- * tools explicitly reassigned to a different group (e.g. `"browser"`, `"read"`,
- * `"write"`) are gated by that group's inclusion in the mode.
+ * Ungrouped tools resolve to `"uncategorized"`, which is an ORDINARY group
+ * here — exactly as `filterPrivateToolsForMode` treats it: visible only when
+ * the mode lists it. (The `mcp` gateway used to imply it; that special case
+ * let an ungrouped tool ride into every mode that opened the gateway, saying
+ * nothing about whether the tool mutates.) Auto-approval is gated separately
+ * by `alwaysAllowUncategorized` either way — visibility ≠ auto-execution.
  *
  * Tools whose metadata has `enabledForPrompt === false` (the user-facing
  * "include in prompt" toggle) are filtered out regardless of mode.
@@ -448,13 +448,12 @@ export function filterMcpToolsForMode(
 		return []
 	}
 
-	// `uncategorized` is implied whenever `mcp` is present: an ungrouped MCP tool
-	// resolves to the `uncategorized` group (see McpHub.fetchToolsList), and we
-	// want those tools to stay VISIBLE in any mode that opens the mcp gateway
-	// (backward compatible). Their *auto-approval* is still gated separately by
-	// `alwaysAllowUncategorized` (see getMcpToolGroup / MCP_GROUP_APPROVAL_GATE),
-	// so visibility here does not loosen the approval requirement.
-	allowedGroups.add("uncategorized")
+	// `uncategorized` is an ORDINARY group: an ungrouped MCP tool resolves to it
+	// (see McpHub.fetchToolsList) and is visible only when the mode lists it —
+	// the same rule filterPrivateToolsForMode applies, one vocabulary in both
+	// filters. Auto-approval is gated separately by `alwaysAllowUncategorized`
+	// (see getMcpToolGroup / MCP_GROUP_APPROVAL_GATE), so visibility here never
+	// loosens the approval requirement.
 
 	// Build a per-tool lookup keyed by the canonical OpenAI function name
 	// (`buildMcpToolName(serverName, name)`) so that name sanitization/

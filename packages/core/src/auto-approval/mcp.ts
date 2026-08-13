@@ -17,7 +17,8 @@ export function getMcpToolGroup(mcpServerUse: McpServerUse, mcpServers: McpServe
 		// default) so ungrouped MCP tools require `alwaysAllowUncategorized` ON TOP
 		// of `alwaysAllowMcp` to auto-approve. The `mcp` gateway grants visibility,
 		// not auto-execution. Visibility is handled separately in
-		// filterMcpToolsForMode, which implies `uncategorized` whenever `mcp` is set.
+		// filterMcpToolsForMode, where `uncategorized` is an ordinary group the
+		// mode must list.
 		return tool?.group ?? "uncategorized"
 	}
 

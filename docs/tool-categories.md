@@ -169,7 +169,7 @@ flowchart TD
 
     MODE --> RD["read group<br/>native read tools + MCP tools<br/>explicitly classified read"]
     MODE --> GW["mcp gateway<br/>use_mcp_tool, access_mcp_resource"]
-    GW -->|"the gateway implies visibility<br/>for the uncategorized group"| UN["ungrouped MCP tools<br/>default uncategorized"]
+    GW -->|"ungrouped tools are visible only<br/>when the mode LISTS uncategorized"| UN["ungrouped MCP tools<br/>default uncategorized"]
 
     AAT["ALWAYS_AVAILABLE_TOOLS"] -->|"bypasses mode filtering entirely"| VIS
     RD --> VIS["visible to the model in this mode"]
@@ -188,7 +188,7 @@ These tools bypass mode filtering entirely, defined in the [`ALWAYS_AVAILABLE_TO
 
 ### MCP tools without group
 
-Tools with no `_meta["shofer.dev/toolGroup"]` (and no `toolGroups` entry) default to `"uncategorized"` (see `McpHub.fetchToolsList`). The `mcp` gateway **implies** the `uncategorized` group for visibility, so ungrouped MCP tools remain visible in any mode that has the `mcp` gateway (backward compatible). Their _auto-approval_ is still gated by `alwaysAllowUncategorized` — visibility does not loosen the approval requirement. Only tools explicitly reassigned to a different group (e.g. `"browser"`, `"read"`, `"write"`) are gated by that group's inclusion in the mode.
+Tools with no `_meta["shofer.dev/toolGroup"]` (and no `toolGroups` entry) default to `"uncategorized"` (see `McpHub.fetchToolsList`). `uncategorized` is an **ordinary group** for visibility — a mode sees ungrouped MCP tools only when it lists `uncategorized`, the same rule `filterPrivateToolsForMode` applies (one vocabulary, no gateway implication). Their _auto-approval_ is still gated by `alwaysAllowUncategorized` — visibility does not loosen the approval requirement. Tools explicitly reassigned to a different group (e.g. `"browser"`, `"read"`, `"write"`) are gated by that group's inclusion in the mode.
 
 For example, a mode with `tools: ["read", "mcp"]` exposes:
 
