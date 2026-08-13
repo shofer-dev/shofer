@@ -6,7 +6,12 @@ import { t } from "../i18n/index.js"
 import { type ToolUse } from "@shofer/types"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
-import { validateMcpToolExists, processMcpToolContent, runMcpToolCall } from "./mcp/use-mcp-shared.js"
+import {
+	validateMcpToolExists,
+	processMcpToolContent,
+	runMcpToolCall,
+	mcpApprovalEnvelope,
+} from "./mcp/use-mcp-shared.js"
 
 interface UseMcpToolParams {
 	server_name: string
@@ -51,13 +56,16 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 			// Reset mistake count on successful validation
 			task.consecutiveMistakeCount = 0
 
-			// Get user approval
-			const completeMessage = JSON.stringify({
-				type: "use_mcp_tool",
+			// Get user approval. The envelope carries `parsedArguments` — the very
+			// object `runMcpToolCall` below is handed — because the approval gate
+			// resolves a verb-multiplexing tool's group from the `operation` inside
+			// it (`getMcpToolGroup`). Serializing anything else here would let one
+			// verb be gated while another runs.
+			const completeMessage = mcpApprovalEnvelope({
 				serverName,
 				toolName: resolvedToolName,
-				arguments: params.arguments ? JSON.stringify(params.arguments) : undefined,
-			} satisfies ShoferAskUseMcpServer)
+				args: parsedArguments,
+			})
 
 			const executionId = task.lastMessageTs?.toString() ?? Date.now().toString()
 			const didApprove = await askApproval("use_mcp_server", completeMessage)

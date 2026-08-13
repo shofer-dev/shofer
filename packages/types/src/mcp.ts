@@ -17,6 +17,17 @@ export interface McpServerUse {
 	toolName?: string
 	uri?: string
 	/**
+	 * The call's arguments, JSON-encoded — the serialization of the very object
+	 * the approved call will execute with (both `use_mcp_tool` and
+	 * `call_mcp_tool_async` build the envelope and the execution from one
+	 * variable, via `mcpApprovalEnvelope`).
+	 *
+	 * The approval path reads the `operation` argument out of it to resolve a
+	 * verb-multiplexing tool's group PER CALL (see `getMcpToolGroup`). Reading
+	 * it from anywhere else would allow gating one verb and running another.
+	 */
+	arguments?: string
+	/**
 	 * When true, this `use_mcp_server` envelope was synthesised by Shofer to
 	 * visualise an external VS Code language-model tool call (registered via
 	 * `vscode.lm.tools`) — not a real MCP server invocation. The
@@ -81,7 +92,35 @@ export type McpTool = {
 	description?: string
 	inputSchema?: object
 	enabledForPrompt?: boolean
+	/**
+	 * The tool-level group: the group every call to this tool falls back to.
+	 *
+	 * For a verb-multiplexing tool (one taking an `operation` argument) the
+	 * server sets this to the MAXIMUM over its operations, so a client that
+	 * knows nothing of {@link opGroups} over-gates rather than under-gates.
+	 */
 	group?: ToolGroup
+	/**
+	 * Per-operation groups for a verb-multiplexing tool, as the server declared
+	 * them in `_meta["shofer.dev/opGroups"]` — each key an `operation` value the
+	 * tool accepts, each value that operation's own group.
+	 *
+	 * Absent when the server declared none, or when nothing in the declaration
+	 * survived validation. Sanitized at discovery: unknown group strings are
+	 * dropped entry by entry, exactly as {@link group} drops an unknown
+	 * tool-level declaration.
+	 */
+	opGroups?: Record<string, ToolGroup>
+	/**
+	 * True when {@link group} came from the user's own `toolGroups` assignment
+	 * in `mcp.json` rather than from the server.
+	 *
+	 * The approval path needs this to keep the priority order honest: a user
+	 * override is a statement about the WHOLE tool and must beat the server's
+	 * per-operation refinement, which is only consulted when the user has said
+	 * nothing.
+	 */
+	groupIsUserOverride?: boolean
 }
 
 export type McpResource = {

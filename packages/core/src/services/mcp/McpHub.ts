@@ -32,6 +32,7 @@ import type {
 	McpServer,
 	McpTool,
 	McpToolCallResponse,
+	ToolGroup,
 } from "@shofer/types"
 import { toolGroupsSchema } from "@shofer/types"
 import {
@@ -108,6 +109,29 @@ export const MCP_META_TOOL_CALL_ID = `${MCP_META_PREFIX}toolCallId`
  * the spec reserves it for metadata like this.
  */
 export const MCP_META_TOOL_GROUP = `${MCP_META_PREFIX}toolGroup`
+
+/**
+ * `_meta` key by which a SERVER declares the per-OPERATION groups of a
+ * verb-multiplexing tool — one that takes an `operation` argument naming the
+ * verb to run. The value is an object mapping each accepted `operation` to its
+ * own {@link ToolGroup}.
+ *
+ * It exists so a catalog can be small without approval becoming coarse. Folding
+ * a family's verbs into one tool keeps the number of tool descriptions in front
+ * of the model down, but a group carried only per TOOL then collapses "allow the
+ * read verbs, gate the mutating ones" into all-or-nothing. With this map the
+ * gate is resolved per CALL, from the `operation` the call will actually run.
+ *
+ * It REFINES {@link MCP_META_TOOL_GROUP}, which is always sent alongside and is
+ * the maximum over the same operations — so a client that ignores this key, or
+ * a call whose operation is absent from the map, gates at the most dangerous
+ * verb. Every failure mode here therefore over-gates; none of them widens.
+ *
+ * A `_meta` value need not be a string (the schema is
+ * `z.record(z.string(), z.unknown())`), which is what lets this one be an
+ * object.
+ */
+export const MCP_META_OP_GROUPS = `${MCP_META_PREFIX}opGroups`
 
 // Discriminated union for connection states
 export type ConnectedMcpConnection = {
@@ -1387,21 +1411,45 @@ export class McpHub {
 				const parsed = toolGroupsSchema.safeParse(raw)
 				return parsed.success ? parsed.data : undefined
 			}
+			// A verb-multiplexing tool's per-operation map (see MCP_META_OP_GROUPS),
+			// sanitized entry by entry: a value that is not a known group is dropped
+			// rather than failing the listing or being forwarded — the call then
+			// falls back to the tool-level group, which is the maximum over the
+			// operations. A declaration that is not a plain object, or one nothing
+			// survives, yields `undefined`.
+			const resolveOpGroups = (raw: unknown): McpTool["opGroups"] => {
+				if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+					return undefined
+				}
+				const map: Record<string, ToolGroup> = {}
+				for (const [operation, declared] of Object.entries(raw as Record<string, unknown>)) {
+					const group = resolveGroup(declared)
+					if (operation.length > 0 && group) {
+						map[operation] = group
+					}
+				}
+				return Object.keys(map).length > 0 ? map : undefined
+			}
 			const tools: McpTool[] = (response?.tools || []).map((tool) => {
 				// Tier 3 is read from `_meta` and NOT from a top-level `group`: the
 				// SDK parses this response through `ToolSchema`, whose plain
 				// `z.object` strips every key it does not declare, so a top-level
 				// one never arrives (see MCP_META_TOOL_GROUP). `_meta` is in that
 				// schema, so it does.
+				const userGroup = resolveGroup(toolGroupsConfig[tool.name])
 				const group: McpTool["group"] =
-					resolveGroup(toolGroupsConfig[tool.name]) ??
-					resolveGroup(tool._meta?.[MCP_META_TOOL_GROUP]) ??
-					"uncategorized"
+					userGroup ?? resolveGroup(tool._meta?.[MCP_META_TOOL_GROUP]) ?? "uncategorized"
 
+				// Both halves of the per-call resolution are carried, never
+				// pre-collapsed: `opGroups` is what the SERVER said about each verb,
+				// and `groupIsUserOverride` is what lets a user's whole-tool
+				// assignment beat it at decision time (`getMcpToolGroup`).
 				return {
 					...tool,
 					enabledForPrompt: !disabledToolsList.includes(tool.name),
 					group,
+					opGroups: resolveOpGroups(tool._meta?.[MCP_META_OP_GROUPS]),
+					groupIsUserOverride: userGroup !== undefined ? true : undefined,
 				}
 			})
 

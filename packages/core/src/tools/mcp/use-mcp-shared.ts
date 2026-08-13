@@ -1,4 +1,4 @@
-import type { McpExecutionStatus, McpToolCallResponse, ToolName } from "@shofer/types"
+import type { McpExecutionStatus, McpToolCallResponse, ShoferAskUseMcpServer, ToolName } from "@shofer/types"
 
 import type { Task } from "../../task/Task.js"
 import { type TaskProviderLike } from "../../task-provider/index.js"
@@ -122,6 +122,40 @@ export async function validateMcpToolExists(
 		mcpLog.error("Error validating MCP tool existence:", error)
 		return { isValid: true }
 	}
+}
+
+/**
+ * Builds the `use_mcp_server` approval envelope for an MCP tool call.
+ *
+ * The single point at which a call's arguments are serialized for approval, and
+ * deliberately so: the approval path resolves a verb-multiplexing tool's group
+ * from the `operation` inside this string (`getMcpToolGroup`), so the string has
+ * to be a serialization of the SAME object the call executes with. Both call
+ * sites — `use_mcp_tool` and `call_mcp_tool_async` — pass one variable to this
+ * helper and to `runMcpToolCall`, which is what makes "the verb that is gated is
+ * the verb that runs" a property of the code rather than a convention.
+ *
+ * `arguments` is omitted (not empty-stringed) when the call carries none, so a
+ * reader can tell "no arguments" from "lost".
+ */
+export function mcpApprovalEnvelope({
+	serverName,
+	toolName,
+	args,
+	async: isAsync,
+}: {
+	serverName: string
+	toolName: string
+	args?: Record<string, unknown>
+	async?: boolean
+}): string {
+	return JSON.stringify({
+		type: "use_mcp_tool",
+		serverName,
+		toolName,
+		arguments: args ? JSON.stringify(args) : undefined,
+		...(isAsync ? { async: true } : {}),
+	} satisfies ShoferAskUseMcpServer)
 }
 
 /**

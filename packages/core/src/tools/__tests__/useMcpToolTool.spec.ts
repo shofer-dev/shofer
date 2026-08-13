@@ -699,6 +699,84 @@ describe("useMcpToolTool", () => {
 				undefined,
 			)
 		})
+
+		// The approval gate resolves a verb-multiplexing tool's group from the
+		// `operation` inside the envelope's `arguments` (getMcpToolGroup). That is
+		// only sound while the envelope serializes the SAME object the call runs
+		// with — otherwise one verb could be gated and another executed, and
+		// nothing downstream would notice. `mcpApprovalEnvelope` is the single
+		// serialization point that makes it so; this pins the property end to end.
+		it("serializes into the approval envelope the very arguments the call executes with", async () => {
+			const callToolMock = vi.fn().mockResolvedValue({ content: [{ type: "text", text: "Success" }] })
+			const args = { operation: "list", project_id: "42", nested: { deep: [1, 2] } }
+
+			mockProviderRef.deref.mockReturnValue({
+				getMcpHub: () => ({
+					getAllServers: vi.fn().mockReturnValue([{ name: "test-server", tools: [{ name: "gitlab" }] }]),
+					callTool: callToolMock,
+				}),
+				postMessageToWebview: vi.fn(),
+			})
+
+			mockAskApproval.mockResolvedValue(true)
+
+			await useMcpToolTool.handle(
+				mockTask as Task,
+				{
+					type: "tool_use",
+					name: "use_mcp_tool",
+					params: { server_name: "test-server", tool_name: "gitlab", arguments: JSON.stringify(args) },
+					nativeArgs: { server_name: "test-server", tool_name: "gitlab", arguments: args },
+					partial: false,
+				} as any,
+				{
+					askApproval: mockAskApproval,
+					handleError: mockHandleError,
+					pushToolResult: mockPushToolResult,
+				},
+			)
+
+			const envelope = JSON.parse(mockAskApproval.mock.calls[0]![1] as string)
+			const executedArgs = callToolMock.mock.calls[0]![2]
+
+			expect(envelope.type).toBe("use_mcp_tool")
+			expect(JSON.parse(envelope.arguments)).toEqual(executedArgs)
+			expect(JSON.parse(envelope.arguments).operation).toBe("list")
+		})
+
+		// A call with no arguments omits the key rather than sending `"{}"` or an
+		// empty string, so a reader can tell "not applicable" from "lost".
+		it("omits the envelope's arguments entirely when the call carries none", async () => {
+			const callToolMock = vi.fn().mockResolvedValue({ content: [{ type: "text", text: "Success" }] })
+
+			mockProviderRef.deref.mockReturnValue({
+				getMcpHub: () => ({
+					getAllServers: vi.fn().mockReturnValue([{ name: "test-server", tools: [{ name: "gitlab" }] }]),
+					callTool: callToolMock,
+				}),
+				postMessageToWebview: vi.fn(),
+			})
+
+			mockAskApproval.mockResolvedValue(true)
+
+			await useMcpToolTool.handle(
+				mockTask as Task,
+				{
+					type: "tool_use",
+					name: "use_mcp_tool",
+					params: { server_name: "test-server", tool_name: "gitlab" },
+					nativeArgs: { server_name: "test-server", tool_name: "gitlab" },
+					partial: false,
+				} as any,
+				{
+					askApproval: mockAskApproval,
+					handleError: mockHandleError,
+					pushToolResult: mockPushToolResult,
+				},
+			)
+
+			expect("arguments" in JSON.parse(mockAskApproval.mock.calls[0]![1] as string)).toBe(false)
+		})
 	})
 
 	describe("image handling", () => {

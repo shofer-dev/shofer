@@ -6,7 +6,7 @@ import { formatResponse } from "../prompts/responses.js"
 import { type ToolUse } from "@shofer/types"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
-import { validateMcpToolExists, runMcpToolCall } from "./mcp/use-mcp-shared.js"
+import { validateMcpToolExists, runMcpToolCall, mcpApprovalEnvelope } from "./mcp/use-mcp-shared.js"
 
 interface CallMcpToolAsyncParams {
 	server_name: string
@@ -56,13 +56,14 @@ export class CallMcpToolAsyncTool extends BaseTool<"call_mcp_tool_async"> {
 
 			// Approval: same gate as use_mcp_tool (gated by alwaysAllowMcp + per-tool approval).
 			// The `async: true` flag lets the chat UI distinguish fire-and-forget invocations.
-			const completeMessage = JSON.stringify({
-				type: "use_mcp_tool",
+			// `params.arguments` is the same object handed to `runMcpToolCall` below —
+			// see `mcpApprovalEnvelope` for why that identity is load-bearing.
+			const completeMessage = mcpApprovalEnvelope({
 				serverName,
 				toolName: resolvedToolName,
-				arguments: params.arguments ? JSON.stringify(params.arguments) : undefined,
+				args: params.arguments,
 				async: true,
-			} satisfies ShoferAskUseMcpServer)
+			})
 
 			const didApprove = await askApproval("use_mcp_server", completeMessage)
 			if (!didApprove) {

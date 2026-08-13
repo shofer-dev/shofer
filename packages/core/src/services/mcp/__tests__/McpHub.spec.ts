@@ -10,7 +10,14 @@ import type {
 	ConnectedMcpConnection,
 	DisconnectedMcpConnection,
 } from "../McpHub.js"
-import { ServerConfigSchema, McpHub, MCP_META_TASK_ID, MCP_META_TOOL_CALL_ID, MCP_META_TOOL_GROUP } from "../McpHub.js"
+import {
+	ServerConfigSchema,
+	McpHub,
+	MCP_META_TASK_ID,
+	MCP_META_TOOL_CALL_ID,
+	MCP_META_TOOL_GROUP,
+	MCP_META_OP_GROUPS,
+} from "../McpHub.js"
 import { setSharedPluginManager } from "../../../plugins/plugin-manager.js"
 import { pluginRegistry } from "../../../plugins/plugin-registry.js"
 import { RESOLVE_MCP_CALL_HEADERS, currentMcpCallHeaders } from "../call-headers.js"
@@ -1309,11 +1316,15 @@ describe("McpHub", () => {
 		it("uses prefixed, spec-conformant _meta keys", () => {
 			expect(MCP_META_TASK_ID).toBe("shofer.dev/taskId")
 			expect(MCP_META_TOOL_CALL_ID).toBe("shofer.dev/toolCallId")
+			// Server → client, and mcp-server pins the same two literals on its
+			// side (internal/types/mcp_test.go).
+			expect(MCP_META_TOOL_GROUP).toBe("shofer.dev/toolGroup")
+			expect(MCP_META_OP_GROUPS).toBe("shofer.dev/opGroups")
 
 			// label = starts with a letter, ends alphanumeric, hyphens inside.
 			const label = String.raw`[a-zA-Z]([a-zA-Z0-9-]*[a-zA-Z0-9])?`
 			const prefixedKey = new RegExp(String.raw`^${label}(\.${label})*/[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$`)
-			for (const key of [MCP_META_TASK_ID, MCP_META_TOOL_CALL_ID]) {
+			for (const key of [MCP_META_TASK_ID, MCP_META_TOOL_CALL_ID, MCP_META_TOOL_GROUP, MCP_META_OP_GROUPS]) {
 				expect(key).toMatch(prefixedKey)
 				// Reserved for MCP: any prefix whose second-to-last label is
 				// `mcp` or `modelcontextprotocol`.
@@ -2433,11 +2444,9 @@ describe("McpHub", () => {
 						config: JSON.stringify({ type: "streamable-http", url: "http://tools.example/mcp" }),
 					},
 					client: {
-						request: vi
-							.fn()
-							.mockResolvedValue({
-								tools: [{ name: "k3s_ops", _meta: { [MCP_META_TOOL_GROUP]: "read" } }],
-							}),
+						request: vi.fn().mockResolvedValue({
+							tools: [{ name: "k3s_ops", _meta: { [MCP_META_TOOL_GROUP]: "read" } }],
+						}),
 					} as any,
 					transport: {} as any,
 				},
@@ -2445,6 +2454,126 @@ describe("McpHub", () => {
 
 			const tools = await (hub as any).fetchToolsList("justceo", "global")
 			expect(tools[0].group).toBe("execute")
+		})
+
+		// A family tool multiplexes verbs of different danger behind one name, so
+		// the server declares a group PER OPERATION beside the tool-level one. The
+		// map is data the approval path resolves against per call; discovery only
+		// sanitizes it, and never collapses it into the tool group — that would
+		// erase the very distinction it exists to carry.
+		it("reads a tool's per-operation groups from _meta and sanitizes them entry by entry", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ mcpServers: {} }))
+
+			const hub = new McpHub(mockProvider as unknown as TaskProviderLike)
+			await hub.waitUntilReady()
+			hub.connections = [
+				{
+					type: "connected",
+					server: {
+						name: "justceo",
+						status: "connected" as const,
+						source: "global" as const,
+						config: JSON.stringify({ type: "streamable-http", url: "http://tools.example/mcp" }),
+					},
+					client: {
+						request: vi.fn().mockResolvedValue({
+							tools: [
+								{
+									name: "events",
+									_meta: {
+										[MCP_META_TOOL_GROUP]: "write",
+										[MCP_META_OP_GROUPS]: { list: "read", create: "write", junk: "not-a-group" },
+									},
+								},
+								// Declarations that are not a usable map at all.
+								{
+									name: "arrayish",
+									_meta: { [MCP_META_TOOL_GROUP]: "read", [MCP_META_OP_GROUPS]: ["list"] },
+								},
+								{
+									name: "stringish",
+									_meta: { [MCP_META_TOOL_GROUP]: "read", [MCP_META_OP_GROUPS]: "read" },
+								},
+								{
+									name: "allJunk",
+									_meta: { [MCP_META_TOOL_GROUP]: "read", [MCP_META_OP_GROUPS]: { a: "nope" } },
+								},
+								// The ordinary single-verb tool: no map, unchanged.
+								{ name: "web_search", _meta: { [MCP_META_TOOL_GROUP]: "read" } },
+							],
+						}),
+					} as any,
+					transport: {} as any,
+				},
+			]
+
+			const tools = await (hub as any).fetchToolsList("justceo", "global")
+			const tool = (name: string) => tools.find((t: any) => t.name === name)
+
+			// The tool-level group is untouched — it is the fail-safe maximum a
+			// client that ignores the map gates at.
+			expect(tool("events").group).toBe("write")
+			// A nonsense entry is dropped; the survivors stand.
+			expect(tool("events").opGroups).toEqual({ list: "read", create: "write" })
+			// Nothing usable declared ⇒ no map, so every call falls back to the
+			// tool group.
+			expect(tool("arrayish").opGroups).toBeUndefined()
+			expect(tool("stringish").opGroups).toBeUndefined()
+			expect(tool("allJunk").opGroups).toBeUndefined()
+			expect(tool("web_search").opGroups).toBeUndefined()
+			// Nobody overrode anything.
+			expect(tools.every((t: any) => t.groupIsUserOverride === undefined)).toBe(true)
+		})
+
+		// The approval path must be able to tell a user's whole-tool assignment
+		// from a server's declaration, because only the former outranks the
+		// per-operation map. Collapsing them at discovery would lose that.
+		it("records that a tool's group came from the user's own assignment", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(
+				JSON.stringify({ mcpServers: { justceo: { toolGroups: { events: "read" } } } }),
+			)
+
+			const hub = new McpHub(mockProvider as unknown as TaskProviderLike)
+			await hub.waitUntilReady()
+			hub.connections = [
+				{
+					type: "connected",
+					server: {
+						name: "justceo",
+						status: "connected" as const,
+						source: "global" as const,
+						config: JSON.stringify({ type: "streamable-http", url: "http://tools.example/mcp" }),
+					},
+					client: {
+						request: vi.fn().mockResolvedValue({
+							tools: [
+								{
+									name: "events",
+									_meta: {
+										[MCP_META_TOOL_GROUP]: "write",
+										[MCP_META_OP_GROUPS]: { list: "read", delete: "write" },
+									},
+								},
+								{ name: "agents", _meta: { [MCP_META_TOOL_GROUP]: "write" } },
+							],
+						}),
+					} as any,
+					transport: {} as any,
+				},
+			]
+
+			const tools = await (hub as any).fetchToolsList("justceo", "global")
+			const tool = (name: string) => tools.find((t: any) => t.name === name)
+
+			expect(tool("events").group).toBe("read")
+			expect(tool("events").groupIsUserOverride).toBe(true)
+			// The server's map is still carried verbatim — suppressing it here
+			// would make the override's precedence a discovery-time secret instead
+			// of a decision the approval path can state.
+			expect(tool("events").opGroups).toEqual({ list: "read", delete: "write" })
+
+			// A tool the user said nothing about carries no flag.
+			expect(tool("agents").groupIsUserOverride).toBeUndefined()
 		})
 
 		it("contributes nothing when no plugin manager is wired", async () => {

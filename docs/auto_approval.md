@@ -344,8 +344,10 @@ approval, regardless of `allowedCommands` or `deniedCommands` configuration.
 The **master gate** for auto-approving MCP tool calls and resource access — if it is
 off, every MCP call prompts. When it is on, `use_mcp_tool` calls go through a second,
 **per-group** gate that mirrors the per-group control applied to native tools:
-[`getMcpToolGroup()`](../packages/core/src/auto-approval/mcp.ts) resolves the tool's group (user
-override in `mcp.json` → server-declared → default `"uncategorized"`) and the shared
+[`getMcpToolGroup()`](../packages/core/src/auto-approval/mcp.ts) resolves the group
+**for this call** (user override in `mcp.json` → the call's operation → the
+tool-level group → default `"uncategorized"`; see
+[Per-operation groups](#per-operation-groups) below) and the shared
 `GROUP_GATE` table in [`auto-approval/group-gates.ts`](../packages/core/src/auto-approval/group-gates.ts)
 maps it to the toggle that must **also** be enabled:
 
@@ -370,9 +372,10 @@ flowchart TD
     T -->|"use_mcp_tool (incl. async)"| RES["getMcpToolGroup()<br/>auto-approval/mcp.ts"]
 
     RES --> R1["1. user override — toolGroups in mcp.json"]
-    R1 --> R2["2. server-declared group field"]
-    R2 --> R3["3. default: uncategorized"]
-    R3 --> GG["isGroupAutoApproved(group, ...)<br/>GROUP_GATE, applyModifiers false"]
+    R1 --> R2["2. the call's operation — opGroups from _meta"]
+    R2 --> R3["3. the tool-level group — _meta"]
+    R3 --> R4["4. default: uncategorized"]
+    R4 --> GG["isGroupAutoApproved(group, ...)<br/>GROUP_GATE, applyModifiers false"]
     GG -->|"the group's toggle is on"| OK
     GG -->|"the group's toggle is off"| ASK
 ```
@@ -395,6 +398,41 @@ browser tool. Groups genuinely absent from the map (e.g. the bare `mcp` protocol
 are approved by `alwaysAllowMcp` alone, but `getMcpToolGroup()` never returns `mcp` for a
 `use_mcp_tool` call — it returns the tool's resolved group or `uncategorized`. For
 `access_mcp_resource`, the `alwaysAllowMcp` toggle alone is sufficient (no per-group stage).
+
+#### Per-operation groups
+
+A **verb-multiplexing tool** takes an `operation` argument naming the verb to
+run, so one tool name covers verbs of different danger — `list` beside `delete`.
+Servers use the shape to keep the number of tool descriptions in front of the
+model down; a group carried only per tool would pay for that by collapsing
+"allow the read verbs, gate the mutating ones" into all-or-nothing.
+
+So the server declares BOTH, in `tools/list` `_meta`:
+
+| `_meta` key            | Meaning                                                                  |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `shofer.dev/toolGroup` | the tool-level group — for a family, the **maximum** over its operations |
+| `shofer.dev/opGroups`  | an object mapping each `operation` to its own group                      |
+
+`McpHub.fetchToolsList` sanitizes the map entry by entry into `McpTool.opGroups`
+(an unknown group string is dropped, exactly as an unknown tool-level
+declaration is) and records in `McpTool.groupIsUserOverride` whether the
+tool-level group came from the user's own `toolGroups` assignment.
+`getMcpToolGroup()` then resolves per call: a user override wins outright,
+otherwise the operation's group, otherwise the tool-level group.
+
+Two properties make this safe rather than merely convenient:
+
+- **The verb that is gated is the verb that runs.** The operation is read from
+  the ask envelope's `arguments`, which
+  [`mcpApprovalEnvelope`](../packages/core/src/tools/mcp/use-mcp-shared.ts)
+  produces from the very object handed to `runMcpToolCall`. There is no second
+  parse of the model's output that could drift from the executed call.
+- **Every failure over-gates.** An operation absent from the map, a non-string
+  or empty `operation`, an unparsable or non-object `arguments` blob, and a tool
+  with no map at all all fall back to the tool-level group — the maximum. A
+  client that ignores `opGroups` entirely behaves the same way. Nothing in this
+  path can widen a gate.
 
 ### `alwaysAllowFollowupQuestions`
 
