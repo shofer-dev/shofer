@@ -1,7 +1,7 @@
 # Tool Categories
 
 **Status:** Implemented  
-**Last Updated:** 2026-08-12
+**Last Updated:** 2026-08-13
 
 ## Overview
 
@@ -40,12 +40,14 @@ flowchart TD
 
     MCPT["MCP server tool"] --> M1{"toolGroups override<br/>in mcp.json?"}
     M1 -->|yes| GROUP
-    M1 -->|no| M2{"_meta shofer.dev/toolGroup<br/>on the tool?"}
+    M1 -->|no| M0{"_meta shofer.dev/opGroups<br/>has this call's operation?"}
+    M0 -->|yes| GROUP
+    M0 -->|no| M2{"_meta shofer.dev/toolGroup<br/>on the tool?"}
     M2 -->|yes| GROUP
     M2 -->|no| M3["default: uncategorized"]
     M3 --> GROUP
 
-    NG --> GROUP["the tool's ToolGroup"]
+    NG --> GROUP["the group gating THIS call"]
     EF --> GROUP
     EA --> GROUP
 
@@ -97,11 +99,17 @@ Browser tools (`browser_*`) are registered as an MCP server (not via a `toolGrou
 
 ### 3. MCP Tools — Server Declaration + User Override
 
-MCP tools are classified via a three-tier priority system (highest first):
+MCP tools are classified via a four-tier priority system (highest first),
+resolved **per call** by [`getMcpToolGroup`](../packages/core/src/auto-approval/mcp.ts):
 
-1. **User Configuration** — `toolGroups` map in `mcp.json`
-2. **Server Declaration** — `_meta["shofer.dev/toolGroup"]` on the tool
-3. **Default Fallback** — `uncategorized`
+1. **User Configuration** — `toolGroups` map in `mcp.json`. A statement about the
+   WHOLE tool, so it wins outright; `McpHub.fetchToolsList` records that it was
+   the source in the tool's `groupIsUserOverride` flag, and the per-operation
+   tier below is skipped when it is set.
+2. **Server Declaration, per operation** — `_meta["shofer.dev/opGroups"]`, keyed
+   by the value of the call's `operation` argument (see the next section).
+3. **Server Declaration, per tool** — `_meta["shofer.dev/toolGroup"]`.
+4. **Default Fallback** — `uncategorized`.
 
 **Server-side declaration** — in `_meta`, which is where MCP sanctions custom
 metadata:
@@ -115,6 +123,43 @@ metadata:
   ]
 }
 ```
+
+#### Verb-multiplexing tools: a group per operation
+
+A tool named for a NOUN, taking the verb in an `operation` argument
+(`argocd app_list | app_delete`, `vms list | create | delete`), cannot be gated
+honestly by one group: the tool name says nothing about whether this call reads
+or destroys. Such a server declares **both** keys:
+
+```json
+{
+	"name": "argocd",
+	"inputSchema": { "properties": { "operation": { "enum": ["app_list", "app_delete", "..."] } } },
+	"_meta": {
+		"shofer.dev/toolGroup": "write",
+		"shofer.dev/opGroups": { "app_list": "read", "app_get": "read", "app_delete": "write", "app_sync": "write" }
+	}
+}
+```
+
+- **`shofer.dev/opGroups`** is the refinement: `operation` value → ToolGroup,
+  surfaced on `McpTool.opGroups` after discovery-time sanitizing (unknown group
+  strings are dropped entry by entry, exactly as an unknown tool-level group is).
+- **`shofer.dev/toolGroup` is the FALLBACK, and a well-formed server sets it to
+  the MAXIMUM over the operations** — `write` above, because `app_delete` is in
+  the enum. A client that ignores `opGroups` entirely then over-gates rather
+  than under-gates; a fallback below one of the operations would auto-approve
+  that operation on every such client, which is the only unsafe state this
+  design can produce.
+- The verb is read from the ask envelope's own `arguments` — the same object
+  handed to the executor — so **the verb that is gated is by construction the
+  verb that runs**. Every way of failing to read it (absent arguments, an
+  unparsable blob, a non-string `operation`) returns to the tool-level group.
+  None of them widens.
+
+The practical effect: under a posture with `alwaysAllowReadOnly: true` and
+`alwaysAllowWrite: false`, `argocd app_list` auto-approves while
+`argocd app_delete` raises an approval — same tool, same run, same server.
 
 **It has to be `_meta`, and a top-level `group` field cannot replace it.** The
 MCP SDK parses `tools/list` through `ToolSchema`, a plain `z.object`, and zod
@@ -137,6 +182,9 @@ Which tier a server should use follows from whether its catalog is static: a
 fixed set of tools can be described by a `toolGroups` map in the config that
 declares the server, but a server whose catalog is **dynamic** (tools added
 without anyone rewriting a config file) can only declare in-band, in `_meta`.
+The config map is also per TOOL only — there is no per-operation form of it, and
+setting it on a verb-multiplexing tool deliberately collapses that tool back to
+one group for every verb.
 
 **User-side override** (`~/.shofer/mcp.json` or `.shofer/mcp.json`):
 
@@ -159,6 +207,13 @@ without anyone rewriting a config file) can only declare in-band, in `_meta`.
 ## Mode-Based Filtering
 
 When a mode requests tools, each tool's group is checked against the mode's allowed groups. The `mcp` group itself is a **gateway** — the `use_mcp_tool` and `access_mcp_resource` gateway tools live in the `mcp` group, but individual MCP tools use their own assigned groups. This means a mode with `tools: ["read", "mcp"]` gets `use_mcp_tool` + all MCP tools classified as `read`.
+
+**Visibility is per TOOL, approval is per CALL.** Mode filtering happens before
+any verb is chosen, so it can only read the tool-level group; a verb-multiplexing
+tool is therefore visible or not as a whole, at its maximum group. `opGroups`
+refines the _approval_ decision once the model has named an `operation`. A mode
+that omits `write` hides `argocd` entirely rather than offering it with only its
+reading verbs.
 
 | Built-in mode | Allowed groups                                                                                 |
 | ------------- | ---------------------------------------------------------------------------------------------- |
@@ -241,3 +296,4 @@ This section tracks known deficiencies in this document and in the tool-group sy
 - [External Tool Resolution](../packages/core/src/task/build-tools.ts)
 - [MCP Hub — Tool Metadata](../packages/core/src/services/mcp/McpHub.ts)
 - [Auto-Approval Tool Group Inference](../packages/core/src/auto-approval/tools.ts)
+- [Per-Call MCP Group Resolution](../packages/core/src/auto-approval/mcp.ts)

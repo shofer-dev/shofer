@@ -821,6 +821,15 @@ Load and execute a skill by name. Skills provide specialized instructions for co
 | `check_mcp_call_status` | 🟣 AW  | mcp   |        –         |   ✅   | Poll the status/result of an async MCP call by `call_id`                    |
 | `wait_for_mcp_call`     | 🟣 AW  | mcp   |        –         |   ✅   | Block until one or more async MCP calls complete (all/any)                  |
 
+> **The `mcp` group in this table is the GATEWAY, not the gate.** It decides
+> whether a mode may reach MCP at all. What gates an individual call is the
+> TARGET tool's own group, resolved per call: a user override in `mcp.json`
+> first, then the server's group for the call's `operation` argument
+> (`_meta["shofer.dev/opGroups"]`), then the server's tool-level group, then
+> `uncategorized`. So one `use_mcp_tool` call against a verb-multiplexing family
+> can auto-approve while the next one against the same tool asks — the verb, not
+> the tool name, decides. See [`tool-categories.md`](tool-categories.md).
+
 ### `call_mcp_tool_async`
 
 Call an MCP server tool asynchronously. Returns immediately with a `call_id`; use `check_mcp_call_status` to poll or `wait_for_mcp_call` to block. Prefer this over `use_mcp_tool` for long-running calls or when fanning out multiple independent MCP calls in parallel.

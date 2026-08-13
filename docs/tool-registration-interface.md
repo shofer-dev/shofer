@@ -140,6 +140,20 @@ Example provider config in `settings.json`:
 }
 ```
 
+### A private tool's group is per TOOL — so do not multiplex verbs
+
+Both resolution steps above key on the tool NAME, and there is no per-operation
+refinement on this channel: an MCP server can declare
+`_meta["shofer.dev/opGroups"]` and have Shofer resolve the group of the verb a
+call actually names (see [`tool-categories.md`](tool-categories.md)), but a
+private tool definition carries a single `group` and nothing reads its arguments.
+
+A private-tool provider that folded several verbs behind an `operation` parameter
+would therefore have to declare one group for all of them — the most dangerous,
+if the declaration is to be honest — and its read-only verbs would inherit that
+gate. Keep one tool per verb here, or move the family to an MCP server where the
+per-operation declaration exists.
+
 ## Example: vscode-tools
 
 See `extensions/vscode-tools/src/tools/registry.ts`

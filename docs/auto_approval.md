@@ -519,7 +519,8 @@ _Discovered during the 2026-05-20 verification review against source at [`index.
    code uses the SayTool name `skills`. Changed to match code.
 
 7. **MCP per-tool `alwaysAllow` flag** — the `McpTool` type has no `alwaysAllow` field
-   (only `name`, `description`, `inputSchema`, `enabledForPrompt`, `group`). Rewrote the MCP
+   (only `name`, `description`, `inputSchema`, `enabledForPrompt`, `group`, `opGroups`,
+   `groupIsUserOverride`). Rewrote the MCP
    section to describe the actual mechanism (group-based gating + `alwaysAllowUncategorized`).
 
 8. **`rag_search` not unconditionally auto-approved** — the doc's `ALWAYS_AVAILABLE_TOOLS` vs
@@ -530,9 +531,12 @@ _Discovered during the 2026-05-20 verification review against source at [`index.
 ### Structural / Completeness Issues (Open)
 
 9. **No mention of `call_mcp_tool_async` routing** — `call_mcp_tool_async` goes through the
-   `use_mcp_server` ask gate (not the `tool` ask path) and therefore falls under `alwaysAllowMcp`.
-   The `check_mcp_call_status` / `wait_for_mcp_call` pair goes through the `tool` ask path and
-   is unconditionally approved. This asymmetry is not documented.
+   `use_mcp_server` ask gate rather than the `tool` ask path, so it gets `alwaysAllowMcp` **and**
+   the same per-group / per-operation resolution a synchronous `use_mcp_tool` call gets: both
+   build the envelope through `mcpApprovalEnvelope`, which stamps `type: "use_mcp_tool"` (the
+   async flavour adds only `async: true`). The `check_mcp_call_status` / `wait_for_mcp_call` pair
+   goes through the `tool` ask path and is unconditionally approved. This asymmetry is not
+   documented in the body.
 
 10. **"Non-blocking asks" terminology ambiguous** — step 1 of the Decision Flow says "Non-blocking
     asks" but the actual code calls `isAutoApprovableAsk()`. Today this is only `command_output`,

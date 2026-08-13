@@ -127,3 +127,21 @@ flowchart BT
 All three honor the same convention: explicit per-model values win; otherwise a
 provider-family default applies; otherwise the standard defaults stand. None of
 them is user-overridable.
+
+## What a tool preference is NOT
+
+Two boundaries, both easy to cross by accident because all three concepts talk
+about "tools":
+
+- **It is availability, not approval.** `includedTools`/`excludedTools` decide
+  what a model is offered; whether a call runs unattended is the ToolGroup
+  machinery ([`tool-categories.md`](tool-categories.md),
+  [`auto_approval.md`](auto_approval.md)). Removing a tool from a model's
+  surface is not a gate — nothing checks these lists at approval time.
+- **It addresses native tools by NAME, and cannot reach inside a
+  verb-multiplexing MCP tool.** The entries are native tool names
+  (`apply_patch`, `write_to_file`); MCP tools are filtered by mode and group,
+  not by these lists. So there is no way to express "this model may call
+  `argocd` but not its `app_delete` operation" here. That distinction is carried
+  by the server's per-operation groups (`_meta["shofer.dev/opGroups"]`) and the
+  posture that gates them, which apply to every model equally.

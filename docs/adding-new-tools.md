@@ -413,6 +413,13 @@ export default plugin
 ```
 
 - **Manifest**: needs `permissions.tools` in `plugin.json`.
+- **Groups**: `defineCustomTool` takes a single `group` and there is **no
+  per-operation form** on this channel — nothing inspects a custom tool's
+  arguments to gate the call. A family folded behind an `operation` parameter
+  here would therefore have to declare the group of its most dangerous verb for
+  all of them. Keep one tool per verb (as `events_*` and the `agents_*` family
+  do), or ship the family as a bundled MCP server (Option B), which is where the
+  per-verb declaration exists.
 - **Wiring**: `pluginRegistry.collectTools()` gathers them in
   [`build-tools.ts`](../packages/core/src/task/build-tools.ts) and registers each via
   `customToolRegistry.register(def, "plugin")`; dispatch is in
@@ -448,6 +455,12 @@ sse, streamable-http) that a plugin ships.
 - **Use when**: the capability is an out-of-process MCP server (its own runtime/binary), not
   TypeScript you'd run in the plugin. On a name collision the last enabled plugin wins (a warning is
   logged).
+- **Groups**: the server declares them in `_meta` on each tool —
+  `shofer.dev/toolGroup`, and, for a tool that takes the verb in an `operation`
+  argument, `shofer.dev/opGroups` mapping each `operation` value to its own
+  group, with the tool-level group set to the MAXIMUM over them. This is the one
+  tool channel where a family can be gated per verb; see
+  [`tool-categories.md`](tool-categories.md) § "Verb-multiplexing tools".
 - **Full transport/config/auto-approval reference**: [`mcp.md`](mcp.md).
 
 ### Choosing between A and B
