@@ -333,6 +333,7 @@ describe("ExtensionHost", () => {
 						alwaysAllowWrite: true,
 						alwaysAllowWriteOutsideWorkspace: true,
 						alwaysAllowWriteProtected: true,
+						alwaysAllowBrowser: true,
 						alwaysAllowMcp: true,
 						alwaysAllowModeSwitch: true,
 						alwaysAllowSubtasks: true,

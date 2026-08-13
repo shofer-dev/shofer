@@ -191,13 +191,38 @@ toggle it sets, and `allowedCommands: ["*"]`; `shofer serve --interactive` seeds
 `autoApprovalEnabled: false` and nothing else, so each dangerous tool raises an
 `ask` the controller brokers.
 
-That seed is a **default, not an override**. The keys it covers —
+**"Everything" means every DECLARED capability**, and the exact list matters
+because the gaps are deliberate. The non-interactive seed sets
 `autoApprovalEnabled`, `alwaysAllowReadOnly`,
 `alwaysAllowReadOnlyOutsideWorkspace`, `alwaysAllowWrite`,
 `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected`,
-`alwaysAllowMcp`, `alwaysAllowModeSwitch`, `alwaysAllowSubtasks`,
-`alwaysAllowExecute`, `allowedCommands`, `deniedCommands` — are ordinary
-`settings.json` keys, so any scope may set them and **the scope wins**:
+`alwaysAllowBrowser`, `alwaysAllowMcp`, `alwaysAllowModeSwitch`,
+`alwaysAllowSubtasks`, `alwaysAllowExecute` and `allowedCommands: ["*"]`. Two
+`alwaysAllow*` toggles are **never** seeded, on either flag:
+
+- `alwaysAllowUncategorized` — `uncategorized` is not a capability, it is the
+  absence of a declaration. Seeding it would auto-approve exactly the tools
+  nobody classified, so a posture that deliberately gates `write` would still be
+  bypassed by any mutating tool whose server declared no group. A tool that parks
+  a headless run is fixed by CLASSIFYING it (`tool-categories.md`), never by
+  widening this.
+- `alwaysAllowFollowupQuestions` — its effect is to answer a question with a
+  suggestion after a timeout. A headless node has no one to ask, which is a
+  reason to relay the question, not to fabricate an answer.
+
+`browser` is seeded because it _is_ a declared capability, and because the group
+holds no native tools — every member arrives over MCP, so without the toggle the
+first browser call of a headless run parked on a `use_mcp_server` ask nobody in
+the pod could answer. On a headless node the executor is a Playwright Chromium
+launched in the run's own pod with a fresh profile, so its authority is that
+pod's network egress — strictly less than the `alwaysAllowExecute: true` plus
+`allowedCommands: ["*"]` the same seed already sets. A deployment whose browser
+reaches a live session (one that can click, type and submit under a person's
+account) is exactly the deployment that overrides the key, below.
+
+That seed is a **default, not an override**. Every key it covers, plus
+`deniedCommands` and the two never-seeded toggles above, is an ordinary
+`settings.json` key, so any scope may set them and **the scope wins**:
 
 - A posture key **any scope supplies** is not seeded at all. The host omits it
   rather than sending a value, because the overlay already wins in

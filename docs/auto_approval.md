@@ -10,8 +10,10 @@ Source: [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-a
 set in the Settings UI, and on **any** host they are overridden by the layered
 `.shofer/settings.json` scopes. A headless host (`shofer serve`, `--print`) has no
 user to have set them, so it seeds a default posture at startup — auto-approve
-everything, or (with `shofer serve --interactive`) nothing — but only for the keys
-no scope supplies. Configuration wins; the flag is the default. See
+every DECLARED capability (`read`, `write`, `execute`, `browser`, `mcp`, `mode`,
+`subtasks`), or (with `shofer serve --interactive`) nothing — but only for the keys
+no scope supplies. `alwaysAllowUncategorized` and `alwaysAllowFollowupQuestions`
+are never seeded under either flag. Configuration wins; the flag is the default. See
 [`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag).
 
 ---

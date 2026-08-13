@@ -62,7 +62,7 @@ import { loadLayeredOverlay, resolveScopeRoots, type LayeredSettings, type Scope
  *
  * **Membership here is not the same as being in the seed.** A key listed here
  * that {@link defaultApprovalSeed} does not set is one configuration may govern
- * and the host will never default ON — the last three, plus `deniedCommands`.
+ * and the host will never default ON — the last two, plus `deniedCommands`.
  * They belong here anyway, because this list is also what the startup banner
  * counts: a key omitted from it is honoured on read (`ContextProxy` serves the
  * overlay ahead of `globalState`) but reported as though the node were running
@@ -76,6 +76,7 @@ export const APPROVAL_POSTURE_KEYS = [
 	"alwaysAllowWrite",
 	"alwaysAllowWriteOutsideWorkspace",
 	"alwaysAllowWriteProtected",
+	"alwaysAllowBrowser",
 	"alwaysAllowMcp",
 	"alwaysAllowModeSwitch",
 	"alwaysAllowSubtasks",
@@ -84,7 +85,6 @@ export const APPROVAL_POSTURE_KEYS = [
 	"deniedCommands",
 	// Configurable, never seeded — see defaultApprovalSeed's "what it does NOT
 	// seed, and why" note.
-	"alwaysAllowBrowser",
 	"alwaysAllowUncategorized",
 	"alwaysAllowFollowupQuestions",
 ] as const satisfies readonly (keyof ShoferSettings)[]
@@ -119,9 +119,36 @@ export interface ApprovalPosture {
  * inert while `autoApprovalEnabled` is false, and seeding them would needlessly
  * overwrite the operator's file for keys the flag does not actually decide.
  *
+ * ## Why `browser` IS in the non-interactive seed
+ *
+ * `browser` is a DECLARED capability like `read` or `write`, and it is seeded
+ * for the same reason they are: on a node with no local user, an approval on it
+ * has no audience. The `browser` group holds no native tools at all — every
+ * member arrives over MCP (the platform's `browser-tools` server declares the
+ * whole `browser_*` catalog) — so before this key was seeded, the FIRST browser
+ * call of a headless run parked on a `use_mcp_server` ask nobody in the pod
+ * could answer. That is the same failure the `_meta` tool-group fix removed for
+ * the platform tools plane, arriving by a different route: there the group was
+ * lost on the wire, here it was resolved correctly and had no seeded toggle.
+ *
+ * What that grant actually is, on the node it is granted on: a headless
+ * executor's browser is a Playwright Chromium launched inside the run's own pod
+ * with a fresh profile — no user session, no cookie jar, no logged-in origin —
+ * so its authority is the POD's network egress and nothing else. The same seed
+ * already sets `alwaysAllowExecute: true` with `allowedCommands: ["*"]`, which
+ * is strictly more: anything `browser_navigate` can reach, a shell command on
+ * that node can reach too. Seeding `browser` therefore widens no boundary the
+ * default headless posture had not already crossed.
+ *
+ * It is a DEFAULT, and the deployments where a browser is more than pod egress
+ * are exactly the ones that override it. A posture that gates `write` because
+ * its agent spends a person's borrowed authority must gate `browser` too — a
+ * browser that reaches a live session can click, type, fill and submit — and it
+ * does so through its own `.shofer/` scope, which wins over every key here.
+ *
  * ## What it does NOT seed, and why
  *
- * Three `alwaysAllow*` toggles are absent from the non-interactive seed on
+ * Two `alwaysAllow*` toggles are absent from the non-interactive seed on
  * purpose. "Everything" here means every DECLARED capability, not everything:
  *
  *   - `alwaysAllowUncategorized` — `uncategorized` is not a capability, it is
@@ -133,8 +160,6 @@ export interface ApprovalPosture {
  *   - `alwaysAllowFollowupQuestions` — its effect is to answer a question with
  *     a suggestion after a timeout. A headless node has no one to ask, but that
  *     is a reason to relay the question, not to fabricate an answer.
- *   - `alwaysAllowBrowser` — not seeded today; a headless node's browser tools
- *     therefore prompt. Configuration can turn it on.
  */
 export function defaultApprovalSeed(nonInteractive: boolean): Partial<ShoferSettings> {
 	if (!nonInteractive) {
@@ -148,6 +173,7 @@ export function defaultApprovalSeed(nonInteractive: boolean): Partial<ShoferSett
 		alwaysAllowWrite: true,
 		alwaysAllowWriteOutsideWorkspace: true,
 		alwaysAllowWriteProtected: true,
+		alwaysAllowBrowser: true,
 		alwaysAllowMcp: true,
 		alwaysAllowModeSwitch: true,
 		alwaysAllowSubtasks: true,

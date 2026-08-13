@@ -4,6 +4,8 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 
+import { checkAutoApproval } from "@shofer/core"
+
 import {
 	APPROVAL_POSTURE_KEYS,
 	applyConfiguredApprovalPosture,
@@ -46,6 +48,7 @@ describe("approval posture", () => {
 				alwaysAllowWrite: true,
 				alwaysAllowWriteOutsideWorkspace: true,
 				alwaysAllowWriteProtected: true,
+				alwaysAllowBrowser: true,
 				alwaysAllowMcp: true,
 				alwaysAllowModeSwitch: true,
 				alwaysAllowSubtasks: true,
@@ -221,7 +224,7 @@ describe("approval posture", () => {
 		// startup banner reports a node running from a file as one running the
 		// flag's default — the exact misreading the summary exists to prevent.
 		it("tracks the toggles it never seeds, so a configured value is still reported", () => {
-			for (const key of ["alwaysAllowUncategorized", "alwaysAllowBrowser", "alwaysAllowFollowupQuestions"]) {
+			for (const key of ["alwaysAllowUncategorized", "alwaysAllowFollowupQuestions"]) {
 				expect(APPROVAL_POSTURE_KEYS).toContain(key)
 			}
 			const posture = applyConfiguredApprovalPosture(
@@ -233,6 +236,95 @@ describe("approval posture", () => {
 			expect(posture.effective.alwaysAllowUncategorized).toBe(false)
 			// Never seeded, so there is nothing to strip and the seed is untouched.
 			expect(posture.seed).toEqual(defaultApprovalSeed(true))
+		})
+	})
+
+	// The seed is only half the story: what matters is the DECISION a real ask
+	// gets under it. These drive `checkAutoApproval` — the same function the
+	// running host calls — with the posture each flag resolves to, so a change to
+	// either the seed or the gate table shows up here rather than in a pod.
+	describe("what the seeded posture actually decides", () => {
+		// A connected `browser-tools` server as McpHub pushes it to consumers: the
+		// whole `browser_*` catalog resolves to the `browser` group, and the group
+		// is the only thing the approval path looks at. `unclassified` stands for a
+		// tool whose server declared no group at all.
+		const mcpServers = [
+			{
+				name: "browser-tools",
+				tools: [
+					{ name: "browser_navigate", group: "browser" },
+					{ name: "unclassified", group: "uncategorized" },
+				],
+			},
+		] as never
+
+		const browserCall = JSON.stringify({
+			type: "use_mcp_tool",
+			serverName: "browser-tools",
+			toolName: "browser_navigate",
+		})
+		const uncategorizedCall = JSON.stringify({
+			type: "use_mcp_tool",
+			serverName: "browser-tools",
+			toolName: "unclassified",
+		})
+
+		/** The effective posture of a node whose `.shofer/` config says nothing. */
+		const postureOf = (nonInteractive: boolean) => ({
+			...applyConfiguredApprovalPosture(defaultApprovalSeed(nonInteractive), {}, nonInteractive).effective,
+			mcpServers,
+		})
+
+		it("auto-approves a browser tool on a headless node — nobody is there to ask", async () => {
+			const result = await checkAutoApproval({
+				state: postureOf(true) as never,
+				ask: "use_mcp_server",
+				text: browserCall,
+			})
+
+			expect(result).toEqual({ decision: "approve" })
+		})
+
+		it("still raises the approval on an interactive node — the ask is the feature there", async () => {
+			const result = await checkAutoApproval({
+				state: postureOf(false) as never,
+				ask: "use_mcp_server",
+				text: browserCall,
+			})
+
+			expect(result).toEqual({ decision: "ask" })
+		})
+
+		it("keeps asking for an unclassified tool under BOTH postures", async () => {
+			for (const nonInteractive of [true, false]) {
+				const result = await checkAutoApproval({
+					state: postureOf(nonInteractive) as never,
+					ask: "use_mcp_server",
+					text: uncategorizedCall,
+				})
+
+				expect(result).toEqual({ decision: "ask" })
+			}
+		})
+
+		it("a node whose config gates the browser group is honoured over the seed", async () => {
+			const posture = applyConfiguredApprovalPosture(
+				defaultApprovalSeed(true),
+				{ alwaysAllowBrowser: false },
+				true,
+			)
+
+			// Omission, as for every other configured key: the scope value wins on read.
+			expect(posture.seed).not.toHaveProperty("alwaysAllowBrowser")
+			expect(posture.configuredKeys).toContain("alwaysAllowBrowser")
+
+			const result = await checkAutoApproval({
+				state: { ...posture.effective, mcpServers } as never,
+				ask: "use_mcp_server",
+				text: browserCall,
+			})
+
+			expect(result).toEqual({ decision: "ask" })
 		})
 	})
 

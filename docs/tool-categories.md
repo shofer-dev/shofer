@@ -125,6 +125,14 @@ must not auto-approve that group, **every call to it parks on a
 `use_mcp_server` approval nobody is there to answer**. `_meta` is part of
 `ToolSchema`, so it survives the parse.
 
+Declaring the group is therefore what makes a tool usable headlessly, and each
+group answers differently: the headless seed sets `alwaysAllowReadOnly`,
+`alwaysAllowWrite`, `alwaysAllowExecute`, `alwaysAllowBrowser`,
+`alwaysAllowModeSwitch` and `alwaysAllowSubtasks`, but never
+`alwaysAllowUncategorized` — so a `read`- or `browser`-declared tool runs
+unattended while an undeclared one still parks
+([`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag)).
+
 Which tier a server should use follows from whether its catalog is static: a
 fixed set of tools can be described by a `toolGroups` map in the config that
 declares the server, but a server whose catalog is **dynamic** (tools added
