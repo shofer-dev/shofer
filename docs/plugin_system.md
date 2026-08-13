@@ -9,7 +9,9 @@ Everything described here is implemented and shipped, **except** two scoped
 remainders inside [§14](#14-agent-control-api-for-workflow--runner-plugins) —
 the `unattended` / `approvalPolicy` pair (§14.2) and the non-HTTP
 `permissions.network` generalization (§14.3), both marked in place; the
-§14 `ctx.agent.spawn` / `PluginTaskHandle` surface itself **is** shipped — and
+§14 `ctx.agent.spawn` / `PluginTaskHandle` surface itself **is** shipped — the two
+deferred MCP modes in [§5.6](#56-mcp-integration) (a plugin as an in-process
+server, and Shofer as an aggregating server host), also marked in place, and
 the deferred hosted remote plugin **registry** ([§13 Deferred](#13-deferred)).
 
 For **authoring** a plugin (manifest fields, build invocations, step-by-step
@@ -167,6 +169,7 @@ flowchart TD
 		"commands": true, // Contribute slash commands
 		"rules": true, // Contribute rules markdown
 		"mcpServers": true, // Declare MCP server configs
+		"mcpInvoke": true, // Invoke tools on connected MCP servers via ctx.mcp
 		"ui": ["chat-input-toolbar", "task-header"], // UI regions to contribute to
 		"lifecycle": true, // Hook into task lifecycle
 		"events": true, // Observe telemetry/lifecycle events
@@ -359,10 +362,13 @@ built-in/user command or another plugin's. A `private: true` command is invocabl
 by its qualified name but filtered out of the command palette.
 (Implemented in `services/command/commands.ts`.)
 
-### 5.6 MCP Integration (three modes)
+### 5.6 MCP Integration
 
-A plugin interacts with MCP in three ways, simplest to most powerful. All three
-compose.
+A plugin meets MCP from two directions, and they are separate grants: it can
+**contribute** a server (`permissions.mcpServers`, Mode A) and it can **invoke**
+one (`permissions.mcpInvoke`, Mode B). Two further modes — a plugin that IS an
+in-process server, and Shofer as an aggregating server host — are designed and
+deferred (Mode C, Mode D below).
 
 #### Mode A — Plugin bundles an MCP server (declarative)
 
@@ -388,52 +394,85 @@ process** managed by `McpHub` — standard MCP protocol, no Shofer-specific code
 **Use case:** wrap an existing MCP server and add Shofer-specific content (a mode,
 a skill, a status badge).
 
-#### Mode B — Plugin IS an in-process MCP server (programmatic)
+#### Mode B — Plugin invokes a connected server (`ctx.mcp`)
 
-A plugin registers itself as an MCP server **in-process** — no separate process,
-no stdio/SSE transport. Its tools are exposed through the MCP tool protocol but
-execute in the host with full `PluginContext` access.
+A plugin granted `permissions.mcpInvoke` gets `ctx.mcp.callTool(serverName,
+toolName, args?, opts?)` — a call against any server the host has connected,
+resolving with the server's raw `McpToolCallResponse` (its `content` array plus
+`isError`). The result is returned unshaped: no truncation, no image extraction,
+no chat row, because a plugin is a program and not a chat transcript.
 
 ```typescript
-export default {
-	name: "code-analyzer",
-	async initialize(ctx) {
-		ctx.mcp.registerServer("code-analyzer", {
-			tools: [
-				{
-					name: "analyze_complexity",
-					description: "Analyze code complexity for a file",
-					inputSchema: { type: "object", properties: { path: { type: "string" } } },
-					execute: async (args) => {
-						const content = await ctx.host.fs.readFile(`${ctx.workspacePath}/${args.path}`)
-						return { content: [{ type: "text", text: analyze(content) }] }
-					},
-				},
-			],
-		})
-	},
-}
+const result = await ctx.mcp?.callTool("memory", "search", { query: "deploy" }, { taskId: ctx.taskId })
 ```
 
-Advantages over Mode A: no process management, full `PluginContext` access, lower
-latency, and the same tools can also participate directly via `registerTools`.
-`McpHub` treats in-process servers identically to stdio/SSE servers — tools appear
-in the catalog, resources in `access_mcp_resource`, same group-based auto-approval.
+The call rides the host's own `McpHub.callTool` — the same entry point
+`use_mcp_tool` uses — so the plugin reaches the same server processes, the same
+connections, and the same per-call header machinery ([`mcp.md`](mcp.md), the
+`"resolve-mcp-call-headers"` broadcast). `opts.taskId`
+is what attributes the call to a run: it travels in the request's `_meta` and is
+what the per-call header seam resolves a run's credential from. It is deliberately
+**not** inferred from "the host's current task" — guessing would attach another
+run's credential to this call, and no credential is a better failure than the wrong
+one. `opts.signal` gives the call cooperative cancellation.
 
-#### Mode C — Shofer as MCP server host (external)
+**It bypasses the ask/approval pipeline by design.** The agent's `use_mcp_tool` is
+a _model's_ request and is gated per tool group by `checkAutoApproval`; a plugin's
+call is trusted host-side code the user installed and granted, and it may run from
+a background service with no task, on a headless node, with nobody to ask. So the
+manifest grant IS the gate, enforced where the context is assembled
+(`PluginManager.buildPluginMcp`) exactly like `ctx.agent` and `ctx.task`:
 
-Shofer can expose **all** registered tools — native, plugin-contributed, and
-MCP-aggregated — as a single MCP server endpoint external clients (Claude Desktop,
-other editors) connect to. A `McpHostServer` adapter over the transport layer
-([`packages/core/src/transport/`](../packages/core/src/transport/)) exposes the
-aggregated catalog. This turns Shofer into a **tool aggregator** — one MCP endpoint
-instead of one server per tool.
+| State                               | `ctx.mcp`                                |
+| ----------------------------------- | ---------------------------------------- |
+| granted + host wired its MCP seam   | live surface (`createPluginMcp`)         |
+| ungranted, host wired the seam      | denying stub — `callTool` throws + warns |
+| no seam wired (pure-core embedding) | absent entirely                          |
 
-| Mode  | What                         | Process model                | Plugin code?                     | External clients?         |
-| ----- | ---------------------------- | ---------------------------- | -------------------------------- | ------------------------- |
-| **A** | Plugin bundles an MCP server | Separate process (stdio/SSE) | Server code in plugin package    | Yes (standard MCP)        |
-| **B** | Plugin IS an MCP server      | In-process (host)            | Yes (`ctx.mcp.registerServer()`) | Yes (via Mode C)          |
-| **C** | Shofer as MCP server host    | Shofer process               | No (infrastructure)              | Yes (aggregated endpoint) |
+`permissions.mcpInvoke` is separate from `permissions.mcpServers` on purpose:
+contributing adds ONE server the plugin ships, invoking reaches EVERY server the
+host is configured with — the user's, the project's, the org's, and other plugins'
+— so it is a strictly larger grant and cannot ride along on the smaller one.
+
+The seam is `PluginMcpProvider`
+([`plugin-mcp.ts`](../packages/core/src/plugins/plugin-mcp.ts)), supplied by the
+host so `@shofer/core` never reaches for a hub;
+[`ShoferProvider`](../src/core/webview/ShoferProvider.ts) wires it from
+`getMcpHub()`, resolving the hub per call because the hub is built asynchronously
+while the plugin manager is built once. `shofer serve` runs the same provider, so a
+headless node's plugins get the same live surface.
+
+**Use case:** an integrator's headless worker plugin — one that runs agent tasks as
+steps of a durable job — invoking MCP tools directly, where there is no chat to
+render into and no human standing by to approve each call.
+
+#### Mode C — Plugin IS an in-process MCP server (programmatic) — deferred
+
+**Deferred, not built.** A plugin would register itself as an MCP server
+**in-process** — no separate process, no stdio/SSE transport — with its tools
+exposed through the MCP tool protocol but executing in the host with full
+`PluginContext` access. Advantages over Mode A: no process management, full context
+access, lower latency, and the same tools could also participate directly via
+`registerTools`; `McpHub` would treat in-process servers identically to stdio/SSE
+ones (tools in the catalog, resources in `access_mcp_resource`, the same
+group-based auto-approval). Nothing of this exists today — a plugin that wants its
+own tools in the catalog uses `registerTools` (§5.1), and a plugin that wants them
+reachable over MCP ships a server via Mode A.
+
+#### Mode D — Shofer as MCP server host (external) — deferred
+
+**Deferred, not built.** Shofer would expose **all** registered tools — native,
+plugin-contributed, and MCP-aggregated — as a single MCP server endpoint external
+clients (Claude Desktop, other editors) connect to, via an adapter over the
+transport layer ([`packages/core/src/transport/`](../packages/core/src/transport/)),
+turning Shofer into a **tool aggregator**. No such adapter exists today.
+
+| Mode  | What                         | Process model                | Plugin code?               | Status              |
+| ----- | ---------------------------- | ---------------------------- | -------------------------- | ------------------- |
+| **A** | Plugin bundles an MCP server | Separate process (stdio/SSE) | Server code in the package | Shipped             |
+| **B** | Plugin invokes a server      | Host's hub connections       | `ctx.mcp.callTool()`       | Shipped             |
+| **C** | Plugin IS an MCP server      | In-process (host)            | —                          | Deferred, not built |
+| **D** | Shofer as MCP server host    | Shofer process               | No (infrastructure)        | Deferred, not built |
 
 ### 5.7 Workflows (`contributes.workflows`)
 
@@ -771,6 +810,16 @@ the host is unchanged.
   [`plugin-services.ts`](../packages/core/src/plugins/plugin-services.ts)), starts
   after load, stops on unregister, and **isolates** a throwing/hanging service
   (per-service start/stop timeout + shown/logged warning, never crash).
+
+- **`ctx.mcp.callTool(server, tool, args?, opts?)` — invoke a connected MCP server.**
+  Gated on a dedicated **`permissions.mcpInvoke`** grant (invoking spans every server
+  the host is configured with, not just the plugin's own): ungranted-but-seam-wired ⇒
+  denying stub; no seam ⇒ absent. Host-side behind a `PluginMcpProvider` seam
+  ([`plugin-mcp.ts`](../packages/core/src/plugins/plugin-mcp.ts)) wired in
+  `ShoferProvider.getPluginManager` against `getMcpHub()`, so the call rides the same
+  hub — and the same per-call header machinery — the agent's own `use_mcp_tool` does.
+  The call does **not** enter the ask/approval pipeline; the grant is the gate. Full
+  contract in [§5.6](#56-mcp-integration).
 
 - **`ctx.agent.notify(message, opts?)` — proactive agent-steering.** A plugin (from
   a background service, a `ctx.host.watch` callback, or a lifecycle hook) can
@@ -1138,6 +1187,7 @@ Enabled state is persisted in `globalState` under
 | `filesystem`   | Read/write listed paths                    | `ctx.host.fs` + `ctx.host.watch` scoped to listed paths only.                                                                                                                                                                                            |
 | `ai`           | Host LLM/embeddings via `ctx.ai`           | **Billed model calls on the user's account.** Requires a separate consent (below). Only an `ApiHandler`, never keys.                                                                                                                                     |
 | `agent`        | Proactive steering via `ctx.agent`         | Injects messages into the running agent (queue/spawn/interrupt) — billed/behavioral. Dedicated grant; ungranted ⇒ denying stub.                                                                                                                          |
+| `mcpInvoke`    | Invoke MCP tools via `ctx.mcp`             | Calls tools on **every** server the host has connected, not just the plugin's own — and the call bypasses the ask/approval pipeline, so this grant is the only gate. Dedicated grant, never implied by `mcpServers`; ungranted ⇒ denying stub.           |
 | `task`         | Task control via `ctx.task`                | Writes rows into the conversation, can **destroy** conversation history (rewind restarts the task), move a task to another directory, and open new tasks. Dedicated grant; ungranted ⇒ denying stub.                                                     |
 | `telemetry`    | Product events via `ctx.host.telemetry`    | Data **leaves the machine**, unlike the always-on logger and metrics. Host-namespaced (`Plugin Event` + `plugin`/`event` properties) and scrubbed to primitives; the user's telemetry opt-in still gates it. Ungranted ⇒ warns and drops (never throws). |
 | `editor`       | `ctx.host.editor` (multi-file diff viewer) | Opens editors — focus-stealing, so granted explicitly rather than always-on like `notifier`.                                                                                                                                                             |

@@ -152,6 +152,7 @@ reachable, when its permission is present. All keys are optional:
 | `commands`     | boolean  | `contributes.commands`.                                                                                                                                        |
 | `rules`        | boolean  | `contributes.rules`.                                                                                                                                           |
 | `mcpServers`   | boolean  | `contributes.mcpServers`.                                                                                                                                      |
+| `mcpInvoke`    | boolean  | Invoking tools on connected MCP servers via `ctx.mcp`. Separate from `mcpServers`: invoking reaches **every** server the host has, not just yours.             |
 | `workflows`    | boolean  | `contributes.workflows` — `.slang` workflows under your `workflows/` dir.                                                                                      |
 | `ui`           | region[] | UI regions the plugin may render into. See [§6](#6-ui-contributions).                                                                                          |
 | `lifecycle`    | boolean  | The `lifecycle` hooks. Without it, none of them ever fire.                                                                                                     |
@@ -314,22 +315,23 @@ manifest — see [§3](#3-manifest-reference-pluginjson).
 Every hook receives a `PluginContext`. Which fields are populated depends on the host and the
 plugin's grants:
 
-| Field                  | Availability                                                                                                    |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `workspacePath`        | Active workspace path, if any.                                                                                  |
-| `mode`                 | Current mode slug.                                                                                              |
-| `taskId`               | Id of the task the hook runs for, if applicable.                                                                |
-| `parentTaskId`         | The spawning parent's task id, when the task is a subtask — how an observer attributes a child's events.        |
-| `rootTaskId`           | The delegation tree's root task id, when the task is a subtask.                                                 |
-| `cwd`                  | Current working directory.                                                                                      |
-| `config`               | This plugin's validated, default-merged settings.                                                               |
-| `host`                 | The restricted host surface (below). Present when the host wired its bridge.                                    |
-| `ai`                   | Host LLM/embeddings. Present **only** with `permissions.ai` + a wired AI seam.                                  |
-| `agent`                | Proactive agent-steering. Present when the host wired its agent seam; denying stub without `permissions.agent`. |
-| `task`                 | Timeline markers + rewind. Present when the host wired its task seam; denying stub without `permissions.task`.  |
-| `turn`                 | The task's current turn index (one per assistant turn), for once-per-turn hook behaviour.                       |
-| `storage`              | Per-plugin persistent dir. Present when the host wired a storage base dir.                                      |
-| `registerService(svc)` | Register a background service. Present when the host wired the supervisor.                                      |
+| Field                  | Availability                                                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `workspacePath`        | Active workspace path, if any.                                                                                                 |
+| `mode`                 | Current mode slug.                                                                                                             |
+| `taskId`               | Id of the task the hook runs for, if applicable.                                                                               |
+| `parentTaskId`         | The spawning parent's task id, when the task is a subtask — how an observer attributes a child's events.                       |
+| `rootTaskId`           | The delegation tree's root task id, when the task is a subtask.                                                                |
+| `cwd`                  | Current working directory.                                                                                                     |
+| `config`               | This plugin's validated, default-merged settings.                                                                              |
+| `host`                 | The restricted host surface (below). Present when the host wired its bridge.                                                   |
+| `ai`                   | Host LLM/embeddings. Present **only** with `permissions.ai` + a wired AI seam.                                                 |
+| `agent`                | Proactive agent-steering. Present when the host wired its agent seam; denying stub without `permissions.agent`.                |
+| `mcp`                  | Invoke tools on connected MCP servers. Present when the host wired its MCP seam; denying stub without `permissions.mcpInvoke`. |
+| `task`                 | Timeline markers + rewind. Present when the host wired its task seam; denying stub without `permissions.task`.                 |
+| `turn`                 | The task's current turn index (one per assistant turn), for once-per-turn hook behaviour.                                      |
+| `storage`              | Per-plugin persistent dir. Present when the host wired a storage base dir.                                                     |
+| `registerService(svc)` | Register a background service. Present when the host wired the supervisor.                                                     |
 
 ### `ctx.host` — the restricted host surface
 
@@ -420,6 +422,30 @@ await ctx.agent?.notify("The deploy just failed — see /var/log/deploy.log for 
 
 Ungranted (host wired the seam) ⇒ `ctx.agent` is a _denying stub_ (`notify` throws + warns). No agent
 seam (headless/pure-core) ⇒ `ctx.agent` is **absent** entirely.
+
+**`ctx.mcp`** (`PluginMcp`) — **invoke** a tool on any MCP server the host has connected,
+requires `permissions.mcpInvoke`. This is the counterpart of `permissions.mcpServers`,
+which only lets you CONTRIBUTE a server; invoking reaches every server the host is
+configured with — the user's, the project's, the org's and other plugins' — so it is a
+separate, larger grant that `mcpServers` never implies.
+
+- `callTool(serverName, toolName, args?, opts?)` → `Promise<McpToolCallResponse>` — the
+  server's raw result (`content` array + `isError`), unshaped: no truncation, no image
+  extraction, no chat row, because your plugin is a program and not a transcript.
+  `opts.taskId` attributes the call to a run (it travels in `_meta` and is what a
+  per-call header resolver keys a run credential off) — pass it when you are acting on
+  behalf of a task; it is never guessed for you, because the wrong run's credential is
+  worse than none. `opts.signal` cancels the call.
+
+```ts
+const res = await ctx.mcp?.callTool("memory", "search", { query: "deploy" }, { taskId: ctx.taskId })
+```
+
+The call rides the host's own MCP hub, so it reaches the same server processes the agent's
+`use_mcp_tool` does. It does **not** raise an approval ask: your code is trusted (the user
+installed and granted it) and may run headless with nobody to ask, so the manifest grant is
+the gate. Ungranted (host wired the seam) ⇒ `ctx.mcp` is a _denying stub_ whose `callTool`
+throws and warns. No MCP seam ⇒ `ctx.mcp` is **absent** entirely.
 
 **`ctx.task`** (`PluginTaskControl`) — **task control**, requires `permissions.task`.
 For a plugin whose feature belongs _in the conversation_ rather than in a side panel, and

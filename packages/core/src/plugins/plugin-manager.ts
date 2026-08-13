@@ -22,6 +22,7 @@ import { createPluginSandbox } from "./plugin-sandbox.js"
 import { type PluginAiProvider, createPluginAi, createDeniedPluginAi } from "./plugin-ai.js"
 import { type PluginUiProvider, createPluginUi } from "./plugin-ui.js"
 import { type PluginAgentProvider, createPluginAgent, createDeniedPluginAgent } from "./plugin-agent.js"
+import { type PluginMcpProvider, createPluginMcp, createDeniedPluginMcp } from "./plugin-mcp.js"
 import { type PluginTaskProvider, createPluginTaskControl, createDeniedPluginTaskControl } from "./plugin-task.js"
 import { type PluginSearchProvider, createPluginSearch, createDeniedPluginSearch } from "./plugin-search.js"
 import { createPluginStorage } from "./plugin-storage.js"
@@ -344,6 +345,14 @@ export interface PluginManagerOptions {
 	 */
 	agentProvider?: PluginAgentProvider
 	/**
+	 * Host seam constructing a plugin's `ctx.mcp` — invoking tools on the host's connected
+	 * MCP servers (design §5.6). When omitted, no plugin gets MCP invocation (even a
+	 * granted one) — pure-core embeddings stay host-agnostic and `ctx.mcp` is absent.
+	 * Supplied by the extension, where the `McpHub` lives; gated on `permissions.mcpInvoke`
+	 * inside the manager.
+	 */
+	mcpProvider?: PluginMcpProvider
+	/**
 	 * Plugin names an **organization** has suppressed (delivered as pod env vars, see
 	 * `config/governance.ts`). Unlike the user's enable/disable these are not a
 	 * preference: a listed plugin never loads and the user cannot turn it back on, which
@@ -406,6 +415,7 @@ export class PluginManager {
 	private readonly forceDisabled: ReadonlySet<string>
 	private readonly forceEnabled: ReadonlySet<string>
 	private readonly agentProvider?: PluginAgentProvider
+	private readonly mcpProvider?: PluginMcpProvider
 	private readonly taskProvider?: PluginTaskProvider
 	private readonly searchProvider?: PluginSearchProvider
 	private readonly uiProvider?: PluginUiProvider
@@ -451,6 +461,7 @@ export class PluginManager {
 		this.forceDisabled = new Set(options.forceDisabledPlugins ?? [])
 		this.forceEnabled = new Set(options.forceEnabledPlugins ?? [])
 		this.agentProvider = options.agentProvider
+		this.mcpProvider = options.mcpProvider
 		this.taskProvider = options.taskProvider
 		this.searchProvider = options.searchProvider
 		this.uiProvider = options.uiProvider
@@ -985,6 +996,7 @@ export class PluginManager {
 			host,
 			ai: this.buildPluginAi(plugin),
 			agent: this.buildPluginAgent(plugin),
+			mcp: this.buildPluginMcp(plugin),
 			task: this.buildPluginTaskControl(plugin),
 			ui: this.buildPluginUi(plugin),
 			storage:
@@ -1021,6 +1033,23 @@ export class PluginManager {
 		if (!this.agentProvider) return undefined
 		if (plugin.manifest.permissions?.agent !== true) return createDeniedPluginAgent(plugin.name)
 		return createPluginAgent(plugin.name, this.agentProvider)
+	}
+
+	/**
+	 * Construct a plugin's `ctx.mcp` surface — invoking tools on the host's connected MCP
+	 * servers (design §5.6). Fail-closed, mirroring {@link buildPluginAgent}: no host
+	 * {@link PluginMcpProvider} wired (pure-core) ⇒ `undefined` (`ctx.mcp` absent — there is
+	 * no hub to call through); wired but `permissions.mcpInvoke` **ungranted** ⇒ a denying
+	 * stub (calls throw + warn); wired **and** granted ⇒ the live provider-backed surface.
+	 *
+	 * This is the ONLY gate on a plugin's MCP call: the call does not enter the
+	 * ask/approval pipeline (see `plugin-mcp.ts`), so an ungranted plugin must be denied
+	 * here rather than downstream.
+	 */
+	private buildPluginMcp(plugin: DiscoveredPlugin): PluginContext["mcp"] {
+		if (!this.mcpProvider) return undefined
+		if (plugin.manifest.permissions?.mcpInvoke !== true) return createDeniedPluginMcp(plugin.name)
+		return createPluginMcp(plugin.name, this.mcpProvider)
 	}
 
 	/**

@@ -2,6 +2,7 @@ import { z } from "zod"
 
 import type { CustomToolDefinition } from "./custom-tool.js"
 import type { HostDiagnostic, HostDisposable, HostEnv, HostFileSystem, HostSymbol, Notifier } from "./host.js"
+import type { McpToolCallResponse } from "./mcp.js"
 import { modeConfigObjectSchema } from "./mode.js"
 
 /**
@@ -592,6 +593,64 @@ export interface PluginAi<Handler = unknown> {
 }
 
 /**
+ * Options for a plugin-originated MCP tool call ({@link PluginMcp.callTool}).
+ *
+ * Both fields exist because a plugin call has no ambient task the host could read
+ * one off: a plugin acting on behalf of a run is the only party that knows WHICH
+ * run, and a plugin doing long work is the only party holding the signal that
+ * cancels it.
+ */
+export interface PluginMcpCallOptions {
+	/**
+	 * The task the call belongs to. Travels in the MCP request's `_meta` and — more
+	 * importantly — is what the per-call header seam resolves a RUN's credential
+	 * from. Omitted ⇒ the request goes out with exactly the connection's own
+	 * headers. Deliberately not inferred from "the host's current task": guessing
+	 * would attach another run's credential to this call, and no credential is a
+	 * better failure than the wrong one.
+	 */
+	readonly taskId?: string
+	/** Cooperative cancellation, forwarded to the MCP client request. */
+	readonly signal?: AbortSignal
+}
+
+/**
+ * **Invoke** a tool on any MCP server the host has connected, handed to a plugin
+ * granted `permissions.mcpInvoke` (design §5.6). The counterpart of
+ * `permissions.mcpServers`, which only lets a plugin CONTRIBUTE a server: invoking
+ * spans every server the host is configured with — the user's, the project's, the
+ * org's and other plugins' — so it is a strictly larger grant and has its own flag.
+ *
+ * The call rides the host's own MCP hub, so a plugin reaches the same server
+ * processes, the same connections and the same per-call header machinery the
+ * agent's own `use_mcp_tool` does; it is not a second client.
+ *
+ * **It bypasses the ask/approval pipeline by design.** An agent's MCP call is a
+ * model's request and is gated per tool group; a plugin's is trusted host-side code
+ * the user installed and granted. There is no ask to raise (a plugin call can
+ * happen with no task, on a headless node, with nobody watching), so the manifest
+ * grant IS the gate — which is why it is a dedicated one.
+ */
+export interface PluginMcp {
+	/**
+	 * Call `toolName` on `serverName` with `args`, resolving with the server's raw
+	 * MCP result ({@link McpToolCallResponse}: the `content` array plus `isError`).
+	 * The result is returned unshaped — no truncation, no image extraction, no chat
+	 * rendering — because a plugin is a program, not a chat transcript.
+	 *
+	 * Rejects when the server is unknown, disconnected or disabled, when the plugin
+	 * lacks `permissions.mcpInvoke`, and when the server itself errors at the
+	 * protocol level. A tool-level failure comes back as `isError: true` instead.
+	 */
+	callTool(
+		serverName: string,
+		toolName: string,
+		args?: Record<string, unknown>,
+		opts?: PluginMcpCallOptions,
+	): Promise<McpToolCallResponse>
+}
+
+/**
  * Proactive **agent-steering** handed to a plugin granted `permissions.agent` (design
  * §6.11 G8; Phase 7). Lets a plugin — from a background service ({@link
  * PluginContext.registerService}), a file watcher ({@link PluginHost.watch}), or a
@@ -1018,6 +1077,14 @@ export interface PluginContext {
 	 */
 	readonly agent?: PluginAgent
 	/**
+	 * Invoke tools on the host's connected MCP servers (design §5.6). Present only when
+	 * the host wired its MCP seam. Granted `permissions.mcpInvoke` ⇒ a live surface that
+	 * calls through the host's own hub; granted-not / seam wired ⇒ a denying stub whose
+	 * `callTool` throws + warns; no seam (pure-core embedding) ⇒ absent entirely. See
+	 * {@link PluginMcp}.
+	 */
+	readonly mcp?: PluginMcp
+	/**
 	 * Chat-timeline control — append the plugin's own marker rows, rewind the task.
 	 * Present only when the host wired its task seam. Granted `permissions.task` ⇒ a
 	 * live surface; granted-not / seam wired ⇒ a denying stub; no seam ⇒ absent.
@@ -1107,6 +1174,17 @@ export const pluginPermissionsSchema = z
 		commands: z.boolean().optional(),
 		rules: z.boolean().optional(),
 		mcpServers: z.boolean().optional(),
+		/**
+		 * **Invoke** tools on the host's connected MCP servers (`ctx.mcp`, design §5.6).
+		 * Deliberately NOT folded into {@link mcpServers}: contributing a server adds one
+		 * the plugin itself ships, while invoking reaches EVERY server the host is
+		 * configured with — the user's, the project's, the org's, and other plugins' —
+		 * so it is a strictly larger grant and gets its own flag. Ungranted ⇒ `ctx.mcp`
+		 * is a denying stub (calls throw + warn), absent entirely on a host with no MCP
+		 * seam. A plugin call bypasses the ask/approval pipeline (it is trusted host-side
+		 * code, and may run with no task and nobody watching), so this grant IS the gate.
+		 */
+		mcpInvoke: z.boolean().optional(),
 		/**
 		 * Contribute `.slang` **workflows** — the multi-phase, multi-agent programs the
 		 * workflow runner executes (`contributes.workflows`). Shipped as files under the

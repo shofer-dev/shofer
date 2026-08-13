@@ -41,7 +41,9 @@ describe("pluginManifestSchema (design §5)", () => {
 					},
 				],
 				skills: [{ name: "deploy-to-staging", description: "Deploy the current branch to staging" }],
-				commands: [{ name: "deploy", description: "Deploy the current project", argumentHint: "<environment>" }],
+				commands: [
+					{ name: "deploy", description: "Deploy the current project", argumentHint: "<environment>" },
+				],
 				mcpServers: {
 					jenkins: { type: "streamable-http", url: "https://jenkins.my-org.com/mcp" },
 				},
@@ -87,6 +89,17 @@ describe("pluginManifestSchema (design §5)", () => {
 	it("fail-closed: rejects unknown fields inside permissions", () => {
 		const result = pluginPermissionsSchema.safeParse({ superpowers: true })
 		expect(result.success).toBe(false)
+	})
+
+	it("accepts the mcpInvoke grant, and keeps it independent of mcpServers (§5.6)", () => {
+		expect(pluginPermissionsSchema.safeParse({ mcpInvoke: true }).success).toBe(true)
+		// Contributing a server and invoking one are separate grants: holding either
+		// alone is a valid manifest, so a plugin cannot reach `ctx.mcp` by declaring
+		// `mcpServers`, nor is it forced to contribute one in order to invoke.
+		const contributesOnly = pluginPermissionsSchema.parse({ mcpServers: true })
+		expect(contributesOnly.mcpInvoke).toBeUndefined()
+		const invokesOnly = pluginPermissionsSchema.parse({ mcpInvoke: true })
+		expect(invokesOnly.mcpServers).toBeUndefined()
 	})
 
 	it("rejects a contributed mode that declares no tools", () => {

@@ -117,6 +117,7 @@ import type {
 	ApiHandler,
 	PluginAiProvider,
 	PluginAgentProvider,
+	PluginMcpProvider,
 	PluginSearchProvider,
 	PluginTaskProvider,
 } from "@shofer/core"
@@ -2293,6 +2294,12 @@ export class ShoferProvider
 			// (not in @shofer/core) because it needs the provider's task stack + message
 			// queue; gated on `permissions.agent` inside the manager.
 			agentProvider: this.buildPluginAgentProvider(),
+			// §5.6 — host seam for `ctx.mcp` (invoke a tool on a connected MCP server).
+			// Wired here because the `McpHub` is the provider's, which is what makes a
+			// plugin's call ride the SAME server processes and per-call header machinery
+			// the agent's own `use_mcp_tool` does; gated on `permissions.mcpInvoke` inside
+			// the manager.
+			mcpProvider: this.buildPluginMcpProvider(),
 			// §6.11 G9 — host seam for `ctx.task` (timeline markers + rewind). Wired here
 			// because it needs the task stack, the message manager, and task persistence;
 			// gated on `permissions.task` inside the manager.
@@ -2551,6 +2558,48 @@ export class ShoferProvider
 				`[applyModeApiConfig] Failed to load API profile "${name}" for mode "${mode}"; ` +
 					`keeping the task's current configuration: ${error instanceof Error ? error.message : String(error)}`,
 			)
+		}
+	}
+
+	/**
+	 * Build the host {@link PluginMcpProvider} seam that backs a granted plugin's
+	 * `ctx.mcp.callTool` (§5.6).
+	 *
+	 * The hub is resolved PER CALL rather than captured: it is constructed
+	 * asynchronously (and re-created when the MCP configuration changes), while the
+	 * plugin manager — and therefore this seam — is built once. A captured hub would
+	 * be either absent forever on a host whose plugins loaded first, or stale.
+	 *
+	 * The call goes through `McpHub.callTool`, deliberately, and not through a
+	 * connection's client: that method is the layer that resolves the per-call header
+	 * seam and stamps `_meta`, so a plugin's call reaches the same server process with
+	 * the same run credential the agent's own `use_mcp_tool` would carry. It does NOT
+	 * go through `runMcpToolCall`, which needs a `Task` to narrate into — a plugin call
+	 * has no task, no chat row and no approval; the manifest grant is its gate.
+	 */
+	private buildPluginMcpProvider(): PluginMcpProvider {
+		return {
+			callTool: async (serverName, toolName, args, opts) => {
+				const mcpHub = this.getMcpHub()
+				if (!mcpHub) {
+					throw new Error(
+						`ctx.mcp.callTool ${serverName}/${toolName}: this host has no MCP hub, so no server is reachable.`,
+					)
+				}
+				// `source` is undefined: a plugin names a server, and the hub resolves
+				// whichever scope defined it. `toolCallId` is absent by construction — a
+				// plugin call is not one of the model's tool calls, so there is no
+				// provider id to join it to.
+				return await mcpHub.callTool(
+					serverName,
+					toolName,
+					args,
+					undefined,
+					opts?.taskId,
+					undefined,
+					opts?.signal,
+				)
+			},
 		}
 	}
 
