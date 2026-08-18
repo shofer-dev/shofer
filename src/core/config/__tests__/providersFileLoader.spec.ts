@@ -45,8 +45,14 @@ describe("providersFileLoader", () => {
 	})
 
 	it("merges per profile name: project > user > org, adds pass through", async () => {
-		await put(roots.global, { version: 1, profiles: { shared: { apiModelId: "org" }, orgOnly: { apiModelId: "o" } } })
-		await put(roots.user, { version: 1, profiles: { shared: { apiModelId: "user" }, userOnly: { apiModelId: "u" } } })
+		await put(roots.global, {
+			version: 1,
+			profiles: { shared: { apiModelId: "org" }, orgOnly: { apiModelId: "o" } },
+		})
+		await put(roots.user, {
+			version: 1,
+			profiles: { shared: { apiModelId: "user" }, userOnly: { apiModelId: "u" } },
+		})
 		await put(roots.project, { version: 1, profiles: { shared: { apiModelId: "project" } } })
 
 		const merged = await loadMergedProvidersFile(roots)
@@ -94,6 +100,55 @@ describe("providersFileLoader", () => {
 
 		expect(merged.currentApiConfigName).toBe("user")
 		expect(merged.modeApiConfigs).toEqual({ code: "u", debug: "o", architect: "p" })
+	})
+
+	it("a collection lock makes the org scalar and mode map final, not just profile bodies", async () => {
+		// The case the lock exists for: a stale user-scope mode association —
+		// persisted by the mode-switch path when a mode had no association —
+		// must not outvote the bundle's mode→profile policy, or a bundle that
+		// pins a mode to a profile silently serves the wrong model.
+		await put(roots.global, {
+			version: 1,
+			currentApiConfigName: "org-default",
+			modeApiConfigs: { orchestrator: "cheap", observability: "cheap" },
+			profiles: {},
+		})
+		await putLocked(["providers"])
+		await put(roots.user, {
+			version: 1,
+			currentApiConfigName: "user-default",
+			modeApiConfigs: { orchestrator: "stale", extra: "stale" },
+			profiles: {},
+		})
+
+		const merged = await loadMergedProvidersFile(roots)
+
+		expect(merged.currentApiConfigName).toBe("org-default")
+		// Org entries win per mode; a mode the org never mapped stays the
+		// user's — the same per-name finality the profile bodies follow.
+		expect(merged.modeApiConfigs).toEqual({ orchestrator: "cheap", observability: "cheap", extra: "stale" })
+	})
+
+	it("a per-profile lock does NOT touch the scalar or the mode map", async () => {
+		await put(roots.global, {
+			version: 1,
+			currentApiConfigName: "org",
+			modeApiConfigs: { code: "o" },
+			profiles: { locked: { apiModelId: "org" } },
+		})
+		await putLocked(["providers/locked"])
+		await put(roots.user, {
+			version: 1,
+			currentApiConfigName: "user",
+			modeApiConfigs: { code: "u" },
+			profiles: { locked: { apiModelId: "user" } },
+		})
+
+		const merged = await loadMergedProvidersFile(roots)
+
+		expect(merged.profiles.locked).toEqual({ apiModelId: "org" })
+		expect(merged.currentApiConfigName).toBe("user")
+		expect(merged.modeApiConfigs).toEqual({ code: "u" })
 	})
 
 	it("a malformed or wrong-version scope file contributes an empty layer", async () => {

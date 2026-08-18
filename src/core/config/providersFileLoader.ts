@@ -23,7 +23,12 @@ import { isPathLocked, loadLockedManifestFromDisk, resolveScopeRoots, type Scope
  * The **user** scope's file is the writable one: every profile edit made in the
  * UI persists there (secrets stripped), exactly as `writeScopeSetting` does for
  * `settings.json`. `currentApiConfigName` and `modeApiConfigs` ride the same
- * file and follow the same layered rule.
+ * file and follow the same layered rule — with one lock caveat: when the org
+ * scope locks the whole `providers` collection, the org's scalar and its
+ * mode-map entries are final too, not just its profile bodies (a stale
+ * user-scope mode association must not outvote the bundle's mode→profile
+ * policy). A name the org never defined is still the user's to add — the same
+ * per-name finality as the profile bodies.
  */
 
 /** Current on-disk version of `providers.json`. */
@@ -132,13 +137,31 @@ export async function loadMergedProvidersFile(roots: ScopeRoots): Promise<Merged
 		}
 	}
 
-	// Scalars: more-specific wins. Mode map: deep-merge per mode key.
-	const currentApiConfigName = project.currentApiConfigName ?? user.currentApiConfigName ?? org.currentApiConfigName
-	const modeApiConfigs = {
-		...(org.modeApiConfigs ?? {}),
-		...(user.modeApiConfigs ?? {}),
-		...(project.modeApiConfigs ?? {}),
-	}
+	// Scalars and the mode map: more-specific scope wins — EXCEPT where the org
+	// scope locks. The lock is the bundle-is-policy contract (docs/shofer_bundles.md
+	// §1: a locked key is final against the user/project scopes), and it must
+	// cover these too, not only profile bodies: a user-scope `modeApiConfigs`
+	// entry — persisted once by the mode-switch path when a mode had no
+	// association — otherwise overrides the org's mode→profile map forever and
+	// gets re-flushed by every later store, so a bundle that pins a mode to a
+	// profile silently serves the wrong model. The rule mirrors the profile-body
+	// rule beside it: a collection lock makes the ORG's entries final (org's
+	// scalar wins when present, org's mode entries win per mode), while a name
+	// the org never defined is still the user's to add.
+	const currentApiConfigName = wholeLocked
+		? (org.currentApiConfigName ?? user.currentApiConfigName ?? project.currentApiConfigName)
+		: (project.currentApiConfigName ?? user.currentApiConfigName ?? org.currentApiConfigName)
+	const modeApiConfigs = wholeLocked
+		? {
+				...(user.modeApiConfigs ?? {}),
+				...(project.modeApiConfigs ?? {}),
+				...(org.modeApiConfigs ?? {}),
+			}
+		: {
+				...(org.modeApiConfigs ?? {}),
+				...(user.modeApiConfigs ?? {}),
+				...(project.modeApiConfigs ?? {}),
+			}
 
 	return { currentApiConfigName, modeApiConfigs, profiles, originByName, lockedNames }
 }
