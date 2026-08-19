@@ -466,7 +466,22 @@ export class ShoferProvider
 						const name = await this.providerSettingsManager.getProfile({
 							name: this.contextProxy.getValue("currentApiConfigName") ?? "default",
 						})
-						await this.activateProviderProfile({ name: name.name })
+						// A RESTORATION, not a user choice: re-hydrate the active
+						// profile's fields from the changed file without touching any
+						// per-task or per-mode state. The default options would (a)
+						// overwrite the CURRENT task's sticky profile with the global
+						// default and rebuild it onto the default model — clobbering a
+						// mode-seeded task's own profile on every org-bundle
+						// re-projection (verified live: an orchestrator task seeded
+						// with its mode's profile billed the default model after the
+						// ConfigMap swap re-fired this handler) — and (b) persist
+						// `modeApiConfigs[currentMode] = <default>` into the USER
+						// scope, planting exactly the stale association the merged
+						// loader's org-lock rule exists to out-vote.
+						await this.activateProviderProfile(
+							{ name: name.name },
+							{ persistModeConfig: false, persistTaskHistory: false },
+						)
 					} catch {
 						// Profile gone or renamed on disk — the state push below still
 						// refreshes the list; the user picks a profile from it.
@@ -2552,6 +2567,12 @@ export class ShoferProvider
 			const profile = await this.providerSettingsManager.getProfile({ name })
 			if (profile?.apiProvider) {
 				task.updateApiConfiguration(profile)
+				// Make the association STICK: the sticky name is what the
+				// profile-change guards key on (`updateTaskApiHandlerIfNeeded`,
+				// the Task's ProviderProfileChanged listener), so without it a
+				// later global-default activation re-points this task at the
+				// default model even though its configuration was just set here.
+				task.setTaskApiConfigName(name)
 			}
 		} catch (error) {
 			this.log(

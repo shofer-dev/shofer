@@ -951,4 +951,72 @@ describe("ShoferProvider - Sticky Provider Profile", () => {
 			)
 		})
 	})
+
+	describe("providers.json reload re-activation (org bundle re-projection)", () => {
+		beforeEach(async () => {
+			await provider.resolveWebviewView(mockWebviewView)
+		})
+
+		it("re-activates the default profile WITHOUT touching per-task or per-mode state", async () => {
+			// A mode-seeded task holding its own profile: the reload must not
+			// re-point it at the global default (the live regression: every
+			// ConfigMap projection swap re-fired this handler and clobbered the
+			// task's mode profile — and planted modeApiConfigs[mode]=default in
+			// the user scope).
+			const mockTask = {
+				taskId: "mode-seeded-task",
+				_taskApiConfigName: "mode-profile",
+				taskApiConfigName: "mode-profile",
+				setTaskApiConfigName: vi.fn(),
+				emit: vi.fn(),
+				updateApiConfiguration: vi.fn(),
+				shoferMessages: [],
+				apiConversationHistory: [],
+			}
+			await provider.addShoferToStack(mockTask as any)
+
+			vi.spyOn(provider.providerSettingsManager, "getProfile").mockResolvedValue({
+				name: "default-profile",
+				id: "default-id",
+				apiProvider: "anthropic",
+			} as any)
+			const activateSpy = vi.spyOn(provider, "activateProviderProfile").mockResolvedValue(undefined as any)
+
+			;(provider.contextProxy as any)._onDidChangeScopeFilesEmitter.fire({ files: ["providers.json"] })
+			await new Promise((resolve) => setTimeout(resolve, 20))
+
+			expect(activateSpy).toHaveBeenCalledWith(
+				{ name: "default-profile" },
+				{ persistModeConfig: false, persistTaskHistory: false },
+			)
+		})
+	})
+
+	describe("applyModeApiConfig", () => {
+		beforeEach(async () => {
+			await provider.resolveWebviewView(mockWebviewView)
+		})
+
+		it("makes the mode's profile the task's sticky profile", async () => {
+			// Without the sticky name, updateTaskApiHandlerIfNeeded and the
+			// Task's ProviderProfileChanged listener treat the task as
+			// default-tracking and re-point it on the next global activation.
+			const mockTask = {
+				taskId: "resumed-task",
+				setTaskApiConfigName: vi.fn(),
+				updateApiConfiguration: vi.fn(),
+			}
+			vi.spyOn(provider, "resolveModeApiConfigName").mockResolvedValue("mode-profile")
+			vi.spyOn(provider.providerSettingsManager, "getProfile").mockResolvedValue({
+				name: "mode-profile",
+				id: "mode-profile-id",
+				apiProvider: "anthropic",
+			} as any)
+
+			await (provider as any).applyModeApiConfig(mockTask, "orchestrator")
+
+			expect(mockTask.updateApiConfiguration).toHaveBeenCalled()
+			expect(mockTask.setTaskApiConfigName).toHaveBeenCalledWith("mode-profile")
+		})
+	})
 })
