@@ -39,7 +39,7 @@ import { registerGlobalStorageFsPath } from "@shofer/core"
 import "@shofer/core" // Necessary to install String.prototype.toPosix at runtime (implementation lives in @shofer/core).
 import { createDualLogger, createOutputChannelLogger } from "@shofer/core"
 import { setOutputChannel } from "@shofer/core"
-import { bootstrapLogging, setLogLevel, setLogCategories } from "@shofer/core"
+import { bootstrapLogging, bootstrapHeadlessLogging, setLogLevel, setLogCategories } from "@shofer/core"
 import { webviewLog } from "@shofer/core"
 import { setTokenCounter } from "@shofer/core"
 import { setModelsCacheDirProvider } from "@shofer/core"
@@ -114,6 +114,24 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Bootstrap the shared logging transport — must happen before any module
 	// uses `getLogger()` so the Output Channel is wired.
 	bootstrapLogging(outputChannel)
+
+	// On a HEADLESS host (`shofer serve`, the Temporal-driven worker pod) the
+	// Output Channel above is the vscode-shim's stub, whose `appendLine` routes to
+	// a `console.log` the CLI host stubs out in quiet mode — so every subsystem log
+	// line (`mcpSysLog`, `taskLog`, …) is silently dropped and MCP diagnostics never
+	// reach the pod log. Re-point the transport at a stderr sink (the stream the
+	// pod captures and the CLI's own `[shofer]` lines use). `SHOFER_CLI_RUNTIME` is
+	// the established headless signal (cf. ShoferProvider); the IDE, where a real
+	// Output Channel exists, never enters this branch and never double-emits.
+	if (process.env.SHOFER_CLI_RUNTIME === "1") {
+		const envLevel = process.env.LOG_LEVEL?.toLowerCase()
+		const level = (["debug", "info", "warn", "error", "fatal"] as const).includes(
+			envLevel as "debug" | "info" | "warn" | "error" | "fatal",
+		)
+			? (envLevel as "debug" | "info" | "warn" | "error" | "fatal")
+			: "info"
+		bootstrapHeadlessLogging(level)
+	}
 
 	// Offload token counting to the extension's worker pool. Host-agnostic core
 	// (e.g. BaseProvider) calls `countTokens` from @shofer/core, which defaults to

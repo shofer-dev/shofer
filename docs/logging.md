@@ -36,7 +36,7 @@ flowchart TD
     DISC["auto-discover ctx"]
     LVL{"level filter"}
     CAT{"category filter"}
-    OC["Output Channel"]
+    OC["Output Channel<br/>(stderr sink when headless)"]
     RING["ring buffer"]
     TASKBUF["per-task buffers<br/>captureForTask()"]
     FILE["file — optional JSON-lines"]
@@ -66,6 +66,17 @@ flowchart TD
 `webviewLog` (the `Webview` subsystem logger), so they respect level and category
 filters. They no longer bypass the transport with direct `outputChannel.appendLine()`.
 
+**Headless hosts** (`shofer serve`, the Temporal-driven worker pod) have no VS
+Code Output Channel: activation hands the transport the vscode-shim's stub
+channel, whose `appendLine` routes to a `console.log` the CLI host stubs out in
+quiet mode, so every subsystem line is silently dropped. `bootstrapHeadlessLogging()`
+re-points the transport at a **stderr** sink — the stream the pod's container log
+captures and the one the CLI's own `[shofer] …` lines use — so `mcpSysLog` /
+`taskLog` / … reach `kubectl logs`. Its minimum level comes from `LOG_LEVEL`
+(default `info`; set `LOG_LEVEL=debug` for MCP connection detail). It fires only
+when `process.env.SHOFER_CLI_RUNTIME === "1"`, so the IDE path is untouched and
+never double-emits.
+
 ### Components
 
 | Component          | File                                                                                                                  | Role                                                                                                                                                               |
@@ -73,12 +84,12 @@ filters. They no longer bypass the transport with direct `outputChannel.appendLi
 | `CompactTransport` | [`packages/core/src/logging/CompactTransport.ts`](../packages/core/src/logging/CompactTransport.ts)                   | Filters by level + categories, writes to Output Channel and optional file; also keeps the public ring buffer and per-task buffers for the Logs tab (see below)     |
 | `CompactLogger`    | [`packages/core/src/logging/CompactLogger.ts`](../packages/core/src/logging/CompactLogger.ts)                         | Variadic `ILogger` implementation with `child()` for subsystem scoping                                                                                             |
 | `ILogger` / types  | [`packages/core/src/logging/types.ts`](../packages/core/src/logging/types.ts)                                         | Interfaces and config types                                                                                                                                        |
-| `index.ts`         | [`packages/core/src/logging/index.ts`](../packages/core/src/logging/index.ts)                                         | `bootstrapLogging()`, `setLogLevel()`, `setLogCategories()`, `getLogger()`                                                                                         |
+| `index.ts`         | [`packages/core/src/logging/index.ts`](../packages/core/src/logging/index.ts)                                         | `bootstrapLogging()`, `bootstrapHeadlessLogging()`, `setLogLevel()`, `setLogCategories()`, `getLogger()`                                                           |
 | Subsystem loggers  | [`packages/core/src/logging/subsystems.ts`](../packages/core/src/logging/subsystems.ts)                               | Pre-scoped logger instances (Task, Webview, Git, Tools, …)                                                                                                         |
 | LoggingSettings    | [`webview-ui/src/components/settings/LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx) | Settings → Logging UI panel; renders checkboxes from live `logCategoriesKnown`                                                                                     |
 | Settings schema    | [`packages/types/src/global-settings.ts`](../packages/types/src/global-settings.ts)                                   | `logLevel` and `logCategories` Zod schemas                                                                                                                         |
 | ExtensionState     | [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                       | `ExtensionState` picks `logLevel`, `logCategories`, and `logCategoriesKnown`                                                                                       |
-| Activation         | [`src/extension.ts`](../src/extension.ts)                                                                             | `bootstrapLogging()` at line 108, persistence restore at line 155                                                                                                  |
+| Activation         | [`src/extension.ts`](../src/extension.ts)                                                                             | `bootstrapLogging(outputChannel)`, then `bootstrapHeadlessLogging()` when `SHOFER_CLI_RUNTIME==="1"`; persistence restore of saved `logLevel`/`logCategories`      |
 | Message handler    | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                           | Wires `logLevel` and `logCategories` changes to live transport                                                                                                     |
 | State plumbing     | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                         | `getState()` → `getStateToPostToWebview()` → webview state;<br>`provider.log()` and `provider.debug()` route through `webviewLog` → transport                      |
 | Legacy compat      | [`packages/core/src/utils/outputChannelLogger.ts`](../packages/core/src/utils/outputChannelLogger.ts)                 | `stringifyForLog` and `createOutputChannelLogger` retained;<br>`outputLog`/`outputWarn`/`outputError` removed                                                      |
@@ -125,25 +136,25 @@ brand-new subsystem appears immediately with its `ctx` as the label.
 Each subsystem logger is created via `getLogger().child({ ctx: "Name" })`.
 The `ctx` is the tag shown in the output channel.
 
-| ctx           | Logger export    | Description                                                                                                                                                   |
-| ------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Task`        | `taskLog`        | Core task engine — task lifecycle, tool execution, context condensing, and the agent loop.                                                                    |
-| `Webview`     | `webviewLog`     | Webview ↔ extension-host IPC, the provider, and message routing.                                                                                             |
-| `Git`         | `gitLog`         | Git index, the working-tree file watcher, and git history queries.                                                                                            |
-| `CodeIndex`   | `codeIndexLog`   | Code (RAG) indexing, embeddings, and tree-sitter parsing.                                                                                                     |
-| `LiveMemory`  | `liveMemoryLog`  | The live-memory subsystem that answers questions and drives clarifying prompts.                                                                               |
-| `MCP`         | `mcpLog`         | MCP server lifecycle, transport, and tool discovery.                                                                                                          |
-| `IPC`         | `ipcLog`         | The `@shofer/ipc` socket server/client used by the CLI / headless runtime and public API.                                                                     |
-| `API`         | `apiLog`         | LLM API providers (Anthropic, OpenAI, Bedrock, …) — requests, streaming, and retries.                                                                         |
-| `FS`          | `fsLog`          | File I/O utilities such as `safeWriteJson`, storage paths, and disk persistence.                                                                              |
-| `Config`      | `configLog`      | Configuration, `ContextProxy` settings/secrets, and settings migration.                                                                                       |
-| `Skills`      | `skillsLog`      | Skill discovery, loading, and invocation.                                                                                                                     |
-| `Metrics`     | `metricsLog`     | Metrics collection via the OpenTelemetry metrics API (§8).                                                                                                    |
-| `Workflow`    | `workflowLog`    | The `.slang` workflow engine — parsing, execution, and stake resolution.                                                                                      |
-| `Tools`       | `toolsLog`       | Native tool execution — one line per call (start / finish / failure) from `BaseTool.handle`, covering `read_file`, `use_mcp_tool`, `attempt_completion`, etc. |
-| `I18n`        | `i18nLog`        | Translation loading and locale resolution.                                                                                                                    |
-| `Scroll`      | `scrollLog`      | Webview scroll-lifecycle diagnostics forwarded from the chat view to the host.                                                                                |
-| `Utils`       | `utilLog`        | General-purpose utilities (token counting, path handling, perf timing, …).                                                                                    |
+| ctx          | Logger export   | Description                                                                                                                                                   |
+| ------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Task`       | `taskLog`       | Core task engine — task lifecycle, tool execution, context condensing, and the agent loop.                                                                    |
+| `Webview`    | `webviewLog`    | Webview ↔ extension-host IPC, the provider, and message routing.                                                                                             |
+| `Git`        | `gitLog`        | Git index, the working-tree file watcher, and git history queries.                                                                                            |
+| `CodeIndex`  | `codeIndexLog`  | Code (RAG) indexing, embeddings, and tree-sitter parsing.                                                                                                     |
+| `LiveMemory` | `liveMemoryLog` | The live-memory subsystem that answers questions and drives clarifying prompts.                                                                               |
+| `MCP`        | `mcpLog`        | MCP server lifecycle, transport, and tool discovery.                                                                                                          |
+| `IPC`        | `ipcLog`        | The `@shofer/ipc` socket server/client used by the CLI / headless runtime and public API.                                                                     |
+| `API`        | `apiLog`        | LLM API providers (Anthropic, OpenAI, Bedrock, …) — requests, streaming, and retries.                                                                         |
+| `FS`         | `fsLog`         | File I/O utilities such as `safeWriteJson`, storage paths, and disk persistence.                                                                              |
+| `Config`     | `configLog`     | Configuration, `ContextProxy` settings/secrets, and settings migration.                                                                                       |
+| `Skills`     | `skillsLog`     | Skill discovery, loading, and invocation.                                                                                                                     |
+| `Metrics`    | `metricsLog`    | Metrics collection via the OpenTelemetry metrics API (§8).                                                                                                    |
+| `Workflow`   | `workflowLog`   | The `.slang` workflow engine — parsing, execution, and stake resolution.                                                                                      |
+| `Tools`      | `toolsLog`      | Native tool execution — one line per call (start / finish / failure) from `BaseTool.handle`, covering `read_file`, `use_mcp_tool`, `attempt_completion`, etc. |
+| `I18n`       | `i18nLog`       | Translation loading and locale resolution.                                                                                                                    |
+| `Scroll`     | `scrollLog`     | Webview scroll-lifecycle diagnostics forwarded from the chat view to the host.                                                                                |
+| `Utils`      | `utilLog`       | General-purpose utilities (token counting, path handling, perf timing, …).                                                                                    |
 
 ## Output Format
 

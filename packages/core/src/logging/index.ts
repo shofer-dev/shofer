@@ -78,6 +78,53 @@ export function bootstrapLogging(outputChannel: LogSink): ILogger {
 }
 
 /**
+ * Attach a **stderr** sink to the shared logging transport for HEADLESS hosts
+ * (`shofer serve`, the Temporal-driven worker pod) that have no VS Code Output
+ * Channel.
+ *
+ * Why this exists: in a headless host `bootstrapLogging()` is handed the
+ * vscode-shim's `OutputChannel`, whose `appendLine` routes to `console.log` —
+ * which the CLI host stubs to a no-op in quiet mode. So every subsystem line
+ * (`mcpSysLog`, `taskLog`, …) is silently dropped, and MCP connect/tool
+ * diagnostics never reach `kubectl logs`. This replaces that dead channel with
+ * a sink that writes straight to `process.stderr`, the stream the pod's
+ * container log captures and the one the CLI's own `[shofer] …` lines use
+ * (stderr survives quiet mode; stdout is stubbed).
+ *
+ * Writing to `process.stderr` directly is the one place raw stream access is
+ * legitimate: this IS the transport's destination — the exact role a
+ * `vscode.OutputChannel` plays in the IDE — not feature-code logging. It is the
+ * HEADLESS fallback only; the caller invokes it solely on a headless host, so
+ * the IDE path (real Output Channel) is untouched and never double-emits.
+ *
+ * @param level Minimum log level; defaults to `"info"`. Raise to `"debug"`
+ *   (the deployment sets `LOG_LEVEL=debug`) to see MCP connection detail.
+ */
+export function bootstrapHeadlessLogging(level: LogLevel = "info"): ILogger {
+	if (process.env.NODE_ENV === "test") {
+		return _noopLogger
+	}
+
+	if (!_transport || !_logger) {
+		// Defensive: eager init is skipped only under NODE_ENV==="test", but
+		// guard anyway so a missing transport can never leave us logger-less.
+		_transport = new CompactTransport(undefined, { level })
+		_logger = new CompactLogger(_transport)
+	}
+
+	const stderrSink: LogSink = {
+		appendLine: (line: string): void => {
+			process.stderr.write(line + "\n")
+		},
+	}
+
+	_transport.setOutputChannel(stderrSink)
+	_transport.setLevel(level)
+	_transport.writeHumanLine(`Log session started (headless, level: ${level})`)
+	return _logger
+}
+
+/**
  * The root logger instance.  In production this is only available after
  * `bootstrapLogging()` has been called.  Before that (or in tests), a
  * noop logger is returned.
