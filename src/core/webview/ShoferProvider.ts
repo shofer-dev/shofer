@@ -504,6 +504,34 @@ export class ShoferProvider
 				if (keys.includes("pluginConfigs")) {
 					void this.reloadPluginsForConfigChange()
 				}
+				// The logging transport is a live singleton wired from these keys only
+				// at activation and on a webview settings edit — neither fires on a
+				// headless host when the org bundle is re-materialized, so without
+				// this a projected logging change sat inert until the next restart.
+				// Same removal semantics as the webview path: a whitelist that
+				// disappears (or empties) must un-filter, so it maps to undefined
+				// (show all). A removed logLevel deliberately leaves the current
+				// level: there is no single "default" to restore — the headless
+				// bootstrap takes its own (LOG_LEVEL-driven) argument.
+				if (keys.includes("logLevel") || keys.includes("logCategories")) {
+					void (async () => {
+						const { setLogLevel, setLogCategories } = await import("@shofer/core")
+						if (keys.includes("logLevel")) {
+							const level = this.contextProxy.getValue("logLevel")
+							if (typeof level === "string" && level) {
+								setLogLevel(level as "debug" | "info" | "warn" | "error" | "fatal")
+							}
+						}
+						if (keys.includes("logCategories")) {
+							const categories = this.contextProxy.getValue("logCategories")
+							setLogCategories(
+								Array.isArray(categories) && categories.length > 0
+									? (categories as string[])
+									: undefined,
+							)
+						}
+					})()
+				}
 			}),
 		)
 
