@@ -26,7 +26,7 @@ import { getDefaultExtensionPath } from "@/lib/utils/extension.js"
 import { isValidSessionId } from "@/lib/utils/session-id.js"
 import { VERSION } from "@/lib/utils/version.js"
 
-import { ExtensionHost, ExtensionHostOptions } from "@/agent/index.js"
+import { ExtensionHost, ExtensionHostOptions, unattendedApprovalSeed } from "@/agent/index.js"
 import { isExpectedControlFlowError } from "./cancellation.js"
 import { runStdinStreamMode } from "./stdin-stream.js"
 
@@ -200,6 +200,12 @@ export async function run(promptArg: string | undefined, flagOptions: FlagOption
 		workspacePath: effectiveWorkspacePath,
 		extensionPath: path.resolve(flagOptions.extension || getDefaultExtensionPath(__dirname)),
 		nonInteractive: !effectiveRequireApproval,
+		// `--require-approval` off is the person at the terminal asking for an
+		// UNATTENDED run, and that request is the author of the grant — nothing is
+		// auto-approved by default anywhere else. With it on, the seed stays the
+		// built-in one (auto-approve nothing) and every dangerous tool prompts.
+		// Either way the workspace's `.shofer/` scopes override the seed per key.
+		approvalSeed: effectiveRequireApproval ? undefined : unattendedApprovalSeed(),
 		exitOnError: flagOptions.exitOnError,
 		retry: flagOptions.retry ?? 0,
 		ephemeral: flagOptions.ephemeral,

@@ -122,11 +122,15 @@ pnpm --filter @shofer/cli dev --print --output-format stream-json "List files"
 ```
 
 **Auto-approval in print mode:**
-All tool categories are auto-approved by default (read, write, execute, MCP,
-browser, subtasks, mode switches, protected files). This makes `--print` safe for
-scripting — the agent never blocks waiting for user input. This is a **seeded
-default**: any approval key the workspace's layered `.shofer/settings.json` sets
-overrides it — see
+Without `--require-approval`, `shofer run` states an **unattended posture** for
+itself: every declared tool category auto-approves (read, write, execute, MCP,
+browser, subtasks, mode switches, protected files) plus `allowedCommands: ["*"]`,
+so `--print` never blocks waiting for user input. That grant has an author — the
+person who invoked the command against their own workspace — which is why it is
+passed by the command rather than defaulted to anywhere. It is still only a seed:
+any approval key the workspace's layered `.shofer/settings.json` sets overrides it
+per key. With `--require-approval`, no seed is stated and the built-in default
+applies, which auto-approves nothing. See
 [`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag).
 
 ### 3. Stdin Stream Mode (`--stdin-prompt-stream`)
@@ -422,11 +426,14 @@ short-circuits both: the ask is left outstanding for the controller to answer vi
 
 Whether an ask _arises_ is decided earlier, by the settings the host seeds at
 startup — resolved by [`approval-posture.ts`](../apps/cli/src/agent/approval-posture.ts)
-and applied in `ExtensionHost.activate()`. The seed is a **default**: any approval
-key the node's layered `.shofer/settings.json` supplies wins and is not seeded at
-all, so the operator's file is authoritative and is never overwritten by the host's
-default. A node whose config says nothing keeps the behaviour documented above.
-See [`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag).
+and applied in `ExtensionHost.activate()`. The built-in seed sets one key,
+`autoApprovalEnabled: false`, and leaves every other posture key absent, where
+absent DENIES; a command that asked for an unattended run (`shofer run` without
+`--require-approval`, `shofer acp`) states `unattendedApprovalSeed()` instead. Either
+way the seed is a **default**: any approval key the node's layered
+`.shofer/settings.json` supplies wins and is not seeded at all, so the operator's
+file is authoritative and is never overwritten by the host's default. See
+[`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag).
 
 ### File Change Tracking
 

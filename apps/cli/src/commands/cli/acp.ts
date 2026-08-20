@@ -3,7 +3,7 @@ import { fileURLToPath } from "url"
 
 import { getProviderDefaultModelId } from "@shofer/types"
 
-import { ExtensionHost, type ExtensionHostOptions } from "@/agent/index.js"
+import { ExtensionHost, unattendedApprovalSeed, type ExtensionHostOptions } from "@/agent/index.js"
 import { getDefaultExtensionPath } from "@/lib/utils/extension.js"
 import type { SupportedProvider } from "@/types/index.js"
 
@@ -39,6 +39,11 @@ export async function acp(options: AcpOptions = {}): Promise<void> {
 		workspacePath: path.resolve(options.workspace || process.cwd()),
 		extensionPath: path.resolve(options.extension || getDefaultExtensionPath(__dirname)),
 		nonInteractive: true,
+		// ACP carries no permission channel — the protocol has no way to put an
+		// approval in front of the client's user — so an ask raised here could only
+		// hang. The person who ran `shofer acp` against their own workspace is the
+		// author of that grant; their `.shofer/` scopes still override it per key.
+		approvalSeed: unattendedApprovalSeed(),
 		ephemeral: false,
 		debug: options.debug ?? false,
 		exitOnComplete: false,

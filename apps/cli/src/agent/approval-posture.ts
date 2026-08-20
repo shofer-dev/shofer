@@ -5,26 +5,57 @@ import { loadLayeredOverlay, resolveScopeRoots, type LayeredSettings, type Scope
 
 /**
  * approval-posture — resolve a CLI/served node's **tool-approval posture** from
- * its own layered `.shofer/` configuration, falling back to the host's built-in
- * seed.
+ * its own layered `.shofer/` configuration.
  *
  * ## Why this module exists
  *
- * A headless host has no local user to ask, so it must decide up front which tools
- * auto-approve. Historically it decided that with two hardcoded settings blobs —
- * non-interactive seeded `autoApprovalEnabled: true` plus every `alwaysAllow*` and
- * `allowedCommands: ["*"]`; interactive seeded them off — and it consulted nothing
- * else. But those are exactly the `globalSettings` keys the layered
- * `.shofer/settings.json` scopes already carry, which an operator (or a platform
- * materialising a config bundle into a scope) can set. The result was an
+ * A headless host has no local user standing at the keyboard, so it must decide up
+ * front which tools auto-approve. Historically it decided that with two hardcoded
+ * settings blobs — non-interactive seeded `autoApprovalEnabled: true` plus every
+ * `alwaysAllow*` and `allowedCommands: ["*"]`; interactive seeded them off — and it
+ * consulted nothing else. But those are exactly the `globalSettings` keys the
+ * layered `.shofer/settings.json` scopes already carry, which an operator (or a
+ * platform materialising a config bundle into a scope) can set. The result was an
  * auto-approval dial that was not connected: whatever the node's configuration
  * said, a served node approved everything or nothing.
  *
+ * ## Doctrine: an absent key DENIES
+ *
+ * A posture key is auto-approving only when a `.shofer/` scope — the operator's
+ * own file, or one a platform materialised from a config bundle — **says so
+ * explicitly**. Silence means ASK: the tool call raises its approval and parks
+ * until whoever is entitled to decide it does.
+ *
+ * The old rule was the inverse — silence seeded auto-approve — and it was wrong
+ * for one reason that outweighs the convenience: **an absent key is not a
+ * decision.** It is indistinguishable from a `settings` section nobody wrote, a
+ * bundle published before the posture was thought about, or a key misspelled. All
+ * three shipped an agent that auto-approved every declared capability — writes,
+ * shell commands with `allowedCommands: ["*"]`, a browser that clicks and submits
+ * inside whatever session its profile carries — and nothing anywhere reported it,
+ * because the seed made the omission look exactly like a considered choice. Under
+ * the current rule the same omission stalls the run instead, which is visible, and
+ * the fix is to state the posture the agent was always meant to have.
+ *
+ * The consequence is real and accepted: a headless node whose configuration says
+ * nothing does nothing dangerous, and does not run very far either. That is the
+ * safe direction to fail in, and the failure announces itself.
+ *
+ * ## What the host still seeds, and why it is exactly one key
+ *
+ * {@link defaultApprovalSeed} sets the master gate to its denying value and
+ * nothing else. It is not merely restating the default: `globalState` persists
+ * across restarts of a node with a state directory, so a `autoApprovalEnabled:
+ * true` written there by an earlier session (or an earlier build) would otherwise
+ * survive into a run whose config says nothing. Re-asserting `false` each boot
+ * closes that. The per-group toggles need no such treatment — the master gate
+ * being off refuses every group regardless of what any of them hold.
+ *
  * ## The precedence, and why it is expressed as omission
  *
- * **Configuration wins; the blob is only a default seed.** That is implemented by
- * *not sending* a posture key the config layers already supply, rather than by
- * merging the config over the seed, and the difference is load-bearing:
+ * **Configuration wins; the seed is only a default.** That is implemented by *not
+ * sending* a posture key the config layers already supply, rather than by merging
+ * the config over the seed, and the difference is load-bearing:
  *
  *   - `ContextProxy.getValue` serves the layered overlay ahead of `globalState`,
  *     so a key present in any scope wins **whatever** the host seeds. Sending a
@@ -35,11 +66,6 @@ import { loadLayeredOverlay, resolveScopeRoots, type LayeredSettings, type Scope
  *     **writes through to the user scope's `~/.shofer/settings.json`**. Seeding a
  *     configured key therefore *overwrites the operator's own file* with the
  *     host's default. Omission is the only way the seed stays a default.
- *
- * A key **no** scope supplies is still seeded exactly as before, so a node whose
- * configuration says nothing behaves byte-for-byte as it did: plain `shofer serve`
- * auto-approves everything, `--interactive` surfaces everything. Deployed workers
- * depend on that, so it is asserted by tests rather than assumed.
  *
  * ## Scope precedence is the platform's, not ours
  *
@@ -55,19 +81,15 @@ import { loadLayeredOverlay, resolveScopeRoots, type LayeredSettings, type Scope
  * gate, every per-group `alwaysAllow*` toggle, and the command allow/deny lists
  * that qualify `alwaysAllowExecute`.
  *
- * This is the exact set the host may seed AND the exact set config may take over.
- * Keeping one list means a key can never be seeded-but-not-overridable (the
- * original defect) or overridable-but-never-seeded (a silent behaviour change on
- * nodes with no config).
+ * This is the exact set config may take over, and — since {@link
+ * defaultApprovalSeed} sets only the master gate — very nearly the exact set that
+ * does nothing at all unless a scope names it.
  *
- * **Membership here is not the same as being in the seed.** A key listed here
- * that {@link defaultApprovalSeed} does not set is one configuration may govern
- * and the host will never default ON — the last two, plus `deniedCommands`.
- * They belong here anyway, because this list is also what the startup banner
- * counts: a key omitted from it is honoured on read (`ContextProxy` serves the
- * overlay ahead of `globalState`) but reported as though the node were running
- * the flag's default, which is precisely the misreading the summary exists to
- * prevent.
+ * The list is also what the startup banner counts, which is why it must stay
+ * complete rather than shrink to the keys the host touches: a key omitted from it
+ * is honoured on read (`ContextProxy` serves the overlay ahead of `globalState`)
+ * but reported as though the node were running the built-in default, which is
+ * precisely the misreading the summary exists to prevent.
  */
 export const APPROVAL_POSTURE_KEYS = [
 	"autoApprovalEnabled",
@@ -83,8 +105,6 @@ export const APPROVAL_POSTURE_KEYS = [
 	"alwaysAllowExecute",
 	"allowedCommands",
 	"deniedCommands",
-	// Configurable, never seeded — see defaultApprovalSeed's "what it does NOT
-	// seed, and why" note.
 	"alwaysAllowUncategorized",
 	"alwaysAllowFollowupQuestions",
 ] as const satisfies readonly (keyof ShoferSettings)[]
@@ -112,60 +132,70 @@ export interface ApprovalPosture {
  * The host's built-in seed: what a node runs with when its configuration says
  * nothing about approvals.
  *
- * Non-interactive means "no local user exists to ask", so everything
- * auto-approves; `--interactive` means "a controller will broker approvals to a
- * human", so the master gate is off and each dangerous tool raises an `ask`. Only
- * the master gate is seeded in the interactive case — the per-group toggles are
- * inert while `autoApprovalEnabled` is false, and seeding them would needlessly
- * overwrite the operator's file for keys the flag does not actually decide.
+ * It sets the master gate to its **denying** value and nothing else, on both
+ * interactive and non-interactive hosts — the launch flag no longer decides the
+ * posture, only configuration does. Every other posture key is left absent,
+ * because absent already denies everywhere the decision is taken:
+ * `checkAutoApproval` refuses the call unless `autoApprovalEnabled` is `true`,
+ * and `isGroupAutoApproved` refuses a group whose toggle is not exactly `true`.
  *
- * ## Why `browser` IS in the non-interactive seed
+ * ## Why the master gate is stated rather than left absent too
  *
- * `browser` is a DECLARED capability like `read` or `write`, and it is seeded
- * for the same reason they are: on a node with no local user, an approval on it
- * has no audience. The `browser` group holds no native tools at all — every
- * member arrives over MCP (the platform's `browser-tools` server declares the
- * whole `browser_*` catalog) — so before this key was seeded, the FIRST browser
- * call of a headless run parked on a `use_mcp_server` ask nobody in the pod
- * could answer. That is the same failure the `_meta` tool-group fix removed for
- * the platform tools plane, arriving by a different route: there the group was
- * lost on the wire, here it was resolved correctly and had no seeded toggle.
+ * Absent and `false` mean the same thing to the gate, but not to the node's
+ * `globalState`, which persists across restarts wherever the host has a state
+ * directory. A `true` written there by an earlier session — a controller's
+ * `updateSettings`, or a build that still seeded auto-approval — would otherwise
+ * outlive it and un-gate a run whose configuration says nothing. Re-asserting the
+ * denying value each boot closes that, and one key suffices: with the master gate
+ * off, no per-group toggle can approve anything.
  *
- * What that grant actually is, on the node it is granted on: a headless
- * executor's browser is a Playwright Chromium launched inside the run's own pod
- * with a fresh profile — no user session, no cookie jar, no logged-in origin —
- * so its authority is the POD's network egress and nothing else. The same seed
- * already sets `alwaysAllowExecute: true` with `allowedCommands: ["*"]`, which
- * is strictly more: anything `browser_navigate` can reach, a shell command on
- * that node can reach too. Seeding `browser` therefore widens no boundary the
- * default headless posture had not already crossed.
+ * ## Why nothing is seeded ON, including `browser`
  *
- * It is a DEFAULT, and the deployments where a browser is more than pod egress
- * are exactly the ones that override it. A posture that gates `write` because
- * its agent spends a person's borrowed authority must gate `browser` too — a
- * browser that reaches a live session can click, type, fill and submit — and it
- * does so through its own `.shofer/` scope, which wins over every key here.
+ * The `browser` group is worth naming because it used to be the exception. It
+ * holds no native tools at all — every member arrives over MCP — so an unseeded
+ * toggle parked the first browser call of a headless run, and the seed existed to
+ * stop that. It is gone for the same reason the rest are: a browser that reaches a
+ * live session can click, type, fill and submit, and "nobody declared a posture"
+ * is not a licence to do so. A deployment that wants its headless agent to browse
+ * says `alwaysAllowBrowser: true` in its own `.shofer/` scope, and then it parks
+ * on nothing.
+ */
+export function defaultApprovalSeed(): Partial<ShoferSettings> {
+	return { autoApprovalEnabled: false }
+}
+
+/**
+ * The seed an **unattended local run** supplies for itself: auto-approve every
+ * DECLARED capability, and every command.
  *
- * ## What it does NOT seed, and why
+ * This is not a default and it is not a fallback — it is a posture a command
+ * passes deliberately, and only where the person at the terminal asked for an
+ * unattended run (`shofer run` without `--require-approval`, `shofer acp`, whose
+ * protocol carries no permission channel at all). The grant therefore has a
+ * stated author: the human who typed the command, running the agent against
+ * their own workspace with their own credentials.
  *
- * Two `alwaysAllow*` toggles are absent from the non-interactive seed on
- * purpose. "Everything" here means every DECLARED capability, not everything:
+ * That is the whole distinction from {@link defaultApprovalSeed}. A served node
+ * gets no such grant, because nobody stated one: its agent acts under authority
+ * somebody else lent it, its asks have a controller that can answer them, and an
+ * absent key there is silence rather than a choice.
+ *
+ * It is still only a seed. Every key here is dropped for any key the node's
+ * `.shofer/` scopes supply, so a workspace that gates `execute` gates it even on
+ * an unattended run.
+ *
+ * ## What it does NOT grant, and why
  *
  *   - `alwaysAllowUncategorized` — `uncategorized` is not a capability, it is
- *     the absence of a declaration. Seeding it would auto-approve exactly the
- *     tools nobody classified, which is strictly worse than seeding `write`:
- *     a posture that deliberately gates `write` would still be bypassed by any
- *     mutating tool whose server forgot to declare a group. The right fix for a
- *     tool that parks a headless run is to CLASSIFY it, never to widen this.
- *   - `alwaysAllowFollowupQuestions` — its effect is to answer a question with
- *     a suggestion after a timeout. A headless node has no one to ask, but that
- *     is a reason to relay the question, not to fabricate an answer.
+ *     the absence of a declaration. Granting it auto-approves exactly the tools
+ *     nobody classified, so a posture that deliberately gates `write` is still
+ *     bypassed by any mutating tool whose server forgot to declare a group. A
+ *     tool that parks an unattended run is fixed by CLASSIFYING it.
+ *   - `alwaysAllowFollowupQuestions` — its effect is to answer a question with a
+ *     suggestion after a timeout. Running unattended is a reason to surface the
+ *     question, not to fabricate an answer to it.
  */
-export function defaultApprovalSeed(nonInteractive: boolean): Partial<ShoferSettings> {
-	if (!nonInteractive) {
-		return { autoApprovalEnabled: false }
-	}
-
+export function unattendedApprovalSeed(): Partial<ShoferSettings> {
 	return {
 		autoApprovalEnabled: true,
 		alwaysAllowReadOnly: true,
@@ -192,7 +222,6 @@ export function defaultApprovalSeed(nonInteractive: boolean): Partial<ShoferSett
 export function applyConfiguredApprovalPosture(
 	seed: Partial<ShoferSettings>,
 	overlay: LayeredSettings,
-	nonInteractive: boolean,
 ): ApprovalPosture {
 	const configuredKeys: ApprovalPostureKey[] = []
 	const effectiveSeed: Partial<ShoferSettings> = { ...seed }
@@ -214,25 +243,29 @@ export function applyConfiguredApprovalPosture(
 		seed: effectiveSeed,
 		configuredKeys,
 		effective,
-		summary: describeApprovalPosture(effective, configuredKeys, nonInteractive),
+		summary: describeApprovalPosture(effective, configuredKeys),
 	}
 }
 
 /**
  * Render the one-line startup summary.
  *
- * Requirement: where configuration and the launch flag disagree, configuration
- * wins and the node **says so once**. A node whose posture came from a file must
- * never look, from its logs, like a node running the flag's default — that is how
- * a silently un-gated (or silently stalled) pipeline goes unnoticed.
+ * Requirement: a node **says once** where its posture came from. Both readings it
+ * prevents matter, and they are opposite failures: a node running an
+ * auto-approving posture from a file must not look like one running the built-in
+ * default, and a node stalling on every tool call must be attributable to the
+ * default rather than hunted for in a config nobody wrote.
+ *
+ * The `autoApprovalEnabled=false` fact carries more weight than it looks: a
+ * configuration that names `alwaysAllowReadOnly` and forgets the master gate
+ * approves nothing at all, and this line is where that shows.
  */
 export function describeApprovalPosture(
 	effective: Partial<ShoferSettings>,
 	configuredKeys: readonly ApprovalPostureKey[],
-	nonInteractive: boolean,
 ): string {
 	if (configuredKeys.length === 0) {
-		return nonInteractive ? "auto-approve (default)" : "interactive, brokered to controller (default)"
+		return "ask (default — no posture configured)"
 	}
 
 	const facts = [
@@ -250,18 +283,18 @@ export function describeApprovalPosture(
  * Resolve a node's approval posture: read the three `.shofer/` scopes, then apply
  * {@link applyConfiguredApprovalPosture} to the built-in seed.
  *
- * Fails **open to the seed**, deliberately: an unreadable scope root must not
- * silently change a deployed worker's posture. A config that cannot be read is
- * indistinguishable from a config that says nothing, and the seed is what a node
- * saying nothing has always run with.
+ * Falls back to the seed, which is now the SAFE direction: a config that cannot
+ * be read is indistinguishable from a config that says nothing, and a node saying
+ * nothing auto-approves nothing. An unreadable scope root therefore stalls a
+ * worker rather than un-gating one — the failure that can be noticed, not the one
+ * that cannot.
  */
 export async function resolveApprovalPosture(options: {
-	nonInteractive: boolean
 	roots: ScopeRoots
 	/** Overrides the built-in seed (tests; hosts with a bespoke default). */
 	seed?: Partial<ShoferSettings>
 }): Promise<ApprovalPosture> {
-	const seed = options.seed ?? defaultApprovalSeed(options.nonInteractive)
+	const seed = options.seed ?? defaultApprovalSeed()
 
 	let overlay: LayeredSettings = {}
 	try {
@@ -270,7 +303,7 @@ export async function resolveApprovalPosture(options: {
 		overlay = {}
 	}
 
-	return applyConfiguredApprovalPosture(seed, overlay, options.nonInteractive)
+	return applyConfiguredApprovalPosture(seed, overlay)
 }
 
 /**

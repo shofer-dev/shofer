@@ -184,45 +184,51 @@ questions and a deployment enforcing org policy needs both.
 
 ### Headless hosts: the approval posture is configuration, not a flag
 
-A host with no local user has to decide up front which tools auto-approve, so the
-CLI host seeds an approval posture at startup: `shofer serve` (and every other
-non-interactive CLI mode) seeds `autoApprovalEnabled: true`, every `alwaysAllow*`
-toggle it sets, and `allowedCommands: ["*"]`; `shofer serve --interactive` seeds
-`autoApprovalEnabled: false` and nothing else, so each dangerous tool raises an
-`ask` the controller brokers.
+A host with no local user has to decide up front which tools auto-approve, and it
+decides it from its own `.shofer/` scopes. The CLI host seeds exactly **one**
+posture key, on every mode and on both sides of `--interactive`:
+`autoApprovalEnabled: false` — the master gate at its denying value. Every other
+posture key is left absent, and **an absent key denies**: `checkAutoApproval`
+refuses unless `autoApprovalEnabled` is `true`, and `isGroupAutoApproved` refuses
+a group whose toggle is not exactly `true`.
 
-**"Everything" means every DECLARED capability**, and the exact list matters
-because the gaps are deliberate. The non-interactive seed sets
+So a node whose configuration says nothing auto-approves nothing, and every
+dangerous tool raises an `ask` for the controller to broker. A posture key is
+auto-approving only where a scope names it `true`.
+
+**Silence means ask, because an absent key is not a decision.** It is
+indistinguishable from a `settings.json` nobody wrote, a config materialized
+before anyone thought about approvals, and a misspelled key. A host that seeded
+those into auto-approve-everything shipped the widest posture it has by
+accident — no error, no log — while the same omission today stalls the run,
+which is visible and fixable by stating the posture the node was meant to have.
+
+Two consequences worth stating plainly, because both are deliberate:
+
+- **The launch flag decides nothing about approvals.** `--interactive` changes
+  how asks are surfaced, not which tools raise them.
+- **`browser` gets no exemption.** The group holds no native tools — every member
+  arrives over MCP — so an unconfigured node parks on its first browser call.
+  That is the intended answer: a browser clicks, types, fills and submits inside
+  whatever session its executor's profile carries, and "nobody stated a posture"
+  is not consent to that. A deployment that wants a headless agent to browse
+  names `alwaysAllowBrowser: true` in its own scope.
+
+**Why the master gate is stated rather than left absent too.** Absent and `false`
+mean the same thing to the gate, but not to `globalState`, which persists across
+restarts on a host with a state directory: a `true` written there by an earlier
+session would otherwise outlive it. Re-asserting the denying value each boot
+closes that, and one key suffices — with the master gate off, no per-group toggle
+can approve anything.
+
+That seed is still a **default, not an override**. Every posture key —
 `autoApprovalEnabled`, `alwaysAllowReadOnly`,
 `alwaysAllowReadOnlyOutsideWorkspace`, `alwaysAllowWrite`,
 `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected`,
 `alwaysAllowBrowser`, `alwaysAllowMcp`, `alwaysAllowModeSwitch`,
-`alwaysAllowSubtasks`, `alwaysAllowExecute` and `allowedCommands: ["*"]`. Two
-`alwaysAllow*` toggles are **never** seeded, on either flag:
-
-- `alwaysAllowUncategorized` — `uncategorized` is not a capability, it is the
-  absence of a declaration. Seeding it would auto-approve exactly the tools
-  nobody classified, so a posture that deliberately gates `write` would still be
-  bypassed by any mutating tool whose server declared no group. A tool that parks
-  a headless run is fixed by CLASSIFYING it (`tool-categories.md`), never by
-  widening this.
-- `alwaysAllowFollowupQuestions` — its effect is to answer a question with a
-  suggestion after a timeout. A headless node has no one to ask, which is a
-  reason to relay the question, not to fabricate an answer.
-
-`browser` is seeded because it _is_ a declared capability, and because the group
-holds no native tools — every member arrives over MCP, so without the toggle the
-first browser call of a headless run parked on a `use_mcp_server` ask nobody in
-the pod could answer. On a headless node the executor is a Playwright Chromium
-launched in the run's own pod with a fresh profile, so its authority is that
-pod's network egress — strictly less than the `alwaysAllowExecute: true` plus
-`allowedCommands: ["*"]` the same seed already sets. A deployment whose browser
-reaches a live session (one that can click, type and submit under a person's
-account) is exactly the deployment that overrides the key, below.
-
-That seed is a **default, not an override**. Every key it covers, plus
-`deniedCommands` and the two never-seeded toggles above, is an ordinary
-`settings.json` key, so any scope may set them and **the scope wins**:
+`alwaysAllowSubtasks`, `alwaysAllowExecute`, `alwaysAllowUncategorized`,
+`alwaysAllowFollowupQuestions`, `allowedCommands` and `deniedCommands` — is an
+ordinary `settings.json` key, so any scope may set it and **the scope wins**:
 
 - A posture key **any scope supplies** is not seeded at all. The host omits it
   rather than sending a value, because the overlay already wins in
@@ -230,45 +236,55 @@ That seed is a **default, not an override**. Every key it covers, plus
   because the seed is delivered as a settings write, which writes through to
   `~/.shofer/settings.json` — seeding a configured key would overwrite the
   operator's own file with the host's default.
-- A posture key **no scope supplies** is seeded exactly as above, so a node whose
-  configuration says nothing behaves precisely as it did before configuration was
-  consulted: plain `shofer serve` auto-approves everything, `--interactive`
-  surfaces everything.
 - Which scope wins among the three is the ordinary merge (above): unlocked keys
   resolve project > user > global, and a key the global scope names in
   `locked.json` is global-final. **Lock the key** when an org policy must not be
   overridable by the node's user or project scope — that is the only thing that
   makes it final.
 
+Two toggles deserve their own note, because they are the ones a stalled run
+tempts an operator to reach for:
+
+- `alwaysAllowUncategorized` — `uncategorized` is not a capability, it is the
+  absence of a declaration. Setting it auto-approves exactly the tools nobody
+  classified, so a posture that deliberately gates `write` is bypassed by any
+  mutating tool whose server declared no group. A tool that parks a headless run
+  is fixed by CLASSIFYING it (`tool-categories.md`), never by widening this.
+- `alwaysAllowFollowupQuestions` — its effect is to answer a question with a
+  suggestion after a timeout. A headless node has no one to ask, which is a
+  reason to relay the question, not to fabricate an answer.
+
 ```mermaid
 flowchart TD
-    START["ExtensionHost.activate()"] --> SEED["defaultApprovalSeed(nonInteractive)<br/>the flag's posture"]
+    START["ExtensionHost.activate()"] --> SEED["defaultApprovalSeed()<br/>autoApprovalEnabled: false"]
     SEED --> READ["loadLayeredOverlay(scope roots)<br/>global · user · project"]
     READ --> Q{"key present<br/>in the overlay?"}
     Q -->|yes| OMIT["omit from the seed<br/>→ the scope value is the posture"]
-    Q -->|no| KEEP["keep in the seed<br/>→ the flag's value is the posture"]
+    Q -->|no| KEEP["leave absent<br/>→ the tool call asks"]
     OMIT --> SEND["updateSettings — only the kept keys"]
     KEEP --> SEND
     SEND --> BANNER["banner: 'approvals: …'<br/>effective posture + source"]
 ```
 
 `shofer serve` prints the resolved posture and its source once at startup, e.g.
-`approvals: auto-approve (default)` versus
-`approvals: from config (autoApprovalEnabled=false, execute gated, 2 keys from .shofer config)`.
-A node whose approvals came from a file must never look, in its logs, like one
-running the flag's default.
+`approvals: ask (default — no posture configured)` versus
+`approvals: from config (autoApprovalEnabled=true, execute gated, 3 keys from .shofer config)`.
+Both readings matter: a node running an auto-approving posture from a file must
+never look, in its logs, like one running the built-in default, and a node
+stalling on every tool call must be attributable to the default rather than
+hunted for in a config nobody wrote.
 
 Resolution lives in
 [`approval-posture.ts`](../apps/cli/src/agent/approval-posture.ts) and reads the
 scopes through the same `@shofer/core` loader `ContextProxy` uses
 ([`layered-settings-file.ts`](../packages/core/src/config/layered-settings-file.ts)),
-so the two cannot disagree about what a scope file says. It fails **open to the
-seed**: a scope root that cannot be read is treated as a config that says nothing,
-never as a silent change of posture.
+so the two cannot disagree about what a scope file says. It falls back **to the
+seed** when a scope root cannot be read, which is the safe direction: an
+unreadable config stalls a node rather than un-gating one.
 
-What the seed does _not_ change is what happens to an ask it did not pre-approve.
-On a served node those stay outstanding and are brokered to the controlling
-client over ShoferApi (`--interactive` or not — see
+What the posture does _not_ change is what happens to an ask it did not
+pre-approve. On a served node those stay outstanding and are brokered to the
+controlling client over ShoferApi (`--interactive` or not — see
 [`shofer-api.md`](shofer-api.md#running-shofer-serve)); nothing on the node
 answers them.
 

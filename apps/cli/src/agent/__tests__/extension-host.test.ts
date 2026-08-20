@@ -11,6 +11,7 @@ import type { ExtensionMessage, WebviewMessage, ShoferExtensionApi } from "@shof
 import { DEFAULT_FLAGS } from "@/types/index.js"
 
 import { type ExtensionHostOptions, ExtensionHost } from "../extension-host.js"
+import { unattendedApprovalSeed } from "../approval-posture.js"
 import { ExtensionClient } from "../extension-client.js"
 import { AgentLoopState } from "../agent-state.js"
 
@@ -323,39 +324,36 @@ describe("ExtensionHost", () => {
 					return ((call?.[1] as WebviewMessage).updatedSettings ?? {}) as Record<string, unknown>
 				}
 
-				it("non-interactive still auto-approves everything when config says nothing", () => {
-					const settings = capturedSettings(createTestHost({ nonInteractive: true }))
+				it.each([true, false])(
+					"sends the master gate OFF and no toggle at all when config says nothing (nonInteractive=%s)",
+					(nonInteractive) => {
+						const settings = capturedSettings(createTestHost({ nonInteractive }))
 
-					expect(settings).toMatchObject({
-						autoApprovalEnabled: true,
-						alwaysAllowReadOnly: true,
-						alwaysAllowReadOnlyOutsideWorkspace: true,
-						alwaysAllowWrite: true,
-						alwaysAllowWriteOutsideWorkspace: true,
-						alwaysAllowWriteProtected: true,
-						alwaysAllowBrowser: true,
-						alwaysAllowMcp: true,
-						alwaysAllowModeSwitch: true,
-						alwaysAllowSubtasks: true,
-						alwaysAllowExecute: true,
-						allowedCommands: ["*"],
-					})
-				})
-
-				it("interactive still surfaces everything when config says nothing", () => {
-					const settings = capturedSettings(createTestHost({ nonInteractive: false }))
-
-					expect(settings.autoApprovalEnabled).toBe(false)
-					expect(settings).not.toHaveProperty("alwaysAllowExecute")
-					expect(settings).not.toHaveProperty("allowedCommands")
-				})
+						expect(settings.autoApprovalEnabled).toBe(false)
+						for (const key of [
+							"alwaysAllowReadOnly",
+							"alwaysAllowReadOnlyOutsideWorkspace",
+							"alwaysAllowWrite",
+							"alwaysAllowWriteOutsideWorkspace",
+							"alwaysAllowWriteProtected",
+							"alwaysAllowBrowser",
+							"alwaysAllowMcp",
+							"alwaysAllowModeSwitch",
+							"alwaysAllowSubtasks",
+							"alwaysAllowExecute",
+							"allowedCommands",
+						]) {
+							expect(settings).not.toHaveProperty(key)
+						}
+					},
+				)
 
 				it("drops a config-supplied posture key from the seed rather than overriding it", async () => {
 					const globalScope = path.join(await fsp.mkdtemp(path.join(os.tmpdir(), "shofer-host-")), ".shofer")
 					await fsp.mkdir(globalScope, { recursive: true })
 					await fsp.writeFile(
 						path.join(globalScope, "settings.json"),
-						JSON.stringify({ autoApprovalEnabled: false, alwaysAllowExecute: false }),
+						JSON.stringify({ autoApprovalEnabled: true, alwaysAllowExecute: true }),
 						"utf8",
 					)
 
@@ -376,9 +374,10 @@ describe("ExtensionHost", () => {
 						// default through into the operator's own settings.json.
 						expect(settings).not.toHaveProperty("autoApprovalEnabled")
 						expect(settings).not.toHaveProperty("alwaysAllowExecute")
-						// Keys the config says nothing about keep the seed's value.
-						expect(settings.alwaysAllowWrite).toBe(true)
-						expect(settings.allowedCommands).toEqual(["*"])
+						// Keys the config says nothing about are still absent — the host
+						// seeds no toggle ON, so `write` and the command list stay denied.
+						expect(settings).not.toHaveProperty("alwaysAllowWrite")
+						expect(settings).not.toHaveProperty("allowedCommands")
 
 						expect(host.approvalPosture.configuredKeys).toEqual([
 							"autoApprovalEnabled",
@@ -395,13 +394,23 @@ describe("ExtensionHost", () => {
 					}
 				})
 
-				it("reports the default posture before any config is read", () => {
-					expect(createTestHost({ nonInteractive: true }).approvalPosture.summary).toBe(
-						"auto-approve (default)",
+				// A command that asked for an unattended run states its own seed; the
+				// host never defaults to one. This is what keeps `shofer serve`
+				// denying while `shofer run` still runs.
+				it("sends the seed the invoking command stated, when it stated one", () => {
+					const settings = capturedSettings(
+						createTestHost({ nonInteractive: true, approvalSeed: unattendedApprovalSeed() }),
 					)
-					expect(createTestHost({ nonInteractive: false }).approvalPosture.summary).toBe(
-						"interactive, brokered to controller (default)",
-					)
+
+					expect(settings).toMatchObject(unattendedApprovalSeed())
+				})
+
+				it("reports the default posture before any config is read, whatever the launch flag", () => {
+					for (const nonInteractive of [true, false]) {
+						expect(createTestHost({ nonInteractive }).approvalPosture.summary).toBe(
+							"ask (default — no posture configured)",
+						)
+					}
 				})
 			})
 
@@ -860,21 +869,15 @@ describe("ExtensionHost", () => {
 			expect(initialSettings.consecutiveMistakeLimit).toBe(8)
 		})
 
-		it("should enable auto-approval in non-interactive mode", () => {
-			const host = createTestHost({ nonInteractive: true })
-
-			const initialSettings = getPrivate<Record<string, unknown>>(host, "initialSettings")
-			expect(initialSettings.autoApprovalEnabled).toBe(true)
-			expect(initialSettings.alwaysAllowReadOnly).toBe(true)
-			expect(initialSettings.alwaysAllowWrite).toBe(true)
-			expect(initialSettings.alwaysAllowExecute).toBe(true)
-		})
-
-		it("should disable auto-approval in interactive mode", () => {
-			const host = createTestHost({ nonInteractive: false })
+		// The launch flag does not decide the posture — only `.shofer/` config does.
+		it.each([true, false])("should disable auto-approval by default (nonInteractive=%s)", (nonInteractive) => {
+			const host = createTestHost({ nonInteractive })
 
 			const initialSettings = getPrivate<Record<string, unknown>>(host, "initialSettings")
 			expect(initialSettings.autoApprovalEnabled).toBe(false)
+			expect(initialSettings).not.toHaveProperty("alwaysAllowReadOnly")
+			expect(initialSettings).not.toHaveProperty("alwaysAllowWrite")
+			expect(initialSettings).not.toHaveProperty("alwaysAllowExecute")
 		})
 
 		it("should set reasoning effort when specified", () => {

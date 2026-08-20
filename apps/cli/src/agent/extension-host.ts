@@ -94,6 +94,15 @@ export interface ExtensionHostOptions {
 	 */
 	brokerInteractiveAsks?: boolean
 	/**
+	 * The approval posture this host seeds for keys its `.shofer/` scopes do not
+	 * supply. Defaults to {@link defaultApprovalSeed} — auto-approve nothing.
+	 *
+	 * A command passes {@link unattendedApprovalSeed} here when the person who
+	 * invoked it asked for an unattended run, which is what keeps the grant
+	 * attributable: a served node never gets one, because nobody stated it.
+	 */
+	approvalSeed?: Partial<ShoferSettings>
+	/**
 	 * When true, uses a temporary storage directory that is cleaned up on exit.
 	 */
 	ephemeral: boolean
@@ -294,14 +303,16 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			),
 		}
 
-		// The approval posture starts as the built-in seed and is narrowed in
-		// `activate()` by whatever the node's own `.shofer/` config supplies — see
-		// `approval-posture.ts` for why configuration wins by OMISSION rather than
-		// by override. Until that runs (and for hosts that never call `activate()`),
-		// the seed is the posture, which is the pre-existing behaviour verbatim.
-		const nonInteractive = !!this.options.nonInteractive
-		this.initialSettings = { ...defaultApprovalSeed(nonInteractive), ...baseSettings }
-		this._approvalPosture = applyConfiguredApprovalPosture(defaultApprovalSeed(nonInteractive), {}, nonInteractive)
+		// The approval posture starts as this host's seed — by default the master
+		// gate off and nothing auto-approved — and is narrowed or widened in
+		// `activate()` by whatever the node's own `.shofer/` config supplies. See
+		// `approval-posture.ts` for why an absent key denies, and why configuration
+		// takes effect by OMISSION from the seed rather than by overriding it. Until
+		// that runs (and for hosts that never call `activate()`), the seed is the
+		// posture.
+		const seed = this.approvalSeed()
+		this.initialSettings = { ...seed, ...baseSettings }
+		this._approvalPosture = applyConfiguredApprovalPosture(seed, {})
 
 		if (this.options.reasoningEffort && this.options.reasoningEffort !== "unspecified") {
 			if (this.options.reasoningEffort === "disabled") {
@@ -521,12 +532,22 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	/**
 	 * The posture this host will actually run with, and where it came from. Read by
 	 * `shofer serve` for its startup banner so a node whose approvals come from
-	 * configuration never looks, in its logs, like one running the flag's default.
+	 * configuration never looks, in its logs, like one running the built-in default.
 	 *
 	 * Meaningful only after {@link activate}; before that it reports the seed.
 	 */
 	public get approvalPosture(): ApprovalPosture {
 		return this._approvalPosture
+	}
+
+	/**
+	 * This host's approval seed: whatever the invoking command stated, else the
+	 * built-in default, which auto-approves nothing. One accessor so the
+	 * constructor's provisional posture and `activate()`'s resolved one cannot
+	 * disagree about what the node would run with when its config says nothing.
+	 */
+	private approvalSeed(): Partial<ShoferSettings> {
+		return this.options.approvalSeed ?? defaultApprovalSeed()
 	}
 
 	/**
@@ -540,21 +561,16 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	 * written through into the operator's own `settings.json` on the way. See
 	 * `approval-posture.ts` for the full reasoning.
 	 *
-	 * Never throws: a config that cannot be read leaves the seed in place, which is
-	 * exactly what a node with no config has always run with.
+	 * Never throws: a config that cannot be read leaves the seed in place, so the
+	 * node asks for everything rather than guessing at a posture it could not read.
 	 */
 	private async applyApprovalPostureFromConfig(): Promise<void> {
-		const nonInteractive = !!this.options.nonInteractive
 		const roots = resolveCliScopeRoots({
 			globalStorageFsPath: this.vscode?.context?.globalStorageUri?.fsPath,
 			workspacePath: this.options.workspacePath,
 		})
 
-		this._approvalPosture = await resolveApprovalPosture({
-			nonInteractive,
-			roots,
-			seed: defaultApprovalSeed(nonInteractive),
-		})
+		this._approvalPosture = await resolveApprovalPosture({ roots, seed: this.approvalSeed() })
 
 		for (const key of this._approvalPosture.configuredKeys) {
 			delete this.initialSettings[key]

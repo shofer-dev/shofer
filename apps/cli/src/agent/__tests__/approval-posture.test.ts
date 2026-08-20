@@ -12,17 +12,18 @@ import {
 	defaultApprovalSeed,
 	resolveApprovalPosture,
 	resolveCliScopeRoots,
+	unattendedApprovalSeed,
 } from "../approval-posture.js"
 
 /**
  * Tests for the served/CLI node's approval-posture resolution.
  *
- * The load-bearing assertion is the FIRST group: a node whose configuration says
- * nothing must behave exactly as it did before configuration was consulted at all.
- * Deployed workers depend on that, and a regression there either silently stops
- * every pipeline stake (nothing auto-approves, everything parks) or silently
- * un-gates one (everything auto-approves where an operator asked for gating) —
- * neither of which shows up as a test failure anywhere else.
+ * The load-bearing assertion is the FIRST group: an absent posture key DENIES.
+ * A node whose configuration says nothing auto-approves nothing, and a key a
+ * `.shofer/` scope does not name is not a decision the host may make on its
+ * behalf. A regression there silently un-gates every deployed worker — an agent
+ * spending someone's borrowed authority with no approval raised anywhere — and
+ * shows up as a test failure nowhere else.
  */
 
 /** Materialise a `.shofer/settings.json` scope root under a fresh temp dir. */
@@ -36,12 +37,44 @@ async function makeScope(settings?: Record<string, unknown>): Promise<string> {
 }
 
 describe("approval posture", () => {
-	describe("defaults — behaviour must be unchanged for a node whose config says nothing", () => {
-		it("non-interactive auto-approves every tool group and every command", () => {
-			const posture = applyConfiguredApprovalPosture(defaultApprovalSeed(true), {}, true)
+	describe("an absent key denies — the host seeds nothing ON", () => {
+		it("seeds the master gate off and no toggle at all", () => {
+			const posture = applyConfiguredApprovalPosture(defaultApprovalSeed(), {})
 
 			expect(posture.configuredKeys).toEqual([])
-			expect(posture.seed).toEqual({
+			expect(posture.seed).toEqual({ autoApprovalEnabled: false })
+			expect(posture.summary).toBe("ask (default — no posture configured)")
+		})
+
+		// The launch flag used to pick between two blobs. It no longer decides the
+		// posture at all: only configuration does, so `defaultApprovalSeed` takes no
+		// argument and there is exactly one default.
+		it("never seeds a true value for any posture key", () => {
+			for (const [key, value] of Object.entries(defaultApprovalSeed())) {
+				expect({ key, value }).toEqual({ key, value: false })
+			}
+		})
+
+		it("never seeds a command allowlist", () => {
+			expect(defaultApprovalSeed()).not.toHaveProperty("allowedCommands")
+		})
+
+		it("an empty overlay is indistinguishable from no overlay", async () => {
+			const emptyScope = await makeScope()
+			const posture = await resolveApprovalPosture({ roots: { global: emptyScope } })
+
+			expect(posture.configuredKeys).toEqual([])
+			expect(posture.seed).toEqual(defaultApprovalSeed())
+			expect(posture.summary).toBe("ask (default — no posture configured)")
+		})
+	})
+
+	// The one grant with a stated author: a person asking for an unattended run
+	// against their own workspace. It is passed by a command, never defaulted to,
+	// which is what keeps `shofer serve` denying.
+	describe("the unattended seed a local command may state for itself", () => {
+		it("auto-approves every declared capability and every command", () => {
+			expect(unattendedApprovalSeed()).toEqual({
 				autoApprovalEnabled: true,
 				alwaysAllowReadOnly: true,
 				alwaysAllowReadOnlyOutsideWorkspace: true,
@@ -55,70 +88,64 @@ describe("approval posture", () => {
 				alwaysAllowExecute: true,
 				allowedCommands: ["*"],
 			})
-			expect(posture.summary).toBe("auto-approve (default)")
 		})
 
-		it("interactive seeds the master gate off and nothing else", () => {
-			const posture = applyConfiguredApprovalPosture(defaultApprovalSeed(false), {}, false)
-
-			expect(posture.configuredKeys).toEqual([])
-			expect(posture.seed).toEqual({ autoApprovalEnabled: false })
-			expect(posture.summary).toBe("interactive, brokered to controller (default)")
+		it("grants neither uncategorized nor the followup auto-answer", () => {
+			expect(unattendedApprovalSeed()).not.toHaveProperty("alwaysAllowUncategorized")
+			expect(unattendedApprovalSeed()).not.toHaveProperty("alwaysAllowFollowupQuestions")
 		})
 
-		it("an empty overlay is indistinguishable from no overlay", async () => {
-			const emptyScope = await makeScope()
-			const posture = await resolveApprovalPosture({
-				nonInteractive: true,
-				roots: { global: emptyScope },
-			})
+		it("is only a seed — a scope that gates a group still wins", async () => {
+			const global = await makeScope({ alwaysAllowExecute: false })
 
-			expect(posture.configuredKeys).toEqual([])
-			expect(posture.seed).toEqual(defaultApprovalSeed(true))
-			expect(posture.summary).toBe("auto-approve (default)")
+			const posture = await resolveApprovalPosture({ roots: { global }, seed: unattendedApprovalSeed() })
+
+			expect(posture.seed).not.toHaveProperty("alwaysAllowExecute")
+			expect(posture.effective.alwaysAllowExecute).toBe(false)
+			expect(posture.effective.alwaysAllowWrite).toBe(true)
+		})
+
+		it("covers only keys the posture set knows about", () => {
+			for (const key of Object.keys(unattendedApprovalSeed())) {
+				expect(APPROVAL_POSTURE_KEYS).toContain(key)
+			}
 		})
 	})
 
-	describe("configuration wins over the flag's default", () => {
+	describe("configuration is the only thing that auto-approves", () => {
 		it("omits a configured key from the seed instead of overriding it", () => {
-			const posture = applyConfiguredApprovalPosture(
-				defaultApprovalSeed(true),
-				{ autoApprovalEnabled: false, alwaysAllowExecute: false },
-				true,
-			)
+			const posture = applyConfiguredApprovalPosture(defaultApprovalSeed(), {
+				autoApprovalEnabled: true,
+				alwaysAllowExecute: true,
+			})
 
 			// Omission is the mechanism: the overlay already wins in ContextProxy.getValue,
 			// and seeding the key would write the host default through into the operator's
 			// own settings.json.
 			expect(posture.seed).not.toHaveProperty("autoApprovalEnabled")
-			expect(posture.seed).not.toHaveProperty("alwaysAllowExecute")
 			expect(posture.configuredKeys).toEqual(["autoApprovalEnabled", "alwaysAllowExecute"])
+			expect(posture.effective.autoApprovalEnabled).toBe(true)
+			expect(posture.effective.alwaysAllowExecute).toBe(true)
 
-			// Untouched posture keys keep the seed's value.
-			expect(posture.seed.alwaysAllowWrite).toBe(true)
-			expect(posture.seed.allowedCommands).toEqual(["*"])
+			// Posture keys the config says nothing about stay absent, hence denying.
+			expect(posture.seed).not.toHaveProperty("alwaysAllowWrite")
+			expect(posture.effective).not.toHaveProperty("alwaysAllowWrite")
+			expect(posture.effective).not.toHaveProperty("allowedCommands")
 		})
 
 		it("reports the effective posture and says the source is config", () => {
-			const posture = applyConfiguredApprovalPosture(
-				defaultApprovalSeed(true),
-				{ autoApprovalEnabled: false, alwaysAllowExecute: false },
-				true,
-			)
+			const posture = applyConfiguredApprovalPosture(defaultApprovalSeed(), {
+				autoApprovalEnabled: true,
+				alwaysAllowExecute: true,
+			})
 
-			expect(posture.effective.autoApprovalEnabled).toBe(false)
-			expect(posture.effective.alwaysAllowExecute).toBe(false)
 			expect(posture.summary).toBe(
-				"from config (autoApprovalEnabled=false, execute gated, 2 keys from .shofer config)",
+				"from config (autoApprovalEnabled=true, execute auto-approved, 2 keys from .shofer config)",
 			)
 		})
 
 		it("gates execute when the master toggle is on but alwaysAllowExecute is off", () => {
-			const posture = applyConfiguredApprovalPosture(
-				defaultApprovalSeed(true),
-				{ alwaysAllowExecute: false },
-				true,
-			)
+			const posture = applyConfiguredApprovalPosture(defaultApprovalSeed(), { autoApprovalEnabled: true })
 
 			expect(posture.effective.autoApprovalEnabled).toBe(true)
 			expect(posture.summary).toBe(
@@ -126,26 +153,24 @@ describe("approval posture", () => {
 			)
 		})
 
-		it("honours a config layer read from disk on a served (non-interactive) node", async () => {
-			const global = await makeScope({ autoApprovalEnabled: false, alwaysAllowExecute: false })
-
-			const posture = await resolveApprovalPosture({ nonInteractive: true, roots: { global } })
-
-			expect(posture.configuredKeys).toEqual(["autoApprovalEnabled", "alwaysAllowExecute"])
-			expect(posture.seed).not.toHaveProperty("autoApprovalEnabled")
-			expect(posture.seed).not.toHaveProperty("alwaysAllowExecute")
-			expect(posture.effective.autoApprovalEnabled).toBe(false)
-			expect(posture.summary).toContain("from config")
-		})
-
-		it("can also turn approvals ON for an --interactive node (config is not one-directional)", async () => {
+		it("honours a config layer read from disk on a served node", async () => {
 			const global = await makeScope({ autoApprovalEnabled: true, alwaysAllowReadOnly: true })
 
-			const posture = await resolveApprovalPosture({ nonInteractive: false, roots: { global } })
+			const posture = await resolveApprovalPosture({ roots: { global } })
 
 			expect(posture.configuredKeys).toEqual(["autoApprovalEnabled", "alwaysAllowReadOnly"])
 			expect(posture.seed).toEqual({})
 			expect(posture.effective.autoApprovalEnabled).toBe(true)
+			expect(posture.summary).toContain("from config")
+		})
+
+		it("lets a scope gate a node back off (config is not one-directional)", async () => {
+			const global = await makeScope({ autoApprovalEnabled: false })
+
+			const posture = await resolveApprovalPosture({ roots: { global } })
+
+			expect(posture.configuredKeys).toEqual(["autoApprovalEnabled"])
+			expect(posture.effective.autoApprovalEnabled).toBe(false)
 		})
 	})
 
@@ -154,7 +179,7 @@ describe("approval posture", () => {
 			const global = await makeScope({ autoApprovalEnabled: true })
 			const project = await makeScope({ autoApprovalEnabled: false })
 
-			const posture = await resolveApprovalPosture({ nonInteractive: true, roots: { global, project } })
+			const posture = await resolveApprovalPosture({ roots: { global, project } })
 
 			expect(posture.effective.autoApprovalEnabled).toBe(false)
 		})
@@ -168,82 +193,63 @@ describe("approval posture", () => {
 			)
 			const project = await makeScope({ autoApprovalEnabled: true })
 
-			const posture = await resolveApprovalPosture({ nonInteractive: true, roots: { global, project } })
+			const posture = await resolveApprovalPosture({ roots: { global, project } })
 
 			expect(posture.effective.autoApprovalEnabled).toBe(false)
 		})
 	})
 
-	describe("fail-open to the seed", () => {
+	describe("an unreadable config falls back to the seed, which denies", () => {
 		it("treats an unreadable scope root as a config that says nothing", async () => {
 			const posture = await resolveApprovalPosture({
-				nonInteractive: true,
 				roots: { global: path.join(os.tmpdir(), "shofer-posture-does-not-exist", ".shofer") },
 			})
 
 			expect(posture.configuredKeys).toEqual([])
-			expect(posture.seed).toEqual(defaultApprovalSeed(true))
+			expect(posture.seed).toEqual(defaultApprovalSeed())
 		})
 
 		it("ignores a scope file that is not valid JSON", async () => {
 			const global = await makeScope()
 			await fs.writeFile(path.join(global, "settings.json"), "{ not json", "utf8")
 
-			const posture = await resolveApprovalPosture({ nonInteractive: true, roots: { global } })
+			const posture = await resolveApprovalPosture({ roots: { global } })
 
 			expect(posture.configuredKeys).toEqual([])
-			expect(posture.seed).toEqual(defaultApprovalSeed(true))
+			expect(posture.seed).toEqual(defaultApprovalSeed())
 		})
 	})
 
 	describe("the posture key set", () => {
-		it("covers every key the non-interactive seed sets", () => {
-			for (const key of Object.keys(defaultApprovalSeed(true))) {
+		it("covers every key the seed sets", () => {
+			for (const key of Object.keys(defaultApprovalSeed())) {
 				expect(APPROVAL_POSTURE_KEYS).toContain(key)
 			}
 		})
 
-		it("covers every key the interactive seed sets", () => {
-			for (const key of Object.keys(defaultApprovalSeed(false))) {
+		// The banner counts this list, so a key configuration may govern must appear
+		// here even though the host never touches it — otherwise a node running from
+		// a file is reported as one running the built-in default, the exact
+		// misreading the summary exists to prevent.
+		it("tracks the toggles the seed never mentions, so a configured value is still reported", () => {
+			for (const key of ["alwaysAllowUncategorized", "alwaysAllowFollowupQuestions", "deniedCommands"]) {
 				expect(APPROVAL_POSTURE_KEYS).toContain(key)
 			}
-		})
-
-		// The seed is "auto-approve every declared capability", not "auto-approve
-		// everything". `uncategorized` is the absence of a declaration, so seeding
-		// it would approve exactly the tools nobody classified — bypassing a
-		// posture that deliberately gates `write`, since a mutating tool whose
-		// server declared no group lands there. A headless run that parks on such
-		// a tool is fixed by CLASSIFYING the tool, never by widening this.
-		it("never seeds the uncategorized group, however headless the node", () => {
-			expect(defaultApprovalSeed(true)).not.toHaveProperty("alwaysAllowUncategorized")
-			expect(defaultApprovalSeed(false)).not.toHaveProperty("alwaysAllowUncategorized")
-		})
-
-		// A key configuration may set must still be COUNTED as configured, or the
-		// startup banner reports a node running from a file as one running the
-		// flag's default — the exact misreading the summary exists to prevent.
-		it("tracks the toggles it never seeds, so a configured value is still reported", () => {
-			for (const key of ["alwaysAllowUncategorized", "alwaysAllowFollowupQuestions"]) {
-				expect(APPROVAL_POSTURE_KEYS).toContain(key)
-			}
-			const posture = applyConfiguredApprovalPosture(
-				defaultApprovalSeed(true),
-				{ alwaysAllowUncategorized: false },
-				true,
-			)
+			const posture = applyConfiguredApprovalPosture(defaultApprovalSeed(), {
+				alwaysAllowUncategorized: true,
+			})
 			expect(posture.configuredKeys).toContain("alwaysAllowUncategorized")
-			expect(posture.effective.alwaysAllowUncategorized).toBe(false)
+			expect(posture.effective.alwaysAllowUncategorized).toBe(true)
 			// Never seeded, so there is nothing to strip and the seed is untouched.
-			expect(posture.seed).toEqual(defaultApprovalSeed(true))
+			expect(posture.seed).toEqual(defaultApprovalSeed())
 		})
 	})
 
 	// The seed is only half the story: what matters is the DECISION a real ask
 	// gets under it. These drive `checkAutoApproval` — the same function the
-	// running host calls — with the posture each flag resolves to, so a change to
-	// either the seed or the gate table shows up here rather than in a pod.
-	describe("what the seeded posture actually decides", () => {
+	// running host calls — with the posture each configuration resolves to, so a
+	// change to either the seed or the gate table shows up here rather than in a pod.
+	describe("what the resolved posture actually decides", () => {
 		// A connected `browser-tools` server as McpHub pushes it to consumers: the
 		// whole `browser_*` catalog resolves to the `browser` group, and the group
 		// is the only thing the approval path looks at. `unclassified` stands for a
@@ -252,79 +258,132 @@ describe("approval posture", () => {
 			{
 				name: "browser-tools",
 				tools: [
+					{ name: "browser_read_page", group: "read" },
 					{ name: "browser_navigate", group: "browser" },
 					{ name: "unclassified", group: "uncategorized" },
 				],
 			},
 		] as never
 
-		const browserCall = JSON.stringify({
-			type: "use_mcp_tool",
-			serverName: "browser-tools",
-			toolName: "browser_navigate",
-		})
-		const uncategorizedCall = JSON.stringify({
-			type: "use_mcp_tool",
-			serverName: "browser-tools",
-			toolName: "unclassified",
-		})
+		const call = (toolName: string) =>
+			JSON.stringify({ type: "use_mcp_tool", serverName: "browser-tools", toolName })
 
-		/** The effective posture of a node whose `.shofer/` config says nothing. */
-		const postureOf = (nonInteractive: boolean) => ({
-			...applyConfiguredApprovalPosture(defaultApprovalSeed(nonInteractive), {}, nonInteractive).effective,
+		/** The effective posture of a node whose `.shofer/` config says what is passed. */
+		const postureOf = (overlay: Record<string, unknown> = {}) => ({
+			...applyConfiguredApprovalPosture(defaultApprovalSeed(), overlay).effective,
 			mcpServers,
 		})
 
-		it("auto-approves a browser tool on a headless node — nobody is there to ask", async () => {
-			const result = await checkAutoApproval({
-				state: postureOf(true) as never,
-				ask: "use_mcp_server",
-				text: browserCall,
-			})
-
-			expect(result).toEqual({ decision: "approve" })
-		})
-
-		it("still raises the approval on an interactive node — the ask is the feature there", async () => {
-			const result = await checkAutoApproval({
-				state: postureOf(false) as never,
-				ask: "use_mcp_server",
-				text: browserCall,
-			})
-
-			expect(result).toEqual({ decision: "ask" })
-		})
-
-		it("keeps asking for an unclassified tool under BOTH postures", async () => {
-			for (const nonInteractive of [true, false]) {
+		it("asks for every group when the config says nothing", async () => {
+			for (const toolName of ["browser_read_page", "browser_navigate", "unclassified"]) {
 				const result = await checkAutoApproval({
-					state: postureOf(nonInteractive) as never,
+					state: postureOf() as never,
 					ask: "use_mcp_server",
-					text: uncategorizedCall,
+					text: call(toolName),
 				})
 
 				expect(result).toEqual({ decision: "ask" })
 			}
 		})
 
-		it("a node whose config gates the browser group is honoured over the seed", async () => {
-			const posture = applyConfiguredApprovalPosture(
-				defaultApprovalSeed(true),
-				{ alwaysAllowBrowser: false },
-				true,
-			)
-
-			// Omission, as for every other configured key: the scope value wins on read.
-			expect(posture.seed).not.toHaveProperty("alwaysAllowBrowser")
-			expect(posture.configuredKeys).toContain("alwaysAllowBrowser")
-
+		it("auto-approves a group a scope explicitly allows", async () => {
 			const result = await checkAutoApproval({
-				state: { ...posture.effective, mcpServers } as never,
+				state: postureOf({
+					autoApprovalEnabled: true,
+					alwaysAllowMcp: true,
+					alwaysAllowReadOnly: true,
+				}) as never,
 				ask: "use_mcp_server",
-				text: browserCall,
+				text: call("browser_read_page"),
+			})
+
+			expect(result).toEqual({ decision: "approve" })
+		})
+
+		// The single most likely mistake a posture author makes: declaring the
+		// per-group toggles and forgetting the master gate. It approves nothing, and
+		// that must be true rather than papered over by a seeded gate.
+		it("approves nothing when the toggles are declared but the master gate is absent", async () => {
+			const result = await checkAutoApproval({
+				state: postureOf({ alwaysAllowMcp: true, alwaysAllowReadOnly: true }) as never,
+				ask: "use_mcp_server",
+				text: call("browser_read_page"),
 			})
 
 			expect(result).toEqual({ decision: "ask" })
+		})
+
+		// `browser` used to be seeded because its group holds no native tools, so an
+		// unseeded toggle parked the first browser call of every headless run. It is
+		// now exactly as explicit as the rest.
+		it("still asks for browser under a read-only posture, and approves it once declared", async () => {
+			const readOnly = postureOf({
+				autoApprovalEnabled: true,
+				alwaysAllowMcp: true,
+				alwaysAllowReadOnly: true,
+			})
+			expect(
+				await checkAutoApproval({
+					state: readOnly as never,
+					ask: "use_mcp_server",
+					text: call("browser_navigate"),
+				}),
+			).toEqual({ decision: "ask" })
+
+			const browsing = postureOf({
+				autoApprovalEnabled: true,
+				alwaysAllowMcp: true,
+				alwaysAllowBrowser: true,
+			})
+			expect(
+				await checkAutoApproval({
+					state: browsing as never,
+					ask: "use_mcp_server",
+					text: call("browser_navigate"),
+				}),
+			).toEqual({ decision: "approve" })
+		})
+
+		// Unchanged by the flip: neither was ever seeded, and `uncategorized` is the
+		// absence of a declaration rather than a capability — a tool that parks a
+		// headless run is fixed by CLASSIFYING it, never by widening this.
+		it("keeps asking for an unclassified tool under a fully-declared read posture", async () => {
+			const result = await checkAutoApproval({
+				state: postureOf({
+					autoApprovalEnabled: true,
+					alwaysAllowMcp: true,
+					alwaysAllowReadOnly: true,
+					alwaysAllowBrowser: true,
+				}) as never,
+				ask: "use_mcp_server",
+				text: call("unclassified"),
+			})
+
+			expect(result).toEqual({ decision: "ask" })
+		})
+
+		it("asks a followup question rather than answering it, unless a scope says otherwise", async () => {
+			const followup = JSON.stringify({ question: "which?", suggest: [{ answer: "this one" }] })
+
+			expect(
+				await checkAutoApproval({
+					state: postureOf({ autoApprovalEnabled: true }) as never,
+					ask: "followup",
+					text: followup,
+				}),
+			).toEqual({ decision: "ask" })
+
+			const answered = await checkAutoApproval({
+				// `followupAutoApproveTimeoutMs` is a tuning value rather than a posture
+				// key, so it is not in APPROVAL_POSTURE_KEYS and never rides the overlay.
+				state: {
+					...postureOf({ autoApprovalEnabled: true, alwaysAllowFollowupQuestions: true }),
+					followupAutoApproveTimeoutMs: 1000,
+				} as never,
+				ask: "followup",
+				text: followup,
+			})
+			expect(answered).toMatchObject({ decision: "timeout", timeout: 1000 })
 		})
 	})
 

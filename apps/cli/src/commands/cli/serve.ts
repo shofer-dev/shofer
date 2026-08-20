@@ -32,16 +32,15 @@ export interface ServeOptions {
 	 */
 	stateDir?: string
 	/**
-	 * Interactive approvals — the **default** posture, not the final one. Off
-	 * (default) is non-interactive: the node auto-approves every tool (there is no
-	 * local user to ask). With `--interactive` the node instead surfaces approvals —
-	 * `autoApprovalEnabled` is off, so dangerous tools raise an `ask` over ShoferApi
-	 * that the driving controller brokers to its user and answers via `respondToAsk`.
-	 *
-	 * The node's own layered `.shofer/settings.json` **overrides** this flag per key
-	 * (`autoApprovalEnabled`, the `alwaysAllow*` toggles, `allowedCommands`,
-	 * `deniedCommands`); the flag decides only the keys no scope supplies. The
-	 * startup banner prints the resolved posture and its source.
+	 * Interactive approvals — how an ask is HANDLED locally, not which tools raise
+	 * one. A served node's approval posture comes from its own layered
+	 * `.shofer/settings.json` and nothing else: the host seeds
+	 * `autoApprovalEnabled: false` and leaves every other posture key absent, where
+	 * absent denies, so a tool auto-approves only where a scope states it `true`.
+	 * Whatever this flag is set to, an ask the posture does not pre-approve is
+	 * raised over ShoferApi for the driving controller to broker to its user and
+	 * answer via `respondToAsk`. The startup banner prints the resolved posture and
+	 * its source.
 	 */
 	interactive?: boolean
 }
@@ -90,14 +89,15 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 		baseUrl: options.baseUrl,
 		workspacePath: path.resolve(options.workspace || process.cwd()),
 		extensionPath: path.resolve(options.extension || getDefaultExtensionPath(__dirname)),
-		// Default: non-interactive (auto-approve every tool — no local user to ask).
-		// `--interactive` turns approvals ON so the driving controller brokers them.
+		// No local stdin user by default. This decides how the node HANDLES an ask,
+		// not which tools raise one — the posture is the node's `.shofer/` config, and
+		// no seed is stated here, so a served node auto-approves only what a scope
+		// grants it (`approval-posture.ts`).
 		nonInteractive: !options.interactive,
 		// A served node is always driven by a remote controller, never a local stdin
 		// user — so interactive asks (approvals + followup questions) are ALWAYS
-		// brokered to the controller, not prompted/auto-answered on the node. Whether
-		// approvals arise at all still depends on `--interactive` (auto-approve vs
-		// surface); followup questions are brokered in either mode.
+		// brokered to the controller, not prompted/auto-answered on the node, under
+		// either setting of `--interactive`.
 		brokerInteractiveAsks: true,
 		ephemeral: false,
 		storageDir: options.stateDir ?? process.env.SHOFER_STATE_DIR,
@@ -130,9 +130,9 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 			(hasOverride
 				? `API config: pinned to ${provider} (CLI override)`
 				: "API config: per-task from controller") +
-			// The posture is resolved, not assumed: `--interactive` only supplies the
-			// DEFAULT, and the node's own `.shofer/` config overrides it. Printing the
-			// resolved summary (rather than echoing the flag) is what makes a
+			// The posture is resolved, not assumed: the built-in default auto-approves
+			// nothing, and only the node's own `.shofer/` config widens it. Printing the
+			// resolved summary (rather than echoing the launch flags) is what makes a
 			// config-driven posture visible — a node silently gating, or silently
 			// un-gating, every stake is the failure this line exists to prevent.
 			` · approvals: ${extHost.approvalPosture.summary}`,

@@ -9,11 +9,15 @@ Source: [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-a
 `ContextProxy` like any other setting, so on a VS Code host they are what the user
 set in the Settings UI, and on **any** host they are overridden by the layered
 `.shofer/settings.json` scopes. A headless host (`shofer serve`, `--print`) has no
-user to have set them, so it seeds a default posture at startup — auto-approve
-every DECLARED capability (`read`, `write`, `execute`, `browser`, `mcp`, `mode`,
-`subtasks`), or (with `shofer serve --interactive`) nothing — but only for the keys
-no scope supplies. `alwaysAllowUncategorized` and `alwaysAllowFollowupQuestions`
-are never seeded under either flag. Configuration wins; the flag is the default. See
+user to have set them, so it seeds a posture at startup — for the keys no scope
+supplies, and never for one a scope does. A served node seeds one key,
+`autoApprovalEnabled: false`, and leaves the rest ABSENT, which denies: nothing
+auto-approves unless a `.shofer/` scope states it `true`. A local unattended run
+(`shofer run` without `--require-approval`, `shofer acp`) states the opposite seed
+for itself — every DECLARED capability (`read`, `write`, `execute`, `browser`,
+`mcp`, `mode`, `subtasks`) plus `allowedCommands: ["*"]` — because the person who
+typed the command is the author of that grant. `alwaysAllowUncategorized` and
+`alwaysAllowFollowupQuestions` are in neither seed. Configuration wins over both. See
 [`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag).
 
 ---
