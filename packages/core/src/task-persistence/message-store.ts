@@ -46,6 +46,25 @@ async function getDb(globalStoragePath: string): Promise<SqliteDatabase> {
 		mkdirSync(globalStoragePath, { recursive: true })
 		const Ctor = await getCtor()
 		db = new Ctor(join(globalStoragePath, "shofer-messages.db"))
+		// WAL + synchronous=NORMAL: measured 190ms -> 0.03ms per commit on the
+		// network-backed volumes this store lands on (ceph RBD PVCs), where the
+		// default journal_mode=delete pays two fsyncs per transaction and every
+		// fsync is a network round-trip. Because node:sqlite is synchronous, that
+		// cost was charged directly to the host's only event loop — a streaming
+		// task stopped reading its provider socket for seconds at a time, and the
+		// backpressure stalled the whole relay chain above it.
+		//
+		// Durability trade, deliberately accepted: WAL+NORMAL can lose the last
+		// committed transaction(s) on a KERNEL/POWER crash (never on an
+		// application crash, and never corrupts — a crash mid-stream already
+		// documented as losing the partial tail). A working transcript whose
+		// readers re-derive from the canonical history does not need FULL.
+		//
+		// journal_mode persists in the DB file (existing delete-mode files
+		// convert on first open); synchronous is per-connection, so it must be
+		// set on every open.
+		db.exec("PRAGMA journal_mode=WAL")
+		db.exec("PRAGMA synchronous=NORMAL")
 		db.exec(
 			`CREATE TABLE IF NOT EXISTS messages (
 				task_id TEXT NOT NULL,
@@ -110,7 +129,18 @@ export async function storeSaveAll(
 	messages: unknown[],
 ): Promise<void> {
 	const db = await getDb(globalStoragePath)
-	db.prepare("DELETE FROM messages WHERE task_id = ? AND kind = ?").run(taskId, kind)
-	const stmt = db.prepare("INSERT OR REPLACE INTO messages (task_id, kind, ts, data) VALUES (?, ?, ?, ?)")
-	for (const m of messages) stmt.run(taskId, kind, tsOf(m), JSON.stringify(m))
+	// One transaction: N+1 autocommitted statements would pay N+1 fsyncs (the
+	// latency this store exists to avoid), and a mid-loop failure would leave
+	// the task's messages deleted-but-not-rewritten. On error the ROLLBACK
+	// restores the pre-call contents exactly.
+	db.exec("BEGIN")
+	try {
+		db.prepare("DELETE FROM messages WHERE task_id = ? AND kind = ?").run(taskId, kind)
+		const stmt = db.prepare("INSERT OR REPLACE INTO messages (task_id, kind, ts, data) VALUES (?, ?, ?, ?)")
+		for (const m of messages) stmt.run(taskId, kind, tsOf(m), JSON.stringify(m))
+		db.exec("COMMIT")
+	} catch (error) {
+		db.exec("ROLLBACK")
+		throw error
+	}
 }
