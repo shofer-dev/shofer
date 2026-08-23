@@ -136,7 +136,8 @@ import { aggregateTaskCostsRecursive } from "../webview/aggregateTaskCosts.js"
 import { type TaskProviderLike } from "../task-provider/index.js"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace.js"
 import { type ApiMessage } from "../task-persistence/apiMessages.js"
-import { type MessagePersistencePort, SqliteMessagePersistence } from "../task-persistence/PersistencePort.js"
+import type { TaskPersistencePort } from "../task-persistence/PersistencePort.js"
+import { resolveTaskPersistence } from "../task-persistence/backend.js"
 import { taskMetadata } from "../task-persistence/taskMetadata.js"
 import { getHost } from "@shofer/types"
 import { getEnvironmentDetails } from "../environment/getEnvironmentDetails.js"
@@ -1657,15 +1658,70 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// API Messages
 
 	/**
-	 * The SQLite-backed message persistence (§5), created once. Returned as a
-	 * resolved promise so the (async) call sites stay unchanged.
+	 * The task store (§5), resolved once per task.
+	 *
+	 * WHICH backend this is comes from host wiring, not from here — see
+	 * `task-persistence/backend.ts`. The default is the local SQLite + files
+	 * pair; a host serving a pool of interchangeable processes supplies a shared
+	 * one. Resolution is cached per host, so this costs a map lookup after the
+	 * first task.
 	 */
-	private _persistencePromise?: Promise<MessagePersistencePort>
-	private getPersistence(): Promise<MessagePersistencePort> {
+	private _persistencePromise?: Promise<TaskPersistencePort>
+	private getPersistence(): Promise<TaskPersistencePort> {
 		if (!this._persistencePromise) {
-			this._persistencePromise = Promise.resolve(new SqliteMessagePersistence(this.globalStoragePath))
+			this._persistencePromise = resolveTaskPersistence(this.globalStoragePath)
 		}
 		return this._persistencePromise
+	}
+
+	/**
+	 * Run one turn under a lease on this task, when the backend has leases.
+	 *
+	 * Sticky routing makes a second driver for the same task RARE; it does not
+	 * make it impossible (a caller holding a stale endpoint list, a previous
+	 * owner still finishing, a deliberate failover retry). The lease is what
+	 * makes the residual case safe: exactly one holder at a time, and every write
+	 * the backend makes carries the fence it was granted at, so a stale holder's
+	 * writes are rejected instead of interleaving into the transcript.
+	 *
+	 * A backend with no lease support runs the turn unchanged — that is the local
+	 * default, where a single writer is guaranteed by the filesystem.
+	 */
+	private async _withTaskLease<T>(run: () => Promise<T>): Promise<T> {
+		const persistence = await this.getPersistence()
+		if (!persistence.lease) {
+			return run()
+		}
+
+		const lease = await persistence.lease.claim(this.taskId, (reason) => this._onTaskLeaseLost(reason))
+		try {
+			return await run()
+		} finally {
+			await lease.release().catch((error: unknown) => {
+				// The claim expires on its own; a failed release costs the next
+				// driver one expiry window, never correctness.
+				taskLog.warn(`Failed to release the task lease for ${this.taskId}:`, error)
+			})
+		}
+	}
+
+	/**
+	 * Losing the lease mid-turn ends the turn, loudly.
+	 *
+	 * Another process now owns this task, so everything this one is still doing
+	 * is work whose output the store will refuse. The abort is the point: a
+	 * fence-rejected write is the BACKSTOP for this condition, not the way it is
+	 * meant to be discovered, and continuing to stream into a transcript nobody
+	 * will accept burns provider quota for output that cannot land.
+	 *
+	 * Nothing is said into the transcript on the way out — that write is exactly
+	 * what the fence rejects — so the log is the record.
+	 */
+	private _onTaskLeaseLost(reason: Error): void {
+		taskLog.error(`Task ${this.taskId}.${this.instanceId} lost its store lease; aborting the turn:`, reason)
+		void this.abortTask().catch((error: unknown) => {
+			taskLog.error(`Failed to abort ${this.taskId} after losing its store lease:`, error)
+		})
 	}
 
 	private async getSavedApiConversationHistory(): Promise<ApiMessage[]> {
@@ -4870,13 +4926,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * Wraps initiateTaskLoop to track the running promise.
 	 * This allows cancelAndProcessQueuedMessages to await the old loop's
 	 * completion before starting a new one.
+	 *
+	 * This is also the turn boundary the store lease is held across — claimed
+	 * before the loop drives anything, released when it stops — so an idle task
+	 * holds nothing and a remapped one can be taken over at once.
 	 */
 	private _runTaskLoop(userContent: Anthropic.Messages.ContentBlockParam[]): Promise<void> {
 		// Establish the ambient log context so every line emitted during this
 		// task's agent loop (including deep API/MCP/git utility logs reached via
 		// awaits and timers) is attributed to this task for the "Logs" tab.
-		const promise = runWithLogTaskContext({ taskId: this.taskId, rootTaskId: this.rootTaskId }, () =>
-			this.initiateTaskLoop(userContent),
+		const promise = this._withTaskLease(() =>
+			runWithLogTaskContext({ taskId: this.taskId, rootTaskId: this.rootTaskId }, () =>
+				this.initiateTaskLoop(userContent),
+			),
 		).finally(() => {
 			if (this._taskLoopPromise === promise) {
 				this._taskLoopPromise = undefined
@@ -6628,6 +6690,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			enableSubfolderRules,
 			useAgentRules,
 			mcpEnabled,
+			includeMarkdownFormattingSection,
+			includeToolUseSection,
+			includeCapabilitiesSection,
+			includeModesSection,
+			includeRulesSection,
+			includeObjectiveSection,
 		} = state ?? {}
 
 		const provider = this.providerRef.deref()
@@ -6672,6 +6740,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// A conversational task gets the minimal (tool-free) prompt variant.
 		const effectiveToolCallingEnabled = !this.toolCallingDisabled
 
+		// Section gates: per-task `agentContext` first, then the GLOBAL setting a
+		// deployment publishes (its config bundle materializes the global
+		// `.shofer/` scope), then "included". The global layer is what makes these
+		// safe to use at scale: the prompt stays byte-identical from turn to turn,
+		// which is the condition for the provider's prompt-prefix cache to hit.
+		const effectiveIncludeMarkdownFormatting =
+			ctx?.include_markdown_formatting ?? includeMarkdownFormattingSection ?? true
+		const effectiveIncludeToolUse = ctx?.include_tool_use ?? includeToolUseSection ?? true
+		const effectiveIncludeCapabilities = ctx?.include_capabilities ?? includeCapabilitiesSection ?? true
+		const effectiveIncludeModes = ctx?.include_modes ?? includeModesSection ?? true
+		const effectiveIncludeRules = ctx?.include_rules ?? includeRulesSection ?? true
+		const effectiveIncludeObjective = ctx?.include_objective ?? includeObjectiveSection ?? true
+
 		// H15: Build a cache key covering every stable input to the system
 		// prompt.  Peer notifications + subtask constraints are appended
 		// below; they don't participate in the cache key because they are
@@ -6696,6 +6777,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			effectiveRequireTodos,
 			effectiveIncludeSystemInfo,
 			effectiveIncludeMcp,
+			// Section gates: republishing a bundle with one flipped must rebuild
+			// the prompt rather than serve the cached one.
+			effectiveIncludeMarkdownFormatting,
+			effectiveIncludeToolUse,
+			effectiveIncludeCapabilities,
+			effectiveIncludeModes,
+			effectiveIncludeRules,
+			effectiveIncludeObjective,
 			// Two different prompts; a task with tools off must never reuse a
 			// cached tools-on prompt (or vice versa).
 			effectiveToolCallingEnabled,
@@ -6772,6 +6861,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					includeSkills: effectiveIncludeSkills,
 					includeSystemInfo: effectiveIncludeSystemInfo,
 					includeMcp: effectiveIncludeMcp,
+					// Section gates (deployment-wide `include*Section` settings, or a
+					// per-task override).
+					includeMarkdownFormatting: effectiveIncludeMarkdownFormatting,
+					includeToolUse: effectiveIncludeToolUse,
+					includeCapabilities: effectiveIncludeCapabilities,
+					includeModes: effectiveIncludeModes,
+					includeRules: effectiveIncludeRules,
+					includeObjective: effectiveIncludeObjective,
 					// No tool plane ⇒ the minimal conversational prompt.
 					toolCallingEnabled: effectiveToolCallingEnabled,
 				},

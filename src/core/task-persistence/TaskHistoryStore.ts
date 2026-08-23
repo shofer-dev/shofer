@@ -8,6 +8,7 @@ import { GlobalFileNames } from "@shofer/core"
 import { safeWriteJson } from "@shofer/core"
 import { getStorageBasePath } from "@shofer/core"
 import { taskLog } from "@shofer/core"
+import { resolveTaskPersistence, type TaskMetadataPersistencePort } from "@shofer/core"
 
 /**
  * Index file format for fast startup reads.
@@ -21,14 +22,22 @@ interface HistoryIndex {
 /**
  * TaskHistoryStore encapsulates all task history persistence logic.
  *
- * Each task's HistoryItem is stored as an individual JSON file in its
- * existing task directory (`globalStorage/tasks/<taskId>/history_item.json`).
- * A single index file (`globalStorage/tasks/_index.json`) is maintained
- * as a cache for fast list reads at startup.
+ * Each task's HistoryItem is read and written through the host's task-metadata
+ * port (`@shofer/core`'s `TaskMetadataPersistencePort`), which the compiled-in
+ * default backs with an individual JSON file in that task's directory
+ * (`globalStorage/tasks/<taskId>/history_item.json`). Going through the port is
+ * what lets a host whose task store is SHARED between processes list and
+ * rehydrate a task it never created — the store owns the record, this class owns
+ * the caching and the reconciliation around it.
  *
- * Cross-process safety comes from `safeWriteJson`'s `proper-lockfile`
- * on per-task file writes. Within a single extension host process,
- * an in-process write lock serializes mutations.
+ * A single index file (`globalStorage/tasks/_index.json`) is maintained
+ * as a cache for fast list reads at startup. The index is a local read
+ * accelerator in every configuration; the port is the source of truth, and
+ * `reconcile()` repairs the cache against it.
+ *
+ * Cross-process safety on the default backend comes from `safeWriteJson`'s
+ * `proper-lockfile` on per-task file writes. Within a single extension host
+ * process, an in-process write lock serializes mutations.
  */
 /**
  * Options for TaskHistoryStore constructor.
@@ -40,11 +49,19 @@ export interface TaskHistoryStoreOptions {
 	 * globalState during the transition period.
 	 */
 	onWrite?: (items: HistoryItem[]) => Promise<void>
+
+	/**
+	 * Metadata port override. Defaults to the host's resolved task store; supply
+	 * one to pin a backend (tests, a host that wires its own).
+	 */
+	metadata?: TaskMetadataPersistencePort
 }
 
 export class TaskHistoryStore {
 	private readonly globalStoragePath: string
 	private readonly onWrite?: (items: HistoryItem[]) => Promise<void>
+	private readonly metadataOverride?: TaskMetadataPersistencePort
+	private metadataPromise?: Promise<TaskMetadataPersistencePort>
 	private cache: Map<string, HistoryItem> = new Map()
 	/**
 	 * Memoized sorted snapshot of `cache.values()` (newest first). Rebuilt
@@ -83,6 +100,7 @@ export class TaskHistoryStore {
 	constructor(globalStoragePath: string, options?: TaskHistoryStoreOptions) {
 		this.globalStoragePath = globalStoragePath
 		this.onWrite = options?.onWrite
+		this.metadataOverride = options?.metadata
 		this.initialized = new Promise<void>((resolve) => {
 			this.resolveInitialized = resolve
 		})
@@ -246,13 +264,7 @@ export class TaskHistoryStore {
 		return this.withLock(async () => {
 			this.deleteCacheEntry(taskId)
 
-			// Remove per-task file (best-effort)
-			try {
-				const filePath = await this.getTaskFilePath(taskId)
-				await fs.unlink(filePath)
-			} catch {
-				// File may already be deleted
-			}
+			await (await this.metadata()).deleteTaskMetadata(taskId)
 
 			this.scheduleIndexWrite()
 
@@ -268,15 +280,10 @@ export class TaskHistoryStore {
 	 */
 	async deleteMany(taskIds: string[]): Promise<void> {
 		return this.withLock(async () => {
+			const metadata = await this.metadata()
 			for (const taskId of taskIds) {
 				this.deleteCacheEntry(taskId)
-
-				try {
-					const filePath = await this.getTaskFilePath(taskId)
-					await fs.unlink(filePath)
-				} catch {
-					// File may already be deleted
-				}
+				await metadata.deleteTaskMetadata(taskId)
 			}
 
 			this.scheduleIndexWrite()
@@ -291,31 +298,26 @@ export class TaskHistoryStore {
 	// ────────────────────────────── Reconciliation ──────────────────────────────
 
 	/**
-	 * Scan task directories vs index and fix any drift.
+	 * Scan the metadata store vs the cache and fix any drift.
 	 *
-	 * - Tasks on disk but missing from cache: read and add
-	 * - Tasks in cache but missing from disk: remove
+	 * - Tasks in the store but missing from cache: read and add
+	 * - Tasks in cache but missing from the store: remove
+	 *
+	 * On a SHARED store this is also how a process learns about tasks another
+	 * process created — the store's id list spans every writer, so a task
+	 * created elsewhere appears here on the next reconciliation rather than
+	 * only when someone asks for it by id (`getOrLoad`).
 	 */
 	async reconcile(): Promise<void> {
 		// Run through the write lock to prevent interleaving with upsert/delete
 		return this.withLock(async () => {
-			const tasksDir = await this.getTasksDir()
+			const storedIds = await (await this.metadata()).listTaskMetadataIds()
 
-			let dirEntries: string[]
-			try {
-				dirEntries = await fs.readdir(tasksDir)
-			} catch {
-				return // tasks dir doesn't exist yet
-			}
-
-			// Filter out the index file and hidden files
-			const taskDirNames = dirEntries.filter((name) => !name.startsWith("_") && !name.startsWith("."))
-
-			const onDiskIds = new Set(taskDirNames)
+			const onDiskIds = new Set(storedIds)
 			const cacheIds = new Set(this.cache.keys())
 			let changed = false
 
-			// Tasks on disk but not in cache: read their history_item.json
+			// Tasks in the store but not in cache: read their metadata record
 			for (const taskId of onDiskIds) {
 				if (!cacheIds.has(taskId)) {
 					try {
@@ -325,12 +327,12 @@ export class TaskHistoryStore {
 							changed = true
 						}
 					} catch {
-						// Corrupted or missing file, skip
+						// Corrupted or missing record, skip
 					}
 				}
 			}
 
-			// Tasks in cache but not on disk: remove from cache
+			// Tasks in cache but not in the store: remove from cache
 			for (const taskId of cacheIds) {
 				if (!onDiskIds.has(taskId)) {
 					this.deleteCacheEntry(taskId)
@@ -402,6 +404,12 @@ export class TaskHistoryStore {
 	 *
 	 * For each entry in the globalState array, writes a `history_item.json`
 	 * file if one doesn't already exist. This is idempotent and safe to re-run.
+	 *
+	 * Deliberately file-specific rather than routed through the metadata port:
+	 * it migrates an on-disk legacy layout, and its orphan test — "is there
+	 * still a task DIRECTORY for this entry" — is a question about that layout
+	 * which no other backend can answer. A host on a shared store has no
+	 * globalState `taskHistory` to migrate, so it never reaches here.
 	 */
 	async migrateFromGlobalState(taskHistoryEntries: HistoryItem[]): Promise<void> {
 		if (!taskHistoryEntries || taskHistoryEntries.length === 0) {
@@ -527,29 +535,37 @@ export class TaskHistoryStore {
 		await this.writeIndex()
 	}
 
-	// ────────────────────────────── Private: Per-task file I/O ──────────────────────────────
+	// ────────────────────────────── Private: metadata port ──────────────────────────────
 
 	/**
-	 * Write a HistoryItem to its per-task `history_item.json` file.
+	 * The host's task-metadata store, resolved once.
+	 *
+	 * Resolution is deferred rather than done in the constructor because the
+	 * backend may need I/O to build (a connection pool) and the constructor is
+	 * synchronous; every caller here is already async.
 	 */
-	private async writeTaskFile(item: HistoryItem): Promise<void> {
-		const filePath = await this.getTaskFilePath(item.id)
-		await safeWriteJson(filePath, item)
+	private metadata(): Promise<TaskMetadataPersistencePort> {
+		if (this.metadataOverride) {
+			return Promise.resolve(this.metadataOverride)
+		}
+		if (!this.metadataPromise) {
+			this.metadataPromise = resolveTaskPersistence(this.globalStoragePath)
+		}
+		return this.metadataPromise
 	}
 
 	/**
-	 * Read a HistoryItem from its per-task `history_item.json` file.
+	 * Write a HistoryItem to the metadata store.
+	 */
+	private async writeTaskFile(item: HistoryItem): Promise<void> {
+		await (await this.metadata()).writeTaskMetadata(item)
+	}
+
+	/**
+	 * Read a HistoryItem from the metadata store; `null` when there is no record.
 	 */
 	private async readTaskFile(taskId: string): Promise<HistoryItem | null> {
-		const filePath = await this.getTaskFilePath(taskId)
-
-		try {
-			const raw = await fs.readFile(filePath, "utf8")
-			const item: HistoryItem = JSON.parse(raw)
-			return item.id ? item : null
-		} catch {
-			return null
-		}
+		return (await (await this.metadata()).readTaskMetadata(taskId)) ?? null
 	}
 
 	// ────────────────────────────── Private: fs.watch ──────────────────────────────

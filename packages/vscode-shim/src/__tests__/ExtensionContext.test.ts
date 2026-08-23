@@ -329,6 +329,31 @@ describe("ExtensionContextImpl", () => {
 		})
 	})
 
+	describe("flushState()", () => {
+		it("should make pending state durable for both mementos", async () => {
+			const storageDir = path.join(tempDir, "storage")
+			const context = new ExtensionContextImpl({
+				extensionPath,
+				workspacePath,
+				storageDir,
+			})
+
+			// Deliberately not awaited: flushState() is the durability barrier.
+			void context.globalState.update("globalKey", "globalValue")
+			void context.workspaceState.update("workspaceKey", "workspaceValue")
+
+			await context.flushState()
+
+			const globalStatePath = path.join(context.globalStoragePath, "global-state.json")
+			const workspaceStatePath = path.join(context.storagePath!, "workspace-state.json")
+
+			expect(JSON.parse(fs.readFileSync(globalStatePath, "utf-8"))).toEqual({ globalKey: "globalValue" })
+			expect(JSON.parse(fs.readFileSync(workspaceStatePath, "utf-8"))).toEqual({
+				workspaceKey: "workspaceValue",
+			})
+		})
+	})
+
 	describe("default storage directory", () => {
 		it("should use home directory based default when no storageDir provided", () => {
 			const context = new ExtensionContextImpl({

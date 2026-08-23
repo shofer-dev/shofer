@@ -10,7 +10,13 @@ export {
 	readTaskMessagesTail,
 	saveTaskMessages,
 	type MessagePersistencePort,
+	type TaskMetadataPersistencePort,
+	type TaskPersistencePort,
 	SqliteMessagePersistence,
+	FileTaskMetadataPersistence,
+	registerTaskPersistenceBackend,
+	resolveTaskPersistence,
+	selectedTaskStoreName,
 	taskMetadata,
 } from "@shofer/core"
 // Remains in src: its src consumer tests mock storage deps via the @shofer/core

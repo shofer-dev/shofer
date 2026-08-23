@@ -89,8 +89,18 @@ vi.mock("@shofer/cloud", () => ({
 // NOTE: Task moved into @shofer/core during the v3 carve-out. ShoferProvider (the SUT)
 // constructs Task internally via the @shofer/core barrel, so the Task mock lives here
 // (formerly vi.mock("../../task/Task")). The old relative path no longer intercepts.
+// The task-metadata port TaskHistoryStore writes each `history_item.json`
+// through. This spec mocks the file layer rather than writing to a real
+// directory, so the port stands in the same way: writes are accepted and
+// nothing reads back, which is how the unwritten `/test` paths already behaved.
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	resolveTaskPersistence: vi.fn().mockResolvedValue({
+		writeTaskMetadata: vi.fn().mockResolvedValue(undefined),
+		readTaskMetadata: vi.fn().mockResolvedValue(undefined),
+		deleteTaskMetadata: vi.fn().mockResolvedValue(undefined),
+		listTaskMetadataIds: vi.fn().mockResolvedValue([]),
+	}),
 	Task: vi.fn().mockImplementation((options) => ({
 		taskId: options.taskId || `test-task-id-${++taskIdCounter}`,
 		saveShoferMessages: vi.fn(),

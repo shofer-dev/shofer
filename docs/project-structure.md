@@ -66,7 +66,7 @@ extensions/shofer/
 │   │       ├── assistant-message/ # presentAssistantMessage dispatcher + NativeToolCallParser
 │   │       ├── api/              # 36 portable providers + transform + buildApiHandler + native-handler-registry
 │   │       ├── prompts/          # system.ts + sections + native-tool descriptions
-│   │       ├── task-persistence/ # SQLite message store (message-store.ts) + taskMessages/apiMessages/taskMetadata
+│   │       ├── task-persistence/ # task store: ports (PersistencePort/taskMetadataStore), backend selection (backend.ts), SQLite default (message-store.ts) + taskMessages/apiMessages/taskMetadata
 │   │       ├── terminal/ blob-store/ metrics/ condense/ context-management/ workflow/ …
 │   │       ├── services/         # tree-sitter, code-index engine, mcp (McpHub), …
 │   │       └── transport/        # HTTP/SSE server + ACP stack (serveHttpOverShoferApi, runAcpAgentOverShoferApi)

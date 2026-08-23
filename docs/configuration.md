@@ -500,7 +500,45 @@ A task's conversation/UI messages are stored in **SQLite** (`node:sqlite`) — s
 `SqliteMessagePersistence` adapter. Rows are keyed by `(task_id, kind, ts)` with
 last-write-wins per `ts`. This replaced the prior flat-file (JSONL) layer and its
 performance machinery (debounced saves, append logs, tail-window reads,
-atomic-rewrite compaction); there is no configuration knob.
+atomic-rewrite compaction).
+
+The connection runs `journal_mode=WAL` with `synchronous=NORMAL`, which is not a
+tuning preference: `node:sqlite` is synchronous, so a commit's fsyncs are charged
+to the host's only event loop, and on a network-backed volume the default
+delete-mode journal costs two network round trips per message — enough to stop a
+streaming task reading its provider socket. The trade is stated where it is set:
+WAL + `NORMAL` can lose the last committed transaction on a kernel or power
+crash, never on an application crash and never as corruption.
+
+### `SHOFER_TASK_STORE` / `SHOFER_TASK_STORE_MODULE`
+
+|         |                                                  |
+| ------- | ------------------------------------------------ |
+| Type    | `string`                                         |
+| Default | `sqlite` / unset                                 |
+| Where   | process environment (host wiring, not a setting) |
+
+Which backend a host's task store uses —
+[`backend.ts`](../packages/core/src/task-persistence/backend.ts). `sqlite` is
+compiled in and is the messages-in-SQLite + metadata-in-`history_item.json` pair
+described above; it is correct for every host whose task lives where its storage
+directory lives, which is the VS Code extension, the CLI and a server with its
+own volume.
+
+A host serving a POOL of interchangeable processes, where a task may be driven
+by whichever process a request reaches, needs a store all of them share. Core
+carries no such backend and no driver for one: the host supplies its own, either
+by calling `registerTaskPersistenceBackend(name, factory)` before the first task
+starts, or by setting `SHOFER_TASK_STORE` to a name and `SHOFER_TASK_STORE_MODULE`
+to a module specifier exporting `createTaskPersistence`. A backend may also offer
+`lease` support, in which case `Task` claims the task for the length of a turn and
+aborts loudly if the claim is lost — which is what makes more than one candidate
+writer safe.
+
+A configured backend that cannot be resolved **throws**; it never falls back to
+`sqlite`. The two are not interchangeable in the case that matters: a host given a
+local store instead of the shared one answers every existing task with an empty
+transcript, silently.
 
 ### `shofer.customStoragePath`
 

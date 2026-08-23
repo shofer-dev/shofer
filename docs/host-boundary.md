@@ -27,21 +27,21 @@ strings, positions as `{line, column}` numbers, edits as
 implementable by any front-end and keeps the core's type graph free of
 platform SDKs.
 
-| Capability        | Interface                | What the core uses it for                                                                                    |
-| ----------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Notifications     | `Notifier`               | info/warn/error messages + choice dialogs (`showChoice`)                                                     |
-| Filesystem        | `HostFileSystem`         | read/write/exists/mkdir/delete + `findFiles` (glob)                                                          |
-| Configuration     | `HostConfig`             | `get<T>(section, key, default)` settings reads                                                               |
-| Environment       | `HostEnv`                | UI `language`, `appRoot` (locate bundled binaries), `machineId` (telemetry), `appInfo`                       |
-| Language services | `HostLsp`                | diagnostics, references, workspace symbols, rename (DTO-based)                                               |
-| Workspace actions | `HostWorkspace`          | open a folder, execute a command, workspace-folder change event, `visibleFiles`/`openTabs`                   |
-| File watching     | `HostWatcher`            | watch a glob; create/change/delete callbacks                                                                 |
-| Terminals         | `HostTerminals`          | integrated-terminal backend + shell-execution start/end events                                               |
-| Diff view         | `createDiffView(...)`    | per-edit `DiffView` factory (open/update/save/revert)                                                        |
-| External links    | `HostExternal`           | `openExternal` (open a URI in the OS/browser)                                                                |
-| Editor surface    | `HostEditor`             | `revealInExplorer`/`openFile`/`focusPanel`/`showMultiFileDiff`/`readTerminalContents`/`getWorkspaceProblems` |
-| Persisted state   | `HostState`              | `readModeOverrides` (mode/tooling overrides the front-end persists)                                          |
-| Message storage   | `MessagePersistencePort` | durable api/UI message persistence (SQLite-backed)                                                           |
+| Capability        | Interface             | What the core uses it for                                                                                     |
+| ----------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Notifications     | `Notifier`            | info/warn/error messages + choice dialogs (`showChoice`)                                                      |
+| Filesystem        | `HostFileSystem`      | read/write/exists/mkdir/delete + `findFiles` (glob)                                                           |
+| Configuration     | `HostConfig`          | `get<T>(section, key, default)` settings reads                                                                |
+| Environment       | `HostEnv`             | UI `language`, `appRoot` (locate bundled binaries), `machineId` (telemetry), `appInfo`                        |
+| Language services | `HostLsp`             | diagnostics, references, workspace symbols, rename (DTO-based)                                                |
+| Workspace actions | `HostWorkspace`       | open a folder, execute a command, workspace-folder change event, `visibleFiles`/`openTabs`                    |
+| File watching     | `HostWatcher`         | watch a glob; create/change/delete callbacks                                                                  |
+| Terminals         | `HostTerminals`       | integrated-terminal backend + shell-execution start/end events                                                |
+| Diff view         | `createDiffView(...)` | per-edit `DiffView` factory (open/update/save/revert)                                                         |
+| External links    | `HostExternal`        | `openExternal` (open a URI in the OS/browser)                                                                 |
+| Editor surface    | `HostEditor`          | `revealInExplorer`/`openFile`/`focusPanel`/`showMultiFileDiff`/`readTerminalContents`/`getWorkspaceProblems`  |
+| Persisted state   | `HostState`           | `readModeOverrides` (mode/tooling overrides the front-end persists)                                           |
+| Task storage      | `TaskPersistencePort` | durable api/UI messages + task metadata, and (shared stores only) per-task leases; backend chosen by the host |
 
 Alongside the host capabilities, two further seam families let the core stay
 platform-free:
@@ -185,8 +185,14 @@ through Category I (`getHost()` + the registries above):
 - **Context tracking** (`FileContextTracker`, `getEnvironmentDetails`,
   `mentions`, `message-manager`) and the **ignore controller**.
 
-Persistence (Category I `MessagePersistencePort`) is SQLite-backed via Node's
-built-in `node:sqlite` — no flat files, no native dependency.
+Persistence (Category I `TaskPersistencePort`, which extends
+`MessagePersistencePort` with the task-metadata port and optional leases) is
+**selected by the host** — `task-persistence/backend.ts`. The compiled-in default
+is `SqliteMessagePersistence`: messages via Node's built-in `node:sqlite`, the
+task's `HistoryItem` in its own `history_item.json`. No flat message files, no
+native dependency, and no other backend in core — a host that needs a store
+shared across processes registers one or names a module for it, which is what
+keeps a database driver out of core's closure entirely.
 
 Three VS Code-coupled subsystems `Task` depends on are abstracted behind
 seams, their implementations staying Category II in `src`:

@@ -73,6 +73,13 @@ export class ExtensionContextImpl implements ExtensionContext {
 	public extensionMode: ExtensionMode
 	public extension: Extension<unknown> | undefined
 
+	/**
+	 * The two state files behind `workspaceState` and `globalState`, kept as
+	 * concrete types so teardown can reach their durability barrier — the public
+	 * `Memento` interface has no `flush`.
+	 */
+	private stateFiles: FileMemento[]
+
 	constructor(options: ExtensionContextOptions) {
 		this.extensionPath = options.extensionPath
 		this.extensionUri = Uri.file(options.extensionPath)
@@ -99,7 +106,8 @@ export class ExtensionContextImpl implements ExtensionContext {
 		ensureDirectoryExists(this.logPath)
 
 		// Initialize state storage
-		this.workspaceState = new FileMemento(path.join(workspaceStoragePath, "workspace-state.json"))
+		const workspaceMemento = new FileMemento(path.join(workspaceStoragePath, "workspace-state.json"))
+		this.workspaceState = workspaceMemento
 
 		const globalMemento = new FileMemento(path.join(this.globalStoragePath, "global-state.json"))
 		this.globalState = Object.assign(globalMemento, {
@@ -107,6 +115,8 @@ export class ExtensionContextImpl implements ExtensionContext {
 				// No-op for mock implementation
 			},
 		})
+
+		this.stateFiles = [workspaceMemento, globalMemento]
 
 		this.secrets = new FileSecretStorage(this.globalStoragePath)
 
@@ -143,7 +153,22 @@ export class ExtensionContextImpl implements ExtensionContext {
 	}
 
 	/**
+	 * Wait until every state mutation made so far is on disk
+	 *
+	 * `FileMemento` coalesces its writes, so state set moments before shutdown may
+	 * still be in flight. A host with a graceful shutdown path awaits this before
+	 * exiting; `dispose()` can only start it.
+	 */
+	async flushState(): Promise<void> {
+		await Promise.all(this.stateFiles.map((memento) => memento.flush()))
+	}
+
+	/**
 	 * Dispose all subscriptions
+	 *
+	 * The `Disposable` contract is synchronous, so the final state flush is only
+	 * started here, not awaited — call `flushState()` first when durability at
+	 * teardown matters.
 	 */
 	dispose(): void {
 		for (const subscription of this.subscriptions) {
@@ -154,5 +179,9 @@ export class ExtensionContextImpl implements ExtensionContext {
 			}
 		}
 		this.subscriptions = []
+
+		this.flushState().catch((error: unknown) => {
+			console.warn("Failed to flush extension state on dispose:", error)
+		})
 	}
 }

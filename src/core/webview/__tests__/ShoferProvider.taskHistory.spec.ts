@@ -163,12 +163,34 @@ vi.mock("../../../integrations/workspace/WorkspaceTracker", () => {
 	}
 })
 
+// The task-metadata port TaskHistoryStore writes each `history_item.json`
+// through. Hoisted so the barrel mock below can hand out the SAME
+// `safeWriteJson` these tests inject a failure into.
+//
+// These specs mock the FILE layer rather than writing to a real directory, so
+// the port stands in the same way: a write goes through the mocked
+// `safeWriteJson`, and nothing reads back — which is exactly how the unwritten
+// `/test` paths behaved when the store called `safeWriteJson` itself.
+const { mockSafeWriteJson, mockMetadataPort } = vi.hoisted(() => {
+	const safeWriteJson = vi.fn().mockResolvedValue(undefined)
+	return {
+		mockSafeWriteJson: safeWriteJson,
+		mockMetadataPort: {
+			writeTaskMetadata: (item: { id: string }) => safeWriteJson(`/test/task/path/history_item.json`, item),
+			readTaskMetadata: async () => undefined,
+			deleteTaskMetadata: async () => {},
+			listTaskMetadataIds: async () => [],
+		},
+	}
+})
+
 // NOTE: Task + getChangedFiles/restore*/accept* moved into @shofer/core during the v3
 // carve-out. There must be a SINGLE vi.mock("@shofer/core") — a second one silently
 // clobbers the first — so all of these (formerly a standalone @shofer/core mock and
 // vi.mock("../../task/Task")) live in this one partial barrel mock.
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	resolveTaskPersistence: vi.fn().mockResolvedValue(mockMetadataPort),
 	Task: vi.fn().mockImplementation((options: any) => ({
 		api: undefined,
 		abortTask: vi.fn(),
@@ -202,7 +224,7 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	getModels: vi.fn().mockResolvedValue({}),
 	flushModels: vi.fn(),
 	getModelsFromCache: vi.fn().mockReturnValue(undefined),
-	safeWriteJson: vi.fn().mockResolvedValue(undefined),
+	safeWriteJson: mockSafeWriteJson,
 	modes: [{ slug: "code", name: "Code Mode", roleDefinition: "You are a code assistant", tools: ["read", "write"] }],
 	getModeBySlug: vi.fn().mockReturnValue({
 		slug: "code",

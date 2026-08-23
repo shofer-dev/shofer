@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import type { HistoryItem } from "@shofer/types"
+
 import type { ApiMessage } from "../apiMessages.js"
 import { SqliteMessagePersistence } from "../PersistencePort.js"
 
@@ -59,5 +61,35 @@ describe("SqliteMessagePersistence", () => {
 	it("returns empty for an unknown task", async () => {
 		expect(await port.readApiMessages("nope")).toEqual([])
 		expect(await port.readTaskMessages("nope")).toEqual([])
+	})
+
+	// ── Task metadata: the sibling port, backed by per-task history_item.json ──
+
+	const historyItem = (id: string, task: string): HistoryItem =>
+		({ id, number: 1, ts: 1, task, tokensIn: 0, tokensOut: 0, totalCost: 0, workspace: "/ws" }) as HistoryItem
+
+	it("round-trips a task's history item", async () => {
+		await port.writeTaskMetadata(historyItem(taskId, "first"))
+		expect((await port.readTaskMetadata(taskId))?.task).toBe("first")
+	})
+
+	it("replaces an existing history item on rewrite", async () => {
+		await port.writeTaskMetadata(historyItem(taskId, "first"))
+		await port.writeTaskMetadata(historyItem(taskId, "second"))
+		expect((await port.readTaskMetadata(taskId))?.task).toBe("second")
+	})
+
+	it("reads an absent history item as undefined, and deleting an absent one is not an error", async () => {
+		expect(await port.readTaskMetadata("nope")).toBeUndefined()
+		await expect(port.deleteTaskMetadata("nope")).resolves.toBeUndefined()
+	})
+
+	it("lists the task ids it holds metadata for, and drops a deleted one", async () => {
+		await port.writeTaskMetadata(historyItem("task-a", "a"))
+		await port.writeTaskMetadata(historyItem("task-b", "b"))
+		expect((await port.listTaskMetadataIds()).sort()).toEqual(["task-a", "task-b"])
+
+		await port.deleteTaskMetadata("task-a")
+		expect(await port.readTaskMetadata("task-a")).toBeUndefined()
 	})
 })
