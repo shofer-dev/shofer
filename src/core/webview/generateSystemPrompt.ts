@@ -20,6 +20,12 @@ export const generateSystemPrompt = async (provider: ShoferProvider, message: We
 		language,
 		enableSubfolderRules,
 		useAgentRules,
+		includeMarkdownFormattingSection,
+		includeToolUseSection,
+		includeCapabilitiesSection,
+		includeModesSection,
+		includeRulesSection,
+		includeObjectiveSection,
 	} = await provider.getState()
 
 	const diffStrategy = new MultiSearchReplaceDiffStrategy()
@@ -61,8 +67,15 @@ export const generateSystemPrompt = async (provider: ShoferProvider, message: We
 			newTaskRequireTodos: getHost().config.get<boolean>(Package.name, "newTaskRequireTodos", false),
 			isStealthModel: modelInfo?.isStealthModel,
 			// The preview must show the prompt the configuration actually
-			// produces — including the conversational (tool-free) variant.
+			// produces — including the conversational (tool-free) variant and
+			// any section a deployment's configuration scope has gated off.
 			toolCallingEnabled: apiConfiguration?.toolCallingEnabled,
+			includeMarkdownFormatting: includeMarkdownFormattingSection,
+			includeToolUse: includeToolUseSection,
+			includeCapabilities: includeCapabilitiesSection,
+			includeModes: includeModesSection,
+			includeRules: includeRulesSection,
+			includeObjective: includeObjectiveSection,
 		},
 		undefined, // todoList
 		undefined, // modelId

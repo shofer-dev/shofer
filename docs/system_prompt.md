@@ -6,15 +6,15 @@ The default system prompt is assembled at runtime by [`packages/core/src/prompts
 
 ```
 ${roleDefinition}                          ← Mode-specific persona
-${markdownFormattingSection()}             ← Clickable link syntax rules
-${getSharedToolUseSection()}               ← Tool availability summary
-${getToolUseGuidelinesSection()}           ← How to choose and chain tools
-${getCapabilitiesSection()}                ← Detailed tool capabilities
-${modesSection}                            ← Available modes listing
+${markdownFormattingSection()}             ← Clickable link syntax rules (gated by include_markdown_formatting)
+${getSharedToolUseSection()}               ← Tool availability summary (gated by include_tool_use)
+${getToolUseGuidelinesSection()}           ← How to choose and chain tools (gated by include_tool_use)
+${getCapabilitiesSection()}                ← Detailed tool capabilities (gated by include_capabilities)
+${modesSection}                            ← Available modes listing (gated by include_modes)
 ${skillsSection}                           ← Available skills listing (gated by include_skills)
-${getRulesSection()}                       ← Operational constraints & rules
+${getRulesSection()}                       ← Operational constraints & rules (gated by include_rules)
 ${getSystemInfoSection()}                  ← OS, shell, workspace paths + submodules (gated by include_system_info)
-${getObjectiveSection()}                   ← Task workflow instructions
+${getObjectiveSection()}                   ← Task workflow instructions (gated by include_objective)
 ${addCustomInstructions()}                 ← Mode-specific + user rules (gated by include_mode_rules, include_user_rules, include_agents_md)
 ```
 
@@ -41,18 +41,90 @@ flowchart TB
 
     GP --> S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10 --> S11 --> OUT
 
-    G5["mode has the mcp group<br/>AND MCP servers configured"]
+    G2["include_markdown_formatting"]
+    G34["include_tool_use"]
+    G5["mode has the mcp group<br/>AND MCP servers configured<br/>include_capabilities"]
+    G6["include_modes"]
     G7["include_skills"]
-    G8["settings.isStealthModel<br/>adds vendor-confidentiality rules"]
+    G8["include_rules<br/>settings.isStealthModel<br/>adds vendor-confidentiality rules"]
     G9["include_system_info"]
+    G10["include_objective"]
     G11["include_mode_rules<br/>include_user_rules<br/>include_agents_md"]
 
+    G2 -.-> S2
+    G34 -.-> S3
+    G34 -.-> S4
     G5 -.-> S5
+    G6 -.-> S6
     G7 -.-> S7
+    G10 -.-> S10
     G8 -.-> S8
     G9 -.-> S9
     G11 -.-> S11
 ```
+
+## Section gates: where the values come from
+
+Every section except the role definition and the custom instructions can be
+dropped. A gate is read in three layers, first answer wins, and the last layer is
+always "include it" — so a caller that sets nothing assembles the prompt
+byte-for-byte as it was before the gates existed:
+
+1. the task's `agentContext` (a workflow agent's `.slang` `context { … }` block),
+   keyed in snake_case — `include_markdown_formatting`, `include_tool_use`,
+   `include_capabilities`, `include_modes`, `include_rules`, `include_objective`,
+   plus the older `include_skills`, `include_system_info`, `include_mcp`,
+   `include_mode_rules`, `include_user_rules`, `include_agents_md`,
+   `require_todos`;
+2. a GLOBAL setting for the six new ones — `includeMarkdownFormattingSection`,
+   `includeToolUseSection`, `includeCapabilitiesSection`, `includeModesSection`,
+   `includeRulesSection`, `includeObjectiveSection` in `globalSettingsSchema`,
+   which a deployment publishes through its configuration scope
+   (`$SHOFER_GLOBAL_DIR/settings.json`) rather than a settings-view control;
+3. included.
+
+`Task.getSystemPrompt` resolves the three into `SystemPromptSettings`
+(`includeMarkdownFormatting`, `includeToolUse`, …) and folds every one into the
+system-prompt cache key, so republishing a configuration with a gate flipped
+rebuilds the prompt instead of serving the cached one.
+
+`include_tool_use` covers the TOOL USE and Tool Use Guidelines pair together,
+deliberately: they are one subject split across two functions, and gating them
+apart would let a prompt state the tool protocol without its rules, or the
+reverse.
+
+**Gates are meant to be STATIC for a deployment, not varied per turn.** The
+system prompt is the head of every request, and a provider's prompt-prefix cache
+only pays while that head is byte-identical from turn to turn — so a gate that
+changed mid-conversation would cost more in cold prefixes than any section it
+removes. That is why the second layer is a global setting rather than something
+a turn can influence: anything that genuinely varies belongs in the user message.
+
+### What each section costs
+
+Measured by
+[`packages/core/src/prompts/__tests__/section-bytes.spec.ts`](../packages/core/src/prompts/__tests__/section-bytes.spec.ts),
+which assembles the prompt with each gate on and off and reports the difference.
+Run it with `npx vitest run --no-silent packages/core/src/prompts/__tests__/section-bytes.spec.ts`.
+For a chat-shaped mode (MCP + questions + subtasks, no file tools) with two modes
+declared and no MCP hub attached — 15,629 bytes assembled:
+
+| Section                                                    | Bytes | Share |
+| ---------------------------------------------------------- | ----: | ----: |
+| RULES                                                      | 7,852 | 50.2% |
+| OBJECTIVE                                                  | 1,990 | 12.7% |
+| CAPABILITIES                                               | 1,915 | 12.3% |
+| SYSTEM INFORMATION                                         | 1,608 | 10.3% |
+| TOOL USE + Tool Use Guidelines                             | 1,500 |  9.6% |
+| MARKDOWN RULES                                             |   327 |  2.1% |
+| MODES                                                      |   235 |  1.5% |
+| ungated (role definition, custom instructions, separators) |   202 |  1.3% |
+
+The last row is small only because this fixture's mode has a one-line role
+definition and no custom instructions; a real mode's persona and instructions
+are frequently larger than every gated section put together. MODES and
+CAPABILITIES also grow with the number of declared modes and the mode's tool
+groups respectively.
 
 ## The conversational variant (`toolCallingEnabled === false`)
 

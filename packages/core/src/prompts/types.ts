@@ -40,6 +40,29 @@ export interface SystemPromptSettings {
 	includeSystemInfo?: boolean
 	includeMcp?: boolean
 	/**
+	 * Section gates for the parts of the prompt that were previously
+	 * unconditional. Each drops exactly one assembled section when `false`;
+	 * absent or `true` renders it, so a caller that sets none gets the prompt
+	 * byte-for-byte as before.
+	 *
+	 * Unlike the five above, these are also readable from a GLOBAL setting
+	 * (`includeMarkdownFormattingSection` and friends), because their intended
+	 * user is a deployment pinning the shape of every prompt a node builds. That
+	 * distinction matters for more than convenience: the provider's prompt-prefix
+	 * cache only hits while the system prompt is byte-stable across turns, so
+	 * these must be settled per deployment/mode and never varied per turn.
+	 *
+	 * `includeToolUse` covers the TOOL USE and Tool Use Guidelines pair, which
+	 * are one subject split across two functions — gating them apart would let a
+	 * prompt state the tool protocol without its rules, or the reverse.
+	 */
+	includeMarkdownFormatting?: boolean
+	includeToolUse?: boolean
+	includeCapabilities?: boolean
+	includeModes?: boolean
+	includeRules?: boolean
+	includeObjective?: boolean
+	/**
 	 * Whether the agent has a tool plane this turn (`ProviderSettings.toolCallingEnabled`).
 	 *
 	 * `false` selects the CONVERSATIONAL prompt: role definition, skills and

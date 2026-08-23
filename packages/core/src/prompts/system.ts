@@ -95,6 +95,19 @@ async function generatePrompt(
 	const includeSystemInfo = settings?.includeSystemInfo ?? true
 	const includeMcp = settings?.includeMcp ?? true
 
+	// Section gates for the rest of the prompt. Same default — absent means
+	// included — so a caller that sets none assembles exactly what it always
+	// did. Their intended user is a DEPLOYMENT trimming every prompt its nodes
+	// build (the global `include*Section` settings the caller resolves these
+	// from), not a turn: the provider's prompt-prefix cache only pays while the
+	// system prompt is byte-stable across turns.
+	const includeMarkdownFormatting = settings?.includeMarkdownFormatting ?? true
+	const includeToolUse = settings?.includeToolUse ?? true
+	const includeCapabilities = settings?.includeCapabilities ?? true
+	const includeModes = settings?.includeModes ?? true
+	const includeRules = settings?.includeRules ?? true
+	const includeObjective = settings?.includeObjective ?? true
+
 	// A conversational turn (`toolCallingEnabled === false`) is given no tools at
 	// all, so every tool-mediated section of the prompt is not merely redundant
 	// but actively wrong for it — see the branch below.
@@ -103,8 +116,10 @@ async function generatePrompt(
 	const [modesSection, rawSkillsSection] = await Promise.all([
 		// Mode overrides are read through the host `state` capability (VS Code reads
 		// `globalState`; a headless host returns none) — no `context` needed here.
-		// Switching modes is itself a tool call, so a conversational turn omits it.
-		toolCallingEnabled ? getModesSection() : Promise.resolve(""),
+		// Switching modes is itself a tool call, so a conversational turn omits it
+		// — as does a deployment whose modes are fixed and whose agent has no
+		// mode-switching tool to reach them with.
+		toolCallingEnabled && includeModes ? getModesSection() : Promise.resolve(""),
 		getSkillsSection(skillsManager, mode as string),
 	])
 	const skillsSection = includeSkills ? rawSkillsSection : ""
@@ -153,23 +168,18 @@ ${skillsSection ? `\n${skillsSection}\n` : ""}${includeSystemInfo ? `\n${getSyst
 ${customInstructionsSection}`
 	}
 
+	// Each gated block carries its own surrounding blank lines, so with every
+	// gate at its default the assembled string is byte-for-byte what the
+	// unconditional template produced.
 	const basePrompt = `${roleDefinition}
-
-${markdownFormattingSection()}
-
-${getSharedToolUseSection()}${toolsCatalog}
-
-	${getToolUseGuidelinesSection()}
-
-${getCapabilitiesSection(cwd, shouldIncludeMcp && includeMcp ? mcpHub : undefined, capabilityGroups)}
-
+${includeMarkdownFormatting ? `\n${markdownFormattingSection()}\n` : ""}
+${includeToolUse ? `${getSharedToolUseSection()}${toolsCatalog}\n\n\t${getToolUseGuidelinesSection()}\n` : ""}
+${includeCapabilities ? `${getCapabilitiesSection(cwd, shouldIncludeMcp && includeMcp ? mcpHub : undefined, capabilityGroups)}\n` : ""}
 ${modesSection}
 ${skillsSection ? `\n${skillsSection}` : ""}
-${getRulesSection(cwd, settings)}
+${includeRules ? getRulesSection(cwd, settings) : ""}
 ${includeSystemInfo ? `\n${getSystemInfoSection(cwd, submoduleInfos)}` : ""}
-
-${getObjectiveSection()}
-
+${includeObjective ? `\n${getObjectiveSection()}\n` : ""}
 ${customInstructionsSection}`
 
 	return basePrompt

@@ -168,6 +168,24 @@ export const globalSettingsSchema = z.object({
 	showShoferIgnoredFiles: z.boolean().optional(),
 	enableSubfolderRules: z.boolean().optional(),
 	useAgentRules: z.boolean().optional(),
+
+	// System-prompt section gates. Each omits one assembled section
+	// (`packages/core/src/prompts/system.ts`) when set to `false`; absent or
+	// `true` keeps it, so a deployment that sets none gets the prompt unchanged.
+	//
+	// They are GLOBAL rather than per-task deliberately. A provider's prompt
+	// prefix cache only hits while the system prompt is byte-identical across
+	// turns, so a gate that varied per turn would trade a small prompt for a
+	// cold cache on every request. Settling them in a scope that changes only
+	// when an operator republishes configuration keeps the prefix stable.
+	// (The matching per-task `agentContext` keys still exist for workflow
+	// agents, whose prompt is built once for a task that runs once.)
+	includeMarkdownFormattingSection: z.boolean().optional(),
+	includeToolUseSection: z.boolean().optional(),
+	includeCapabilitiesSection: z.boolean().optional(),
+	includeModesSection: z.boolean().optional(),
+	includeRulesSection: z.boolean().optional(),
+	includeObjectiveSection: z.boolean().optional(),
 	maxImageFileSize: z.number().optional(),
 	maxTotalImageSize: z.number().optional(),
 

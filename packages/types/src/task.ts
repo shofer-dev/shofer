@@ -174,6 +174,17 @@ export interface CreateTaskOptions {
 	 *   - `require_todos`           — TODO enforcement
 	 *   - `include_system_info`     — OS/shell/workspace info section
 	 *   - `include_mcp`             — MCP tools in capabilities
+	 *   - `include_markdown_formatting` — MARKDOWN RULES section
+	 *   - `include_tool_use`        — TOOL USE + Tool Use Guidelines sections
+	 *   - `include_capabilities`    — CAPABILITIES section
+	 *   - `include_modes`           — MODES listing section
+	 *   - `include_rules`           — RULES section
+	 *   - `include_objective`       — OBJECTIVE section
+	 *
+	 * The last six are also settable GLOBALLY (`includeMarkdownFormattingSection`
+	 * and friends in `globalSettingsSchema`), which is how a deployment pins them
+	 * per bundle rather than per task. A per-task key wins over the global one;
+	 * absent everywhere, every section is included, as it always was.
 	 *
 	 * Unknown keys are silently ignored (forward-compatible).
 	 */

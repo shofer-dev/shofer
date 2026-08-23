@@ -5512,6 +5512,16 @@ export class ShoferProvider
 			showShoferIgnoredFiles: stateValues.showShoferIgnoredFiles ?? false,
 			enableSubfolderRules: stateValues.enableSubfolderRules ?? true,
 			useAgentRules: stateValues.useAgentRules ?? true,
+			// System-prompt section gates. Passed through UNDEFAULTED, like
+			// `disabledTools` above: the default belongs to the prompt assembler,
+			// and materializing `true` here would erase the distinction between
+			// "the deployment said include it" and "the deployment said nothing".
+			includeMarkdownFormattingSection: stateValues.includeMarkdownFormattingSection,
+			includeToolUseSection: stateValues.includeToolUseSection,
+			includeCapabilitiesSection: stateValues.includeCapabilitiesSection,
+			includeModesSection: stateValues.includeModesSection,
+			includeRulesSection: stateValues.includeRulesSection,
+			includeObjectiveSection: stateValues.includeObjectiveSection,
 			maxImageFileSize: stateValues.maxImageFileSize ?? 5,
 			maxTotalImageSize: stateValues.maxTotalImageSize ?? 20,
 			historyPreviewCollapsed: stateValues.historyPreviewCollapsed ?? false,

@@ -64,10 +64,7 @@
 						"type": "string"
 					}
 				},
-				"required": [
-					"id",
-					"name"
-				],
+				"required": ["id", "name"],
 				"additionalProperties": true
 			}
 		},
@@ -148,17 +145,10 @@
 							},
 							"action": {
 								"type": "string",
-								"enum": [
-									"pause",
-									"abort",
-									"kill"
-								]
+								"enum": ["pause", "abort", "kill"]
 							}
 						},
-						"required": [
-							"maxUsd",
-							"action"
-						],
+						"required": ["maxUsd", "action"],
 						"additionalProperties": true
 					},
 					"delegatedToId": {
@@ -187,11 +177,7 @@
 					},
 					"titleSource": {
 						"type": "string",
-						"enum": [
-							"default",
-							"user",
-							"agent"
-						]
+						"enum": ["default", "user", "agent"]
 					},
 					"lastActiveTs": {
 						"type": "number"
@@ -201,28 +187,14 @@
 						"properties": {
 							"lifecycle": {
 								"type": "string",
-								"enum": [
-									"idle",
-									"running",
-									"waiting_input",
-									"waiting",
-									"paused",
-									"completed",
-									"error"
-								]
+								"enum": ["idle", "running", "waiting_input", "waiting", "paused", "completed", "error"]
 							},
 							"rating": {
 								"type": "string",
-								"enum": [
-									"poor",
-									"well",
-									"excellent"
-								]
+								"enum": ["poor", "well", "excellent"]
 							}
 						},
-						"required": [
-							"lifecycle"
-						],
+						"required": ["lifecycle"],
 						"additionalProperties": true
 					},
 					"backgroundChildIds": {
@@ -275,15 +247,7 @@
 						"additionalProperties": {}
 					}
 				},
-				"required": [
-					"id",
-					"number",
-					"ts",
-					"task",
-					"tokensIn",
-					"tokensOut",
-					"totalCost"
-				],
+				"required": ["id", "number", "ts", "task", "tokensIn", "tokensOut", "totalCost"],
 				"additionalProperties": true
 			}
 		},
@@ -295,9 +259,7 @@
 		},
 		"imageGenerationProvider": {
 			"type": "string",
-			"enum": [
-				"openrouter"
-			]
+			"enum": ["openrouter"]
 		},
 		"openRouterImageApiKey": {
 			"type": "string"
@@ -399,10 +361,7 @@
 		},
 		"settingsWriteScope": {
 			"type": "string",
-			"enum": [
-				"user",
-				"project"
-			]
+			"enum": ["user", "project"]
 		},
 		"newTaskRequireTodos": {
 			"type": "boolean"
@@ -441,16 +400,10 @@
 			"type": "boolean"
 		},
 		"allowedMaxRequests": {
-			"type": [
-				"number",
-				"null"
-			]
+			"type": ["number", "null"]
 		},
 		"allowedMaxCost": {
-			"type": [
-				"number",
-				"null"
-			]
+			"type": ["number", "null"]
 		},
 		"autoCondenseContext": {
 			"type": "boolean"
@@ -500,6 +453,24 @@
 		"useAgentRules": {
 			"type": "boolean"
 		},
+		"includeMarkdownFormattingSection": {
+			"type": "boolean"
+		},
+		"includeToolUseSection": {
+			"type": "boolean"
+		},
+		"includeCapabilitiesSection": {
+			"type": "boolean"
+		},
+		"includeModesSection": {
+			"type": "boolean"
+		},
+		"includeRulesSection": {
+			"type": "boolean"
+		},
+		"includeObjectiveSection": {
+			"type": "boolean"
+		},
 		"maxImageFileSize": {
 			"type": "number"
 		},
@@ -508,11 +479,7 @@
 		},
 		"terminalOutputPreviewSize": {
 			"type": "string",
-			"enum": [
-				"small",
-				"medium",
-				"large"
-			]
+			"enum": ["small", "medium", "large"]
 		},
 		"terminalShellIntegrationTimeout": {
 			"type": "number"
@@ -599,11 +566,7 @@
 		},
 		"telemetrySetting": {
 			"type": "string",
-			"enum": [
-				"unset",
-				"enabled",
-				"disabled"
-			]
+			"enum": ["unset", "enabled", "disabled"]
 		},
 		"mcpEnabled": {
 			"type": "boolean"
@@ -726,11 +689,7 @@
 					},
 					"source": {
 						"type": "string",
-						"enum": [
-							"global",
-							"project",
-							"plugin"
-						]
+						"enum": ["global", "project", "plugin"]
 					},
 					"pluginName": {
 						"type": "string"
@@ -742,11 +701,7 @@
 						"type": "string"
 					}
 				},
-				"required": [
-					"slug",
-					"name",
-					"roleDefinition"
-				],
+				"required": ["slug", "name", "roleDefinition"],
 				"additionalProperties": true
 			}
 		},
@@ -805,10 +760,7 @@
 		},
 		"enterBehavior": {
 			"type": "string",
-			"enum": [
-				"send",
-				"newline"
-			]
+			"enum": ["send", "newline"]
 		},
 		"profileThresholds": {
 			"type": "object",
@@ -904,17 +856,10 @@
 						},
 						"action": {
 							"type": "string",
-							"enum": [
-								"pause",
-								"abort",
-								"kill"
-							]
+							"enum": ["pause", "abort", "kill"]
 						}
 					},
-					"required": [
-						"maxUsd",
-						"action"
-					],
+					"required": ["maxUsd", "action"],
 					"additionalProperties": true
 				},
 				{
@@ -957,13 +902,7 @@
 		},
 		"logLevel": {
 			"type": "string",
-			"enum": [
-				"debug",
-				"info",
-				"warn",
-				"error",
-				"fatal"
-			]
+			"enum": ["debug", "info", "warn", "error", "fatal"]
 		},
 		"logCategories": {
 			"type": "array",

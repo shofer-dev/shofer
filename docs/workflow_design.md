@@ -722,16 +722,26 @@ _All current `agent`-block fields are now wired — including the full `context 
 
 The `context:` block is an extensible container for system-prompt component toggles. Each key is a boolean; absent keys inherit the global default for that component. Unknown keys are silently ignored (forward-compatible).
 
-| Key                       | Default | System prompt component controlled                                                         |
-| ------------------------- | ------- | ------------------------------------------------------------------------------------------ |
-| `include_agents_md`       | `true`  | Injection of `AGENTS.md` / `AGENT.md` rules (maps to `useAgentRules`).                     |
-| `include_subfolder_rules` | `false` | Recursive scanning of `.shofer/rules/` in subdirectories (maps to `enableSubfolderRules`). |
-| `include_mode_rules`      | `true`  | Loading of `.shofer/rules-{mode}/` (e.g., `.shofer/rules-code/`).                          |
-| `include_user_rules`      | `true`  | Loading of `.shofer/rules/` (non-mode).                                                    |
-| `include_skills`          | `true`  | Skills listing section in the prompt.                                                      |
-| `require_todos`           | `false` | TODO enforcement in the prompt.                                                            |
-| `include_system_info`     | `true`  | OS/shell/workspace paths section.                                                          |
-| `include_mcp`             | `true`  | MCP tools in the capabilities section.                                                     |
+| Key                           | Default | System prompt component controlled                                                         |
+| ----------------------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `include_agents_md`           | `true`  | Injection of `AGENTS.md` / `AGENT.md` rules (maps to `useAgentRules`).                     |
+| `include_subfolder_rules`     | `false` | Recursive scanning of `.shofer/rules/` in subdirectories (maps to `enableSubfolderRules`). |
+| `include_mode_rules`          | `true`  | Loading of `.shofer/rules-{mode}/` (e.g., `.shofer/rules-code/`).                          |
+| `include_user_rules`          | `true`  | Loading of `.shofer/rules/` (non-mode).                                                    |
+| `include_skills`              | `true`  | Skills listing section in the prompt.                                                      |
+| `require_todos`               | `false` | TODO enforcement in the prompt.                                                            |
+| `include_system_info`         | `true`  | OS/shell/workspace paths section.                                                          |
+| `include_mcp`                 | `true`  | MCP tools in the capabilities section.                                                     |
+| `include_markdown_formatting` | `true`  | MARKDOWN RULES section.                                                                    |
+| `include_tool_use`            | `true`  | TOOL USE section and its guidelines (one gate covers both).                                |
+| `include_capabilities`        | `true`  | CAPABILITIES section.                                                                      |
+| `include_modes`               | `true`  | MODES listing.                                                                             |
+| `include_rules`               | `true`  | RULES section.                                                                             |
+| `include_objective`           | `true`  | OBJECTIVE section.                                                                         |
+
+The last six also exist as GLOBAL settings (`includeMarkdownFormattingSection`
+and friends), which is how a deployment fixes them for every task a node runs; a
+key here overrides the global one for this agent.
 
 ```slang
 agent Developer {

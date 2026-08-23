@@ -453,6 +453,17 @@ export type ExtensionState = Pick<
 	showShoferIgnoredFiles: boolean // Whether to show .shoferignore'd files in listings
 	enableSubfolderRules: boolean // Whether to load rules from subdirectories on demand (default: true)
 	useAgentRules: boolean // Whether to load AGENTS.md files for agent-specific rules
+	// System-prompt section gates. Optional and undefined-means-included: they
+	// have no settings-view control, because their audience is a deployment
+	// publishing a configuration scope rather than a person clicking a checkbox
+	// — the prompt must be identical on every turn for the provider's prefix
+	// cache to hit.
+	includeMarkdownFormattingSection?: boolean
+	includeToolUseSection?: boolean
+	includeCapabilitiesSection?: boolean
+	includeModesSection?: boolean
+	includeRulesSection?: boolean
+	includeObjectiveSection?: boolean
 	maxReadFileLine?: number // Maximum line limit for read_file tool (-1 for default)
 	maxImageFileSize: number // Maximum size of image files to process in MB
 	maxTotalImageSize: number // Maximum total size for all images in a single read operation in MB

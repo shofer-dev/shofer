@@ -383,18 +383,30 @@ via a set of boolean toggles. Written as a block — `context { include_agents_m
 and a leading colon (`context: { ... }`) is also accepted. Each key gates a
 specific system-prompt component; absent keys inherit the global default.
 
-| Key                       | Default | Effect                                                                                |
-| ------------------------- | ------- | ------------------------------------------------------------------------------------- |
-| `include_agents_md`       | `true`  | Inject AGENTS.md / AGENT.md rules (maps to `useAgentRules`).                          |
-| `include_subfolder_rules` | `false` | Recursively scan `.shofer/rules/` in subdirectories (maps to `enableSubfolderRules`). |
-| `include_mode_rules`      | `true`  | Load `.shofer/rules-{mode}/` rules.                                                   |
-| `include_user_rules`      | `true`  | Load `.shofer/rules/` rules (non-mode).                                               |
-| `include_skills`          | `true`  | Include the skills listing section in the prompt.                                     |
-| `require_todos`           | `false` | Enforce TODO list in the prompt.                                                      |
-| `include_system_info`     | `true`  | Include OS/shell/workspace info section.                                              |
-| `include_mcp`             | `true`  | Include MCP tools in the capabilities section.                                        |
+| Key                           | Default | Effect                                                                                |
+| ----------------------------- | ------- | ------------------------------------------------------------------------------------- |
+| `include_agents_md`           | `true`  | Inject AGENTS.md / AGENT.md rules (maps to `useAgentRules`).                          |
+| `include_subfolder_rules`     | `false` | Recursively scan `.shofer/rules/` in subdirectories (maps to `enableSubfolderRules`). |
+| `include_mode_rules`          | `true`  | Load `.shofer/rules-{mode}/` rules.                                                   |
+| `include_user_rules`          | `true`  | Load `.shofer/rules/` rules (non-mode).                                               |
+| `include_skills`              | `true`  | Include the skills listing section in the prompt.                                     |
+| `require_todos`               | `false` | Enforce TODO list in the prompt.                                                      |
+| `include_system_info`         | `true`  | Include OS/shell/workspace info section.                                              |
+| `include_mcp`                 | `true`  | Include MCP tools in the capabilities section.                                        |
+| `include_markdown_formatting` | `true`  | Include the MARKDOWN RULES section.                                                   |
+| `include_tool_use`            | `true`  | Include TOOL USE and its guidelines (one gate — they are one subject).                |
+| `include_capabilities`        | `true`  | Include the CAPABILITIES section.                                                     |
+| `include_modes`               | `true`  | Include the MODES listing.                                                            |
+| `include_rules`               | `true`  | Include the RULES section.                                                            |
+| `include_objective`           | `true`  | Include the OBJECTIVE section.                                                        |
 
 Unknown keys inside the block are silently ignored (forward-compatible).
+
+The last six also have a global counterpart (`includeMarkdownFormattingSection`
+and friends in `globalSettingsSchema`), which is how a whole deployment pins
+them; a key here wins over the global one for this agent. See
+[`system_prompt.md`](system_prompt.md) for the resolution order and the measured
+byte cost of each section.
 
 By convention, meta fields appear **before** the operations. Note this is **not
 enforced** by the parser — the agent-body loop in
