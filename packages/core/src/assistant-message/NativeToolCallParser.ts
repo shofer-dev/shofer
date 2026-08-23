@@ -1026,6 +1026,14 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "describe_tools":
+				if (Array.isArray(partialArgs.names)) {
+					nativeArgs = {
+						names: partialArgs.names,
+					}
+				}
+				break
+
 			case "create_directory":
 				if (partialArgs.path !== undefined || partialArgs.filePath !== undefined) {
 					nativeArgs = {
@@ -1758,6 +1766,16 @@ export class NativeToolCallParser {
 				case "list_background_tasks":
 					nativeArgs = {
 						scope: args.scope === "peers" ? "peers" : "children",
+					} as NativeArgsFor<TName>
+					break
+
+				// Emitted unconditionally: a call with no usable `names` must reach the
+				// handler, which raises the missing-parameter error the model can act
+				// on. Leaving nativeArgs unset would instead trip the dispatcher's
+				// "missing nativeArgs" rejection, which reads as a provider error.
+				case "describe_tools":
+					nativeArgs = {
+						names: Array.isArray(args.names) ? args.names : [],
 					} as NativeArgsFor<TName>
 					break
 

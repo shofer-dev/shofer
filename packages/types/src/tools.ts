@@ -164,6 +164,8 @@ export const toolParamNames = [
 	"softResultLength",
 	// list_background_tasks scope parameter
 	"scope",
+	// describe_tools parameter — the tool names whose schemas are wanted
+	"names",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -209,6 +211,7 @@ export type NativeToolArgs = {
 	check_task_status: { task_id: string; include_activity?: boolean | null }
 	wait_for_task: { task_ids: string[]; wait?: "all" | "any"; timeout?: number }
 	list_background_tasks: { scope?: "children" | "peers" | null }
+	describe_tools: { names: string[] }
 	cancel_tasks: { task_ids: string[] }
 	answer_subtask_question: { task_id: string; answer: string }
 	ask_followup_question: {

@@ -8,6 +8,10 @@ mode-level fields that govern tool access:
 - `tools_allowed`
 - `tools_denied`
 
+A fourth field, `tools_full_schema`, is on a different axis: it changes nothing
+about which tools a mode HAS, only how much of each admitted tool's contract is
+sent to the model (§`tools_full_schema`).
+
 > **See also:** [`tool_preferences.md`](./tool_preferences.md) — how a specific
 > **model** opts into/out of tools (`includedTools`/`excludedTools`, dialect &
 > naming) across the three model-access paths, and where that metadata lives.
@@ -28,6 +32,7 @@ export const modeConfigObjectSchema = z.object({
 	tools: groupEntryArraySchema.optional(),
 	tools_allowed: z.array(z.string()).optional(),
 	tools_denied: z.array(z.string()).optional(),
+	tools_full_schema: z.array(z.string()).optional(),
 	source: z.enum(["global", "project"]).optional(),
 	provider: z.string().optional(),
 })
@@ -151,6 +156,73 @@ A flat list of tool IDs that are unconditionally forbidden, regardless of
 whether `tools` or `tools_allowed` would otherwise grant them. This is the
 right field for "subtract one tool from an otherwise broad permission set"
 patterns — e.g. grant the `execute` group but deny `execute_command`.
+
+### `tools_full_schema` — the presentation tier, not an access field
+
+The three fields above answer _may the agent call this tool_.
+`tools_full_schema` answers a different question: _how much of the tool's
+contract is put in front of the model_. It grants nothing and forbids nothing,
+and the decision rule above is untouched by it.
+
+Every tool a mode admits is serialized into the tools array of **every** request
+and re-attended on every turn, so a chat-shaped agent fronting a large MCP
+catalog pays for the whole catalog to call two of it. Declaring
+`tools_full_schema` splits the surface into three tiers:
+
+| Tier            | What the model gets                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| **full schema** | the tools named in `tools_full_schema` — their definitions, unchanged                                        |
+| **stub**        | every other admitted tool: name, one line of its own description, and a permissive `object` parameter schema |
+| **discovery**   | `describe_tools(names[])`, which returns the real contracts of any of them                                   |
+
+```yaml
+- slug: orchestrator
+  tools: [mcp, questions, subtasks]
+  tools_full_schema: [attempt_completion, ask_followup_question, new_task]
+```
+
+Semantics, all of which follow from "presentation, not access":
+
+- **Absent ⇒ no tiering.** Every admitted tool carries its full schema and
+  `describe_tools` is not offered, so a mode that says nothing about this field
+  builds byte-for-byte the array it always built.
+- **Present (including `[]`) ⇒ tiering is on**, and `describe_tools` is admitted
+  and always carries its full schema — a stubbed discovery tool could describe
+  nothing.
+- **Names are matched as the MODEL sees them**, so an MCP tool is named
+  `mcp--<server>--<tool>` and a plugin tool by its own name.
+- **Denial still wins.** A name here that the mode does not admit stays absent;
+  this field cannot re-admit it.
+- **A stub is individually callable.** It is an ordinary entry in the tools
+  array — no dispatcher, no new calling convention.
+- **A stub weakens no validation.** It changes only what is shown; execution
+  still runs the real contract — a native tool's own missing-parameter error (or,
+  for a required argument its parser guards on, the dispatcher's "arguments could
+  not be parsed"), a plugin tool's Zod parse at dispatch, an MCP server's schema
+  validation. That is also the recovery path when the model skips discovery: it
+  gets the ordinary validation error, unchanged, and can react to it.
+
+It is an ALLOW-list rather than a stub-list on purpose: the admitted set grows on
+its own — an MCP catalog gains a tool, a plugin contributes one — and a stub-list
+would silently let every newcomer back into the full-schema tier. Here a
+newcomer arrives as a stub, which costs one `describe_tools` call.
+
+**Set it per deployment, never per turn.** The tools array serializes into the
+provider's cached request prefix, so a schema fetched mid-conversation is never
+injected back into it — `describe_tools` answers through the message stream,
+which is append-only and cache-safe. Varying the tiers between turns would cost
+more in cold prefixes than the stubs save.
+
+Implementation:
+[`packages/core/src/prompts/tools/tool-stubs.ts`](../packages/core/src/prompts/tools/tool-stubs.ts)
+(the tiers), applied in
+[`packages/core/src/task/build-tools.ts`](../packages/core/src/task/build-tools.ts)
+after mode filtering, with the pre-stub definitions recorded in
+[`packages/core/src/tools/tool-schema-registry.ts`](../packages/core/src/tools/tool-schema-registry.ts)
+for
+[`describe_tools`](../packages/core/src/tools/DescribeToolsTool.ts) to answer
+from. The TOOL USE and CAPABILITIES sections of the system prompt say so when a
+mode tiers ([`system_prompt.md`](system_prompt.md)).
 
 ## Worked examples
 
@@ -282,11 +354,14 @@ The check order documented in §Decision rule describes
 deny → tools_allowed → groups → false. The actual implementation in
 [`isToolAllowedForMode()`](../packages/core/src/tools/validateToolUse.ts:200) has a
 fast-path before any of those checks: `ALWAYS_AVAILABLE_TOOLS` (comprising
-`attempt_completion`, `wait_for_message`, `update_todo_list`, `run_slash_command`, `skills`,
-`set_task_title`, `give_feedback`, `list_background_tasks`, and
-`send_message_to_task`) unconditionally returns `true`. This
-means these nine tools always pass mode-level checks regardless of `tools`,
-`tools_allowed`, or `tools_denied`. Disabling them requires the `disabledTools`
+`attempt_completion`, `describe_tools`, `wait_for_message`, `update_todo_list`,
+`run_slash_command`, `skills`, `set_task_title`, `give_feedback`,
+`list_background_tasks`, and `send_message_to_task`) unconditionally returns
+`true`. This means these ten tools always pass mode-level checks regardless of
+`tools`, `tools_allowed`, or `tools_denied`. `describe_tools` is the one
+qualified member: it passes the runtime check everywhere, but `computeToolAccess`
+removes it from the tools a mode is SHOWN unless that mode declares
+`tools_full_schema` — a mode with no stubs has nothing to describe. Disabling them requires the `disabledTools`
 setting (checked earlier in `validateToolUse()` via `toolRequirements`), not
 mode configuration.
 

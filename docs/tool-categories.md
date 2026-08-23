@@ -247,7 +247,9 @@ flowchart TD
 
 These tools bypass mode filtering entirely, defined in the [`ALWAYS_AVAILABLE_TOOLS`](../packages/types/src/tool.ts) constant:
 
-`attempt_completion`, `wait_for_message`, `update_todo_list`, `run_slash_command`, `skills`, `set_task_title`, `give_feedback`, `list_background_tasks`, `send_message_to_task`
+`attempt_completion`, `wait_for_message`, `update_todo_list`, `run_slash_command`, `skills`, `set_task_title`, `give_feedback`, `list_background_tasks`, `send_message_to_task`, `describe_tools`
+
+`describe_tools` is the one member with a further condition: it belongs to the constant so that a mode which tiers its tool schemas (`tools_full_schema` — see [`tool_access.md`](tool_access.md)) gets it without listing it, and `computeToolAccess` removes it again for a mode that declares no tiering, which has no stubbed tool to describe.
 
 ### MCP tools without group
 

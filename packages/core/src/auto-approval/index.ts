@@ -244,6 +244,12 @@ export async function checkAutoApproval({
 				"readProjectStructure",
 				"listCodeUsages",
 				"lspSearch",
+				// describeTools reads back the schemas of tools the model was shown as
+				// stubs, out of the definitions this very request was built from. It
+				// touches nothing and reveals nothing the tool list does not already
+				// carry, so gating it would only stall the call that discovery exists
+				// to unblock.
+				"describeTools",
 				// sleep is harmless — it just pauses execution. Without auto-approval it
 				// would prompt the user on every pause, and without a chat row it would
 				// appear as a silent hang.

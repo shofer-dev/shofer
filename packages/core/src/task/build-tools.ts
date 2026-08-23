@@ -16,8 +16,18 @@ import { getRooDirectoriesForCwd } from "../services/shofer-config/index.js"
 import { getNativeTools } from "../prompts/tools/native-tools/index.js"
 import { getMcpServerTools } from "../prompts/tools/native-tools/mcp_server.js"
 import { filterNativeToolsForMode, filterMcpToolsForMode } from "../prompts/tools/filter-tools-for-mode.js"
-import { defaultModeSlug, getGroupName, getModeBySlug, getToolsForMode } from "@shofer/types"
+import { applyToolSchemaTiers } from "../prompts/tools/tool-stubs.js"
+import {
+	DESCRIBE_TOOLS_TOOL_NAME,
+	defaultModeSlug,
+	getGroupName,
+	getModeBySlug,
+	getToolsForMode,
+	modeStubsToolSchemas,
+	resolveModeConfig,
+} from "@shofer/types"
 import { resolveToolAlias } from "../tools/tool-aliases.js"
+import { recordToolSchemas } from "../tools/tool-schema-registry.js"
 
 interface BuildToolsOptions {
 	provider: TaskProviderLike
@@ -404,11 +414,39 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 
 	const filteredTools = [...restrictedNative, ...restrictedMcp, ...restrictedCustom, ...restrictedPrivate]
 
+	// The FULL contracts of everything this mode admits, recorded before the stub
+	// tier reduces them — this is what `describe_tools` hands back, so the
+	// described contract is by construction the one the call is validated
+	// against. Recorded even when the mode declares no tiering: the tool is not
+	// offered there, and a registry that only exists in one configuration is a
+	// registry nobody can test.
+	const modeConfig = resolveModeConfig(mode ?? defaultModeSlug, customModes)
+	recordToolSchemas(modeConfig.slug, filteredTools)
+
+	// Presentation tier (`ModeConfig.tools_full_schema`): a mode that declares one
+	// keeps its always-on tools whole and reduces the rest to stubs. A mode that
+	// declares none is returned exactly what it was returned before.
+	const { tools: tieredTools, stubbed } = applyToolSchemaTiers(filteredTools, modeConfig)
+	if (stubbed.length > 0) {
+		toolsLog.debug(
+			`[tool-stubs] mode ${modeConfig.slug}: ${tieredTools.length - stubbed.length} full schema(s), ` +
+				`${stubbed.length} stub(s) recoverable via describe_tools`,
+		)
+	}
+
 	if (includeAllToolsWithRestrictions) {
-		const allTools = [...nativeTools, ...mcpTools, ...nativeCustomTools, ...allPrivateTools]
-		const allowedFunctionNames = filteredTools.map((tool) => resolveToolAlias(getToolName(tool)))
+		// Providers that take every definition and restrict callability by name
+		// (Gemini's `allowedFunctionNames`) get the same two tiers. `describe_tools`
+		// is dropped here for a mode that declares no tiering, for the same reason
+		// `computeToolAccess` drops it: a mode with no stubs must see exactly the
+		// tools it saw before.
+		const everything = [...nativeTools, ...mcpTools, ...nativeCustomTools, ...allPrivateTools].filter(
+			(tool) => modeStubsToolSchemas(modeConfig) || getToolName(tool) !== DESCRIBE_TOOLS_TOOL_NAME,
+		)
+		const allTools = applyToolSchemaTiers(everything, modeConfig).tools
+		const allowedFunctionNames = tieredTools.map((tool) => resolveToolAlias(getToolName(tool)))
 		return { tools: allTools, allowedFunctionNames }
 	}
 
-	return { tools: filteredTools }
+	return { tools: tieredTools }
 }

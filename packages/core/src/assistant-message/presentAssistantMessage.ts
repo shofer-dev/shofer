@@ -63,6 +63,7 @@ import { viewImageTool } from "../tools/ViewImageTool.js"
 import { checkTaskStatusTool } from "../tools/CheckTaskStatusTool.js"
 import { waitForTaskTool } from "../tools/WaitForTaskTool.js"
 import { listBackgroundTasksTool } from "../tools/ListBackgroundTasksTool.js"
+import { describeToolsTool } from "../tools/DescribeToolsTool.js"
 import { cancelTasksTool } from "../tools/CancelTasksTool.js"
 import { answerSubtaskQuestionTool } from "../tools/AnswerSubtaskQuestionTool.js"
 import { sendMessageToTaskTool } from "../tools/SendMessageToTaskTool.js"
@@ -565,6 +566,10 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} for '${block.params.task_id}']`
 					case "list_background_tasks":
 						return `[${block.name}]`
+					case "describe_tools": {
+						const names = block.params.names
+						return `[${block.name} for '${Array.isArray(names) ? names.join(", ") : (names ?? "")}']`
+					}
 					case "skills":
 						return `[${block.name} for '${block.params.skill}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
 					case "generate_image":
@@ -1299,6 +1304,13 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "list_background_tasks":
 					await listBackgroundTasksTool.handle(shofer, block as ToolUse<"list_background_tasks">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "describe_tools":
+					await describeToolsTool.handle(shofer, block as ToolUse<"describe_tools">, {
 						askApproval,
 						handleError,
 						pushToolResult,

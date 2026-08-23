@@ -92,6 +92,8 @@ export const toolNames = [
 	"send_message_to_task",
 	// Alias for attempt_completion with canned params (yield while waiting for a message)
 	"wait_for_message",
+	// On-demand schema loading: hands back the full contract of a stubbed tool
+	"describe_tools",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)
@@ -165,6 +167,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	wait_for_mcp_call: "wait for async mcp calls",
 	send_message_to_task: "send messages to peer tasks",
 	wait_for_message: "wait for a message from another task",
+	describe_tools: "read tool schemas",
 } as const
 
 /**
@@ -237,9 +240,15 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 /**
  * ALWAYS_AVAILABLE_TOOLS
  * Tools that are always available to all modes and cannot be disabled.
+ *
+ * `describe_tools` is a member so that a mode which tiers its schemas gets it
+ * without listing it, but it is REMOVED again by `computeToolAccess` for a mode
+ * that declares no tiering: a mode with no stubs has nothing to describe, and
+ * offering it there would change every existing mode's tool array.
  */
 export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"attempt_completion",
+	"describe_tools",
 	"update_todo_list",
 	"run_slash_command",
 	"skills",

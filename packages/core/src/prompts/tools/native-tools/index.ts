@@ -54,6 +54,7 @@ function applyCompletionSchema(
 		},
 	}
 }
+import describeTools from "./describe_tools.js"
 import lspSearch from "./lsp_search.js"
 import createDirectory from "./create_directory.js"
 import createNewWorkspace from "./create_new_workspace.js"
@@ -146,6 +147,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		completionSchema
 			? applyCompletionSchema(attemptCompletion as OpenAI.Chat.ChatCompletionFunctionTool, completionSchema)
 			: attemptCompletion,
+		describeTools,
 		lspSearch,
 		createDirectory,
 		createNewWorkspace,

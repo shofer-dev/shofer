@@ -461,6 +461,7 @@ Pauses agent execution for the given number of seconds. Useful for polling exter
 | `skills`                  | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                                                                               |
 | `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                                                                                     |
 | `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                                                                             |
+| `describe_tools`          | 🟣 AW  | –     |   ✅ (tiered)    |   ✅   | Return the full parameter schema of tools the mode declared as stubs                                                   |
 
 The subtask tools form one control plane around a background child. The parent
 holds every lever; the child never talks to the user directly:
@@ -707,6 +708,33 @@ Returns each task's ID, title, current status (a `TaskLifecycle` value: `idle`, 
 | ------- | --------------------------------- | :------: | ----------------------------------------------------------------------------------------------------- |
 | `scope` | `"children"` \| `"peers"` \| null |    –     | `"children"` (default): direct children only. `"peers"`: all tasks sharing the caller's `rootTaskId`. |
 
+### `describe_tools`
+
+Return the full parameter schema of one or more tools. It exists for modes that
+declare `tools_full_schema` ([`tool_access.md`](tool_access.md)): those send most
+of their tools to the model as STUBS — name, one line, and a permissive `object`
+parameter schema — and this tool is how the model recovers the real contract
+before calling one.
+
+It is answered entirely client-side, from the definitions the current tool build
+recorded (`packages/core/src/tools/tool-schema-registry.ts`), so it costs no MCP
+round trip and cannot describe a contract that differs from the one the call is
+validated against. The schemas come back as an ordinary tool RESULT rather than
+being injected into the request's tools array — the array is part of the
+provider's cached prefix and must stay byte-stable, while the message stream is
+append-only.
+
+Unknown names never fail the call: the model is told which names do not exist,
+given the nearest ones that do, and still receives the schemas of the names that
+were found.
+
+Offered only where the mode declares `tools_full_schema`; a mode with no stubs
+has nothing to describe.
+
+| Param   | Type     | Required | Description                                                                                           |
+| ------- | -------- | :------: | ----------------------------------------------------------------------------------------------------- |
+| `names` | string[] |    ✅    | Tool names exactly as they appear in the model's tool list (`mcp--<server>--<tool>` for an MCP tool). |
+
 ### `send_message_to_task`
 
 Send a message to a peer task sharing the same root task. The caller and target must share a root task (the root/parent task can message any task in its tree; sub-tasks require `knownPeers`). Discover the target's task ID via `list_background_tasks(scope="peers")`.
@@ -920,7 +948,11 @@ To read off availability for any tool:
 
 `ALWAYS_AVAILABLE_TOOLS` (available in every mode): `attempt_completion`,
 `update_todo_list`, `run_slash_command` (🔒), `skills`, `set_task_title`,
-`give_feedback`, `list_background_tasks`, `send_message_to_task`, `wait_for_message`. Note
+`give_feedback`, `list_background_tasks`, `send_message_to_task`,
+`wait_for_message`, and `describe_tools` — the last of which is additionally
+gated: `computeToolAccess` removes it from a mode that declares no
+`tools_full_schema`, since a mode with no stubbed tools has nothing to describe.
+Note
 `switch_mode` is **not** always-available — it lives in the `mode` group (only
 `code` carries it), and the `subtasks` tools (`new_task`, `check_task_status`,
 `wait_for_task`, `cancel_tasks`, `answer_subtask_question`) require the `subtasks`

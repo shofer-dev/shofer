@@ -79,6 +79,41 @@ export function getToolsForMode(
 }
 
 /**
+ * The discovery tool that hands the model the full parameter contract of a
+ * stubbed tool. It is offered exactly where stubbing is on, because a stub is
+ * only callable once the model can read the contract it does not carry.
+ */
+export const DESCRIBE_TOOLS_TOOL_NAME = "describe_tools"
+
+/**
+ * Whether this mode tiers its tool schemas — i.e. whether every admitted tool
+ * outside {@link ModeConfig.tools_full_schema} is sent to the model as a stub.
+ *
+ * The field's PRESENCE is the switch (an empty list still means "tier them"), so
+ * a mode that says nothing gets the untiered behaviour byte-for-byte.
+ */
+export function modeStubsToolSchemas(mode: Pick<ModeConfig, "tools_full_schema">): boolean {
+	return mode.tools_full_schema !== undefined
+}
+
+/**
+ * Whether a tool this mode admits keeps its full schema in the request's tools
+ * array. Always true when the mode declares no tiering, and always true for
+ * {@link DESCRIBE_TOOLS_TOOL_NAME} — a stubbed discovery tool could not describe
+ * anything.
+ *
+ * @param toolName The name the model sees: a native tool's snake_case name, an
+ *   MCP tool's `mcp--<server>--<tool>` name, or a plugin tool's own name.
+ */
+export function isFullSchemaTool(mode: Pick<ModeConfig, "tools_full_schema">, toolName: string): boolean {
+	const full = mode.tools_full_schema
+	if (full === undefined) {
+		return true
+	}
+	return toolName === DESCRIBE_TOOLS_TOOL_NAME || full.includes(toolName)
+}
+
+/**
  * The slug of the mode a task falls back to when its own mode cannot be resolved.
  *
  * This is a **platform constant, not a lookup**: modes themselves are data — Shofer's

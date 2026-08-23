@@ -1,0 +1,19 @@
+{
+	"name": "describe_tools",
+	"strict": true,
+	"description": "Return the full parameter schema of one or more tools. Tools whose description says their parameters are omitted are declared to you as stubs: call describe_tools with their names FIRST, then call them with the arguments the returned schema requires. Ask for every tool you are about to use in a single call. Names must be exactly as they appear in your tool list.",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"names": {
+				"description": "Tool names to describe, exactly as they appear in your tool list (e.g. \"some_tool\" or \"mcp--<server>--<tool>\").",
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			}
+		},
+		"required": ["names"],
+		"additionalProperties": false
+	}
+}

@@ -1,6 +1,13 @@
 import type OpenAI from "openai"
 import type { ModeConfig, ToolName, ToolGroup, ModelInfo, McpTool } from "@shofer/types"
-import { getGroupName, getModeBySlug, getToolsForMode, resolveModeConfig } from "@shofer/types"
+import {
+	DESCRIBE_TOOLS_TOOL_NAME,
+	getGroupName,
+	getModeBySlug,
+	getToolsForMode,
+	modeStubsToolSchemas,
+	resolveModeConfig,
+} from "@shofer/types"
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/types"
 import { defaultModeSlug } from "@shofer/types"
 import { resolveToolAlias } from "../../tools/tool-aliases.js"
@@ -236,6 +243,14 @@ export function computeToolAccess(params: ToolAccessParams): {
 		for (const toolName of disabledTools) {
 			allowedTools.delete(resolveToolAlias(toolName))
 		}
+	}
+
+	// 3c. `describe_tools` is always-available so that a mode which tiers its tool
+	// schemas gets it for free — but a mode that declares no tiering has no stub
+	// to describe, and offering the tool there would change the surface of every
+	// existing mode. So it is admitted exactly where stubs exist.
+	if (!modeStubsToolSchemas(modeConfig)) {
+		allowedTools.delete(DESCRIBE_TOOLS_TOOL_NAME)
 	}
 
 	return { allowedTools, aliasRenames }

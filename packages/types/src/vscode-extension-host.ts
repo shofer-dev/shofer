@@ -1037,6 +1037,7 @@ export interface ShoferSayTool {
 		| "checkMcpCallStatus"
 		| "waitForMcpCall"
 		| "sleep"
+		| "describeTools"
 	path?: string
 	/** For `removeFile` / `moveFile`: the rm/mv subcommand. */
 	fileOp?: "rm" | "mv"

@@ -7,7 +7,7 @@ The default system prompt is assembled at runtime by [`packages/core/src/prompts
 ```
 ${roleDefinition}                          ← Mode-specific persona
 ${markdownFormattingSection()}             ← Clickable link syntax rules (gated by include_markdown_formatting)
-${getSharedToolUseSection()}               ← Tool availability summary (gated by include_tool_use)
+${getSharedToolUseSection(stubs?)}         ← Tool availability summary (gated by include_tool_use)
 ${getToolUseGuidelinesSection()}           ← How to choose and chain tools (gated by include_tool_use)
 ${getCapabilitiesSection()}                ← Detailed tool capabilities (gated by include_capabilities)
 ${modesSection}                            ← Available modes listing (gated by include_modes)
@@ -27,9 +27,9 @@ flowchart TB
 
     S1["roleDefinition<br/>mode persona"]
     S2["markdownFormattingSection()"]
-    S3["getSharedToolUseSection()"]
+    S3["getSharedToolUseSection(toolSchemasOnDemand?)"]
     S4["getToolUseGuidelinesSection()"]
-    S5["getCapabilitiesSection(cwd, mcpHub?)"]
+    S5["getCapabilitiesSection(cwd, mcpHub?, groups?, toolSchemasOnDemand?)"]
     S6["getModesSection(context)"]
     S7["getSkillsSection(skillsManager, currentMode)"]
     S8["getRulesSection(cwd, settings?)"]
@@ -92,6 +92,28 @@ rebuilds the prompt instead of serving the cached one.
 deliberately: they are one subject split across two functions, and gating them
 apart would let a prompt state the tool protocol without its rules, or the
 reverse.
+
+### The tool plane the prompt describes must be the one the request carries
+
+Two sections describe the tool INVENTORY, so they change when the inventory's
+presentation does. A mode that declares `tools_full_schema`
+(`tool_access.md`) sends most of its tools to the model as STUBS — name, one
+line, permissive parameters — and recovers the real contracts on demand through
+`describe_tools`. When it does:
+
+- **TOOL USE** gains a paragraph stating that a stub's arguments were omitted to
+  keep the list small (not because the tool takes none), that `describe_tools`
+  returns them, and that a stubbed tool's arguments are never to be guessed;
+- **CAPABILITIES** gains a bullet saying the stub list IS the full inventory
+  rather than a summary of it — without which a model reading one-line entries
+  concludes it has fewer capabilities than it does.
+
+Neither is a gate: the two sections read the MODE, which is the same source the
+tool build reads, so the prose and the tools array cannot disagree. And like the
+gates, the setting is static per bundle/mode — `Task.getSystemPrompt` folds the
+mode's `tools_full_schema` into the system-prompt cache key so republishing a
+mode that starts (or stops) stubbing rebuilds the prompt, but nothing varies
+turn to turn.
 
 **Gates are meant to be STATIC for a deployment, not varied per turn.** The
 system prompt is the head of every request, and a provider's prompt-prefix cache
@@ -183,12 +205,14 @@ a cached tools-on prompt.
 
 ### 3. [`sections/tool-use.ts`](../packages/core/src/prompts/sections/tool-use.ts)
 
-**Function:** `getSharedToolUseSection()`
+**Function:** `getSharedToolUseSection(toolSchemasOnDemand?)`
 
 - Declares that tools are available and executed upon user approval.
 - Uses provider-native tool-calling (no XML markup).
 - Requires at least one tool call per assistant response.
 - Encourages batching multiple tools in a single response to reduce round-trips.
+- When the mode tiers its tool schemas, appends the deferred-schema protocol:
+  stubs, `describe_tools`, and "do not guess a stubbed tool's arguments".
 
 ### 4. [`sections/tool-use-guidelines.ts`](../packages/core/src/prompts/sections/tool-use-guidelines.ts)
 
@@ -200,12 +224,13 @@ a cached tools-on prompt.
 
 ### 5. [`sections/capabilities.ts`](../packages/core/src/prompts/sections/capabilities.ts)
 
-**Function:** `getCapabilitiesSection(cwd, mcpHub?)`
+**Function:** `getCapabilitiesSection(cwd, mcpHub?, groups?, toolSchemasOnDemand?)`
 
 - Describes the full tool inventory: CLI commands, file listing, source code viewing, regex search, read/write files, follow-up questions.
 - Explains how `environment_details` (the auto-generated file listing) works after every user message.
 - Documents `execute_command` behavior (new terminal per command, preferred over scripts for complex operations).
 - **Conditionally includes MCP server info** if the current mode has the `mcp` group AND MCP servers are configured.
+- **Conditionally states that most tools are stubs** when the mode declares `tools_full_schema`.
 
 ### 6. [`sections/modes.ts`](../packages/core/src/prompts/sections/modes.ts)
 

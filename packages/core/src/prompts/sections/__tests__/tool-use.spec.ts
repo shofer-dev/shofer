@@ -28,4 +28,21 @@ describe("getSharedToolUseSection", () => {
 		expect(section).not.toContain("<actual_tool_name>")
 		expect(section).not.toContain("</actual_tool_name>")
 	})
+
+	// A mode that stubs most of its tools must SAY so: a model shown a stub with
+	// an empty `properties` map otherwise concludes the tool takes no arguments.
+	describe("when the mode tiers its tool schemas", () => {
+		it("states the deferred-schema protocol and names describe_tools", () => {
+			const section = getSharedToolUseSection(true)
+
+			expect(section).toContain("describe_tools")
+			expect(section).toContain("not because they take none")
+			expect(section).toContain("Do not guess a stubbed tool's arguments")
+		})
+
+		it("is byte-identical to the untiered section for false and for absent", () => {
+			expect(getSharedToolUseSection(false)).toEqual(getSharedToolUseSection())
+			expect(getSharedToolUseSection()).not.toContain("describe_tools")
+		})
+	})
 })

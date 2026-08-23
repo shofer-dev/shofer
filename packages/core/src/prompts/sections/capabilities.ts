@@ -1,14 +1,28 @@
 import type { McpHub } from "../../services/mcp/McpHub.js"
 
 /**
+ * The bullet added when the mode tiers its tool schemas: the inventory this
+ * section describes is then only partly visible, and a capability list that
+ * ignored that would overstate what the model can call without asking first.
+ */
+const DEFERRED_SCHEMA_BULLET = `- Most of your tools are listed as stubs: a name and one line, with their parameters omitted. They are real capabilities and you call them normally — you just have to read their contract first with describe_tools. Treat the stub list as your full inventory, not as a summary of it.`
+
+/**
  * @param groups When provided (workflow agents with a `.slang` `tools:`
  *   restriction), the capability prose is gated to only the groups the agent
  *   actually has — so e.g. a `[questions]`-only coordinator isn't told it can
  *   read/write files or run commands (which would invite it to hallucinate
  *   tools that aren't in its catalog). When undefined, the full prose is
  *   rendered unchanged (normal tasks).
+ * @param toolSchemasOnDemand When true, the mode sends most tools as stubs
+ *   (`ModeConfig.tools_full_schema`) and the section says how to expand them.
  */
-export function getCapabilitiesSection(cwd: string, mcpHub?: McpHub, groups?: Set<string>): string {
+export function getCapabilitiesSection(
+	cwd: string,
+	mcpHub?: McpHub,
+	groups?: Set<string>,
+	toolSchemasOnDemand?: boolean,
+): string {
 	// Unrestricted path: byte-identical to the original prose.
 	if (groups === undefined) {
 		return `====
@@ -23,7 +37,7 @@ CAPABILITIES
 - You have access to MCP servers that may provide additional tools and resources. Each server may provide different capabilities that you can use to accomplish tasks more effectively.
 `
 				: ""
-		}`
+		}${toolSchemasOnDemand ? `${mcpHub ? "" : "\n"}${DEFERRED_SCHEMA_BULLET}` : ""}`
 	}
 
 	// Restricted path: describe only what the agent's tool groups allow.
@@ -74,6 +88,10 @@ CAPABILITIES
 		lines.push(
 			`- You are a coordination agent: you do NOT read, write, or execute — you direct other agents and complete your assigned step. Do not attempt to call file or command tools; they are not available to you.`,
 		)
+	}
+
+	if (toolSchemasOnDemand) {
+		lines.push(DEFERRED_SCHEMA_BULLET)
 	}
 
 	return `====

@@ -132,6 +132,26 @@ export const modeConfigObjectSchema = z.object({
 	tools: groupEntryArraySchema.optional(),
 	tools_allowed: z.array(z.string()).optional(),
 	tools_denied: z.array(z.string()).optional(),
+	/**
+	 * PRESENTATION tier, orthogonal to the three admission fields above: which of
+	 * the tools this mode admits are sent to the model with their **full**
+	 * parameter schema. Every other admitted tool — native, MCP or plugin — is
+	 * declared as a STUB (name, one-line description, permissive parameters) and
+	 * the model recovers its real contract on demand with `describe_tools`.
+	 *
+	 * Absent ⇒ no tiering: every admitted tool carries its full schema, exactly as
+	 * before this field existed. Present (including `[]`) ⇒ tiering is on, and
+	 * `describe_tools` is added to the mode and always carries its full schema.
+	 *
+	 * An ALLOW-list rather than a stub-list because the admitted set grows on its
+	 * own — an MCP catalog gains a tool, a plugin contributes one — and a
+	 * stub-list would silently let each newcomer back into the full-schema tier.
+	 * Here a newcomer arrives as a stub, which costs a `describe_tools` round trip
+	 * and nothing else. Names are matched exactly as the model sees them, so an
+	 * MCP tool is named `mcp--<server>--<tool>`. Denial still wins: a name listed
+	 * here that the mode does not admit stays absent.
+	 */
+	tools_full_schema: z.array(z.string()).optional(),
 	source: z.enum(["global", "project", "plugin"]).optional(),
 	/**
 	 * When `source === "plugin"`, the name of the plugin that contributed this

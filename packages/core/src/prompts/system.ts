@@ -9,7 +9,14 @@ import {
 } from "@shofer/types"
 import { pluginRegistry } from "../plugins/plugin-registry.js"
 
-import { Mode, defaultModeSlug, getGroupName, getModeSelection, resolveModeConfig } from "@shofer/types"
+import {
+	Mode,
+	defaultModeSlug,
+	getGroupName,
+	getModeSelection,
+	modeStubsToolSchemas,
+	resolveModeConfig,
+} from "@shofer/types"
 import { DiffStrategy } from "@shofer/types"
 import { formatLanguage } from "@shofer/types"
 import { isEmpty } from "../utils/object.js"
@@ -108,6 +115,14 @@ async function generatePrompt(
 	const includeRules = settings?.includeRules ?? true
 	const includeObjective = settings?.includeObjective ?? true
 
+	// On-demand schema loading: when the mode declares a full-schema tier
+	// (`tools_full_schema`), every other tool reaches the model as a stub, so the
+	// two sections that describe the tool plane must say how to expand one. Read
+	// off the MODE, which is the same source the tool build reads, so the prose
+	// and the tools array can never disagree — and static per bundle/mode, which
+	// is what the prompt-prefix cache requires.
+	const toolSchemasOnDemand = modeStubsToolSchemas(modeConfig)
+
 	// A conversational turn (`toolCallingEnabled === false`) is given no tools at
 	// all, so every tool-mediated section of the prompt is not merely redundant
 	// but actively wrong for it — see the branch below.
@@ -173,8 +188,8 @@ ${customInstructionsSection}`
 	// unconditional template produced.
 	const basePrompt = `${roleDefinition}
 ${includeMarkdownFormatting ? `\n${markdownFormattingSection()}\n` : ""}
-${includeToolUse ? `${getSharedToolUseSection()}${toolsCatalog}\n\n\t${getToolUseGuidelinesSection()}\n` : ""}
-${includeCapabilities ? `${getCapabilitiesSection(cwd, shouldIncludeMcp && includeMcp ? mcpHub : undefined, capabilityGroups)}\n` : ""}
+${includeToolUse ? `${getSharedToolUseSection(toolSchemasOnDemand)}${toolsCatalog}\n\n\t${getToolUseGuidelinesSection()}\n` : ""}
+${includeCapabilities ? `${getCapabilitiesSection(cwd, shouldIncludeMcp && includeMcp ? mcpHub : undefined, capabilityGroups, toolSchemasOnDemand)}\n` : ""}
 ${modesSection}
 ${skillsSection ? `\n${skillsSection}` : ""}
 ${includeRules ? getRulesSection(cwd, settings) : ""}

@@ -64,6 +64,29 @@ describe("getCapabilitiesSection", () => {
 
 		expect(result).not.toContain("MCP servers")
 	})
+
+	// The section describes the tool INVENTORY, so it must change when most of
+	// that inventory arrives as stubs — otherwise the model reads one-line
+	// entries as a smaller set of capabilities than it actually has.
+	it("says the stub list IS the inventory when the mode tiers its schemas", () => {
+		const withMcp = getCapabilitiesSection(cwd, {} as McpHub, undefined, true)
+		const withoutMcp = getCapabilitiesSection(cwd, undefined, undefined, true)
+		const restricted = getCapabilitiesSection(cwd, undefined, new Set(["read"]), true)
+
+		for (const result of [withMcp, withoutMcp, restricted]) {
+			expect(result).toContain("describe_tools")
+			expect(result).toContain("not as a summary of it")
+		}
+	})
+
+	it("is byte-identical to the untiered section when the mode does not tier", () => {
+		expect(getCapabilitiesSection(cwd, {} as McpHub, undefined, false)).toEqual(
+			getCapabilitiesSection(cwd, {} as McpHub),
+		)
+		expect(getCapabilitiesSection(cwd, undefined, new Set(["read"]), false)).toEqual(
+			getCapabilitiesSection(cwd, undefined, new Set(["read"])),
+		)
+	})
 })
 
 describe("getRulesSection", () => {

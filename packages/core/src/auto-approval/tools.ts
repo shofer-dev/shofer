@@ -55,6 +55,7 @@ export const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 
 	// mode-independent always-available (not in TOOL_GROUPS.subtasks — falls through to "uncategorized" for auto-approval)
 	sendMessageToTask: "send_message_to_task",
+	describeTools: "describe_tools",
 
 	// questions group
 	askFollowupQuestion: "ask_followup_question",

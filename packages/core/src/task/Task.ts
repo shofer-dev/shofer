@@ -77,7 +77,7 @@ import { combineCommandSequences } from "@shofer/types"
 import { t } from "../i18n/index.js"
 import { getApiMetrics, hasTokenUsageChanged, hasToolUsageChanged } from "@shofer/types"
 import { ShoferAskResponse } from "@shofer/types"
-import { defaultModeSlug, getModeBySlug } from "@shofer/types"
+import { defaultModeSlug, getModeBySlug, resolveModeConfig } from "@shofer/types"
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { DiffStrategy, type ToolUse, type McpToolUse, type ToolParamName, toolParamNames } from "@shofer/types"
 import { getModelMaxOutputTokens } from "@shofer/types"
@@ -6788,6 +6788,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// Two different prompts; a task with tools off must never reuse a
 			// cached tools-on prompt (or vice versa).
 			effectiveToolCallingEnabled,
+			// The mode's full-schema tier decides whether the tool-use and
+			// capabilities sections explain describe_tools, so republishing a mode
+			// that starts (or stops) stubbing must rebuild the prompt.
+			JSON.stringify(resolveModeConfig(taskMode, customModes).tools_full_schema ?? null),
 			JSON.stringify(this.agentToolGroups ?? null),
 			JSON.stringify(this.agentContext ?? null),
 			apiConfiguration?.todoListEnabled ?? true,

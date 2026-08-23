@@ -687,6 +687,12 @@
 							"type": "string"
 						}
 					},
+					"tools_full_schema": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
 					"source": {
 						"type": "string",
 						"enum": ["global", "project", "plugin"]
@@ -841,7 +847,8 @@
 					"check_mcp_call_status",
 					"wait_for_mcp_call",
 					"send_message_to_task",
-					"wait_for_message"
+					"wait_for_message",
+					"describe_tools"
 				]
 			}
 		},

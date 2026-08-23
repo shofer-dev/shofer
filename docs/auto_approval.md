@@ -188,16 +188,17 @@ These tools query in-memory editor/LSP state, fetch public URLs, or list workspa
 metadata. They cannot mutate user state and are unconditionally approved (independent
 of `alwaysAllowReadOnly`):
 
-| Tool                     | What it queries                                    |
-| ------------------------ | -------------------------------------------------- |
-| `find_files`             | File-name glob matching against workspace index.   |
-| `view_image`             | Reads an image file for visual analysis.           |
-| `get_errors`             | Language-server diagnostics for open files.        |
-| `get_changed_files`      | Files modified during the current task session.    |
-| `get_project_setup_info` | Detected languages, frameworks, and build systems. |
-| `read_project_structure` | Directory tree of the workspace.                   |
-| `list_code_usages`       | LSP "find all references" for a symbol.            |
-| `lsp_search`             | LSP workspace symbol search.                       |
+| Tool                     | What it queries                                                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `find_files`             | File-name glob matching against workspace index.                                                                         |
+| `view_image`             | Reads an image file for visual analysis.                                                                                 |
+| `get_errors`             | Language-server diagnostics for open files.                                                                              |
+| `get_changed_files`      | Files modified during the current task session.                                                                          |
+| `get_project_setup_info` | Detected languages, frameworks, and build systems.                                                                       |
+| `read_project_structure` | Directory tree of the workspace.                                                                                         |
+| `list_code_usages`       | LSP "find all references" for a symbol.                                                                                  |
+| `lsp_search`             | LSP workspace symbol search.                                                                                             |
+| `describe_tools`         | The parameter schemas of tools the mode declared as stubs, read out of the definitions this same request was built from. |
 
 ### Async MCP Call Status Tools
 
