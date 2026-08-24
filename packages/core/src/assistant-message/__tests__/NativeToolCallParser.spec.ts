@@ -1037,4 +1037,194 @@ describe("NativeToolCallParser", () => {
 			})
 		})
 	})
+
+	// On-demand schema loading declares ONE property on every stub —
+	// `arguments_json` — because a provider that decodes tool arguments under a
+	// grammar built from the declared schema (Moonshot/Kimi, MiniMax) can emit
+	// nothing but `{}` against a schema that declares none, and neither the stub's
+	// prose nor a `describe_tools` result can talk it out of that. The parser
+	// unwraps the hatch back into ordinary arguments BEFORE anything validates
+	// them, so no tool, handler or MCP server learns it exists.
+	describe("stub escape hatch (arguments_json)", () => {
+		beforeEach(() => {
+			NativeToolCallParser.consumeLastParseError()
+			NativeToolCallParser.consumeRecoveries()
+		})
+
+		it("unwraps a lone arguments_json into the tool's real, typed arguments", () => {
+			const result = NativeToolCallParser.parseToolCall({
+				id: "toolu_hatch_ok",
+				name: "read_file" as const,
+				arguments: JSON.stringify({
+					arguments_json: JSON.stringify({ path: "src/app.ts", offset: 10, limit: 5 }),
+				}),
+			})
+
+			expect(result?.type).toBe("tool_use")
+			if (result?.type === "tool_use") {
+				const nativeArgs = result.nativeArgs as { path: string; offset?: number; limit?: number }
+				expect(nativeArgs.path).toBe("src/app.ts")
+				expect(nativeArgs.offset).toBe(10)
+				expect(nativeArgs.limit).toBe(5)
+				// The display params are the real ones too — `arguments_json` never
+				// reaches the UI, the handler, or the API history.
+				expect(result.params).toEqual({ path: "src/app.ts", offset: "10", limit: "5" })
+			}
+		})
+
+		it("records the unwrap as a recovery layer so its hit rate is measurable", () => {
+			NativeToolCallParser.parseToolCall({
+				id: "toolu_hatch_telemetry",
+				name: "read_file" as const,
+				arguments: JSON.stringify({ arguments_json: JSON.stringify({ path: "src/app.ts" }) }),
+			})
+
+			const recoveries = NativeToolCallParser.consumeRecoveries()
+			expect(recoveries).toHaveLength(1)
+			expect(recoveries[0]).toMatchObject({ layerId: "stub_arguments_json", tool: "read_file" })
+		})
+
+		it("leaves a direct-arguments call byte-for-byte what it was", () => {
+			const result = NativeToolCallParser.parseToolCall({
+				id: "toolu_hatch_direct",
+				name: "read_file" as const,
+				arguments: JSON.stringify({ path: "src/direct.ts" }),
+			})
+
+			expect(result?.type).toBe("tool_use")
+			if (result?.type === "tool_use") {
+				expect((result.nativeArgs as { path: string }).path).toBe("src/direct.ts")
+			}
+			expect(NativeToolCallParser.consumeRecoveries()).toEqual([])
+		})
+
+		it("still accepts a zero-argument call — nothing about the hatch is required", () => {
+			const empty = NativeToolCallParser.parseToolCall({
+				id: "toolu_hatch_zero_direct",
+				name: "list_background_tasks" as const,
+				arguments: "{}",
+			})
+			expect((empty as { nativeArgs: { scope: string } }).nativeArgs.scope).toBe("children")
+
+			// A constrained decoder asked for a zero-argument tool may fill the hatch
+			// with an empty string; that means "no arguments", not a broken call.
+			const emptyHatch = NativeToolCallParser.parseToolCall({
+				id: "toolu_hatch_zero_hatch",
+				name: "list_background_tasks" as const,
+				arguments: JSON.stringify({ arguments_json: "" }),
+			})
+			expect((emptyHatch as { nativeArgs: { scope: string } }).nativeArgs.scope).toBe("children")
+		})
+
+		it("does NOT unwrap when arguments_json sits alongside other keys", () => {
+			// Ambiguous — a wrapper, or a real argument that happens to be named that?
+			// The object passes through untouched and execution-side validation speaks.
+			const result = NativeToolCallParser.parseToolCall({
+				id: "toolu_hatch_ambiguous",
+				name: "read_file" as const,
+				arguments: JSON.stringify({
+					path: "src/direct.ts",
+					arguments_json: JSON.stringify({ path: "src/wrapped.ts" }),
+				}),
+			})
+
+			expect(result?.type).toBe("tool_use")
+			if (result?.type === "tool_use") {
+				expect((result.nativeArgs as { path: string }).path).toBe("src/direct.ts")
+			}
+			expect(NativeToolCallParser.consumeRecoveries()).toEqual([])
+		})
+
+		it("rejects an unparseable arguments_json with an error the model can act on", () => {
+			const result = NativeToolCallParser.parseToolCall({
+				id: "toolu_hatch_broken",
+				name: "read_file" as const,
+				arguments: JSON.stringify({ arguments_json: '{"path": "src/app.ts"' }),
+			})
+
+			expect(result).toBeNull()
+			const parseError = NativeToolCallParser.consumeLastParseError()
+			// It must name the property that is wrong (not the outer arguments, which
+			// parsed fine) and carry the underlying parse failure.
+			expect(parseError).toContain("arguments_json")
+			// The underlying parse failure, so the model can see WHERE it broke …
+			expect(parseError).toMatch(/is not valid JSON: .+/)
+			// … and the payload it actually sent back, verbatim.
+			expect(parseError).toContain(JSON.stringify('{"path": "src/app.ts"'))
+			expect(parseError).toContain("Re-emit")
+		})
+
+		it("rejects an arguments_json that decodes to something other than an object", () => {
+			const result = NativeToolCallParser.parseToolCall({
+				id: "toolu_hatch_scalar",
+				name: "read_file" as const,
+				arguments: JSON.stringify({ arguments_json: '"src/app.ts"' }),
+			})
+
+			expect(result).toBeNull()
+			const parseError = NativeToolCallParser.consumeLastParseError()
+			expect(parseError).toContain("arguments_json")
+			expect(parseError).toContain("not a JSON object")
+		})
+
+		it("unwraps for a dynamic MCP tool, so the server receives its own contract", () => {
+			const result = NativeToolCallParser.parseToolCall({
+				id: "toolu_hatch_mcp",
+				name: "mcp--platform--vms" as never,
+				arguments: JSON.stringify({
+					arguments_json: JSON.stringify({ operation: "list", project_id: "p1" }),
+				}),
+			})
+
+			expect(result?.type).toBe("mcp_tool_use")
+			if (result?.type === "mcp_tool_use") {
+				expect(result.serverName).toBe("platform")
+				expect(result.toolName).toBe("vms")
+				expect(result.arguments).toEqual({ operation: "list", project_id: "p1" })
+			}
+		})
+
+		describe("streaming", () => {
+			it("survives a half-streamed arguments_json without rendering a broken call", () => {
+				const id = "toolu_hatch_stream_partial"
+				NativeToolCallParser.startStreamingToolCall(id, "read_file")
+
+				// The inner JSON is still arriving, escaped inside the outer string.
+				const partial = NativeToolCallParser.processStreamingChunk(
+					id,
+					'{"arguments_json": "{\\"path\\": \\"src/',
+				)
+
+				// Optimistically unwrapped: the partial path renders the same keys a
+				// direct-arguments call would, and never throws.
+				expect(partial).not.toBeNull()
+				expect((partial?.nativeArgs as { path?: string } | undefined)?.path).toBe("src/")
+
+				// Truncated mid-escape — no inner object yet, so nothing is decided.
+				const id2 = "toolu_hatch_stream_truncated"
+				NativeToolCallParser.startStreamingToolCall(id2, "read_file")
+				const early = NativeToolCallParser.processStreamingChunk(id2, '{"arguments_json": "{\\"pa')
+				expect(early).not.toBeNull()
+				expect((early?.nativeArgs as { path?: string } | undefined)?.path).toBeUndefined()
+			})
+
+			it("unwraps on finalize — the authoritative parse is the complete one", () => {
+				const id = "toolu_hatch_stream_final"
+				NativeToolCallParser.startStreamingToolCall(id, "read_file")
+				NativeToolCallParser.processStreamingChunk(
+					id,
+					JSON.stringify({ arguments_json: JSON.stringify({ path: "streamed.ts", limit: 3 }) }),
+				)
+
+				const result = NativeToolCallParser.finalizeStreamingToolCall(id)
+
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					const nativeArgs = result.nativeArgs as { path: string; limit?: number }
+					expect(nativeArgs.path).toBe("streamed.ts")
+					expect(nativeArgs.limit).toBe(3)
+				}
+			})
+		})
+	})
 })

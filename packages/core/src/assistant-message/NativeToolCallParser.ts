@@ -1,7 +1,7 @@
 import { parseJSON } from "partial-json"
 import { distance } from "fastest-levenshtein"
 
-import { type ToolName, toolNames, type FileEntry } from "@shofer/types"
+import { type ToolName, toolNames, type FileEntry, STUB_ARGUMENTS_JSON_PARAM } from "@shofer/types"
 import { type ToolUse, type McpToolUse, type ToolParamName, type NativeToolArgs, toolParamNames } from "@shofer/types"
 import { customToolRegistry } from "../custom-tools/index.js"
 
@@ -79,6 +79,20 @@ export interface ToolRecoveryRecord {
 	layerId: string
 	tool: string
 	[key: string]: unknown
+}
+
+/**
+ * A tool call carried the stub escape hatch (`arguments_json`) but its payload
+ * was not a JSON object. Distinguished from an ordinary JSON failure so the
+ * error handed back to the model names the property it must fix, instead of
+ * blaming the outer arguments — which parsed fine, and re-emitting which would
+ * reproduce the same failure.
+ */
+export class StubArgumentsJsonError extends Error {
+	constructor(message: string) {
+		super(message)
+		this.name = "StubArgumentsJsonError"
+	}
 }
 
 export class NativeToolCallParser {
@@ -326,11 +340,16 @@ export class NativeToolCallParser {
 		// Parse whatever we can from the incomplete JSON!
 		// partial-json-parser extracts partial values (strings, arrays, objects) immediately
 		try {
-			const partialArgs = parseJSON(toolCall.argumentsAccumulator)
-			this.normalizeArgAliases(partialArgs)
-
 			// Resolve tool alias to canonical name
 			const resolvedName = resolveToolAlias(toolCall.name) as ToolName
+
+			// A stubbed tool's arguments may arrive JSON-encoded inside
+			// `arguments_json`; unwrap leniently so partial rendering sees the same
+			// keys a direct-arguments call would. Still-truncated inner JSON yields
+			// the wrapper unchanged, which renders as "no arguments yet".
+			const partialArgs = this.unwrapStubArguments(parseJSON(toolCall.argumentsAccumulator), resolvedName, true)
+			this.normalizeArgAliases(partialArgs)
+
 			// Preserve original name if it differs from resolved (i.e., it was an alias)
 			const originalName = toolCall.name !== resolvedName ? toolCall.name : undefined
 
@@ -437,6 +456,94 @@ export class NativeToolCallParser {
 		// Match: ">>>>>>> REPLACE" followed by optional whitespace/newlines,
 		// then ":path", then newline(s), then a non-empty value to end of string.
 		return />>>>>>> REPLACE\s*\n:path\s*\n.+$/s.test(afterReplace)
+	}
+
+	/**
+	 * Unwrap the stub escape hatch: a tool call whose arguments are exactly
+	 * `{ arguments_json: "<json object>" }` carries its real arguments inside that
+	 * string, and everything downstream — the alias normalizer, the per-tool arg
+	 * builders, the missing-field check, a plugin tool's Zod parse, an MCP server's
+	 * own validation — must see the UNWRAPPED object. On-demand schema loading
+	 * declares the property on every stub because a provider that decodes tool
+	 * arguments under a grammar built from the declared schema can emit nothing
+	 * else (`prompts/tools/tool-stubs.ts`).
+	 *
+	 * Applied to EVERY tool call, not only to tools stubbed in this request: a
+	 * model that learned the pattern earlier in the conversation keeps using it
+	 * after a tool's schema is no longer stubbed, and the parser has no view of
+	 * which tier a name was in. That is safe because the trigger is unambiguous —
+	 * the property is the SOLE key, its value is a string, and it decodes to a JSON
+	 * object. No native, plugin or bundled MCP tool declares a parameter by that
+	 * name.
+	 *
+	 * Three deliberate non-unwraps:
+	 * - **alongside other keys** — ambiguous (is it a wrapper or a real argument?),
+	 *   so the object passes through untouched and execution-side validation
+	 *   speaks;
+	 * - **a non-string value** — not the hatch;
+	 * - **an empty string** — read as "no arguments", i.e. `{}`, which a zero-arg
+	 *   tool may legitimately produce under a constrained decoder; a tool that does
+	 *   need arguments then raises its ordinary missing-parameter error.
+	 *
+	 * @param partial Streaming: the inner string is still arriving, so it is parsed
+	 *   leniently and a failure yields the wrapper unchanged rather than an error —
+	 *   a half-streamed hatch must render as "nothing decided yet", never as a
+	 *   broken call. The authoritative unwrap is the final one.
+	 * @throws StubArgumentsJsonError when a complete `arguments_json` is not a JSON
+	 *   object, so the model gets an error naming the property rather than one
+	 *   blaming the outer arguments, which were well-formed.
+	 */
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- mirrors JSON.parse's `any`; every caller indexes the result by tool-specific keys.
+	private static unwrapStubArguments(args: any, toolName: string, partial = false): any {
+		if (!args || typeof args !== "object" || Array.isArray(args)) return args
+
+		const keys = Object.keys(args as Record<string, unknown>)
+		if (keys.length !== 1 || keys[0] !== STUB_ARGUMENTS_JSON_PARAM) return args
+
+		const encoded = (args as Record<string, unknown>)[STUB_ARGUMENTS_JSON_PARAM]
+		if (typeof encoded !== "string") return args
+		if (encoded.trim() === "") return {}
+
+		if (partial) {
+			try {
+				const optimistic = parseJSON(encoded)
+				return optimistic && typeof optimistic === "object" && !Array.isArray(optimistic) ? optimistic : args
+			} catch {
+				return args
+			}
+		}
+
+		let decoded: unknown
+		try {
+			decoded = JSON.parse(encoded)
+		} catch (error) {
+			throw new StubArgumentsJsonError(
+				`The '${STUB_ARGUMENTS_JSON_PARAM}' string for tool '${toolName}' is not valid JSON: ` +
+					`${error instanceof Error ? error.message : String(error)}. It must contain a JSON OBJECT of this ` +
+					`tool's real arguments — e.g. {"${STUB_ARGUMENTS_JSON_PARAM}": "{\\"path\\": \\"src/app.ts\\"}"} — ` +
+					`with every inner quote escaped. Re-emit the call with a valid JSON object in ` +
+					`'${STUB_ARGUMENTS_JSON_PARAM}', or with the arguments passed directly. Received (truncated): ` +
+					`${JSON.stringify(encoded.slice(0, 200))}`,
+			)
+		}
+
+		if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+			throw new StubArgumentsJsonError(
+				`The '${STUB_ARGUMENTS_JSON_PARAM}' string for tool '${toolName}' decoded to ` +
+					`${Array.isArray(decoded) ? "an array" : `a ${decoded === null ? "null" : typeof decoded}`}, not a ` +
+					`JSON object. It must encode an OBJECT mapping this tool's parameter names to their values — ` +
+					`e.g. {"${STUB_ARGUMENTS_JSON_PARAM}": "{\\"path\\": \\"src/app.ts\\"}"}. Call describe_tools for ` +
+					`the contract if you do not have it.`,
+			)
+		}
+
+		this.recordRecovery({
+			layerId: "stub_arguments_json",
+			tool: toolName,
+			argCount: Object.keys(decoded as Record<string, unknown>).length,
+		})
+
+		return decoded
 	}
 
 	/**
@@ -1307,8 +1414,13 @@ export class NativeToolCallParser {
 		}
 
 		try {
-			// Parse the arguments JSON string
-			const args = toolCall.arguments === "" ? {} : JSON.parse(toolCall.arguments)
+			// Parse the arguments JSON string, then unwrap the stub escape hatch so
+			// everything below — params, the typed builders, the required-field check,
+			// and every execution-side validator — sees the real arguments.
+			const args = this.unwrapStubArguments(
+				toolCall.arguments === "" ? {} : JSON.parse(toolCall.arguments),
+				resolvedName,
+			)
 			this.normalizeArgAliases(args)
 
 			// Build stringified params for display/logging.
@@ -1999,6 +2111,15 @@ export class NativeToolCallParser {
 
 			return result
 		} catch (error) {
+			// The outer arguments parsed; it is the hatch's payload that did not. Hand
+			// back the error that names it — the generic "arguments are not valid JSON"
+			// below would send the model to fix bytes that were already correct.
+			if (error instanceof StubArgumentsJsonError) {
+				this.lastParseError = error.message
+				webviewLog.error(`Failed to parse ${STUB_ARGUMENTS_JSON_PARAM} for '${resolvedName}': ${error.message}`)
+				return null
+			}
+
 			const rawError = error instanceof Error ? error.message : String(error)
 
 			// Build an actionable error message that helps the LLM understand
@@ -2031,8 +2152,10 @@ export class NativeToolCallParser {
 	 */
 	public static parseDynamicMcpTool(toolCall: { id: string; name: string; arguments: string }): McpToolUse | null {
 		try {
-			// Parse the arguments - these are the actual tool arguments passed directly
-			const args = JSON.parse(toolCall.arguments || "{}")
+			// Parse the arguments - these are the actual tool arguments passed directly,
+			// unless the model used the stub escape hatch, in which case the real ones
+			// are JSON-encoded inside it and the SERVER must be handed those.
+			const args = this.unwrapStubArguments(JSON.parse(toolCall.arguments || "{}"), toolCall.name)
 
 			// Normalize the tool name to handle models that output underscores instead of hyphens
 			// e.g., mcp__serverName__toolName -> mcp--serverName--toolName
@@ -2063,6 +2186,11 @@ export class NativeToolCallParser {
 
 			return result
 		} catch (error) {
+			// An MCP call is the one path whose failure carries no other diagnosis, so
+			// record the hatch error for the caller to hand back to the model.
+			if (error instanceof StubArgumentsJsonError) {
+				this.lastParseError = error.message
+			}
 			webviewLog.error(`Failed to parse dynamic MCP tool:`, error)
 			return null
 		}

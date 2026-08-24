@@ -9,7 +9,7 @@
 
 import type OpenAI from "openai"
 import type { ModeConfig } from "@shofer/types"
-import { parametersSchema as z } from "@shofer/types"
+import { STUB_ARGUMENTS_JSON_PARAM, parametersSchema as z } from "@shofer/types"
 
 import { applyToolSchemaTiers, stubToolDefinition, summarizeToolDescription } from "../tool-stubs.js"
 import { filterNativeToolsForMode } from "../filter-tools-for-mode.js"
@@ -86,11 +86,34 @@ describe("tool schema tiers", () => {
 			expect(stub.function.name).toBe("mcp--platform--vms")
 			expect(stub.function.description).toContain("Manage virtual machines.")
 			expect(stub.function.description).toContain("describe_tools")
-			// Permissive, and NOT strict: a stub declares no properties, so strict
-			// mode (which requires every property declared and additionalProperties
-			// false) would make the tool uncallable.
-			expect(stub.function.parameters).toEqual({ type: "object", properties: {}, additionalProperties: true })
+			expect(stub.function.description).toContain(STUB_ARGUMENTS_JSON_PARAM)
+			// One declared string property and nothing required — the escape hatch a
+			// schema-constrained decoder can express (an empty `properties` map lets
+			// Kimi/MiniMax emit only `{}`), plus `additionalProperties` open so a
+			// provider that permits direct arguments keeps sending them. NOT strict:
+			// strict mode requires every property declared and additionalProperties
+			// false, which is the opposite of a stub.
+			expect(stub.function.parameters).toEqual({
+				type: "object",
+				properties: {
+					[STUB_ARGUMENTS_JSON_PARAM]: {
+						type: "string",
+						description: expect.stringContaining("JSON-encoded"),
+					},
+				},
+				additionalProperties: true,
+			})
+			expect(stub.function.parameters).not.toHaveProperty("required")
 			expect(stub.function).not.toHaveProperty("strict")
+		})
+
+		it("declares the hatch identically on every stub — it is part of the cached prefix", () => {
+			const { tools } = tiered()
+			const schemas = tools
+				.map((t) => (t as OpenAI.Chat.ChatCompletionFunctionTool).function)
+				.filter((fn) => fn.name !== "attempt_completion")
+				.map((fn) => JSON.stringify(fn.parameters))
+			expect(new Set(schemas).size).toBe(1)
 		})
 
 		it("never stubs describe_tools itself, listed or not", () => {

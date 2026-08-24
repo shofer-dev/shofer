@@ -98,12 +98,14 @@ reverse.
 Two sections describe the tool INVENTORY, so they change when the inventory's
 presentation does. A mode that declares `tools_full_schema`
 (`tool_access.md`) sends most of its tools to the model as STUBS — name, one
-line, permissive parameters — and recovers the real contracts on demand through
-`describe_tools`. When it does:
+line, and a single `arguments_json` string standing in for their parameters — and
+recovers the real contracts on demand through `describe_tools`. When it does:
 
 - **TOOL USE** gains a paragraph stating that a stub's arguments were omitted to
   keep the list small (not because the tool takes none), that `describe_tools`
-  returns them, and that a stubbed tool's arguments are never to be guessed;
+  returns them, that they are passed back JSON-encoded in `arguments_json` (or
+  directly where the tool-calling interface allows it), and that a stubbed tool's
+  arguments are never to be guessed;
 - **CAPABILITIES** gains a bullet saying the stub list IS the full inventory
   rather than a summary of it — without which a model reading one-line entries
   concludes it has fewer capabilities than it does.
@@ -212,7 +214,8 @@ a cached tools-on prompt.
 - Requires at least one tool call per assistant response.
 - Encourages batching multiple tools in a single response to reduce round-trips.
 - When the mode tiers its tool schemas, appends the deferred-schema protocol:
-  stubs, `describe_tools`, and "do not guess a stubbed tool's arguments".
+  stubs, `describe_tools`, the `arguments_json` hatch, and "do not guess a
+  stubbed tool's arguments".
 
 ### 4. [`sections/tool-use-guidelines.ts`](../packages/core/src/prompts/sections/tool-use-guidelines.ts)
 

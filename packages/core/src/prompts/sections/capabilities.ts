@@ -5,7 +5,7 @@ import type { McpHub } from "../../services/mcp/McpHub.js"
  * section describes is then only partly visible, and a capability list that
  * ignored that would overstate what the model can call without asking first.
  */
-const DEFERRED_SCHEMA_BULLET = `- Most of your tools are listed as stubs: a name and one line, with their parameters omitted. They are real capabilities and you call them normally — you just have to read their contract first with describe_tools. Treat the stub list as your full inventory, not as a summary of it.`
+const DEFERRED_SCHEMA_BULLET = `- Most of your tools are listed as stubs: a name and one line, with their real parameters omitted behind a single arguments_json string. They are real capabilities and you call them individually — you just have to read their contract first with describe_tools and pass the arguments through arguments_json. Treat the stub list as your full inventory, not as a summary of it.`
 
 /**
  * @param groups When provided (a task with a declared tool-group

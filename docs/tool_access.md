@@ -169,11 +169,11 @@ and re-attended on every turn, so a chat-shaped agent fronting a large MCP
 catalog pays for the whole catalog to call two of it. Declaring
 `tools_full_schema` splits the surface into three tiers:
 
-| Tier            | What the model gets                                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------ |
-| **full schema** | the tools named in `tools_full_schema` — their definitions, unchanged                                        |
-| **stub**        | every other admitted tool: name, one line of its own description, and a permissive `object` parameter schema |
-| **discovery**   | `describe_tools(names[])`, which returns the real contracts of any of them                                   |
+| Tier            | What the model gets                                                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **full schema** | the tools named in `tools_full_schema` — their definitions, unchanged                                                          |
+| **stub**        | every other admitted tool: name, one line of its own description, and a schema declaring one string property, `arguments_json` |
+| **discovery**   | `describe_tools(names[])`, which returns the real contracts of any of them                                                     |
 
 ```yaml
 - slug: orchestrator
@@ -194,13 +194,35 @@ Semantics, all of which follow from "presentation, not access":
 - **Denial still wins.** A name here that the mode does not admit stays absent;
   this field cannot re-admit it.
 - **A stub is individually callable.** It is an ordinary entry in the tools
-  array — no dispatcher, no new calling convention.
+  array — no dispatcher, no routing tool.
+- **A stub declares one property, `arguments_json`, and that is not cosmetic.**
+  Moonshot/Kimi and MiniMax decode tool arguments under a grammar compiled from
+  the DECLARED schema, so a stub declaring no properties admits exactly one
+  output — `{}` — on every call, forever. The constraint outranks the stub's
+  prose and outranks the `describe_tools` result riding the message stream, so
+  the model reads the real contract and still cannot emit it, and there is no
+  self-heal. The stub therefore declares one string property holding the real
+  arguments JSON-encoded, which every constrained decoder can express.
+  `additionalProperties` stays open and nothing is `required`, so a provider that
+  lets the model emit direct arguments keeps doing that and a zero-argument call
+  may still be `{}`.
+- **The hatch never survives the parser.**
+  [`NativeToolCallParser`](../packages/core/src/assistant-message/NativeToolCallParser.ts)
+  unwraps `{arguments_json: "<json object>"}` back into ordinary arguments before
+  anything validates them, so no handler, Zod schema or MCP server learns it
+  exists. It unwraps on any tool, not only one stubbed in this request — a model
+  that learned the pattern keeps using it — which is unambiguous because no real
+  tool declares a parameter by that name, the property must be the SOLE key, and
+  its value must decode to a JSON object. Alongside another key it is left
+  untouched; unparseable, the model gets an error naming `arguments_json` and
+  carrying the parse failure, which it can act on.
 - **A stub weakens no validation.** It changes only what is shown; execution
-  still runs the real contract — a native tool's own missing-parameter error (or,
-  for a required argument its parser guards on, the dispatcher's "arguments could
-  not be parsed"), a plugin tool's Zod parse at dispatch, an MCP server's schema
-  validation. That is also the recovery path when the model skips discovery: it
-  gets the ordinary validation error, unchanged, and can react to it.
+  still runs the real contract, against the unwrapped arguments — a native tool's
+  own missing-parameter error (or, for a required argument its parser guards on,
+  the dispatcher's "arguments could not be parsed"), a plugin tool's Zod parse at
+  dispatch, an MCP server's schema validation. That is also the recovery path
+  when the model skips discovery: it gets the ordinary validation error,
+  unchanged, and can react to it.
 
 It is an ALLOW-list rather than a stub-list on purpose: the admitted set grows on
 its own — an MCP catalog gains a tool, a plugin contributes one — and a stub-list

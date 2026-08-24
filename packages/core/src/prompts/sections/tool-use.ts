@@ -5,7 +5,7 @@
  * not have. Static per mode, like the section itself — the prompt is the head of
  * every request and only pays while it is byte-stable from turn to turn.
  */
-const DEFERRED_SCHEMA_PARAGRAPH = `Some tools are listed with a one-line description and no parameters — their description says so and names describe_tools. Their arguments were omitted to keep this list small, not because they take none. Call describe_tools with the names you need (all of them in one call), read the schemas it returns, then call those tools normally. Do not guess a stubbed tool's arguments.`
+const DEFERRED_SCHEMA_PARAGRAPH = `Some tools are listed with a one-line description and a single arguments_json parameter — their description says so and names describe_tools. Their real arguments were omitted to keep this list small, not because they take none. Call describe_tools with the names you need (all of them in one call) and read the schemas it returns, then call those tools with the arguments those schemas require, JSON-encoded into the arguments_json string — e.g. arguments_json: "{\\"path\\": \\"src/app.ts\\"}". Passing the arguments directly instead works wherever your tool-calling interface allows it; arguments_json always works. Do not guess a stubbed tool's arguments.`
 
 /**
  * @param toolSchemasOnDemand When true, the mode declares a full-schema tier and

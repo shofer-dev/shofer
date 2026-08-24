@@ -711,9 +711,9 @@ Returns each task's ID, title, current status (a `TaskLifecycle` value: `idle`, 
 
 Return the full parameter schema of one or more tools. It exists for modes that
 declare `tools_full_schema` ([`tool_access.md`](tool_access.md)): those send most
-of their tools to the model as STUBS — name, one line, and a permissive `object`
-parameter schema — and this tool is how the model recovers the real contract
-before calling one.
+of their tools to the model as STUBS — name, one line, and a schema declaring
+only the `arguments_json` escape hatch — and this tool is how the model recovers
+the real contract before calling one.
 
 It is answered entirely client-side, from the definitions the current tool build
 recorded (`packages/core/src/tools/tool-schema-registry.ts`), so it costs no MCP

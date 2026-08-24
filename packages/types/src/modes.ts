@@ -86,6 +86,25 @@ export function getToolsForMode(
 export const DESCRIBE_TOOLS_TOOL_NAME = "describe_tools"
 
 /**
+ * The one property a stub's parameter schema declares: the tool's REAL arguments,
+ * JSON-encoded into a string.
+ *
+ * It exists because a stub's schema is the only contract some providers will let
+ * the model express. Moonshot/Kimi and MiniMax decode tool arguments under a
+ * grammar built from the declared schema, so a stub declaring no properties can
+ * only ever produce `{}` — the constraint outranks the stub's prose and outranks
+ * the `describe_tools` result riding the message stream, so the model cannot
+ * self-heal and every call to a stubbed tool is invalid. A declared string
+ * property is the one escape hatch every constrained decoder can express, and the
+ * parser unwraps it before validation (`NativeToolCallParser`).
+ *
+ * The name must stay collision-free: unwrapping is keyed on it being the SOLE
+ * key of the arguments object, so a real tool declaring a parameter by this name
+ * would be misread. No native, plugin or bundled MCP tool does.
+ */
+export const STUB_ARGUMENTS_JSON_PARAM = "arguments_json"
+
+/**
  * Whether this mode tiers its tool schemas — i.e. whether every admitted tool
  * outside {@link ModeConfig.tools_full_schema} is sent to the model as a stub.
  *

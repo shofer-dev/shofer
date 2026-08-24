@@ -75,9 +75,13 @@ describe("build-tools × schema tiers", () => {
 
 		const stubbed = tools.find((t) => nameOf(t as never) === "cancel_tasks")
 		expect(stubbed).toBeDefined()
+		// The stub's real parameters are gone, replaced by the one declared escape
+		// hatch a schema-constrained decoder can express (see `tool-stubs.ts`).
 		expect((stubbed as { function: { parameters: unknown } }).function.parameters).toEqual({
 			type: "object",
-			properties: {},
+			properties: {
+				arguments_json: { type: "string", description: expect.stringContaining("JSON-encoded") },
+			},
 			additionalProperties: true,
 		})
 	})
