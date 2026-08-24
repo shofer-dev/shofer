@@ -81,7 +81,7 @@ describe("plugin-loader (§7 code loading, step 2.1)", () => {
 
 		reg.dispatchEvent({ name: "task.created" })
 		expect((globalThis as unknown as { __tsPluginSeen: string[] }).__tsPluginSeen).toEqual(["task.created"])
-	}, 30_000)
+	})
 
 	it("externalizes an installed runtime dependency instead of bundling it", async () => {
 		// A plugin that declares + installs a dep whose code is deliberately UNBUNDLABLE (it
@@ -120,7 +120,7 @@ describe("plugin-loader (§7 code loading, step 2.1)", () => {
 		const tools = await reg.collectTools()
 		expect(tools.map((t) => t.name)).toEqual(["probe"])
 		expect(await tools[0]!.execute!({}, {} as never)).toBe("EXTERNAL")
-	}, 30_000)
+	})
 
 	it("uses baked deps as-is when the arch marker matches (no reinstall)", async () => {
 		// Deps present + a marker for THIS platform-arch → ensurePluginDeps must be a no-op (it must
@@ -156,7 +156,7 @@ describe("plugin-loader (§7 code loading, step 2.1)", () => {
 		await reg.register(plugin, {}, { hookTimeoutMs: LOADER_HOOK_BUDGET_MS })
 		const tools = await reg.collectTools()
 		expect(await tools[0]!.execute!({}, {} as never)).toBe("BAKED")
-	}, 30_000)
+	})
 
 	it("loads a plain .js entry directly (no transpile)", async () => {
 		const root = writePlugin(
