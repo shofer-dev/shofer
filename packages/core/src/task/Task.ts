@@ -264,9 +264,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * (dynamically added). When undefined, no peer communication is
 	 * allowed at all — every peer-tool access is denied.
 	 *
-	 * Set explicitly by {@link NewTaskTool} at spawn time (baseline:
-	 * parent only) and extended by workflow agents via declared
-	 * `peers:` grants.
+	 * Set explicitly by {@link NewTaskTool} at spawn time (baseline: parent
+	 * only) and extended as the task spawns children.
 	 */
 	knownPeers?: Set<string>
 
@@ -524,14 +523,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * replaced with a structured object schema so providers with constrained
 	 * decoding enforce an output contract at decode time.
 	 *
-	 * Set by {@link WorkflowTask.spawnAgentTask} from the stake's `output:`
 	 * contract. When undefined, the default `result: string` schema applies.
 	 */
 	completionSchema?: Record<string, unknown>
 
 	/**
-	 * Optional persona/role injected into this task's system prompt (workflow
-	 * agents pass their `.slang` `role:` here). Layered on top of the mode's
+	 * Optional persona/role injected into this task's system prompt. Layered on
+	 * top of the mode's
 	 * roleDefinition for this task only; see {@link CreateTaskOptions.agentRole}.
 	 */
 	agentRole?: string
@@ -548,7 +546,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	readonly trace?: TraceContext
 
 	/**
-	 * Per-task tool-group allow-list (workflow agents pass their `.slang`
+	 * Per-task tool-group allow-list (a caller passes the declared
 	 * `tools:` here). Intersected with the mode's groups when building the
 	 * tool array; see {@link CreateTaskOptions.agentToolGroups}. A restriction
 	 * only — never grants tools beyond the mode.
@@ -556,8 +554,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	agentToolGroups?: string[]
 
 	/**
-	 * Per-task overrides for system-prompt components (workflow agents'
-	 * `.slang` `context { ... }` block); see {@link CreateTaskOptions.agentContext}.
+	 * Per-task overrides for system-prompt components; see
+	 * {@link CreateTaskOptions.agentContext}.
 	 * Each key is a boolean toggle for a specific component. Absent keys
 	 * inherit the global default.
 	 *
@@ -1108,7 +1106,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		} else if (initialKnownPeers && initialKnownPeers.length > 0) {
 			// Fresh task (no persisted history yet): seed knownPeers from the
 			// spawn-time grant so the first persisted HistoryItem.peerIds carries
-			// it (see getHistoryExtension-adjacent peerIds write in
+			// it (see the peerIds write in
 			// _refreshTaskMetadata). This removes the post-creation persistence
 			// race the spawner would otherwise hit ("Task not found").
 			this.knownPeers = new Set<string>(initialKnownPeers)
@@ -2444,8 +2442,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * via an out-of-band `objectResponse` (no chat echo), so without this the
 	 * persisted form would re-render editable with default values after a reload.
 	 * Writing `answeredValues` lets the webview replay the form read-only with what
-	 * the user entered. Shared by `ask_followup_question` (form mode) and
-	 * {@link WorkflowTask} flow-parameter collection.
+	 * the user entered.
 	 */
 	public async markFollowupFormAnswered(
 		answeredValues: Record<string, string | number | boolean | string[]>,
@@ -2480,16 +2477,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			taskLog.error("Failed to save Shofer messages:", error)
 			return false
 		}
-	}
-
-	/**
-	 * Extra fields that subclasses contribute to every persisted
-	 * `HistoryItem`. The base task adds nothing; `WorkflowTask` overrides this
-	 * to inject `isWorkflow`/`slangSource`/`flowState` so the persisted item is
-	 * recognisable as a workflow from the first write onward.
-	 */
-	protected getHistoryExtension(): Partial<HistoryItem> {
-		return {}
 	}
 
 	/**
@@ -2566,15 +2553,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const titleExtension =
 				this.nameLocked && this.lockedTitle ? { name: this.lockedTitle, nameLocked: true } : {}
 
-			// Subclasses (e.g. WorkflowTask) may contribute extra persisted
-			// fields. Merging here guarantees the extension is present on EVERY
-			// history write, so the webview sees it from the very first
-			// postInitState rather than only after the first checkpoint.
 			await this.providerRef.deref()?.updateTaskHistory({
 				...historyItem,
 				...peerExtension,
 				...titleExtension,
-				...this.getHistoryExtension(),
 			})
 
 			return true
@@ -3185,7 +3167,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return result
 	}
 
-	handleWebviewAskResponse(askResponse: ShoferAskResponse, text?: string, images?: string[], askId?: string) {
+	/**
+	 * `trace` is the W3C trace context of the request that delivered this
+	 * response, when the caller stated one. It is carried straight to the
+	 * `onUserMessage` observers and nowhere else — core stores the two header
+	 * values and never parses them.
+	 */
+	handleWebviewAskResponse(
+		askResponse: ShoferAskResponse,
+		text?: string,
+		images?: string[],
+		askId?: string,
+		trace?: TraceContext,
+	) {
 		this.diagLog(
 			`[DIAG handleWebviewAskResponse] taskId=${this.taskId}.${this.instanceId}, askResponse=${askResponse}, text=${text?.substring(0, 100)}, askId=${askId}, currentAskId=${this._currentAskId}, abort=${this.abort}, abandoned=${this.abandoned}, isAwaitingAskResponse=${this.isAwaitingAskResponse}`,
 		)
@@ -3237,7 +3231,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// never sit between the user pressing send and the agent hearing it.
 			void pluginRegistry
 				.notifyUserMessage(
-					{ taskId: this.taskId, text, imageCount: images?.length },
+					{ taskId: this.taskId, text, imageCount: images?.length, trace },
 					{
 						parentTaskId: this.parentTaskId,
 						rootTaskId: this.rootTaskId,
@@ -3352,6 +3346,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		images?: string[],
 		mode?: string,
 		providerProfile?: string,
+		trace?: TraceContext,
 	): Promise<void> {
 		try {
 			text = (text ?? "").trim()
@@ -3386,7 +3381,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// Handle the message directly instead of routing through the webview.
 				// This avoids a race condition where the webview's message state hasn't
 				// hydrated yet, causing it to interpret the message as a new task request.
-				this.handleWebviewAskResponse("messageResponse", text, images)
+				this.handleWebviewAskResponse("messageResponse", text, images, undefined, trace)
 			} else {
 				taskLog.error("[Task#submitUserMessage] Provider reference lost")
 			}
@@ -4111,6 +4106,25 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				response = "messageResponse"
 				text = queuedResumption.text
 				images = queuedResumption.images
+				// The queued message IS this turn's user message, and taking it as the
+				// resumption bypasses `handleWebviewAskResponse` — the one place that
+				// tells `onUserMessage` observers the user spoke. Announce it here, or
+				// a plugin sees a user message on the warm path and NOTHING on the
+				// cold one, which is every follow-up turn of a rehydrated
+				// conversation. `this.trace` is the context the caller delivering it
+				// stated (see `TaskOptions.trace`).
+				void pluginRegistry
+					.notifyUserMessage(
+						{ taskId: this.taskId, text, imageCount: images?.length, trace: this.trace },
+						{
+							parentTaskId: this.parentTaskId,
+							rootTaskId: this.rootTaskId,
+							cwd: this.cwd,
+							mode: this._taskMode,
+							turn: this.turnCount,
+						},
+					)
+					.catch(() => {})
 			} else {
 				this.diagLog(
 					`[DIAG resumeTaskFromHistory] about to ask(${askType}), taskId=${this.taskId}.${this.instanceId}, queueSize=${this.messageQueueService.messages.length}`,
@@ -6825,15 +6839,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const modelInfo = this.api.getModel().info
 		const taskMode = this._taskMode || (mode ?? defaultModeSlug)
 
-		// Workflow agents carry a per-task `agentRole` (their `.slang` `role:`).
+		// A task may carry a per-task `agentRole`.
 		// Layer it on top of the user's custom instructions so it actually shapes
-		// the agent's behavior — the slang `role` is otherwise not consumed. Scoped
+		// the agent's behavior. Scoped
 		// to this task only; the mode's roleDefinition is untouched.
 		const effectiveCustomInstructions = this.agentRole?.trim()
 			? `# Agent Role\n\n${this.agentRole.trim()}${customInstructions ? `\n\n${customInstructions}` : ""}`
 			: customInstructions
 
-		// Workflow agents may override system-prompt components via `.slang`
+		// A task may override system-prompt components via its
 		// `context { ... }`; each absent key inherits the global default.
 		const ctx = this.agentContext
 		const effectiveUseAgentRules = ctx?.include_agents_md ?? useAgentRules ?? true
@@ -6972,13 +6986,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
 					useAgentRules: effectiveUseAgentRules,
 					// Gate the CAPABILITIES prose to the agent's actual tool groups so a
-					// restricted workflow agent isn't told it can read/write/execute.
+					// tool-restricted agent isn't told it can read/write/execute.
 					agentToolGroups: this.agentToolGroups,
 					enableSubfolderRules: effectiveEnableSubfolderRules,
 					touchedPaths,
 					newTaskRequireTodos: effectiveRequireTodos,
 					isStealthModel: modelInfo?.isStealthModel,
-					// Per-agent context overrides (workflow agents' `.slang` `context { ... }`).
+					// Per-agent context overrides.
 					includeModeRules: effectiveIncludeModeRules,
 					includeUserRules: effectiveIncludeUserRules,
 					includeSkills: effectiveIncludeSkills,
@@ -8280,16 +8294,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	/**
-	 * Re-point this task's working directory. Used only to move a running
-	 * WorkflowTask to a worktree the user selects on the workflow surface: safe
-	 * because the WorkflowTask root performs no filesystem work itself, and
-	 * agents read `this.cwd` at spawn time — so agents spawned after the change
-	 * run in the new worktree. Not for ordinary LLM tasks, whose cwd is bound to
-	 * their tools/state once running.
+	 * Re-point this task's working directory — the seam a plugin that manages
+	 * worktrees needs (`ctx.task.setCwd`). Child tasks read `this.cwd` at spawn
+	 * time, so anything spawned after the change runs in the new worktree.
 	 *
 	 * The FileContextTracker's cwd is kept in sync so that any file-change
-	 * tracking performed by the WorkflowTask root itself resolves against the
-	 * new worktree.
+	 * tracking performed by this task resolves against the new worktree.
 	 */
 	public reassignCwd(newCwd: string): void {
 		this._cwd = newCwd

@@ -17,6 +17,7 @@ import {
 	type TaskEvent,
 	type TaskSnapshot,
 	type CreateTaskOptions,
+	type TraceContext,
 	type HistoryItem,
 	type ShoferMessage,
 	type TokenUsage,
@@ -40,7 +41,6 @@ import { utilLog } from "@shofer/core"
 import { getRecentLogs, getLogLevel, getLogKnownCategories } from "@shofer/core"
 import { buildJsonTrace } from "../integrations/misc/export-json"
 import { formatContentBlockToMarkdown, getTaskFileName } from "../integrations/misc/export-markdown"
-import { createWorkflowTask, discoverWorkflows } from "../core/workflow/index"
 
 export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionApi {
 	private readonly outputChannel: vscode.OutputChannel
@@ -469,7 +469,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 		await background.abortTask()
 	}
 
-	public async sendMessage(taskId: string, message: string, images?: string[]) {
+	public async sendMessage(taskId: string, message: string, images?: string[], trace?: TraceContext) {
 		// Resolve the managed instance and hand the message straight to its
 		// ask/message channel. This MUST NOT route through the webview: in the CLI
 		// host the mock webview reports viewLaunched=true, and an
@@ -488,14 +488,14 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 
 		// Warm: the instance is still running this conversation.
 		if (task && !task.abandoned && !task.abort) {
-			await task.submitUserMessage(message, images)
+			await task.submitUserMessage(message, images, undefined, undefined, trace)
 			return
 		}
 
 		// Cold or FINISHED. A completed task has `abort === true` — both completion
 		// shapes set it — so this is the ordinary "next turn of a conversation"
 		// path, not an error, and the message must not be dropped.
-		await this.resumeAndDeliver(taskId, message, images)
+		await this.resumeAndDeliver(taskId, message, images, trace)
 	}
 
 	/**
@@ -519,7 +519,12 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 	 * This mirrors `ShoferProvider.resumePluginSession`, which reached the same
 	 * conclusion for the plugin-agent entry point.
 	 */
-	private async resumeAndDeliver(taskId: string, message: string, images?: string[]): Promise<void> {
+	private async resumeAndDeliver(
+		taskId: string,
+		message: string,
+		images?: string[],
+		trace?: TraceContext,
+	): Promise<void> {
 		let historyItem: HistoryItem
 		try {
 			;({ historyItem } = await this.sidebarProvider.getTaskWithId(taskId))
@@ -536,6 +541,11 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 		const task = await this.sidebarProvider.createTaskWithHistoryItem(historyItem, {
 			keepCurrentTask: true,
 			startTask: false,
+			// The caller's trace, so the resumed run continues the story that asked
+			// for it rather than starting one of its own. It reaches observers at
+			// the queued-resumption `onUserMessage`, which is this path's only
+			// announcement that the user spoke.
+			trace,
 		})
 		task.messageQueueService.addMessage(message, images)
 		task.startFromHistory()
@@ -1130,37 +1140,5 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 			throw new Error(`Invalid configuration JSON: ${err instanceof Error ? err.message : String(err)}`)
 		}
 		await this.setConfiguration(parsed)
-	}
-
-	// ─── Workflows ─────────────────────────────────────────────────
-
-	public async createWorkflow(slangSource: string, flowParams?: Record<string, unknown>): Promise<string> {
-		const task = await createWorkflowTask(this.sidebarProvider, slangSource, flowParams)
-
-		// Pop the current task to the background (same as the webview handler).
-		const poppedTask = this.sidebarProvider.popFromStackWithoutAborting()
-		if (poppedTask) {
-			this.sidebarProvider.taskManager.registerBackgroundTask(poppedTask)
-		}
-
-		await this.sidebarProvider.addShoferToStack(task)
-		this.sidebarProvider.taskManager.registerBackgroundTask(task)
-
-		try {
-			await this.sidebarProvider.taskManager.focusTask(task.taskId)
-		} catch {
-			this.log(`[createWorkflow] Failed to focus task ${task.taskId}`)
-		}
-
-		await task.seedHistory()
-		await this.sidebarProvider.postInitState()
-
-		task.start()
-
-		return task.taskId
-	}
-
-	public async discoverWorkflows(): Promise<Map<string, string>> {
-		return discoverWorkflows(this.sidebarProvider.cwd)
 	}
 }

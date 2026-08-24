@@ -197,12 +197,43 @@ describe("createRequestHandler (§11)", () => {
 		const m = mockRes()
 		await run(mockReq("POST", "/api/v1/task/t1/message", { message: "go" }), m as unknown as ServerResponse)
 		expect(m.statusCode).toBe(202)
-		expect(api.sendMessage).toHaveBeenCalledWith("t1", "go", undefined)
+		expect(api.sendMessage).toHaveBeenCalledWith("t1", "go", undefined, undefined)
 
 		const c = mockRes()
 		await run(mockReq("POST", "/api/v1/task/t1/cancel"), c as unknown as ServerResponse)
 		expect(c.statusCode).toBe(202)
 		expect(api.cancelTask).toHaveBeenCalledWith("t1")
+	})
+
+	it("POST /api/v1/task/:id/message carries the trace context, body or headers", async () => {
+		// A conversation is created once and messaged for the rest of its life, so
+		// honouring the trace on `createTask` alone attributes exactly the first
+		// turn of every multi-turn run and loses the rest — silently.
+		const trace = { traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", tracestate: "a=1" }
+
+		const body = mockRes()
+		await run(
+			mockReq("POST", "/api/v1/task/t1/message", { message: "go", trace }),
+			body as unknown as ServerResponse,
+		)
+		expect(api.sendMessage).toHaveBeenCalledWith("t1", "go", undefined, trace)
+
+		const headers = mockRes()
+		await run(
+			mockReq("POST", "/api/v1/task/t1/message", { message: "again" }, { traceparent: trace.traceparent }),
+			headers as unknown as ServerResponse,
+		)
+		expect(api.sendMessage).toHaveBeenCalledWith("t1", "again", undefined, { traceparent: trace.traceparent })
+	})
+
+	it("POST /api/v1/task/:id/message drops a malformed trace rather than refusing the turn", async () => {
+		const res = mockRes()
+		await run(
+			mockReq("POST", "/api/v1/task/t1/message", { message: "go", trace: { nonsense: true } }),
+			res as unknown as ServerResponse,
+		)
+		expect(res.statusCode).toBe(202)
+		expect(api.sendMessage).toHaveBeenCalledWith("t1", "go", undefined, undefined)
 	})
 
 	it("routes an ask response to the agent", async () => {

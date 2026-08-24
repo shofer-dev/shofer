@@ -228,7 +228,7 @@ impossible by construction — there is no last-installed-wins tie-break.
 ### `permissions.ai`
 
 `permissions.ai: true` requests **host LLM/embeddings access** — the `ctx.ai`
-surface ([§5.12](#512-host-capabilities-ctx)). It is unlike the other permission
+surface ([§5.11](#511-host-capabilities-ctx)). It is unlike the other permission
 flags: it costs the **user money** (billed model calls on their configured
 provider account). The manifest grant is necessary but **not sufficient** —
 `ctx.ai` goes live only after a **separate, explicit consent**
@@ -474,39 +474,24 @@ turning Shofer into a **tool aggregator**. No such adapter exists today.
 | **C** | Plugin IS an MCP server      | In-process (host)            | —                          | Deferred, not built |
 | **D** | Shofer as MCP server host    | Shofer process               | No (infrastructure)        | Deferred, not built |
 
-### 5.7 Workflows (`contributes.workflows`)
-
-A plugin ships `.slang` workflow sources under `workflows/`, each declared in the
-manifest (`{ name, description? }`), discovered by `discoverWorkflows()` alongside
-`~/.shofer/workflows/` and `<workspace>/.shofer/workflows/`.
-
-Unlike modes/skills/commands these are **not namespaced**: a workflow is addressed by
-the flow name inside its source, and discovery is a plain priority merge — plugin <
-global < project — so a user or project file of the same name overrides a shipped one.
-That is deliberate: forking a shipped workflow by copying it into `.shofer/workflows/`
-is the intended way to adapt it, and namespacing would break it.
-
-Shofer's own **Debug** and **Implement a Feature** workflows are exactly this: the
-bundled `builtin-config` plugin ([`plugins/builtin-config/docs/workflows.md`](../plugins/builtin-config/docs/workflows.md)).
-
-### 5.8 Rules (`contributes.rules`)
+### 5.7 Rules (`contributes.rules`)
 
 A plugin ships rules markdown, optionally scoped to specific modes. These are
 injected into the system prompt via `addCustomInstructions()`.
 
-### 5.9 UI Components (`permissions.ui`)
+### 5.8 UI Components (`permissions.ui`)
 
 **The key differentiator from MCP.** A plugin contributes React components that
 render in designated Shofer UI regions:
 
-| Region ID            | Location                          | What plugins render                                                        |
-| -------------------- | --------------------------------- | -------------------------------------------------------------------------- |
-| `chat-input-toolbar` | ChatTextArea toolbar              | Buttons, chips, status badges/popovers                                     |
-| `task-header`        | TaskHeader (expanded)             | Status badges, info rows, action buttons                                   |
-| `settings-tab`       | SettingsView (per-plugin panel)   | Full plugin settings panel                                                 |
-| `chat-message-addon` | A `plugin_marker` row in the chat | The plugin's own timeline row (see [§5.14](#514-timeline-markers-ctxtask)) |
-| `chat-footer`        | Between the chat and its input    | A per-task summary the user acts on (the file-changes panel)               |
-| `sidebar-panel`      | New panel in the Shofer sidebar   | Custom dashboard/view                                                      |
+| Region ID            | Location                          | What plugins render                                                    |
+| -------------------- | --------------------------------- | ---------------------------------------------------------------------- |
+| `chat-input-toolbar` | ChatTextArea toolbar              | Buttons, chips, status badges/popovers                                 |
+| `task-header`        | TaskHeader (expanded)             | Status badges, info rows, action buttons                               |
+| `settings-tab`       | SettingsView (per-plugin panel)   | Full plugin settings panel                                             |
+| `chat-message-addon` | A `plugin_marker` row in the chat | The plugin's own timeline row (see [§5.13](#513-task-control-ctxtask)) |
+| `chat-footer`        | Between the chat and its input    | A per-task summary the user acts on (the file-changes panel)           |
+| `sidebar-panel`      | New panel in the Shofer sidebar   | Custom dashboard/view                                                  |
 
 **The kit — `@shofer/plugin-ui`.** The same import map that resolves a bundle's `react`
 also resolves `@shofer/plugin-ui` to the host's **component kit** (`Button`, `Dialog*`,
@@ -592,7 +577,7 @@ in-sidebar drawer.)
 
 - import-map wiring.)
 
-### 5.10 Lifecycle Hooks (`permissions.lifecycle`)
+### 5.9 Lifecycle Hooks (`permissions.lifecycle`)
 
 A plugin granted `permissions.lifecycle` can hook into task lifecycle and tool
 execution:
@@ -660,9 +645,16 @@ export interface LifecycleHooks {
 	 * not build a second, worse copy of a record that already exists. Observer.
 	 */
 	onApiRequestFinish?(info: ApiRequestFinishedPayload, context: PluginContext): void | Promise<void>
-	/** The user sent a message into a running task (a step the tool hooks cannot see). Observer. */
+	/**
+	 * The user sent a message into a task (a step the tool hooks cannot see) — including
+	 * the message that RESUMES a task from history, which is how a conversation's second
+	 * and later turns arrive. `trace` is the W3C trace context of the request that
+	 * delivered it (`ShoferApi.sendMessage`'s `trace`), and it is the twin of
+	 * `TaskLifecycleContext.trace`: `beforeTaskStart` fires when a task is CREATED, so
+	 * without this every turn after the first would lose the caller's context. Observer.
+	 */
 	onUserMessage?(
-		info: { taskId: string; text?: string; imageCount?: number },
+		info: { taskId: string; text?: string; imageCount?: number; trace?: TraceContext },
 		context: PluginContext,
 	): void | Promise<void>
 	/** The agent completed a narration text block (its prose between tool calls). Observer. */
@@ -763,13 +755,13 @@ sequenceDiagram
     Note over PR,PL: every hook runs under a 500 ms per-hook timeout<br/>with per-plugin error isolation
 ```
 
-### 5.11 Events (`onEvent`)
+### 5.10 Events (`onEvent`)
 
 Every telemetry event is forwarded to plugin `onEvent` observers. The
 `PluginEvent` carries a typed `name`, optional `properties`, `taskId`, and
 `timestamp`.
 
-### 5.12 Host Capabilities (`ctx.*`)
+### 5.11 Host Capabilities (`ctx.*`)
 
 Beyond the restricted `ctx.host` (fs/fetch/notifier/env/watch/log), a plugin
 context carries optional host capabilities, all off by default — a plugin that
@@ -918,7 +910,7 @@ flowchart TD
 
 ---
 
-### 5.13 Plugin Requests (`handleRequest`)
+### 5.12 Plugin Requests (`handleRequest`)
 
 `onUiMessage` is fire-and-forget, which is the wrong shape for the common case where a
 plugin's UI needs an **answer** ("give me this diff", "list my markers"). A plugin
@@ -1009,7 +1001,7 @@ the plugin itself (see `basics`' `main.ts`):
 | method prefixed `local:`             | The UI is stating this must be answered where the UI runs — opening an editor/viewer, which a headless executor would silently no-op. |
 | `{ mutates: true }` on `api.request` | The request changes state rather than reading it.                                                                                     |
 
-### 5.14 Task control (`ctx.task`)
+### 5.13 Task control (`ctx.task`)
 
 A plugin granted **`permissions.task`** can write to the task's **chat timeline**, rewind
 it, move it, and open a new one — what lets a plugin own a feature whose UX belongs _in
@@ -1045,8 +1037,8 @@ interface PluginTaskControl {
   own job, done before it calls this.
 - **`setCwd`** re-points an existing task (and every agent it starts afterwards) at
   another directory — the seam a plugin that _manages_ directories needs, since only the
-  host can move a live task. It refuses a workflow that has already started its agents,
-  whose work is on disk in the old directory, rather than silently doing nothing.
+  host can move a live task. It throws when there is no task to re-point, rather than
+  silently doing nothing.
 - **`openTask`** opens and focuses a NEW task, optionally in another directory, and
   resolves with its id. Without `text` the task is idle and waits for the user — the
   distinction from `ctx.agent.spawn`, which starts an agent _run_ (prompt in, awaitable
@@ -1054,7 +1046,7 @@ interface PluginTaskControl {
   it to put the user inside a checkout it just created.
 
 Gated like the other capabilities: ungranted ⇒ a denying stub, no host seam ⇒ absent.
-The complementary direction is `lifecycle.onTimelineRewind` ([§5.10](#510-lifecycle-hooks-permissionslifecycle)),
+The complementary direction is `lifecycle.onTimelineRewind` ([§5.9](#59-lifecycle-hooks-permissionslifecycle)),
 where the _host_ is rewinding and the plugin follows.
 
 **`ctx.host.editor`** (`permissions.editor`) rounds this out with the host's multi-file
@@ -1062,7 +1054,7 @@ diff viewer, for a plugin that computes a set of before/after contents and needs
 rendered rather than reinvented.
 
 The bundled `basics` plugin's **checkpoints** feature ([`plugins/basics/docs/checkpoints.md`](../plugins/basics/docs/checkpoints.md))
-is built entirely from §5.10 + §5.13 + §5.14 — it is the worked example of a _feature_,
+is built entirely from §5.9 + §5.12 + §5.13 — it is the worked example of a _feature_,
 not just a tool, living outside core.
 
 ---
@@ -1143,11 +1135,11 @@ independent** consent (billed AI calls — see [§7](#7-security-model)).
 **Organization suppression (`forceDisabledPlugins`).** A deployment can suppress
 plugins outright — `PluginManager.forceDisabledPlugins`, fed from env by
 `governanceDisabledPlugins()` (`SHOFER_DISABLED_PLUGINS`, comma-separated —
-`builtin-config` is the entry that removes the built-in modes and workflows; a
+`builtin-config` is the entry that removes the built-in modes; a
 `basics:<feature>` entry is ignored here and read by the `basics` plugin itself as a
 feature switch). It is **not** a preference: a suppressed plugin never
 loads, `setEnabled` refuses to switch it on, and the user's recorded intent only takes
-effect if the org lifts it. This is what lets an org define the entire mode/workflow set
+effect if the org lifts it. This is what lets an org define the entire mode set
 from a config bundle.
 
 **Deployment activation (`forceEnabledPlugins`).** The mirror image, fed from env by
@@ -1281,7 +1273,7 @@ Logging).
 
 Discovery classifies each plugin by where it was found (`PluginScope`):
 
-- **`bundled`** — first-party plugins shipped inside the extension build. **Non-uninstallable**, and opt-in unless the manifest sets `defaultEnabled` (a plugin that IS a Shofer feature does). The esbuild build (`src/esbuild.mjs`) copies `plugins/**` → `dist/plugins`, auto-builds each plugin's UI bundles (running its `build-ui.mjs`), and ships the runtime deps external bundles need: the esbuild-wasm CLI (`dist/bin/esbuild`), the shared-React shims (`webview-ui/build/plugin-host/*.js`), and a self-contained `@shofer/types` SDK (`dist/plugin-sdk/node_modules/@shofer/types`, so a bare `@shofer/types` import resolves at runtime). The bundled set is **Live Memory**, **Checkpoints**, **File Changes**, **Worktrees**, **Built-in Modes** and **Built-in Workflows** (`plugins/<name>/`) — each self-contained, with its domain types living in the plugin (zero `@shofer/types` runtime footprint); see [`PLUGINS.md`](../PLUGINS.md). A bundled plugin may ship a **pre-built** entry (checkpoints bundles `simple-git` into `main.mjs` via its `build-ui.mjs`), which is what keeps it dependency-free at runtime and packable to a single archive.
+- **`bundled`** — first-party plugins shipped inside the extension build. **Non-uninstallable**, and opt-in unless the manifest sets `defaultEnabled` (a plugin that IS a Shofer feature does). The esbuild build (`src/esbuild.mjs`) copies `plugins/**` → `dist/plugins`, auto-builds each plugin's UI bundles (running its `build-ui.mjs`), and ships the runtime deps external bundles need: the esbuild-wasm CLI (`dist/bin/esbuild`), the shared-React shims (`webview-ui/build/plugin-host/*.js`), and a self-contained `@shofer/types` SDK (`dist/plugin-sdk/node_modules/@shofer/types`, so a bare `@shofer/types` import resolves at runtime). The bundled set is **Live Memory**, **Checkpoints**, **File Changes**, **Worktrees** and **Built-in Modes** (`plugins/<name>/`) — each self-contained, with its domain types living in the plugin (zero `@shofer/types` runtime footprint); see [`PLUGINS.md`](../PLUGINS.md). A bundled plugin may ship a **pre-built** entry (checkpoints bundles `simple-git` into `main.mjs` via its `build-ui.mjs`), which is what keeps it dependency-free at runtime and packable to a single archive.
 - **`global`** — installed under `~/.shofer/plugins/` (all workspaces).
 - **`project`** — installed under `<workspace>/.shofer/plugins/` (checked into VCS or gitignored per team choice).
 
@@ -1466,7 +1458,7 @@ a **V2** imperative-registration API where plugins call `ctx.domain.transform()`
 
 | OpenCode pattern                                                                              | Shofer                                                                                                                         |
 | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Runtime `before`/`after` hooks** (`tool.execute.before`, later hooks see earlier mutations) | Matched by Shofer's reducer-semantics lifecycle hooks ([§5.10](#510-lifecycle-hooks-permissionslifecycle)).                    |
+| **Runtime `before`/`after` hooks** (`tool.execute.before`, later hooks see earlier mutations) | Matched by Shofer's reducer-semantics lifecycle hooks ([§5.9](#59-lifecycle-hooks-permissionslifecycle)).                      |
 | **Scope-owned registration** (closing a scope removes all registrations)                      | Matched by Shofer's enable/disable/reload model — disabling a plugin removes all its contributions.                            |
 | **Config in `opencode.jsonc`, options as `ctx.options`**                                      | Matched by Shofer's manifest `config` schema surfaced as `ctx.config` (schema-driven Settings form).                           |
 | **Domain transform model** (replayable mutations on a stateful domain editor)                 | Not adopted — Shofer merges contributions directly and uses namespacing for collision safety rather than a transform pipeline. |
@@ -1516,12 +1508,12 @@ model).
 > on the spawn options. What is **not** shipped is §14.2's `unattended` / `approvalPolicy` pair and
 > §14.3's non-HTTP `permissions.network` generalization; both are marked in place. This section lets
 > a plugin **drive** the agent as a durable unit of work — workflow, integration, and **runner**
-> plugins (e.g. a Temporal activity worker). It rides the seams §5.11/§7 already define and exposes
+> plugins (e.g. a Temporal activity worker). It rides the seams §5.10/§7 already define and exposes
 > a **scoped** capability, never the raw `ShoferExtensionApi`.
 
 ### 14.1 Motivation
 
-`ctx.agent.notify` ([§5.12](#512-host-capabilities-ctx)) lets a plugin _inject_ a message —
+`ctx.agent.notify` ([§5.11](#511-host-capabilities-ctx)) lets a plugin _inject_ a message —
 spawn/queue/interrupt — but it is **fire-and-forget**: no handle, no completion, no result, no
 cancel. A runner/workflow plugin needs to treat an agent run as a **job**: start it, **await its
 structured result**, and **cancel** it (e.g. when an external orchestrator cancels, or a kill
@@ -1615,7 +1607,7 @@ interface TaskResult {
 - **Gated + host-agnostic.** Same gate as steering (`permissions.agent`), wired via the existing
   `PluginAgentProvider` seam so `@shofer/core` stays host-agnostic (the host binds the concrete task
   stack). Ungranted ⇒ denying stub, per [§7](#7-security-model).
-- **Completion + result.** `afterTaskComplete` ([§5.10](#510-lifecycle-hooks-permissionslifecycle)) and
+- **Completion + result.** `afterTaskComplete` ([§5.9](#59-lifecycle-hooks-permissionslifecycle)) and
   `TaskHandle.result()` carry the structured `TaskResult` (today the lifecycle context carries only a
   `reason` — this adds the result payload).
 - `ctx.agent.notify` stays as the lightweight fire-and-forget path (inbound message delivery, one-way
@@ -1667,7 +1659,7 @@ already "high trust," on par with `permissions.lifecycle` / `permissions.ai`.
 ### 14.4 What does NOT change
 
 The rest of the runner/workflow surface is **already shipped**: `ctx.registerService`
-([§5.12](#512-host-capabilities-ctx)) hosts the long-lived worker (Live-Memory-precedented);
+([§5.11](#511-host-capabilities-ctx)) hosts the long-lived worker (Live-Memory-precedented);
 `ctx.agent.notify` already does spawn/queue/interrupt inbound delivery; `onEvent` + lifecycle hooks
 observe; `ctx.config` / `ctx.storage` back config + idempotency state. With `spawn`/`cancel` and the
 task handle now shipped too, the remaining delta is the unattended-approval pair and the socket-egress

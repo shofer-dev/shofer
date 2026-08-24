@@ -191,8 +191,15 @@ export interface ShoferApi {
 	 * Send a follow-up message to a running task. `images` are data URIs, the same
 	 * shape {@link AskResponse.images} carries, so a client can attach them to a
 	 * follow-up exactly as it can to an approval.
+	 *
+	 * `trace` is the W3C trace context of the caller's own request, the same value
+	 * {@link CreateTaskInput.trace} carries and for the same reason — except that
+	 * a conversation reaches this method for every turn after the first, so
+	 * WITHOUT it a multi-turn run is attributable to its caller exactly once. Core
+	 * stores the two header values, hands them to observers, and never parses
+	 * them; omitting it leaves the call byte-for-byte what it was.
 	 */
-	sendMessage(taskId: string, message: string, images?: string[]): Promise<void>
+	sendMessage(taskId: string, message: string, images?: string[], trace?: TraceContext): Promise<void>
 	cancelTask(taskId: string): Promise<void>
 	/**
 	 * Answer a task's outstanding `ask` (interactive tool approval / follow-up).

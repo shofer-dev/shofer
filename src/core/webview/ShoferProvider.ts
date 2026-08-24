@@ -29,6 +29,7 @@ import {
 	type TerminalActionId,
 	type TerminalActionPromptType,
 	type HistoryItem,
+	type TraceContext,
 	type TaskInteractionPayload,
 	// CloudUserInfo removed
 	// CloudOrganizationMembership removed
@@ -62,12 +63,7 @@ import { WebviewMessage } from "@shofer/core"
 import { ProfileValidator } from "../../shared/ProfileValidator"
 
 import { Terminal } from "../../integrations/terminal/Terminal"
-import {
-	buildTaskMarkdown,
-	formatWorkflowEventsToMarkdown,
-	getTaskFileName,
-	saveMarkdownFile,
-} from "../../integrations/misc/export-markdown"
+import { buildTaskMarkdown, getTaskFileName, saveMarkdownFile } from "../../integrations/misc/export-markdown"
 import {
 	buildJsonTrace,
 	buildJsonTraceTree,
@@ -144,7 +140,6 @@ import { ContextProxy } from "../config/ContextProxy"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
 import { CustomModesManager } from "../config/CustomModesManager"
 import { Task } from "@shofer/core"
-import type { WorkflowTask } from "../workflow/WorkflowTask"
 
 import { webviewMessageHandler } from "./webviewMessageHandler"
 import type { ShoferMessage, TodoItem, TaskLogLine } from "@shofer/types"
@@ -219,14 +214,14 @@ export class ShoferProvider
 	private readonly pluginPanelManager = new PluginPanelManager(this)
 	private taskCreationCallback: (task: Task) => void
 	/**
-	 * Public accessor for the task-creation event-forwarding callback. Tasks
-	 * constructed out-of-band (e.g. {@link WorkflowTask}, which is built via
-	 * `new WorkflowTask(...)` rather than {@link createTask}) must pass this as
-	 * their `onCreated` option so they receive the same provider-level event
-	 * forwarding (`TaskCreated` announcement + per-task lifecycle listeners that
-	 * the public ShoferExtensionApi re-emits). Without it, a WorkflowTask's own
-	 * `TaskCompleted` emission is never forwarded to the API and consumers that
-	 * await completion (integration harness, eval runner) hang forever.
+	 * Public accessor for the task-creation event-forwarding callback. A task
+	 * constructed out-of-band (i.e. with `new Task(...)` rather than
+	 * {@link createTask}) must pass this as its `onCreated` option so it receives
+	 * the same provider-level event forwarding (`TaskCreated` announcement +
+	 * per-task lifecycle listeners that the public ShoferExtensionApi re-emits).
+	 * Without it, its `TaskCompleted` emission is never forwarded to the API and
+	 * consumers that await completion (integration harness, eval runner) hang
+	 * forever.
 	 */
 	public get onTaskCreated(): (task: Task) => void {
 		return this.taskCreationCallback
@@ -375,8 +370,8 @@ export class ShoferProvider
 		this.taskManager = new TaskManager(this)
 
 		// Ordering guarantee: `initializeTaskHistoryStore` is fire-and-forget
-		// in the constructor and may not settle before a WorkflowTask spawns
-		// its first agent child (which calls registerBackgroundTask). Mark the
+		// in the constructor and may not settle before a task spawns its first
+		// child (which calls registerBackgroundTask). Mark the
 		// manager as restored now so the early-bird register doesn't throw.
 		// `restoreManagedTasks` is idempotent — when initializeTaskHistoryStore
 		// eventually calls it with real history, the `seeded` guard ensures it
@@ -1743,14 +1738,14 @@ export class ShoferProvider
 
 	public async createTaskWithHistoryItem(
 		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
-		options?: { startTask?: boolean; keepCurrentTask?: boolean; maxMessages?: number },
+		options?: { startTask?: boolean; keepCurrentTask?: boolean; maxMessages?: number; trace?: TraceContext },
 	) {
 		return time("createTaskWithHistoryItem", () => this._createTaskWithHistoryItemImpl(historyItem, options))
 	}
 
 	private async _createTaskWithHistoryItemImpl(
 		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
-		options?: { startTask?: boolean; keepCurrentTask?: boolean; maxMessages?: number },
+		options?: { startTask?: boolean; keepCurrentTask?: boolean; maxMessages?: number; trace?: TraceContext },
 	) {
 		const isCliRuntime = process.env.SHOFER_CLI_RUNTIME === "1"
 		// CLI injects runtime provider settings from command flags/env at startup.
@@ -1816,21 +1811,6 @@ export class ShoferProvider
 			} else {
 				await this.removeShoferFromStack()
 			}
-		}
-
-		// Workflow tasks are driven by a slang loop, not an LLM loop. Reconstruct
-		// the WorkflowTask subclass (recompiling the agent programs from the
-		// persisted slang source and rehydrating FlowState) rather than a plain
-		// Task. This is gated on the persisted `isWorkflow` flag so ordinary task
-		// restoration is completely unaffected. We branch here — before the mode
-		// / provider-profile restoration below — because a workflow's `mode` is a
-		// synthetic flow name that does not exist in customModes and would
-		// otherwise trip the "mode no longer exists" fallback.
-		if (historyItem.isWorkflow && historyItem.slangSource) {
-			const workflowTask = await this._restoreWorkflowTask(historyItem, isRehydratingCurrentTask, options)
-			if (workflowTask) return workflowTask
-			// Fall through to plain-Task restoration on reconstruction failure
-			// (already logged) so the task history entry is at least viewable.
 		}
 
 		// If the history item has a saved mode, restore it and its associated API configuration.
@@ -1960,6 +1940,11 @@ export class ShoferProvider
 			// surfaces a `resume_completed_task` ask). The persisted `taskState`
 			// is owned solely by TaskManager — this is NOT used to seed it.
 			initialState: historyItem.taskState ?? { lifecycle: "idle" },
+			// The W3C trace context of whatever asked for this rehydration — a
+			// controller delivering the conversation's next message. Without it a
+			// resumed task starts a causal story of its own, and every turn after
+			// the first is unattributable to its caller.
+			trace: options?.trace,
 		})
 
 		// Populate `shoferMessages` (and `apiConversationHistory`) on the new
@@ -2080,83 +2065,6 @@ export class ShoferProvider
 		}
 
 		return task
-	}
-
-	/**
-	 * Reconstruct and publish a {@link WorkflowTask} from a persisted workflow
-	 * HistoryItem, mirroring the stack/publish handling of plain-task
-	 * restoration. Returns the live WorkflowTask, or `undefined` if
-	 * reconstruction failed (the caller then falls back to plain-Task
-	 * restoration so the history entry remains viewable).
-	 *
-	 * The slang loop is only (re)started when the persisted flow status is
-	 * non-terminal; terminal flows (converged / deadlock / budget_exceeded /
-	 * error) are restored read-only.
-	 */
-	private async _restoreWorkflowTask(
-		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
-		isRehydratingCurrentTask: boolean | undefined,
-		options?: { startTask?: boolean; keepCurrentTask?: boolean },
-	): Promise<WorkflowTask | undefined> {
-		const { createWorkflowTaskFromHistory, TERMINAL_FLOW_STATUSES } = await import("../workflow/WorkflowTask")
-
-		let workflowTask: WorkflowTask
-		try {
-			workflowTask = await createWorkflowTaskFromHistory(this, historyItem)
-		} catch (error) {
-			this.log(
-				`[createTaskWithHistoryItem] Failed to reconstruct workflow task ${historyItem.id}: ` +
-					`${error instanceof Error ? error.message : String(error)}. Falling back to plain task.`,
-			)
-			return undefined
-		}
-
-		// Preload-Before-Publish invariant: populate shoferMessages (and
-		// apiConversationHistory) from disk BEFORE the task goes onto the
-		// stack, just like the plain-task path does at line ~1688. Without
-		// this, WorkflowView renders the empty-stream "Starting workflow…"
-		// spinner on restore because the task's shoferMessages is [] at the
-		// moment showTaskWithId pushes its postInitState.
-		await workflowTask.preloadShoferMessages()
-
-		if (isRehydratingCurrentTask) {
-			const stackIndex = this.shoferStack.length - 1
-			const oldTask = this.shoferStack[stackIndex]
-			try {
-				await oldTask.abortTask(true)
-			} catch (e) {
-				this.log(
-					`[createTaskWithHistoryItem] abortTask() failed for old task ${oldTask.taskId}.${oldTask.instanceId}: ${e instanceof Error ? e.message : String(e)}`,
-				)
-			}
-			const cleanupFunctions = this.taskEventListeners.get(oldTask)
-			if (cleanupFunctions) {
-				cleanupFunctions.forEach((cleanup) => cleanup())
-				this.taskEventListeners.delete(oldTask)
-			}
-			this.shoferStack[stackIndex] = workflowTask
-			workflowTask.emit(ShoferEventName.TaskFocused)
-			this.taskManager.updateTaskInstance(workflowTask.taskId, workflowTask)
-			await this.performPreparationTasks(workflowTask)
-		} else {
-			await this.addShoferToStack(workflowTask)
-		}
-
-		const shouldStart = options?.startTask ?? true
-		if (shouldStart && !TERMINAL_FLOW_STATUSES.has(workflowTask.flowState.status)) {
-			// Escalation waits are persisted as "escalated"; on resume the human is
-			// re-engaging, so return the flow to "running" and re-drive the loop.
-			if (workflowTask.flowState.status === "escalated") {
-				workflowTask.flowState.status = "running"
-			}
-			void workflowTask.start()
-		}
-
-		this.debug(
-			`[createTaskWithHistoryItem] workflow task ${workflowTask.taskId}.${workflowTask.instanceId} ` +
-				`restored (status=${workflowTask.flowState.status})`,
-		)
-		return workflowTask
 	}
 
 	/**
@@ -2381,7 +2289,7 @@ export class ShoferProvider
 			},
 			// Org governance (env-delivered): plugins an organization has suppressed —
 			// including the bundled built-ins, which is how "disable the built-in
-			// workflows/modes" works now that they ARE plugins. Not a user preference:
+			// modes" works now that they ARE plugins. Not a user preference:
 			// a listed plugin cannot be enabled from the Plugins panel.
 			forceDisabledPlugins: governanceDisabledPlugins(),
 			// The mirror: plugins THIS host was provisioned to run (`SHOFER_ENABLED_PLUGINS`).
@@ -2744,8 +2652,8 @@ export class ShoferProvider
 					// task when this runs — read in memory rather than from history,
 					// which would race the persist. Without this a caller that awaits
 					// `result()` learns only that the agent finished, and anything
-					// downstream binding the answer (a Slang `-> @out`, an output
-					// contract) sees `undefined` and can only ever fail.
+					// downstream binding the answer sees `undefined` and can only ever
+					// fail.
 					settle?.({ taskId, status: "completed", output: lastCompletionResult(task), metadata })
 				}
 				const onAborted = () => {
@@ -2870,16 +2778,6 @@ export class ShoferProvider
 				const task = resolveTask(taskId)
 				if (!task) {
 					throw new Error(`[plugin:${pluginName}] ctx.task.setCwd: no task to re-point`)
-				}
-
-				// A workflow that has already started has agents with work on disk in the
-				// old directory; moving it now would desync the two. Refuse loudly — the
-				// caller is a UI action the user just took.
-				const { WorkflowTask } = await import("../workflow/index")
-				if (task instanceof WorkflowTask && task.flowState.started) {
-					throw new Error(
-						`[plugin:${pluginName}] ctx.task.setCwd: workflow ${task.taskId} has already started its agents`,
-					)
 				}
 
 				task.reassignCwd(cwd)
@@ -3521,9 +3419,6 @@ export class ShoferProvider
 			`media-src ${webview.cspSource}`,
 			`script-src 'unsafe-eval' ${webview.cspSource} https://* https://*.posthog.com http://${localServerUrl} http://0.0.0.0:${localPort} 'nonce-${nonce}'`,
 			`connect-src ${webview.cspSource} ${openRouterDomain} https://* https://*.posthog.com ws://${localServerUrl} ws://0.0.0.0:${localPort} http://${localServerUrl} http://0.0.0.0:${localPort}`,
-			// frame-src is required so the SlangViz srcdoc iframe (workflow
-			// visualization) is permitted under default-src 'none'.
-			"frame-src 'self'",
 			"clipboard-read 'self'",
 			"clipboard-write 'self'",
 		]
@@ -3543,10 +3438,6 @@ export class ShoferProvider
 						window.IMAGES_BASE_URI = "${imagesUri}"
 						window.AUDIO_BASE_URI = "${audioUri}"
 						window.MATERIAL_ICONS_BASE_URI = "${materialIconsUri}"
-						// Exposed so SlangViz can stamp the CSP nonce onto the
-						// script tags inside its srcdoc iframe (which inherits
-						// this document's policy).
-						window.__shofer_csp_nonce__ = "${nonce}"
 					</script>
 					<title>Shofer</title>
 				</head>
@@ -3638,9 +3529,6 @@ export class ShoferProvider
 				window.IMAGES_BASE_URI = "${imagesUri}"
 				window.AUDIO_BASE_URI = "${audioUri}"
 				window.MATERIAL_ICONS_BASE_URI = "${materialIconsUri}"
-				// Exposed so SlangViz can stamp the CSP nonce onto the script
-				// tags inside its srcdoc iframe (which inherits this policy).
-				window.__shofer_csp_nonce__ = "${nonce}"
 			</script>
             <title>Shofer</title>
           </head>
@@ -4377,12 +4265,7 @@ export class ShoferProvider
 					`[getTaskWithId] api_conversation_history.jsonl corrupted for task ${id}, returning empty history: ${error instanceof Error ? error.message : String(error)}`,
 				)
 			}
-			// An empty API history is only anomalous for LLM-backed tasks. A workflow
-			// orchestrator (`isWorkflow`) drives no LLM of its own — its observable
-			// history lives entirely in `ui_messages.jsonl` as the say/ask stream — so
-			// an empty `api_conversation_history.jsonl` is expected, not a fault. Only
-			// warn for tasks that should have API turns.
-			if (apiConversationHistory.length === 0 && !historyItem.isWorkflow) {
+			if (apiConversationHistory.length === 0) {
 				webviewLog.warn(`[getTaskWithId] api_conversation_history.jsonl missing or empty for task ${id}`)
 			}
 		}
@@ -4555,33 +4438,7 @@ export class ShoferProvider
 			return // user dismissed the destination picker
 		}
 
-		// A workflow makes no direct LLM calls, so `apiConversationHistory` is empty
-		// — its transcript is the "Events" tab: the say/ask state-transition messages
-		// (peer-to-peer `peer_message` excluded, to match the JSON export's `events`
-		// field). Resolve the markdown content for whichever task kind this is.
-		let markdown: string
-		if (historyItem.isWorkflow) {
-			let uiMessages: Array<{ type: string; say?: string; ask?: string; ts: number; text?: string }> = []
-			try {
-				const { readTaskMessages } = await import("@shofer/core")
-				const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
-				uiMessages = (await readTaskMessages({ taskId: id, globalStoragePath })) as typeof uiMessages
-			} catch (err) {
-				webviewLog.warn(
-					`[exportTaskWithId] Could not read ui_messages.jsonl for workflow ${id}: ${err instanceof Error ? err.message : String(err)}`,
-				)
-			}
-			const events = uiMessages
-				.filter((m) => !(m.type === "say" && m.say === "peer_message"))
-				.map((m) => ({ ts: m.ts, type: m.type, say: m.say, ask: m.ask, text: m.text }))
-			const flowName =
-				((historyItem.flowState as Record<string, unknown> | undefined)?.flowName as string) ||
-				historyItem.task ||
-				""
-			markdown = formatWorkflowEventsToMarkdown(flowName, events)
-		} else {
-			markdown = buildTaskMarkdown(apiConversationHistory)
-		}
+		const markdown = buildTaskMarkdown(apiConversationHistory)
 
 		if (destination === "browser") {
 			await this.postMessageToWebview({
@@ -4613,7 +4470,7 @@ export class ShoferProvider
 		const { historyItem } = await this.getTaskWithId(id)
 
 		// Build the trace for this task plus the full descendant tree of any
-		// sub-tasks it spawned (for a workflow, its per-agent tasks). Large trees
+		// sub-tasks it spawned. Large trees
 		// mean many sequential reads, so run the walk inside a cancellable progress
 		// notification and report a running count; the pure walker handles
 		// recursion / cycle-guarding and skips any unreadable child.
@@ -4657,8 +4514,8 @@ export class ShoferProvider
 		}
 
 		if (destination === "browser") {
-			// Serialize to an OS temp file via the worker (a workflow trace is the
-			// whole descendant task tree, so stringifying it on the main thread would
+			// Serialize to an OS temp file via the worker (a trace is the whole
+			// descendant task tree, so stringifying it on the main thread would
 			// freeze the webview), read the bytes back, and stream them to the webview
 			// for a client-side download. The temp file is removed afterwards.
 			const tmpFile = path.join(os.tmpdir(), fileName)
@@ -4694,9 +4551,8 @@ export class ShoferProvider
 	/**
 	 * Load one task's JSON trace and its direct `childIds` for the export walker
 	 * ({@link buildJsonTraceTree}). Reads the persisted api-conversation + ui
-	 * messages and assembles the single-task trace (LLM calls, or — for a workflow
-	 * — flowState + event log + slang source). Recursion/cycle-guarding is the
-	 * walker's job; this just returns the node plus its children.
+	 * messages and assembles the single-task trace. Recursion/cycle-guarding is
+	 * the walker's job; this just returns the node plus its children.
 	 */
 	private async loadJsonTraceNode(id: string): Promise<{ trace: JsonExportTrace; childIds: string[] }> {
 		const { historyItem, apiConversationHistory } = await this.getTaskWithId(id)
@@ -4720,16 +4576,7 @@ export class ShoferProvider
 			historyItem.ts ? new Date(historyItem.ts).toISOString() : new Date().toISOString(),
 			apiConversationHistory,
 			uiMessages,
-			// A workflow makes no direct LLM calls, so its trace is the slang state
-			// machine + data (flowState) plus the UI event log (state transitions).
-			// slangSource + flowState.mailboxHistory are exactly what's needed to
-			// reproduce the sequence/swimlane/topology diagrams post-mortem.
-			{
-				title: historyItem.name,
-				isWorkflow: historyItem.isWorkflow ?? false,
-				flowState: historyItem.flowState,
-				slangSource: historyItem.slangSource,
-			},
+			{ title: historyItem.name },
 		)
 
 		return { trace, childIds: historyItem.childIds ?? [] }
@@ -5122,22 +4969,6 @@ export class ShoferProvider
 		const cwd = this.cwd
 		const currentTask = this.getCurrentTask()
 
-		// Re-seed the workflow visualization from the *focused* task. The viz
-		// fields below are normally pushed as deltas by WorkflowTask via
-		// postConfigUpdate, but those are global keys any live workflow writes to.
-		// Reseeding from the current task on every full state push (which fires on
-		// task switch) guarantees that switching to a workflow restores its own
-		// diagrams rather than whichever workflow last pushed. Duck-typed so we
-		// don't depend on a runtime WorkflowTask import here.
-		const _wfVizSnap = (() => {
-			const t = currentTask as unknown as {
-				getWorkflowVizSnapshot?: () =>
-					| { html: string; meta?: unknown; runState?: Record<string, unknown> }
-					| undefined
-			}
-			return typeof t?.getWorkflowVizSnapshot === "function" ? t.getWorkflowVizSnapshot() : undefined
-		})()
-
 		// [header:content] Does the PERSISTED HistoryItem.task (the value the webview
 		// turns into the synthetic TaskHeader via currentTaskItem.task) hold the
 		// canonical first prompt, or a corrupted api_req_started wireRequest blob?
@@ -5342,11 +5173,6 @@ export class ShoferProvider
 				}
 			})(),
 			debug: this.contextProxy.getValue("debug") ?? false,
-			// Seeded from the focused workflow task (if any); thereafter refreshed
-			// as deltas via postConfigUpdate from WorkflowTask.notifySlangEditor().
-			workflowVizHtml: _wfVizSnap?.html,
-			workflowVizRunState: _wfVizSnap?.runState,
-			workflowVizMeta: _wfVizSnap?.meta as ExtensionState["workflowVizMeta"],
 		}
 	}
 
@@ -6087,32 +5913,6 @@ export class ShoferProvider
 
 		if (!historyItem) {
 			return
-		}
-
-		// When a WorkflowTask was stopped before the slang loop started
-		// (e.g. during param collection), there is no work to resume —
-		// the task was just asking the user a question. The live
-		// WorkflowTask's .catch() handler already set flowState.status
-		// to "aborted" and persisted it during abortTask(). Skip
-		// rehydrate so the task stays stopped instead of re-asking the
-		// same question.
-		if (historyItem.isWorkflow) {
-			// Re-read history from disk — abortTask() may have updated
-			// the persisted flowState.status to "aborted".
-			let freshStatus: string | undefined
-			try {
-				const fresh = await this.getTaskWithId(historyItem.id)
-				freshStatus = (fresh.historyItem.flowState as Record<string, unknown>)?.status as string | undefined
-			} catch {
-				// Fall back to the in-memory snapshot
-				freshStatus = (historyItem.flowState as Record<string, unknown>)?.status as string | undefined
-			}
-			if (freshStatus && freshStatus !== "running") {
-				webviewLog.info(
-					`[cancelTask] Skipping rehydrate: WorkflowTask ${task.taskId} was stopped (status=${freshStatus})`,
-				)
-				return
-			}
 		}
 
 		// Clears task again, so we need to abortTask manually above.

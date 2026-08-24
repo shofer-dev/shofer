@@ -1537,7 +1537,13 @@ describe("Shofer", () => {
 				task.submitUserMessage("test message", ["image1.png"])
 
 				// Verify handleWebviewAskResponse was called directly (not webview)
-				expect(handleResponseSpy).toHaveBeenCalledWith("messageResponse", "test message", ["image1.png"])
+				expect(handleResponseSpy).toHaveBeenCalledWith(
+					"messageResponse",
+					"test message",
+					["image1.png"],
+					undefined,
+					undefined,
+				)
 				// Should NOT route through webview anymore
 				expect(mockProvider.postMessageToWebview).not.toHaveBeenCalled()
 			})
@@ -1579,7 +1585,13 @@ describe("Shofer", () => {
 				task.shoferMessages = []
 				task.submitUserMessage("new task", ["image1.png"])
 
-				expect(handleResponseSpy).toHaveBeenCalledWith("messageResponse", "new task", ["image1.png"])
+				expect(handleResponseSpy).toHaveBeenCalledWith(
+					"messageResponse",
+					"new task",
+					["image1.png"],
+					undefined,
+					undefined,
+				)
 
 				// Clear mock
 				handleResponseSpy.mockClear()
@@ -1595,7 +1607,13 @@ describe("Shofer", () => {
 				]
 				task.submitUserMessage("follow-up message", ["image2.png"])
 
-				expect(handleResponseSpy).toHaveBeenCalledWith("messageResponse", "follow-up message", ["image2.png"])
+				expect(handleResponseSpy).toHaveBeenCalledWith(
+					"messageResponse",
+					"follow-up message",
+					["image2.png"],
+					undefined,
+					undefined,
+				)
 			})
 
 			it("should handle undefined provider gracefully", async () => {

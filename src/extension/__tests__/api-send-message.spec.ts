@@ -76,7 +76,7 @@ describe("API - sendMessage (task-addressed)", () => {
 		await api.sendMessage("t1", "hello")
 
 		expect(getManagedTaskInstance).toHaveBeenCalledWith("t1")
-		expect(task.submitUserMessage).toHaveBeenCalledWith("hello", undefined)
+		expect(task.submitUserMessage).toHaveBeenCalledWith("hello", undefined, undefined, undefined, undefined)
 		// Never the webview — see the contract note above.
 		expect(mockPostMessageToWebview).not.toHaveBeenCalled()
 	})
@@ -88,7 +88,7 @@ describe("API - sendMessage (task-addressed)", () => {
 
 		await api.sendMessage("t1", "compare these", images)
 
-		expect(task.submitUserMessage).toHaveBeenCalledWith("compare these", images)
+		expect(task.submitUserMessage).toHaveBeenCalledWith("compare these", images, undefined, undefined, undefined)
 	})
 
 	it("falls back to the current task when its id matches the addressed one", async () => {
@@ -99,7 +99,7 @@ describe("API - sendMessage (task-addressed)", () => {
 
 		await api.sendMessage("t-current", "hello")
 
-		expect(task.submitUserMessage).toHaveBeenCalledWith("hello", undefined)
+		expect(task.submitUserMessage).toHaveBeenCalledWith("hello", undefined, undefined, undefined, undefined)
 	})
 
 	it("does not deliver to the current task when the addressed id differs", async () => {
@@ -148,7 +148,7 @@ describe("API - sendMessage (task-addressed)", () => {
 
 			expect(createTaskWithHistoryItem).toHaveBeenCalledWith(
 				{ id: "t1" },
-				{ keepCurrentTask: true, startTask: false },
+				{ keepCurrentTask: true, startTask: false, trace: undefined },
 			)
 			expect(fresh.messageQueueService.addMessage).toHaveBeenCalledWith("and tomorrow?", undefined)
 			expect(fresh.startFromHistory).toHaveBeenCalled()
@@ -172,6 +172,38 @@ describe("API - sendMessage (task-addressed)", () => {
 			// Nothing is delivered a second time through the ask channel.
 			expect(fresh.submitUserMessage).not.toHaveBeenCalled()
 			expect(fresh.messageQueueService.dequeueMessage).not.toHaveBeenCalled()
+		})
+	})
+
+	/**
+	 * The caller's trace context follows the message down BOTH paths. It has to:
+	 * `beforeTaskStart` fires when a task is CREATED, so a conversation whose
+	 * context is stated only there is attributable to its caller for exactly one
+	 * turn — and the cold path below is how every follow-up turn actually arrives.
+	 */
+	describe("trace context", () => {
+		const trace = { traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", tracestate: "a=1" }
+
+		it("reaches a warm task's own message channel", async () => {
+			const task = liveTask("t1")
+			getManagedTaskInstance.mockReturnValue(task)
+
+			await api.sendMessage("t1", "hello", undefined, trace)
+
+			expect(task.submitUserMessage).toHaveBeenCalledWith("hello", undefined, undefined, undefined, trace)
+		})
+
+		it("reaches a rehydrated task, which is where a conversation's later turns land", async () => {
+			getManagedTaskInstance.mockReturnValue(liveTask("t1", { abort: true }))
+			getTaskWithId.mockResolvedValue({ historyItem: { id: "t1" } })
+			createTaskWithHistoryItem.mockResolvedValue(rehydrated("t1"))
+
+			await api.sendMessage("t1", "and tomorrow?", undefined, trace)
+
+			expect(createTaskWithHistoryItem).toHaveBeenCalledWith(
+				{ id: "t1" },
+				{ keepCurrentTask: true, startTask: false, trace },
+			)
 		})
 	})
 })

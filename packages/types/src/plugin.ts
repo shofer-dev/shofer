@@ -271,6 +271,17 @@ export interface UserMessageInfo {
 	readonly text?: string
 	/** How many images the message carried. */
 	readonly imageCount?: number
+	/**
+	 * The W3C trace context of the request that DELIVERED this message, when the
+	 * caller stated one ({@link ShoferApi.sendMessage}'s `trace`).
+	 *
+	 * The twin of {@link TaskLifecycleContext.trace}, and it exists for the turns
+	 * that hook cannot cover: `beforeTaskStart` fires when a task is CREATED, so
+	 * on a long-running conversation every turn after the first would otherwise
+	 * lose the caller's context. Core stores the two header values and never
+	 * parses them.
+	 */
+	readonly trace?: TraceContext
 }
 
 /** What a {@link LifecycleHooks.onAssistantMessage} hook is being told (design §5.9). */
@@ -788,7 +799,7 @@ export interface PluginAgent {
 	/**
 	 * Start a task and get an awaitable, cancellable {@link PluginTaskHandle} (design §14).
 	 * Unlike {@link notify} (fire-and-forget), this is the **job-oriented** path a
-	 * workflow/runner plugin uses: `await handle.result()` for the structured outcome,
+	 * job-runner plugin uses: `await handle.result()` for the structured outcome,
 	 * `handle.cancel()` to abort. Scoped, gated (`permissions.agent`); the plugin never
 	 * touches the task stack or `ShoferExtensionApi`.
 	 */
@@ -974,9 +985,7 @@ export interface PluginTaskControl {
 	 * afterwards, run there.
 	 *
 	 * The seam a plugin that *manages* directories (worktrees) needs, since only the host
-	 * can move a running task. The host refuses when the move would be incoherent — a
-	 * workflow that has already started agents has work on disk in the old directory —
-	 * and reports that rather than silently doing nothing.
+	 * can move a running task.
 	 *
 	 * Defaults to the host's current task.
 	 */
@@ -1334,13 +1343,6 @@ export const pluginPermissionsSchema = z
 		 * code, and may run with no task and nobody watching), so this grant IS the gate.
 		 */
 		mcpInvoke: z.boolean().optional(),
-		/**
-		 * Contribute `.slang` **workflows** — the multi-phase, multi-agent programs the
-		 * workflow runner executes (`contributes.workflows`). Shipped as files under the
-		 * plugin's `workflows/` dir and discovered alongside the user's
-		 * (`~/.shofer/workflows/`) and the project's (`.shofer/workflows/`).
-		 */
-		workflows: z.boolean().optional(),
 		/** UI regions the plugin wants to render into (Phase 4). */
 		ui: z.array(pluginUiRegionSchema).optional(),
 		lifecycle: z.boolean().optional(),
@@ -1522,33 +1524,12 @@ export const pluginUiEntrySchema = z
 
 export type PluginUiEntry = z.infer<typeof pluginUiEntrySchema>
 
-/**
- * A `.slang` workflow a plugin ships. The physical `<name>.slang` lives under the
- * plugin's `workflows/` directory; this entry is the manifest-level declaration.
- *
- * Unlike modes/skills/commands these are **not** namespaced: a workflow is addressed
- * by the flow name inside its `.slang` source, and the discovery chain is a plain
- * priority merge (plugin < global < project) so a user or project can override a
- * shipped workflow by dropping in a file of the same name — which is exactly how the
- * built-in workflows behaved before they became a plugin.
- */
-export const pluginWorkflowContributionSchema = z
-	.object({
-		/** File base name under `workflows/`, without the `.slang` extension. */
-		name: z.string().min(1),
-		description: z.string().optional(),
-	})
-	.strict()
-
-export type PluginWorkflowContribution = z.infer<typeof pluginWorkflowContributionSchema>
-
 /** The declarative `contributes` block (design §5, §6). All entries optional. */
 export const pluginContributesSchema = z
 	.object({
 		modes: z.array(pluginModeContributionSchema).optional(),
 		skills: z.array(pluginSkillContributionSchema).optional(),
 		commands: z.array(pluginCommandContributionSchema).optional(),
-		workflows: z.array(pluginWorkflowContributionSchema).optional(),
 		mcpServers: pluginMcpServersSchema.optional(),
 		rules: z.array(pluginRuleContributionSchema).optional(),
 		/**
@@ -1898,7 +1879,7 @@ export interface PluginUiTaskSummary {
 	 * Whether the host would still accept {@link PluginTaskControl.setCwd} for this task.
 	 *
 	 * False once the task's work is on disk in the current directory — an ordinary task
-	 * that has started, or a workflow whose agents are running. A UI that offers to move
+	 * that has started. A UI that offers to move
 	 * the task asks this rather than re-deriving the rule, which lives host-side with the
 	 * task it protects.
 	 */

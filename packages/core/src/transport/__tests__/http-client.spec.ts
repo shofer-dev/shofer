@@ -104,6 +104,18 @@ describe("ShoferHttpClient (typed SDK)", () => {
 		expect(init.body).toBe(JSON.stringify({ prompt: "hi", mode: "code", trace }))
 	})
 
+	it("sendMessage mirrors the trace context the same way, for every turn after the first", async () => {
+		const fetchMock = vi.fn(
+			async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({}), { status: 202 }),
+		)
+		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
+		const trace = { traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", tracestate: "a=1" }
+		await client.sendMessage("t1", "next", undefined, trace)
+		const init = fetchMock.mock.calls[0]![1]!
+		expect(init.headers).toMatchObject({ traceparent: trace.traceparent, tracestate: "a=1" })
+		expect(init.body).toBe(JSON.stringify({ message: "next", trace }))
+	})
+
 	it("attaches the per-request headers supplier to every request, without unseating auth", async () => {
 		let n = 0
 		const fetchMock = vi.fn(
@@ -243,7 +255,7 @@ describe("ShoferHttpClient (typed SDK)", () => {
 			await client.respondToAsk("t1", { askResponse: "yesButtonClicked", askId: "a1" })
 			await client.sendMessage("t1", "carry on")
 			expect(api.respondToAsk).toHaveBeenCalledWith("t1", expect.objectContaining({ askId: "a1" }))
-			expect(api.sendMessage).toHaveBeenCalledWith("t1", "carry on", undefined)
+			expect(api.sendMessage).toHaveBeenCalledWith("t1", "carry on", undefined, undefined)
 		})
 
 		it("reports an unknown task as undefined and a wrong token as an error", async () => {

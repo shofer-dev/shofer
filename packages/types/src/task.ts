@@ -154,16 +154,12 @@ export interface CreateTaskOptions {
 	trace?: TraceContext
 	/**
 	 * Persona/role text injected into this task's system prompt, on top of the
-	 * mode's roleDefinition. Used by workflow agents to make the `.slang`
-	 * `agent { role: "…" }` actually shape behavior (the slang `role` is otherwise
-	 * parsed-but-not-consumed). Applied for this task only — never mutates the mode.
+	 * mode's roleDefinition. Applied for this task only — never mutates the mode.
 	 */
 	agentRole?: string
 	/**
 	 * Tool-group allow-list for this task, on top of the mode's own tools.
-	 * Used by workflow agents to make the `.slang` `agent { tools: [...] }`
-	 * restriction actually narrow the spawned task's tools (otherwise
-	 * parsed-but-not-consumed). Each entry is a `ToolGroup` name (`read`,
+	 * Narrows the spawned task's tools. Each entry is a `ToolGroup` name (`read`,
 	 * `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`,
 	 * `uncategorized`). The effective tool set is the mode's tools INTERSECTED
 	 * with these groups (always-available tools like `attempt_completion` are
@@ -172,9 +168,8 @@ export interface CreateTaskOptions {
 	 */
 	agentToolGroups?: string[]
 	/**
-	 * Per-task overrides for system-prompt components (workflow agents' `.slang`
-	 * `context { ... }` block). Each key is a boolean toggle for a specific
-	 * component. Absent keys inherit the global default for that component.
+	 * Per-task overrides for system-prompt components. Each key is a boolean
+	 * toggle for a specific component. Absent keys inherit the global default for that component.
 	 *
 	 * Supported keys:
 	 *   - `include_agents_md`       — AGENTS.md / AGENT.md rules injection
@@ -255,12 +250,12 @@ export interface CreateTaskOptions {
 	 * `additionalProperties: false`) so providers with constrained decoding
 	 * enforce the contract at decode time.
 	 *
-	 * This is a workflow-layer concept — set by `WorkflowTask.spawnAgentTask()`
-	 * from the stake's `output:` contract AST. It is provider-agnostic: the
+	 * Set by the caller that owns the output contract — a plugin passes it as
+	 * `ctx.agent.spawn({ completionSchema })`. It is provider-agnostic: the
 	 * schema is safe to send everywhere (within the universal + strict-safe
 	 * subset), and providers without constrained decoding treat it as a strong
-	 * semantic hint. The existing post-hoc validator in `collectStakeResults()`
-	 * remains the universal floor.
+	 * semantic hint, so a caller that needs a guarantee still validates the
+	 * answer it gets back.
 	 */
 	completionSchema?: Record<string, unknown>
 	/**
@@ -334,7 +329,13 @@ export interface TaskLike {
 
 	approveAsk(options?: { text?: string; images?: string[] }): void
 	denyAsk(options?: { text?: string; images?: string[] }): void
-	submitUserMessage(text: string, images?: string[], mode?: string, providerProfile?: string): Promise<void>
+	submitUserMessage(
+		text: string,
+		images?: string[],
+		mode?: string,
+		providerProfile?: string,
+		trace?: TraceContext,
+	): Promise<void>
 	abortTask(): void
 }
 

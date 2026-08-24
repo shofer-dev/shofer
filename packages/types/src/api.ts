@@ -8,6 +8,7 @@ import type { HistoryItem } from "./history.js"
 import type { ShoferMessage, TokenUsage } from "./message.js"
 import type { ProviderSettingsEntry, ProviderSettings } from "./provider-settings.js"
 import type { IpcMessage, IpcServerEvents } from "./ipc.js"
+import type { TraceContext } from "./trace-context.js"
 
 export type ShoferExtensionApiEvents = ShoferEvents
 
@@ -29,7 +30,7 @@ export interface ExtensionCreateTaskInput extends Omit<CreateTaskInput, "mode"> 
 /**
  * The Shofer extension's API: the agent control plane ({@link ShoferApi}) plus the
  * host-only administration surface — provider profiles, configuration
- * import/export, task-history management, exports, logs and workflows.
+ * import/export, task-history management, exports and logs.
  *
  * The `extends` is the contract: a method cannot exist on the wire surface
  * without existing here, and — because transports bind {@link ShoferApi}, not this
@@ -78,8 +79,11 @@ export interface ShoferExtensionApi extends ShoferApi, EventEmitter<ShoferExtens
 	 * @param taskId The id of the task to deliver to.
 	 * @param message The message text.
 	 * @param images Optional array of image data URIs (e.g., "data:image/webp;base64,...").
+	 * @param trace Optional W3C trace context of the request delivering this
+	 * message, carried to observers so a conversation's later turns stay
+	 * attributable to their caller (see {@link ShoferApi.sendMessage}).
 	 */
-	sendMessage(taskId: string, message: string, images?: string[]): Promise<void>
+	sendMessage(taskId: string, message: string, images?: string[], trace?: TraceContext): Promise<void>
 	/**
 	 * Answers an outstanding `ask` (interactive tool approval / follow-up) on a task.
 	 * Resolves the managed task by id (or the current task when omitted) and drives
@@ -308,31 +312,6 @@ export interface ShoferExtensionApi extends ShoferApi, EventEmitter<ShoferExtens
 	 * @throws Error if the JSON is invalid or the schema is violated.
 	 */
 	importConfiguration(json: string): Promise<void>
-
-	// ─── Workflows ─────────────────────────────────────────────────
-
-	/**
-	 * Creates and starts a Slang workflow from a .slang source string.
-	 *
-	 * The workflow is parsed, validated, and launched as a WorkflowTask that
-	 * manages its own multi-agent slang-driven loop. The current task (if any)
-	 * is moved to the background.
-	 *
-	 * @param slangSource The .slang source content as a string.
-	 * @param flowParams Optional initial parameter values for the flow.
-	 * @returns The task ID of the created WorkflowTask.
-	 * @throws Error if the slang source has parse errors or contains no flows.
-	 */
-	createWorkflow(slangSource: string, flowParams?: Record<string, unknown>): Promise<string>
-
-	/**
-	 * Discovers available Slang workflows from the project's
-	 * `.shofer/workflows/` directory and the user's global
-	 * `~/.shofer/workflows/` directory.
-	 *
-	 * @returns A map of flow name → slang source content.
-	 */
-	discoverWorkflows(): Promise<Map<string, string>>
 }
 
 export interface ShoferIpcServer extends EventEmitter<IpcServerEvents> {

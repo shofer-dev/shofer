@@ -1,6 +1,6 @@
 import { taskSnapshotSchema, traceContextToHeaders } from "@shofer/types"
 
-import type { ShoferApi, AskResponse, CreateTaskInput, ServerEvent, TaskSnapshot } from "@shofer/types"
+import type { ShoferApi, AskResponse, CreateTaskInput, ServerEvent, TaskSnapshot, TraceContext } from "@shofer/types"
 
 /**
  * Typed HTTP/SSE client SDK for the shofer server (v3 architecture §11).
@@ -55,8 +55,15 @@ export class ShoferHttpClient implements ShoferApi {
 		return (await this.post("/task", input, traceContextToHeaders(input.trace))) as { taskId: string }
 	}
 
-	async sendMessage(taskId: string, message: string, images?: string[]): Promise<void> {
-		await this.post(`/task/${encodeURIComponent(taskId)}/message`, { message, images })
+	async sendMessage(taskId: string, message: string, images?: string[], trace?: TraceContext): Promise<void> {
+		// Body AND headers, exactly as `createTask` sends them and for the same
+		// reason: a proxy between here and the server reads the headers, the server
+		// prefers the body, and both halves are the same value.
+		await this.post(
+			`/task/${encodeURIComponent(taskId)}/message`,
+			{ message, images, trace },
+			traceContextToHeaders(trace),
+		)
 	}
 
 	async cancelTask(taskId: string): Promise<void> {

@@ -8,6 +8,7 @@ import type {
 	ServerEvent,
 	ShoferMessage,
 	TaskSnapshot,
+	TraceContext,
 } from "@shofer/types"
 
 /** Construction options for {@link ShoferApiAgent}. */
@@ -135,7 +136,7 @@ export class ShoferApiAgent implements ShoferApi {
 		return this.api.createTask({ ...input, apiConfiguration })
 	}
 
-	sendMessage(taskId: string, message: string, images?: string[]): Promise<void> {
+	sendMessage(taskId: string, message: string, images?: string[], trace?: TraceContext): Promise<void> {
 		// Straight through. This used to `resumeTask` first, to give the addressed
 		// task a live instance before delivering — but rehydration RAISES a resume
 		// ask, and resuming with nothing queued to answer it hands that ask to
@@ -143,7 +144,7 @@ export class ShoferApiAgent implements ShoferApi {
 		// spends the `--retry` budget and then declines). Delivery owns the
 		// rehydration now, and does it queue-first so the message itself answers
 		// the resume ask. Sequencing them here could only re-open that race.
-		return this.api.sendMessage(taskId, message, images)
+		return this.api.sendMessage(taskId, message, images, trace)
 	}
 
 	cancelTask(taskId: string): Promise<void> {

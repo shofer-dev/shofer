@@ -58,6 +58,7 @@ vi.mock("fs/promises", async (importOriginal) => {
 })
 
 import { Task } from "../Task.js"
+import { pluginRegistry } from "../../plugins/plugin-registry.js"
 
 /**
  * Resuming a task to DELIVER A MESSAGE must raise no resume ask.
@@ -116,13 +117,17 @@ describe("resumeTaskFromHistory with a queued message", () => {
 	})
 
 	/** A task rehydrated from history, with its agent loop stubbed out. */
-	const makeTask = async (lifecycle: "completed" | "idle" = "completed") => {
+	const makeTask = async (
+		lifecycle: "completed" | "idle" = "completed",
+		trace?: { traceparent: string; tracestate?: string },
+	) => {
 		const task = new Task({
 			provider: mockProvider as any,
 			apiConfiguration,
 			historyItem: makeHistoryItem(),
 			startTask: false,
 			initialState: { lifecycle },
+			trace,
 		})
 
 		await task.preloadShoferMessages()
@@ -169,6 +174,42 @@ describe("resumeTaskFromHistory with a queued message", () => {
 
 		const blocks = loop.mock.calls[0]![0] as Array<{ type: string }>
 		expect(blocks.some((b) => b.type === "image")).toBe(true)
+	})
+
+	/**
+	 * A resumption bypasses `handleWebviewAskResponse`, the one place that tells
+	 * `onUserMessage` observers the user spoke — so without an announcement here a
+	 * plugin sees a user message on the warm path and NOTHING on the cold one,
+	 * which is every follow-up turn of a rehydrated conversation.
+	 */
+	it("announces the queued resumption as a user message, with the delivering request's trace", async () => {
+		const spy = vi.spyOn(pluginRegistry, "notifyUserMessage").mockResolvedValue()
+		const trace = { traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", tracestate: "a=1" }
+		const { task, loop } = await makeTask("completed", trace)
+		task.messageQueueService.addMessage("and what about tomorrow?", ["data:image/png;base64,AAA"])
+
+		task.startFromHistory()
+		await vi.waitFor(() => expect(loop).toHaveBeenCalled())
+
+		expect(spy).toHaveBeenCalledTimes(1)
+		expect(spy.mock.calls[0]![0]).toMatchObject({
+			taskId: task.taskId,
+			text: "and what about tomorrow?",
+			imageCount: 1,
+			trace,
+		})
+		spy.mockRestore()
+	})
+
+	it("announces nothing when the resume is INTERACTIVE — the ask path already does", async () => {
+		const spy = vi.spyOn(pluginRegistry, "notifyUserMessage").mockResolvedValue()
+		const { task, ask } = await makeTask("completed")
+
+		task.startFromHistory()
+		await vi.waitFor(() => expect(ask).toHaveBeenCalled())
+
+		expect(spy).not.toHaveBeenCalled()
+		spy.mockRestore()
 	})
 
 	it.each([

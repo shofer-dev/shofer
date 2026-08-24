@@ -59,8 +59,13 @@ function eventTaskId(event: ServerEvent): string | undefined {
 }
 
 /**
- * The W3C trace context a `createTask` request carries — the body's `trace`
- * field, else the standard `traceparent`/`tracestate` headers.
+ * The W3C trace context a request carries — the body's `trace` field, else the
+ * standard `traceparent`/`tracestate` headers.
+ *
+ * Read on BOTH task-starting routes, `POST /task` and `POST /task/:id/message`:
+ * a conversation is created once and messaged many times, so honouring it only
+ * on creation attributes exactly the first turn of every multi-turn run and
+ * silently loses the rest.
  *
  * Both, because the two kinds of caller differ: a client using this transport's
  * own SDK states the context in the body (which survives transports that have no
@@ -114,7 +119,8 @@ export interface HttpServerOptions {
  *   GET  /api/v1/task/:id/snapshot   → 200 TaskSnapshot | 404 (attach backfill)
  *   POST /api/v1/task                → { prompt, mode, taskId?, apiConfiguration?, title?, trace? } → { taskId }
  *                                      (also honours W3C `traceparent`/`tracestate` headers)
- *   POST /api/v1/task/:id/message    → { message }
+ *   POST /api/v1/task/:id/message    → { message, images?, trace? }
+ *                                      (also honours W3C `traceparent`/`tracestate` headers)
  *   POST /api/v1/task/:id/cancel
  *   POST /api/v1/task/:id/ask        → { askResponse, text?, images?, askId?, mode? } (interactive approval)
  *   POST /api/v1/task/:id/plugin-request → { plugin, method, params } → 200 { result }
@@ -231,7 +237,15 @@ export function createRequestHandler(
 			if (action === "message") {
 				const body = await readJson(req)
 				if (typeof body.message !== "string") return send(res, 400, { error: "message is required" })
-				await api.sendMessage(taskId, body.message, body.images as string[] | undefined)
+				await api.sendMessage(
+					taskId,
+					body.message,
+					body.images as string[] | undefined,
+					// The trace this turn belongs to — the same body-or-headers pair
+					// `createTask` honours, because a follow-up message starts a turn
+					// exactly as task creation does.
+					requestTraceContext(req, body),
+				)
 				return send(res, 202, { taskId, accepted: true })
 			}
 			if (action === "ask") {
