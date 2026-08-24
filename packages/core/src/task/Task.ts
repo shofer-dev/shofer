@@ -3173,6 +3173,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * `onUserMessage` observers and nowhere else — core stores the two header
 	 * values and never parses them.
 	 */
+	/**
+	 * Whether this task is right now parked on the ask identified by `askId`.
+	 *
+	 * The addressing question a controller's answer has to settle: an ask is
+	 * published with the id of the task that RAISED it, but a conversation is
+	 * addressed by its ROOT task, so `respondToAsk` needs to find which live task
+	 * of the tree the answer belongs to. Both halves are load-bearing —
+	 * `_currentAskId` alone would match an ask already resolved, and
+	 * `isAwaitingAskResponse` alone would match whatever the task is parked on now,
+	 * which after a supersede is a different question than the one answered.
+	 */
+	public isAwaitingAsk(askId: string): boolean {
+		return this.isAwaitingAskResponse && this._currentAskId === askId
+	}
+
 	handleWebviewAskResponse(
 		askResponse: ShoferAskResponse,
 		text?: string,

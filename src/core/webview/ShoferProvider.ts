@@ -965,6 +965,20 @@ export class ShoferProvider
 		return this.shoferStack.map((shofer) => shofer.taskId)
 	}
 
+	/**
+	 * The live task instances on the stack, root-first.
+	 *
+	 * A synchronously spawned child lives HERE and nowhere else: `new_task`
+	 * without `is_background` pushes it onto the stack rather than calling
+	 * `taskManager.registerBackgroundTask`, so `getManagedTaskInstance(childId)`
+	 * does not know it. Anything that has to find an arbitrary live task by id —
+	 * routing an ask answer back to whichever task of a conversation raised it —
+	 * must consult this as well as the managed set.
+	 */
+	public getTaskStackInstances(): Task[] {
+		return [...this.shoferStack]
+	}
+
 	// Pending Edit Operations Management
 
 	/**

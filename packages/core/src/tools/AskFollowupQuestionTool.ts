@@ -3,8 +3,22 @@ import type { ParamField } from "@shofer/types"
 import { Task } from "../task/Task.js"
 import { formatResponse } from "../prompts/responses.js"
 import { type ToolUse } from "@shofer/types"
+import { isConversationDriverAttached } from "../transport/conversation-driver.js"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
+
+/**
+ * What the model is told when its question has no audience at all — a
+ * synchronously spawned child on a remotely driven host whose conversation has
+ * no subscriber. It must read as a refusal to ASK, never as an answer: the
+ * platform's ask rule ("an ask with no reachable audience must fail fast rather
+ * than block silently") is precisely about not fabricating one.
+ */
+const NO_AUDIENCE_MESSAGE =
+	"No user is reachable to answer this question: this task was started by another task, " +
+	"which is itself blocked waiting for you, and nobody is watching the conversation. " +
+	"Do not ask again — decide with the information you have, state the assumption you made " +
+	"in your result, or complete with attempt_completion explaining what you needed."
 
 interface Suggestion {
 	text: string
@@ -80,6 +94,31 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			// buttons appear when the user views the child task. Either channel
 			// can answer; whichever fires first resolves the ask.
 			const isBackgroundChild = !!(task.providerRef?.deref() && task.parentTaskId && task.isBackgroundTask)
+
+			// A SYNCHRONOUSLY spawned child (`new_task` without `is_background`) has
+			// the opposite problem to a background one: its parent is the entity that
+			// created it, but the parent cannot answer — it is suspended inside
+			// `new_task` waiting for this child to finish. So the next hop backwards
+			// is the human driving the ROOT conversation, and the question is
+			// published on the ROOT task's event stream (by
+			// `API.escalateFollowupToConversation`, carrying `sourceTaskId`) rather
+			// than only on this child's, which no controller subscribes to. Both
+			// answer shapes ride it — a suggestion list and a `paramForm`. The
+			// blocking primitive below is unchanged: the child still parks on its own
+			// `task.ask("followup")`, and the answer comes back through
+			// `respondToAsk`'s conversation-wide askId lookup.
+			//
+			// Before parking, refuse outright when the question provably cannot reach
+			// anyone: a remotely driven host with no subscriber on the root stream.
+			// `undefined` means the host is not remotely driven (the VS Code webview,
+			// a terminal `shofer` run), where the local ask surface IS the audience
+			// and nothing changes.
+			const rootTaskId = task.parentTaskId && !task.isBackgroundTask ? task.rootTaskId : undefined
+			if (rootTaskId && isConversationDriverAttached(rootTaskId) === false) {
+				task.recordToolError("ask_followup_question")
+				pushToolResult(formatResponse.toolError(NO_AUDIENCE_MESSAGE))
+				return
+			}
 
 			// Form mode: render a typed input form (dropdown/radio/checkbox/slider/
 			// number/text/boolean). The webview submits all answers at once as a

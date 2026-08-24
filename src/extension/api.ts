@@ -20,6 +20,7 @@ import {
 	type TraceContext,
 	type HistoryItem,
 	type ShoferMessage,
+	type TaskLike,
 	type TokenUsage,
 	ShoferEventName,
 	TaskCommandName,
@@ -28,6 +29,7 @@ import {
 	IpcMessageType,
 } from "@shofer/types"
 import { FORWARDED_EVENTS, findOutstandingAsk } from "@shofer/core"
+import type { Task } from "@shofer/core"
 import { IpcServer } from "@shofer/ipc"
 
 import { Package } from "@shofer/core"
@@ -49,6 +51,12 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 	private readonly ipc?: IpcServer
 	private readonly log: (...args: unknown[]) => void
 	private logfile?: string
+
+	/** Cap on {@link escalatedAskIds} — see `escalateFollowupToConversation`. */
+	private static readonly MAX_TRACKED_ESCALATED_ASKS = 256
+
+	/** Ask ids already republished on a conversation's stream (dedupe, bounded). */
+	private readonly escalatedAskIds = new Set<string>()
 
 	constructor(
 		outputChannel: vscode.OutputChannel,
@@ -568,13 +576,21 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 		// drive the answer through the same ask-response channel a webview button
 		// takes. This is the executor side of the reverse ask channel: a controller
 		// routes a remote task's approval back here over the transport.
-		const task =
+		const addressed =
 			this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ?? this.sidebarProvider.getCurrentTask()
 
-		if (!task) {
+		if (!addressed) {
 			this.log(`[API#respondToAsk] no task for ${taskId}; ask response dropped`)
 			return
 		}
+
+		// A CONVERSATION is addressed by its root task, but an ask can be raised by
+		// any task in that conversation's tree — a synchronously spawned child's
+		// question is published on the root's stream (see
+		// `escalateFollowupToConversation`), so the controller answers it against
+		// the root id it knows — the only one its question row holds. Follow the askId
+		// to whichever live task is actually parked on it.
+		const task = this.resolveAskTarget(addressed, response.askId)
 
 		// A followup suggestion may carry a mode: switch this task to it before
 		// resolving the answer, mirroring the webview (which calls switchToMode then
@@ -590,6 +606,50 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 			response.images,
 			response.askId,
 		)
+	}
+
+	/**
+	 * The task an ask answer belongs to: the addressed one unless a DESCENDANT of
+	 * the same conversation is the one parked on `askId`.
+	 *
+	 * Without this an escalated question is unanswerable. The child raises the
+	 * ask; the copy published on the root's stream carries the child's `askId`;
+	 * the controller posts the answer to the conversation (the root) because that
+	 * is the only id its durable question row holds. Handed to the root task, the
+	 * askId matches nothing and `handleWebviewAskResponse` drops it as a stale
+	 * answer — silently, which is exactly the failure mode this whole path exists
+	 * to remove.
+	 *
+	 * Narrow by construction, so it can never redirect an ordinary answer: with no
+	 * `askId` (or with the addressed task parked on it) the addressed task wins,
+	 * and a candidate must both belong to the same conversation and be parked on
+	 * that precise ask. The stack is searched top-down because the deepest live
+	 * child is the one blocking the tree.
+	 */
+	private resolveAskTarget(addressed: Task, askId?: string): Task {
+		if (!askId || addressed.isAwaitingAsk(askId)) return addressed
+
+		const conversationOf = (task: Task) => task.rootTaskId ?? task.taskId
+		const conversation = conversationOf(addressed)
+		const candidates: Task[] = [
+			...this.sidebarProvider.getTaskStackInstances().reverse(),
+			...this.sidebarProvider.taskManager
+				.getManagedTasks()
+				.map((managed) => this.sidebarProvider.taskManager.getManagedTaskInstance(managed.id))
+				.filter((task): task is Task => !!task),
+		]
+
+		for (const candidate of candidates) {
+			if (candidate.taskId === addressed.taskId) continue
+			if (conversationOf(candidate) !== conversation) continue
+			if (!candidate.isAwaitingAsk(askId)) continue
+			this.log(
+				`[API#respondToAsk] ask ${askId} addressed at ${addressed.taskId} belongs to ${candidate.taskId}; routing there`,
+			)
+			return candidate
+		}
+
+		return addressed
 	}
 
 	/**
@@ -752,6 +812,65 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 		}
 	}
 
+	/**
+	 * Republish a synchronously spawned child's `ask_followup_question` on the
+	 * ROOT task's event stream, so the conversation's driver sees it.
+	 *
+	 * The gap this closes: a controller subscribes to ONE task — the conversation's
+	 * root (`GET /api/v1/task/:id/event`) — so nothing consumes a child task's
+	 * events. A background child is fine, because its question is routed to its
+	 * PARENT, which is running and can answer via `answer_subtask_question`. A
+	 * SYNCHRONOUS child has no such hop: its parent is suspended inside `new_task`
+	 * waiting for it. Left alone the question reaches no durable surface, the child
+	 * parks forever, and the parent parks behind it — the whole conversation stops
+	 * with nothing shown and nothing logged.
+	 *
+	 * So the next hop backwards is the human who set the work in motion, and this
+	 * is the wire that reaches them: the identical `message` event a root task's
+	 * own question produces, published under the root's id, with `sourceTaskId`
+	 * naming the child. A controller therefore needs no new event type to render
+	 * it, and its answer — posted against the conversation, carrying the child's
+	 * `askId` — is routed back to the child by {@link resolveAskTarget}.
+	 *
+	 * Only the finalized, undecided ask is republished. Partials are mid-stream
+	 * noise, and an auto-approved or already-answered ask has no decision left to
+	 * ask for; `escalatedAskIds` additionally makes it once-per-ask, so a later
+	 * update of the same message can never open a second question row on the
+	 * controller.
+	 */
+	private escalateFollowupToConversation(
+		task: TaskLike,
+		event: { action: "created" | "updated"; message: ShoferMessage },
+	): void {
+		const message = event.message
+		const rootTaskId = task.rootTaskId
+
+		if (!rootTaskId || rootTaskId === task.taskId) return
+		if (!task.parentTaskId || task.isBackgroundTask) return
+		if (message.type !== "ask" || message.ask !== "followup") return
+		if (message.partial === true || message.autoApproved === true || message.isAnswered === true) return
+		if (!message.askId || this.escalatedAskIds.has(message.askId)) return
+
+		this.escalatedAskIds.add(message.askId)
+		// Bounded: an id is only useful until its ask is answered, and a host runs
+		// for as long as its pod does. Drop the oldest (insertion-ordered Set) once
+		// past the cap rather than growing without limit.
+		if (this.escalatedAskIds.size > API.MAX_TRACKED_ESCALATED_ASKS) {
+			const oldest = this.escalatedAskIds.values().next()
+			if (!oldest.done) this.escalatedAskIds.delete(oldest.value)
+		}
+
+		this.log(
+			`[API#escalateFollowup] question from sync child ${task.taskId} published on conversation ${rootTaskId} (askId ${message.askId})`,
+		)
+		this.emit(ShoferEventName.Message, {
+			taskId: rootTaskId,
+			sourceTaskId: task.taskId,
+			action: event.action,
+			message,
+		})
+	}
+
 	private registerListeners(provider: ShoferProvider) {
 		provider.on(ShoferEventName.TaskCreated, (task) => {
 			// Task Lifecycle
@@ -830,6 +949,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 
 			task.on(ShoferEventName.Message, async (message) => {
 				this.emit(ShoferEventName.Message, { taskId: task.taskId, ...message })
+				this.escalateFollowupToConversation(task, message)
 
 				if (message.message.partial !== true) {
 					await this.fileLog(`[${new Date().toISOString()}] ${JSON.stringify(message.message, null, 2)}\n`)

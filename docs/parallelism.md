@@ -424,6 +424,39 @@ When a background child calls `ask_followup_question`, the question is rendered 
 9. If the child is aborted while waiting, `Task.abortTask` calls `clearPendingParentQuestion()` to clear the metadata. The blocking `task.ask("followup")` unwinds via `AskIgnoredError` (the `pWaitFor` loop checks `this.abort`), so the child's tool handler surfaces a clean tool error instead of hanging.
 10. The `followup` auto-approval (`alwaysAllowFollowupQuestions`) is suppressed for routed questions — the question must NOT be auto-answered with the first suggestion, since it is directed at the parent/user, not at an auto-approval policy.
 
+### A SYNCHRONOUS child's question goes to the conversation, not the parent
+
+A question travels backwards along the relationship that created the task, and at each hop the entity there either answers it or passes it on. For a background child that hop is the parent, which is running. For a **synchronous** child (`new_task` without `is_background`) the parent is suspended inside `new_task` waiting for this very child, so it cannot answer anything — the next hop is the human driving the ROOT conversation.
+
+On an interactive host that already works: the child is pushed onto the task stack, so its chat — question and suggestion buttons — is what the user is looking at. On a host driven over the [ShoferApi](shofer-api.md) it did not, because a controller subscribes to ONE task's event stream (the conversation's root), and nothing consumes a child task's events. The question reached no surface, the child parked forever, and the parent parked behind it.
+
+The question is therefore **republished on the root task's stream**:
+
+1. The child raises its ordinary `task.ask("followup", …)` — the blocking primitive is unchanged, and every local channel (the child's chat, the CLI ask dispatcher) still answers it exactly as before.
+2. `API.escalateFollowupToConversation` publishes a second `message` event carrying the same `ShoferMessage` under `taskId = rootTaskId`, with `sourceTaskId` naming the child. It is the identical wire shape a root task's own question produces, so a controller renders and answers it with no new event type; a consumer of the worker-wide `/api/v1/event` firehose sees both copies and tells them apart by `sourceTaskId`.
+3. Only the finalized, undecided ask is republished (never a partial, an auto-approved or an already-answered one), and only once per `askId`.
+4. The controller answers against the CONVERSATION — the root id, the only one its durable question row holds — echoing the child's `askId`. `API.respondToAsk` follows that id to whichever live task of the conversation is parked on it (`Task.isAwaitingAsk`), so the answer lands on the child. Nothing else is redirected: with no `askId`, or with the addressed task parked on it, the addressed task answers.
+5. When the question provably has **no** audience — a remotely driven host with no subscriber on the root's stream, per `isConversationDriverAttached` — the tool refuses to ask at all and returns a tool error telling the model to decide with what it has. Parking would take the parent down with it, invisibly. On a host that is not remotely driven the probe is unregistered and answers `undefined`, which is never read as "nobody": the local ask surface is the audience.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant C as Controller
+    participant R as Root task
+    participant S as Sync child
+
+    R->>S: new_task (no is_background) — R suspends
+    S->>S: task.ask("followup", …) — parks
+    Note over S: published on the child's own stream,<br/>which nobody subscribes to
+    S-->>C: message event on the ROOT stream<br/>(taskId=root, sourceTaskId=child)
+    C->>U: render the question
+    U->>C: answer
+    C->>R: POST /task/{root}/ask { askId, text }
+    R-->>S: resolveAskTarget follows askId to the child
+    S->>R: attempt_completion — R resumes
+```
+
 ---
 
 ## Abort Propagation

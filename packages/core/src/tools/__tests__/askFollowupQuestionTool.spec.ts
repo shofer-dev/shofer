@@ -1,4 +1,5 @@
 import { askFollowupQuestionTool } from "../AskFollowupQuestionTool.js"
+import { setConversationDriverProbe } from "../../transport/conversation-driver.js"
 import { ToolUse } from "@shofer/types"
 import { NativeToolCallParser } from "../../assistant-message/NativeToolCallParser.js"
 
@@ -705,6 +706,93 @@ describe("askFollowupQuestionTool", () => {
 
 			// The foreground path was taken (task.ask was called).
 			expect(mockShofer.ask).toHaveBeenCalledWith("followup", expect.any(String), false)
+		})
+	})
+
+	/**
+	 * A synchronously spawned child's question has ONE audience: the human driving
+	 * the root conversation. Its parent cannot answer (it is suspended inside
+	 * `new_task` waiting for this child), so when nobody is driving the
+	 * conversation either, the question must FAIL rather than park — a parked one
+	 * takes the parent down with it and shows nothing anywhere.
+	 */
+	describe("a sync child with no reachable audience", () => {
+		const syncChild = (overrides: Record<string, unknown> = {}) => ({
+			...mockShofer,
+			taskId: "child-1",
+			rootTaskId: "root-1",
+			parentTaskId: "root-1",
+			isBackgroundTask: false,
+			...overrides,
+		})
+
+		const question: ToolUse = {
+			type: "tool_use",
+			name: "ask_followup_question",
+			params: { question: "Which region?" },
+			nativeArgs: { question: "Which region?", follow_up: [{ text: "eu-west" }] },
+			partial: false,
+		}
+
+		afterEach(() => {
+			setConversationDriverProbe(undefined)
+		})
+
+		it("fails fast instead of blocking when the conversation has no driver", async () => {
+			setConversationDriverProbe(() => false)
+			const task = syncChild()
+
+			await askFollowupQuestionTool.handle(task as any, question as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			expect(task.ask).not.toHaveBeenCalled()
+			expect(toolResult).toContain("No user is reachable")
+			expect(task.recordToolError).toHaveBeenCalledWith("ask_followup_question")
+		})
+
+		it("asks normally when a driver IS attached", async () => {
+			setConversationDriverProbe(() => true)
+			const task = syncChild()
+
+			await askFollowupQuestionTool.handle(task as any, question as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			expect(task.ask).toHaveBeenCalledWith("followup", expect.any(String), false)
+		})
+
+		it("asks normally on a host that is not remotely driven at all", async () => {
+			// No probe registered: the VS Code webview / a terminal run, where the
+			// host's own ask surface is the audience. `undefined` is not `false`.
+			const task = syncChild()
+
+			await askFollowupQuestionTool.handle(task as any, question as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			expect(task.ask).toHaveBeenCalledWith("followup", expect.any(String), false)
+		})
+
+		it("does not fail a ROOT task's question when no driver is attached", async () => {
+			// A root task's own question is already on the stream a controller
+			// subscribes to, and on an interactive host the user is right there.
+			setConversationDriverProbe(() => false)
+			const task = { ...mockShofer, taskId: "root-1" }
+
+			await askFollowupQuestionTool.handle(task as any, question as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			expect(task.ask).toHaveBeenCalledWith("followup", expect.any(String), false)
 		})
 	})
 })

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import type { IncomingMessage, ServerResponse } from "node:http"
 
-import { createRequestHandler, type ShoferApi, type ServerEvent } from "../http-server.js"
+import { createRequestHandler, createStreamSubscribers, type ShoferApi, type ServerEvent } from "../http-server.js"
 
 /**
  * §11 HTTP/SSE transport. Drives the request handler with mock req/res (no
@@ -405,6 +405,61 @@ describe("createRequestHandler (§11)", () => {
 			const res = await call(authed(), mockReq("GET", "/health"))
 			expect(res.statusCode).toBe(200)
 			expect(JSON.parse(res.body)).toMatchObject({ ok: true, version: "1.2.3" })
+		})
+	})
+
+	/**
+	 * The subscriber census answers "would an ask published for this task reach
+	 * anybody?" — the question a headless host has to settle before parking an
+	 * agent on an interactive ask nobody would ever see. It is per TASK because a
+	 * controller subscribes per conversation, so "some stream is open" says
+	 * nothing about the conversation the ask belongs to.
+	 */
+	describe("stream subscriber census", () => {
+		it("counts a per-task stream against that task only", async () => {
+			const subscribers = createStreamSubscribers()
+			const scoped = createRequestHandler(api, { subscribers })
+			const req = mockReq("GET", "/api/v1/task/t1/event")
+
+			scoped(req, mockRes() as unknown as ServerResponse)
+			await flush()
+
+			expect(subscribers.has("t1")).toBe(true)
+			expect(subscribers.has("t2")).toBe(false)
+
+			req.fireClose()
+			expect(subscribers.has("t1")).toBe(false)
+		})
+
+		it("counts a worker-wide stream against every task", async () => {
+			const subscribers = createStreamSubscribers()
+			const scoped = createRequestHandler(api, { subscribers })
+			const req = mockReq("GET", "/api/v1/event")
+
+			scoped(req, mockRes() as unknown as ServerResponse)
+			await flush()
+
+			expect(subscribers.has("anything")).toBe(true)
+
+			req.fireClose()
+			expect(subscribers.has("anything")).toBe(false)
+		})
+
+		it("keeps the task subscribed while a second stream on it is open", async () => {
+			const subscribers = createStreamSubscribers()
+			const scoped = createRequestHandler(api, { subscribers })
+			const first = mockReq("GET", "/api/v1/task/t1/event")
+			const second = mockReq("GET", "/api/v1/task/t1/event")
+
+			scoped(first, mockRes() as unknown as ServerResponse)
+			scoped(second, mockRes() as unknown as ServerResponse)
+			await flush()
+
+			first.fireClose()
+			expect(subscribers.has("t1")).toBe(true)
+
+			second.fireClose()
+			expect(subscribers.has("t1")).toBe(false)
 		})
 	})
 })

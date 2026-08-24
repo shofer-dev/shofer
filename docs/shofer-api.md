@@ -157,6 +157,29 @@ Transports project this stream onto their own shape: HTTP/SSE emits it verbatim 
 ACP maps the common cases onto its typed `session/update` variants and wraps the rest as
 `passthrough` (see [shofer-api.md](./shofer-api.md#4-acp--the-external-adapter)).
 
+#### A conversation's stream carries its whole task tree's questions
+
+`GET /api/v1/task/:id/event` filters on the task id an event carries, and a controller
+subscribes to ONE task — the conversation's root. A task the agent spawns is a task of
+its own, so nothing consumes its events; for a background child that is fine (its
+question is routed to its parent, which is running), and for a **synchronous** child it
+is fatal — the parent is suspended inside `new_task` waiting for it, so a question raised
+there would reach nobody and stall the whole conversation.
+
+Such a question is therefore **republished on the root task's stream**: the same `message`
+event, with `taskId` = the root and an added **`sourceTaskId`** naming the task that
+actually asked. A controller needs no new event type to render it. Its answer goes back
+through the ordinary `respondToAsk` **addressed at the conversation** (the root id, which
+is the only one a controller's durable question row holds), echoing the ask's `askId` —
+`respondToAsk` follows that id to whichever live task of the conversation is parked on it.
+Answers with no `askId`, or whose `askId` the addressed task itself is parked on, are
+never redirected. See [parallelism.md](./parallelism.md) for the routing rules by task
+kind.
+
+A worker-wide `/api/v1/event` consumer receives both copies — the original under the
+child's id and the republished one under the root's — and tells them apart by
+`sourceTaskId`, which is set only on the copy.
+
 ### Task snapshots — attaching to a running task
 
 `subscribe` only carries what happens NEXT. A controller that reaches a task already in

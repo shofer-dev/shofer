@@ -1,3 +1,30 @@
+- **A sync child's dangerous-tool APPROVAL still has no audience on a remotely
+  driven host.** `ask_followup_question` from a synchronously spawned child is
+  now republished on the root conversation's event stream
+  (`API.escalateFollowupToConversation`, `docs/parallelism.md`), but the same
+  invisibility applies to the child's `tool` / `command` / `use_mcp_server`
+  approval asks: they are published only on the child's own stream, which no
+  controller subscribes to, so a child that reaches for a gated tool parks and
+  takes its suspended parent with it. The mechanism generalises exactly — widen
+  the predicate from `ask === "followup"` to the interactive-ask set — but the
+  AUDIENCE differs (an approval goes to whoever holds that authority on the
+  project, not to whoever set the work in motion), so a controller's approval
+  surface has to be part of the same change rather than inheriting the question
+  path by accident. Not urgent while deployed worker bundles auto-approve their
+  declared groups; it is the first thing to break when one does not.
+
+- **"Is a driver attached?" is answered per SERVER, not per controller.**
+  `isConversationDriverAttached` reads the HTTP transport's live subscriber
+  census (`createStreamSubscribers`), so it says an SSE connection is open on the
+  conversation — not that a human is on the other end of it. A controller that
+  holds the stream open while nobody is watching (a browser tab closed with the
+  server-side consumer still running, which is the DESIGNED behaviour) reads as
+  an audience, so the fail-fast in `AskFollowupQuestionTool` catches only the
+  unambiguous case: nothing subscribed at all. Bounding the resulting wait is the
+  controller's job (it owns the durable question row and its deadline), and this
+  host deliberately has no timer of its own — a timer that resolved an ask would
+  be fabricating an answer.
+
 - The marketplace removal left the `plugin` channel's `installFromFile` /
   `installFromUrl` / `uninstall` actions (and their host handlers) with no webview
   caller — install/uninstall are CLI verbs (`shofer plugin install|remove`) and

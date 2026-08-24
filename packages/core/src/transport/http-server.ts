@@ -93,6 +93,54 @@ async function readJson(req: http.IncomingMessage): Promise<Record<string, unkno
 	return JSON.parse(raw) as Record<string, unknown>
 }
 
+/**
+ * Live census of the open event-stream subscriptions, so the host can answer
+ * "would an ask published on task X's stream reach anybody?".
+ *
+ * The question has to be asked per TASK, not per host: a controller subscribes
+ * to one conversation (`GET /api/v1/task/:id/event`), so "some SSE connection is
+ * open" says nothing about the conversation an ask belongs to. A worker-wide
+ * subscriber (`GET /api/v1/event`) counts for every task, because it receives
+ * every task's events unfiltered.
+ */
+export interface StreamSubscribers {
+	/**
+	 * Record a new subscription and return its release function. `taskId`
+	 * `undefined` means the worker-wide firehose.
+	 */
+	add(taskId: string | undefined): () => void
+	/** Whether an event published for `taskId` would reach at least one subscriber. */
+	has(taskId: string): boolean
+}
+
+/** An independent {@link StreamSubscribers} census (one per server). */
+export function createStreamSubscribers(): StreamSubscribers {
+	const perTask = new Map<string, number>()
+	let firehose = 0
+	return {
+		add(taskId) {
+			if (taskId === undefined) {
+				firehose++
+				return () => {
+					firehose--
+				}
+			}
+			perTask.set(taskId, (perTask.get(taskId) ?? 0) + 1)
+			let released = false
+			return () => {
+				if (released) return
+				released = true
+				const next = (perTask.get(taskId) ?? 1) - 1
+				if (next <= 0) perTask.delete(taskId)
+				else perTask.set(taskId, next)
+			}
+		},
+		has(taskId) {
+			return firehose > 0 || (perTask.get(taskId) ?? 0) > 0
+		},
+	}
+}
+
 /** Options for the HTTP/SSE server (auth + version handshake). */
 export interface HttpServerOptions {
 	/**
@@ -107,6 +155,13 @@ export interface HttpServerOptions {
 	 * build before driving it.
 	 */
 	version?: string
+	/**
+	 * Census to record this server's open event streams in. Supply one when the
+	 * caller needs to ask whether a task has a live driver (see
+	 * `setConversationDriverProbe`); omitted, the server keeps a private census
+	 * nobody reads.
+	 */
+	subscribers?: StreamSubscribers
 }
 
 /**
@@ -138,6 +193,7 @@ export function createRequestHandler(
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
 	const base = `/api/${API_VERSION}`
 	const { token, version } = opts
+	const subscribers = opts.subscribers ?? createStreamSubscribers()
 
 	return (req, res) => {
 		void handle(req, res).catch((error) => {
@@ -173,7 +229,11 @@ export function createRequestHandler(
 			const unsubscribe = api.subscribe((event) => {
 				res.write(`data: ${JSON.stringify(event)}\n\n`)
 			})
-			req.on("close", unsubscribe)
+			const release = subscribers.add(undefined)
+			req.on("close", () => {
+				release()
+				unsubscribe()
+			})
 			return
 		}
 
@@ -191,7 +251,11 @@ export function createRequestHandler(
 					res.write(`data: ${JSON.stringify(event)}\n\n`)
 				}
 			})
-			req.on("close", unsubscribe)
+			const release = subscribers.add(taskId)
+			req.on("close", () => {
+				release()
+				unsubscribe()
+			})
 			return
 		}
 

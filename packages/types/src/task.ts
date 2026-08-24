@@ -318,6 +318,15 @@ export interface TaskLike {
 	readonly rootTaskId?: string
 	readonly parentTaskId?: string
 	readonly childTaskId?: string
+	/**
+	 * Whether this task was spawned as a BACKGROUND child (`new_task` with
+	 * `is_background`) rather than a synchronous one. It sits beside the parent
+	 * and root ids because it completes them: the ids say a task has a parent,
+	 * this says whether that parent is still running (background) or suspended
+	 * inside `new_task` waiting for this task (synchronous) — which is what
+	 * decides where an ask raised here can travel.
+	 */
+	readonly isBackgroundTask: boolean
 	readonly metadata: TaskMetadata
 	readonly taskStatus: TaskStatus
 	readonly taskAsk: ShoferMessage | undefined
