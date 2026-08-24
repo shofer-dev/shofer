@@ -938,15 +938,16 @@ caller is waiting on the answer, so a throw (or an unknown plugin / missing
 **Broadcast requests.** Core sometimes needs a fact that a _feature_ owns without knowing
 which plugin — if any — provides it. `pluginRegistry.requestAll(method, params)` asks
 every plugin the same question and returns the answers; a plugin that does not recognise
-the method throws, which counts as "no answer" rather than an error. Four conventions are
+the method throws, which counts as "no answer" rather than an error. Five conventions are
 in use:
 
-| Question                     | Answer                                                        | Nobody answers                                          |
-| ---------------------------- | ------------------------------------------------------------- | ------------------------------------------------------- |
-| `"task-stats"`               | `{ insertions, deletions }`                                   | A completed task gets no `+`/`−` badge.                 |
-| `"resolve-task-cwd"`         | `{ cwd }` or `{ error }`                                      | The task runs in the workspace.                         |
-| `"resolve-task-placement"`   | `{ dispatched: { taskId, address?, token? } }` or `{ error }` | The task runs in-process, exactly as before.            |
-| `"resolve-mcp-call-headers"` | `{ headers }`                                                 | The MCP call carries only its connection's own headers. |
+| Question                       | Answer                                                        | Nobody answers                                             |
+| ------------------------------ | ------------------------------------------------------------- | ---------------------------------------------------------- |
+| `"task-stats"`                 | `{ insertions, deletions }`                                   | A completed task gets no `+`/`−` badge.                    |
+| `"resolve-task-cwd"`           | `{ cwd }` or `{ error }`                                      | The task runs in the workspace.                            |
+| `"resolve-task-placement"`     | `{ dispatched: { taskId, address?, token? } }` or `{ error }` | The task runs in-process, exactly as before.               |
+| `"resolve-mcp-call-headers"`   | `{ headers }`                                                 | The MCP call carries only its connection's own headers.    |
+| `"resolve-model-call-headers"` | `{ headers }`                                                 | The model request carries only its provider's own headers. |
 
 `"resolve-mcp-call-headers"` is asked once per MCP **tool call**, with the server's name,
 scope, transport, URL and the task id — enough for a resolver to decide whether this is a
@@ -967,6 +968,25 @@ from what a header IS here:
   first answer wins and the rest are warned about, since letting registration order pick
   which credential goes out is the worse failure. `stdio` servers are never asked (a pipe
   has no headers; such a server reads the task id from `_meta` instead).
+
+`"resolve-model-call-headers"` is its twin on the LLM side, asked once per **model request**
+— `createMessage` and `completePrompt` alike — from `buildApiHandler`, which is the one layer
+every provider and every caller passes through
+([`api/call-headers.ts`](../packages/core/src/api/call-headers.ts)). It exists for the same
+reason: a provider's SDK client is built once from the API configuration and shared by every
+task, so its headers are the HOST's and can carry nothing that belongs to a run. Same
+`AsyncLocalStorage` mechanism, same "no error channel" rule, same first-answer-wins merge —
+and two rules of its own, because a model request carries a credential the host paid for:
+
+- **The question names no URL.** Each provider owns its own base-url setting and builds its
+  client privately, so there is no endpoint core can state here. A resolver decides from the
+  PROFILE — `provider`, `model`, `operation` — plus the task ids.
+- **An answer can never authorize.** The merge refuses `authorization`, `x-api-key` and the
+  other credential and transport names outright, and the shared `fetch` only sets a header the
+  request does not already carry, so the provider's own headers always win. That is what makes
+  answering without a URL safe: a plugin annotates a model call and can neither re-point nor
+  re-authenticate it. (A provider whose SDK takes no custom `fetch` — AWS Bedrock, Google
+  GenAI — simply never sees the headers, which is the no-plugin behaviour.)
 
 `"resolve-task-cwd"` and `"resolve-task-placement"` are the **placement seam**, and both
 share the opposite rule: an `{ error }` answer

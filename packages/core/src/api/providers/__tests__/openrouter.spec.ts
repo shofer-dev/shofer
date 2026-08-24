@@ -104,6 +104,7 @@ describe("OpenRouterHandler", () => {
 				"X-Title": "Shofer",
 				"User-Agent": `Shofer/${Package.version}`,
 			},
+			fetch: expect.any(Function),
 		})
 	})
 

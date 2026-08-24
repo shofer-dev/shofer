@@ -154,6 +154,7 @@ describe("OpenAiHandler", () => {
 					"User-Agent": `Shofer/${Package.version}`,
 				},
 				timeout: expect.any(Number),
+				fetch: expect.any(Function),
 			})
 		})
 	})

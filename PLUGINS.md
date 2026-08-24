@@ -547,6 +547,15 @@ async handleRequest(method, params) {
 This is the seam for anything that belongs to the RUN rather than to the host: a transport's
 own headers are fixed when it connects, and one connection serves every task.
 
+`"resolve-model-call-headers"` is the same question one seam over, asked before every MODEL
+request (`createMessage` and `completePrompt` alike), with `{ operation, provider, model,
+taskId, parentTaskId, rootTaskId }` and the same `{ headers }` answer. A provider's SDK
+client is built once from the API configuration and shared by every task, so the same
+argument applies — but with one difference worth knowing before you answer it: the host
+refuses `authorization`, `x-api-key` and the other credential names outright, and never lets
+an answered header displace one the provider already set. An answer there **annotates** a
+model call and cannot re-authenticate it, which is why the question names no endpoint.
+
 ---
 
 ## 6. UI contributions

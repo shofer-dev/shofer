@@ -62,6 +62,7 @@ describe("RequestyHandler", () => {
 				"X-Title": "Shofer",
 				"User-Agent": `Shofer/${Package.version}`,
 			},
+			fetch: expect.any(Function),
 		})
 	})
 
@@ -77,6 +78,7 @@ describe("RequestyHandler", () => {
 				"X-Title": "Shofer",
 				"User-Agent": `Shofer/${Package.version}`,
 			},
+			fetch: expect.any(Function),
 		})
 	})
 

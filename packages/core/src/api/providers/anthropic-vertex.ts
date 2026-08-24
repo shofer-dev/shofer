@@ -22,6 +22,7 @@ import { convertOpenAIToolsToAnthropic, convertOpenAIToolChoiceToAnthropic } fro
 
 import { BaseProvider } from "./base-provider.js"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
+import { nodeFetchWithModelCallHeaders } from "../call-headers.js"
 
 // https://docs.anthropic.com/en/api/claude-on-vertex-ai
 export class AnthropicVertexHandler extends BaseProvider implements SingleCompletionHandler {
@@ -45,6 +46,7 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 					scopes: ["https://www.googleapis.com/auth/cloud-platform"],
 					credentials: safeJsonParse<JWTInput>(this.options.vertexJsonCredentials, undefined),
 				}),
+				fetch: nodeFetchWithModelCallHeaders,
 			})
 		} else if (this.options.vertexKeyFile) {
 			this.client = new AnthropicVertex({
@@ -54,9 +56,10 @@ export class AnthropicVertexHandler extends BaseProvider implements SingleComple
 					scopes: ["https://www.googleapis.com/auth/cloud-platform"],
 					keyFile: this.options.vertexKeyFile,
 				}),
+				fetch: nodeFetchWithModelCallHeaders,
 			})
 		} else {
-			this.client = new AnthropicVertex({ projectId, region })
+			this.client = new AnthropicVertex({ projectId, region, fetch: nodeFetchWithModelCallHeaders })
 		}
 	}
 

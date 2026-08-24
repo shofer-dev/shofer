@@ -101,6 +101,7 @@ describe("VercelAiGatewayHandler", () => {
 				"X-Title": "Shofer",
 				"User-Agent": expect.stringContaining("Shofer/"),
 			}),
+			fetch: expect.any(Function),
 		})
 	})
 

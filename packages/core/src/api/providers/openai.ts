@@ -24,6 +24,7 @@ import { BaseProvider } from "./base-provider.js"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
 import { getApiRequestTimeout } from "./utils/timeout-config.js"
 import { handleOpenAIError } from "./utils/openai-error-handler.js"
+import { fetchWithModelCallHeaders } from "../call-headers.js"
 
 // TODO: Rename this to OpenAICompatibleHandler. Also, I think the
 // `OpenAINativeHandler` can subclass from this, since it's obviously
@@ -58,6 +59,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				defaultHeaders: headers,
 				defaultQuery: { "api-version": this.options.azureApiVersion || "2024-05-01-preview" },
 				timeout,
+				fetch: fetchWithModelCallHeaders,
 			})
 		} else if (isAzureOpenAi) {
 			// Azure API shape slightly differs from the core API shape:
@@ -75,6 +77,7 @@ export class OpenAiHandler extends BaseProvider implements SingleCompletionHandl
 				apiKey,
 				defaultHeaders: headers,
 				timeout,
+				fetch: fetchWithModelCallHeaders,
 			})
 		}
 	}

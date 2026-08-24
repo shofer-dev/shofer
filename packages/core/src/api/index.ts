@@ -2,8 +2,9 @@ import { isRetiredProvider, type ProviderSettings, type ModelInfo } from "@shofe
 
 import { applyCustomPricing } from "@shofer/types"
 
-import type { ApiHandler } from "./api-handler-types.js"
+import type { ApiHandler, SingleCompletionHandler } from "./api-handler-types.js"
 import { getNativeApiHandler } from "./native-handler-registry.js"
+import { modelCallHeadersCall, modelCallHeadersStream } from "./call-headers.js"
 
 import {
 	AnthropicHandler,
@@ -137,6 +138,47 @@ export function buildApiHandler(
 				return new AnthropicHandler(options)
 		}
 	})()
+
+	// Per-request transport headers (`api/call-headers.ts`). Wrapped HERE, and
+	// only here, because this is the one layer every model request passes through
+	// whatever provider serves it and whoever asks for it — the agent loop's
+	// `attemptApiRequest`, the condenser, prompt enhancement. Doing it inside a
+	// provider would be a copy per SDK and a silent gap for the next one added.
+	//
+	// The wrap is lazy in both directions: `createMessage` returns a generator
+	// whose body has not run, so resolving the headers on the first pull neither
+	// delays nor reorders anything the caller does with the stream, and a handler
+	// with nothing to answer for costs one broadcast that returns `[]`.
+	const rawCreateMessage = raw.createMessage.bind(raw)
+	raw.createMessage = (systemPrompt, messages, metadata) =>
+		modelCallHeadersStream(
+			() => ({
+				operation: "chat",
+				provider: apiProvider,
+				model: raw.getModel().id,
+				taskId: metadata?.taskId ?? extraOptions?.taskId,
+				parentTaskId: extraOptions?.parentTaskId,
+				rootTaskId: extraOptions?.rootTaskId,
+			}),
+			() => rawCreateMessage(systemPrompt, messages, metadata),
+		)
+
+	const single = raw as Partial<SingleCompletionHandler>
+	if (typeof single.completePrompt === "function") {
+		const rawCompletePrompt = single.completePrompt.bind(raw)
+		single.completePrompt = (prompt: string) =>
+			modelCallHeadersCall(
+				() => ({
+					operation: "complete",
+					provider: apiProvider,
+					model: raw.getModel().id,
+					taskId: extraOptions?.taskId,
+					parentTaskId: extraOptions?.parentTaskId,
+					rootTaskId: extraOptions?.rootTaskId,
+				}),
+				() => rawCompletePrompt(prompt),
+			)
+	}
 
 	// When customPricing is configured, wrap getModel() to merge overrides.
 	const customPricing = options.customPricing

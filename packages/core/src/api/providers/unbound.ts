@@ -17,6 +17,7 @@ import { BaseProvider } from "./base-provider.js"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
 import { handleOpenAIError } from "./utils/openai-error-handler.js"
 import { applyRouterToolPreferences } from "./utils/router-tool-preferences.js"
+import { fetchWithModelCallHeaders } from "../call-headers.js"
 
 // Unbound usage includes extra fields for Anthropic cache tokens.
 interface UnboundUsage extends OpenAI.CompletionUsage {
@@ -62,6 +63,7 @@ export class UnboundHandler extends BaseProvider implements SingleCompletionHand
 				...DEFAULT_HEADERS,
 				"X-Unbound-Metadata": JSON.stringify({ labels: [{ key: "app", value: "shofer-code" }] }),
 			},
+			fetch: fetchWithModelCallHeaders,
 		})
 	}
 

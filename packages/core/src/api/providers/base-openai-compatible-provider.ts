@@ -14,6 +14,7 @@ import { BaseProvider } from "./base-provider.js"
 import { handleOpenAIError } from "./utils/openai-error-handler.js"
 import { calculateApiCostOpenAI } from "./_deps.js"
 import { getApiRequestTimeout } from "./utils/timeout-config.js"
+import { fetchWithModelCallHeaders } from "../call-headers.js"
 
 type BaseOpenAiCompatibleProviderOptions<ModelName extends string> = ApiHandlerOptions & {
 	providerName: string
@@ -64,6 +65,7 @@ export abstract class BaseOpenAiCompatibleProvider<ModelName extends string>
 			apiKey: this.options.apiKey,
 			defaultHeaders: DEFAULT_HEADERS,
 			timeout: getApiRequestTimeout(),
+			fetch: fetchWithModelCallHeaders,
 		})
 	}
 

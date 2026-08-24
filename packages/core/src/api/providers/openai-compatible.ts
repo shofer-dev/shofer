@@ -18,6 +18,7 @@ import { ApiStream, ApiStreamUsageChunk } from "./_deps.js"
 import { DEFAULT_HEADERS } from "./constants.js"
 import { BaseProvider } from "./base-provider.js"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
+import { fetchWithModelCallHeaders } from "../call-headers.js"
 
 /**
  * Configuration options for creating an OpenAI-compatible provider.
@@ -80,6 +81,7 @@ export abstract class OpenAICompatibleHandler extends BaseProvider implements Si
 				...(config.headers || {}),
 			},
 			includeUsage: true,
+			fetch: fetchWithModelCallHeaders,
 		})
 	}
 

@@ -28,6 +28,7 @@ import { BaseProvider } from "./base-provider.js"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
 import { isMcpTool } from "./_deps.js"
 import { sanitizeOpenAiCallId } from "./_deps.js"
+import { fetchWithModelCallHeaders } from "../call-headers.js"
 
 export type OpenAiNativeModel = ReturnType<OpenAiNativeHandler["getModel"]>
 
@@ -104,6 +105,7 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 				session_id: this.sessionId,
 				"User-Agent": userAgent,
 			},
+			fetch: fetchWithModelCallHeaders,
 		})
 	}
 

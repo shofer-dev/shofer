@@ -16,6 +16,7 @@ import { BaseProvider } from "./base-provider.js"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
 import { handleOpenAIError } from "./utils/openai-error-handler.js"
 import { isMcpTool } from "./_deps.js"
+import { fetchWithModelCallHeaders } from "../call-headers.js"
 
 const XAI_DEFAULT_TEMPERATURE = 0
 
@@ -34,6 +35,7 @@ export class XAIHandler extends BaseProvider implements SingleCompletionHandler 
 			baseURL: "https://api.x.ai/v1",
 			apiKey: apiKey,
 			defaultHeaders: DEFAULT_HEADERS,
+			fetch: fetchWithModelCallHeaders,
 		})
 	}
 

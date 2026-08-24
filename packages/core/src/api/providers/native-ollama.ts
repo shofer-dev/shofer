@@ -9,6 +9,7 @@ import { getOllamaModels } from "./fetchers/ollama.js"
 import { TagMatcher } from "./_deps.js"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
 import { apiLog } from "./_deps.js"
+import { fetchWithModelCallHeaders } from "../call-headers.js"
 
 interface OllamaChatOptions {
 	temperature: number
@@ -162,6 +163,7 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 				const clientOptions: OllamaOptions = {
 					host: this.options.ollamaBaseUrl || "http://localhost:11434",
 					// Note: The ollama npm package handles timeouts internally
+					fetch: fetchWithModelCallHeaders,
 				}
 
 				// Add API key if provided (for Ollama cloud or authenticated instances)

@@ -15,6 +15,7 @@ import { BaseProvider } from "./base-provider.js"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
 import { calculateApiCostAnthropic } from "./_deps.js"
 import { convertOpenAIToolsToAnthropic } from "./_deps.js"
+import { nodeFetchWithModelCallHeaders } from "../call-headers.js"
 
 /**
  * Converts OpenAI tool_choice to Anthropic ToolChoice format
@@ -73,6 +74,7 @@ export class MiniMaxHandler extends BaseProvider implements SingleCompletionHand
 		this.client = new Anthropic({
 			baseURL,
 			apiKey: options.minimaxApiKey,
+			fetch: nodeFetchWithModelCallHeaders,
 		})
 	}
 

@@ -36,6 +36,7 @@ import type { ApiHandlerCreateMessageMetadata, SingleCompletionHandler } from ".
 import { handleOpenAIError } from "./utils/openai-error-handler.js"
 import { generateImageWithProvider, ImageGenerationResult } from "./utils/image-generation.js"
 import { applyRouterToolPreferences } from "./utils/router-tool-preferences.js"
+import { fetchWithModelCallHeaders } from "../call-headers.js"
 
 // Add custom interface for OpenRouter params.
 type OpenRouterChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParams & {
@@ -141,7 +142,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		const baseURL = this.options.openRouterBaseUrl || "https://openrouter.ai/api/v1"
 		const apiKey = this.options.openRouterApiKey ?? "not-provided"
 
-		this.client = new OpenAI({ baseURL, apiKey, defaultHeaders: DEFAULT_HEADERS })
+		this.client = new OpenAI({ baseURL, apiKey, defaultHeaders: DEFAULT_HEADERS, fetch: fetchWithModelCallHeaders })
 
 		// Load models asynchronously to populate cache before getModel() is called
 		this.loadDynamicModels().catch((error) => {

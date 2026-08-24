@@ -16,6 +16,7 @@ import { ApiStream } from "./_deps.js"
 import { BaseProvider } from "./base-provider.js"
 import { apiLog } from "./_deps.js"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
+import { fetchWithModelCallHeaders } from "../call-headers.js"
 
 const QWEN_OAUTH_BASE_URL = "https://chat.qwen.ai"
 const QWEN_OAUTH_TOKEN_ENDPOINT = `${QWEN_OAUTH_BASE_URL}/api/v1/oauth2/token`
@@ -76,6 +77,7 @@ export class QwenCodeHandler extends BaseProvider implements SingleCompletionHan
 					"X-DashScope-UserAgent": `QwenCode/1.0.0 (${os.platform()}; ${os.arch()})`,
 					"X-DashScope-AuthType": "qwen-oauth",
 				},
+				fetch: fetchWithModelCallHeaders,
 			})
 		}
 		return this.client

@@ -22,6 +22,7 @@ import { BaseProvider } from "./base-provider.js"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
 import { calculateApiCostAnthropic } from "./_deps.js"
 import { convertOpenAIToolsToAnthropic, convertOpenAIToolChoiceToAnthropic } from "./_deps.js"
+import { nodeFetchWithModelCallHeaders } from "../call-headers.js"
 
 export class AnthropicHandler extends BaseProvider implements SingleCompletionHandler {
 	private options: ApiHandlerOptions
@@ -38,6 +39,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 		this.client = new Anthropic({
 			baseURL: this.options.anthropicBaseUrl || undefined,
 			[apiKeyFieldName]: this.options.apiKey,
+			fetch: nodeFetchWithModelCallHeaders,
 		})
 	}
 

@@ -8,6 +8,7 @@ import { BaseProvider } from "./base-provider.js"
 import { getModels, getModelsFromCache } from "./fetchers/modelCache.js"
 
 import { DEFAULT_HEADERS } from "./constants.js"
+import { fetchWithModelCallHeaders } from "../call-headers.js"
 
 type RouterProviderOptions = {
 	name: RouterName
@@ -52,6 +53,7 @@ export abstract class RouterProvider extends BaseProvider {
 				...DEFAULT_HEADERS,
 				...(options.openAiHeaders || {}),
 			},
+			fetch: fetchWithModelCallHeaders,
 		})
 	}
 
