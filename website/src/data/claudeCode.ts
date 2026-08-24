@@ -28,12 +28,12 @@ export const claudeCodeComparisons: ClaudeCodeComparison[] = [
 	{
 		aspect: "Multi-Agent Orchestration",
 		claudeCode: "Imperative subagents the model spawns at runtime, plus dynamic workflows expressed in Javascript",
-		shofer: "Declarative, deterministic Slang Workflows — repeatable, inspectable, and visualized",
+		shofer: "Background subtasks with least-privilege peer scoping — the whole agent tree is inspectable and visualized in the editor",
 	},
 	{
 		aspect: "Agent Visibility",
 		claudeCode: "Terminal-first with /agents and /tasks, plus a companion Desktop app (parallel tasks, diffs, PRs)",
-		shofer: "In-editor agent graph, sequence/swimlane diagrams, a Stats breakdown, and filterable Logs",
+		shofer: "In-editor task tree, a sequence diagram, a request-waterfall trace, a Stats breakdown, and filterable Logs",
 	},
 	{
 		aspect: "Autonomy & Sandboxing",
@@ -56,7 +56,7 @@ export const claudeCodeComparisons: ClaudeCodeComparison[] = [
 export const claudeCodeMigration = {
 	title: "Migrating from Claude Code",
 	description:
-		"Keep the agentic power, but bring any model (including local/offline), a graphical cockpit, deterministic Slang Workflows, semantic code & git-log search, native worktrees, and hard cost caps.",
+		"Keep the agentic power, but bring any model (including local/offline), a graphical cockpit, semantic code & git-log search, native worktrees, and hard cost caps.",
 	command: "/migrate-from-claude",
 	docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_claude_code_users.md",
 }

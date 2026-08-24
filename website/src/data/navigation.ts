@@ -2,7 +2,7 @@ export const siteConfig = {
 	name: "Shofer",
 	tagline: "Deterministic, observable multi-agent coding — open source, in VS Code",
 	description:
-		"Shofer is a new (June 2026) open-source AI coding agent for VS Code with unparalleled parallelism, usability and observability. Specify multi-agent workflows declaratively, and watch them execute as live diagrams — on top of all the standard features you expect from your AI-powered development environment.",
+		"Shofer is a new (June 2026) open-source AI coding agent for VS Code with unparalleled parallelism, usability and observability. Run many agents in parallel and watch them work, with full observability — on top of all the standard features you expect from your AI-powered development environment.",
 	url: "https://shofer.dev",
 	ogImage: "/images/og-image.png",
 	links: {

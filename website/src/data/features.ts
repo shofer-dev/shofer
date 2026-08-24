@@ -7,7 +7,7 @@ export interface Feature {
 	docsLabel: string
 	/** Same-page anchor the card's "Learn more" link jumps to. */
 	anchor: string
-	/** High-level expanded copy for the detail section (omit to skip a detail block — e.g. Workflows links to its own #workflows section). */
+	/** High-level expanded copy for the detail section (omit to skip a detail block). */
 	detail?: string
 	/** Alternative to `detail`: render the expanded copy as a bulleted list. */
 	detailBullets?: string[]
@@ -25,42 +25,25 @@ export interface Feature {
 // appear on the page, so each card's "Learn more" jumps straight down.
 export const features: Feature[] = [
 	{
-		title: "Provable Multi-Agent Workflows",
-		description:
-			"Specify a whole multi-agent pipeline declaratively in a .slang file — agents, message routing, control flow, a convergence condition, and budgets — then a non-LLM executor runs it.",
-		icon: "Workflow",
-		highlights: [
-			"Slang DSL: a deliberately constrained language to express multi-agent interactions",
-			"Statically analyzable — deadlocks & orphan agents caught before a run",
-			"Per-agent output contracts + a deterministic, repeatable scheduler",
-		],
-		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/slang_specs.md",
-		docsLabel: "Slang Spec",
-		// Links to its own dedicated section below — no separate detail block.
-		anchor: "workflows",
-	},
-	{
 		title: "Live Agent Visualization",
 		description:
-			"Shofer gives you the tools to introspect, troubleshoot and optimize your multi-agent workflows, with beautiful diagrams right on your IDE.",
+			"Shofer gives you the tools to introspect, troubleshoot and optimize a whole tree of agents, with beautiful diagrams right on your IDE.",
 		icon: "Activity",
 		highlights: [
-			"Topology / Sequence / Swimlane diagrams with live runtime overlays",
+			"Tree / Sequence / Trace / Stats views over the whole task tree",
 			"Latency/Reliability breakdowns: active-time donut + per-tool breakdown across the whole tree",
 			"Filterable per-session Logs",
 			"Export the complete wire protocol for any session to a .json file for offline analysis",
 		],
-		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/workflow_visualization.md",
+		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/task_visualization.md",
 		docsLabel: "Visualization",
 		anchor: "live-visualization",
-		detail: "Open WorkflowView and the whole agent tree becomes legible. A topology graph shows the current round — who's running and who they're sending to or waiting on. A sequence timeline replays every message, escalations to @Human included. Per-agent swimlanes mark exactly which step each agent is on, a Stats tab breaks active time down by phase and tool across the entire tree, and a filterable Logs stream shows everything that happened. The same diagrams render for any .slang file in an editor tab.",
+		detail: "Open the visualization tabs and the whole task tree becomes legible. A tree view shows every task and the subtasks it spawned. A sequence timeline replays every message between them — spawns, sends, awaits, answers and cancellations. A trace view lays each task's API requests and tool calls out on a time axis, a Stats tab breaks active time down by phase and tool across the entire tree, and a filterable Logs stream shows everything that happened.",
 		images: [
-			{ src: "images/workflow-topology.png", caption: "Topology — the agent graph for the current round" },
 			{
 				src: "images/task-sequence-diagram.png",
-				caption: "Sequence — message timeline, including escalations to @Human",
+				caption: "Sequence — the message timeline across the task tree",
 			},
-			{ src: "images/swimlanes.png", caption: "State — per-agent swimlanes marking the executing op" },
 			{ src: "images/task-stats.png", caption: "Stats — active-time donut + per-tool breakdown across the tree" },
 			{ src: "images/logs.png", caption: "Logs — filterable by free text and severity" },
 		],

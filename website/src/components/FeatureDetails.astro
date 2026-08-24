@@ -1,8 +1,7 @@
 ---
 import { features } from "../data/features";
 
-// Only features with `detail` get a block here. Workflows links to its own
-// dedicated <Workflows /> section instead.
+// Only features with `detail` get a block here.
 const detailed = features.filter((f) => f.detail || f.detailBullets);
 
 /** Classify how a feature's images should be rendered. */

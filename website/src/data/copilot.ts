@@ -19,7 +19,7 @@ export const copilotComparisons: CopilotComparison[] = [
 		aspect: "Agent Orchestration",
 		copilot:
 			"Parallel Cloud Agents (isolated GitHub Actions envs) + third-party agents — orchestrated via remote envs/hooks, not a developer-authored graph",
-		shofer: "Declarative Slang execution graph — deterministic message routing, control flow, and budgets, plus spawn/monitor/converse with child agents",
+		shofer: "Spawn, monitor and converse with child agents from any task — an in-editor tree you can inspect, with per-agent tool scoping and cost caps",
 	},
 	{
 		aspect: "Cross-Session Memory",
