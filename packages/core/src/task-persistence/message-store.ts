@@ -4,12 +4,21 @@ import { mkdirSync } from "node:fs"
 /**
  * SQLite message store (v3 architecture §5).
  *
- * The single persistence backend for task api/UI messages. Rows are keyed by
- * (task_id, kind, ts); `ts` is the dedupe/order key so a partial→final update at
- * the same `ts` collapses to the latest (matching the old flat-file read
- * semantics). Writes are cheap and incremental, so none of the prior flat-file
- * performance machinery (debounced saves, append logs, tail-window reads,
- * atomic-rewrite compaction) is needed.
+ * The storage engine of ONE backend — the compiled-in local default
+ * (`SqliteMessagePersistence` in `PersistencePort.ts`), which is its only
+ * caller. It is NOT "the" message store: which backend a host runs is decided in
+ * `backend.ts`, and a host serving one pool of tasks from several processes runs
+ * a shared one whose rows are nowhere near this file. Anything that reads a
+ * transcript goes through the selected port — `Task.getPersistence()` or the
+ * `apiMessages`/`taskMessages` facades — never through these primitives, because
+ * reading here on such a host answers an existing task with an EMPTY transcript
+ * and no error.
+ *
+ * Rows are keyed by (task_id, kind, ts); `ts` is the dedupe/order key so a
+ * partial→final update at the same `ts` collapses to the latest (matching the
+ * old flat-file read semantics). Writes are cheap and incremental, so none of
+ * the prior flat-file performance machinery (debounced saves, append logs,
+ * tail-window reads, atomic-rewrite compaction) is needed.
  *
  * Uses Node's built-in `node:sqlite` (no native dependency), loaded lazily via a
  * string-specifier dynamic import (experimental module, no bundled types; dynamic

@@ -1,16 +1,30 @@
 /**
  * taskMessages.ts — per-task `shoferMessages` (UI messages) persistence (§5).
  *
- * SQLite-backed via the shared message store. Signatures are unchanged so all
- * callers are unaffected; the prior JSONL implementation and its flat-file
- * performance machinery have been removed. In-place updates (partial→final,
- * `isAnswered` flips, streaming `api_req_started` mutations) re-append the same
- * `ts`, which the store collapses to the latest (last-write-wins per ts).
+ * A FACADE over the task store this host SELECTED (`backend.ts`), not over any
+ * particular store. Every function here resolves the backend for the given
+ * `globalStoragePath` and delegates to its {@link MessagePersistencePort}
+ * methods, so a host running a shared store (several processes serving one pool
+ * of tasks) reads and writes the same transcript through these free functions as
+ * it does through `Task.getPersistence()`.
+ *
+ * That equivalence is the whole point, and its absence was a live bug: these
+ * functions used to call the SQLite store directly, so a parent asking
+ * `wait_for_task` about a child driven by another process read an empty
+ * transcript from a local `.db` file the child had never written to — reporting
+ * the child's status with no result, silently, exactly the failure
+ * `backend.ts`'s selection is documented to refuse.
+ *
+ * Signatures are unchanged, and on the default local host the behaviour is
+ * byte-identical: the selected backend IS `SqliteMessagePersistence`. In-place
+ * updates (partial→final, `isAnswered` flips, streaming `api_req_started`
+ * mutations) re-append the same `ts`, which the store collapses to the latest
+ * (last-write-wins per ts).
  */
 
 import type { ShoferMessage } from "@shofer/types"
 
-import { storeAppend, storeReadAll, storeReadTail, storeSaveAll } from "./message-store.js"
+import { resolveTaskPersistence } from "./backend.js"
 
 export type ReadTaskMessagesOptions = {
 	taskId: string
@@ -21,7 +35,7 @@ export async function readTaskMessages({
 	taskId,
 	globalStoragePath,
 }: ReadTaskMessagesOptions): Promise<ShoferMessage[]> {
-	return storeReadAll<ShoferMessage>(globalStoragePath, taskId, "ui")
+	return (await resolveTaskPersistence(globalStoragePath)).readTaskMessages(taskId)
 }
 
 export type AppendTaskMessageOptions = {
@@ -36,14 +50,14 @@ export async function appendTaskMessage({
 	taskId,
 	globalStoragePath,
 }: AppendTaskMessageOptions): Promise<void> {
-	await storeAppend(globalStoragePath, taskId, "ui", message)
+	await (await resolveTaskPersistence(globalStoragePath)).appendTaskMessage(taskId, message)
 }
 
 export type SaveTaskMessagesOptions = {
 	messages: ShoferMessage[]
 	taskId: string
 	globalStoragePath: string
-	/** Accepted for signature compatibility; unused (SQLite needs no pre-serialized payload). */
+	/** Accepted for signature compatibility; unused (no backend needs a pre-serialized payload). */
 	serialized?: string
 }
 
@@ -53,7 +67,7 @@ export async function saveTaskMessages({
 	taskId,
 	globalStoragePath,
 }: SaveTaskMessagesOptions): Promise<void> {
-	await storeSaveAll(globalStoragePath, taskId, "ui", messages)
+	await (await resolveTaskPersistence(globalStoragePath)).saveTaskMessages(taskId, messages)
 }
 
 export type DisposeAppendHandleForTaskOptions = {
@@ -61,9 +75,12 @@ export type DisposeAppendHandleForTaskOptions = {
 	globalStoragePath: string
 }
 
-/** No-op: the SQLite backend keeps no long-lived per-task file handle. Kept for signature compatibility. */
-export async function disposeAppendHandleForTask(_options: DisposeAppendHandleForTaskOptions): Promise<void> {
-	// nothing to release
+/** Release whatever per-task handle the selected backend holds (a no-op for SQLite). */
+export async function disposeAppendHandleForTask({
+	taskId,
+	globalStoragePath,
+}: DisposeAppendHandleForTaskOptions): Promise<void> {
+	await (await resolveTaskPersistence(globalStoragePath)).disposeAppendHandleForTask(taskId)
 }
 
 export type ReadTaskMessagesTailOptions = {
@@ -82,5 +99,5 @@ export async function readTaskMessagesTail({
 	globalStoragePath,
 	maxMessages,
 }: ReadTaskMessagesTailOptions): Promise<[ShoferMessage[], boolean]> {
-	return storeReadTail<ShoferMessage>(globalStoragePath, taskId, "ui", maxMessages)
+	return (await resolveTaskPersistence(globalStoragePath)).readTaskMessagesTail(taskId, maxMessages)
 }

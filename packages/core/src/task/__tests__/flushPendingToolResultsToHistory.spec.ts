@@ -39,13 +39,13 @@ vi.mock("@shofer/telemetry", () => ({
 	},
 }))
 
-// Keep the flush path off SQLite: mock the api-message leaf module that
-// `SqliteMessagePersistence.appendApiMessage` delegates to relatively.
-vi.mock("../../task-persistence/apiMessages.js", () => ({
-	appendApiMessage: vi.fn().mockResolvedValue(undefined),
-	readApiMessages: vi.fn().mockResolvedValue([]),
-	readApiMessagesTail: vi.fn().mockResolvedValue([[], false]),
-	saveApiMessages: vi.fn().mockResolvedValue(undefined),
+// Keep the flush path off disk: mock the SQLite storage engine the default
+// backend drives, rather than the facade — backend selection stays real.
+vi.mock("../../task-persistence/message-store.js", () => ({
+	storeAppend: vi.fn().mockResolvedValue(undefined),
+	storeReadAll: vi.fn().mockResolvedValue([]),
+	storeReadTail: vi.fn().mockResolvedValue([[], false]),
+	storeSaveAll: vi.fn().mockResolvedValue(undefined),
 }))
 
 const { mockPWaitFor } = vi.hoisted(() => {

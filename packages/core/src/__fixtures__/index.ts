@@ -7,3 +7,4 @@
  */
 
 export { BUILTIN_MODES } from "./builtin-config.js"
+export { FakeSharedTaskStore } from "./fakeSharedTaskStore.js"

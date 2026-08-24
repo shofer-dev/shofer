@@ -28,8 +28,10 @@ flowchart TD
 
 Task messages (the `api` conversation history and the `ui` message stream) are
 stored in a single SQLite database, `shofer-messages.db`, under the global
-storage path. The backend is Node's built-in `node:sqlite` (no native
-dependency), loaded lazily and cached per storage path.
+storage path. This is the compiled-in DEFAULT backend — Node's built-in
+`node:sqlite` (no native dependency), loaded lazily and cached per storage path;
+the figures below are its costs, and a host that selects a shared store
+(`SHOFER_TASK_STORE`) pays that store's instead.
 
 - **Schema.** One `messages` table keyed by `(task_id, kind, ts)`, `data` holding
   the serialized message. See

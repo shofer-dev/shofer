@@ -3,7 +3,7 @@ import { setHost, createInMemoryHost } from "@shofer/types"
 import { hasToolUsageChanged, hasTokenUsageChanged } from "@shofer/types"
 
 import { Task } from "../Task.js"
-import { appendTaskMessage } from "../../task-persistence/taskMessages.js"
+import { storeAppend } from "../../task-persistence/message-store.js"
 
 // Mock Task's intra-core dependencies via core-RELATIVE paths (a barrel mock of
 // @shofer/core cannot intercept Task's intra-package relative imports).
@@ -35,23 +35,16 @@ vi.mock("@shofer/telemetry", () => ({
 	},
 }))
 
-// Mock the task-persistence leaf modules Task reaches through
-// `SqliteMessagePersistence` (which imports these free functions relatively).
-// This keeps the tests off disk/SQLite. The H29 test spies on the real
-// `appendTaskMessage` fn that `SqliteMessagePersistence.appendTaskMessage`
-// delegates to — it is the SAME vi.fn the test imports above.
-vi.mock("../../task-persistence/taskMessages.js", () => ({
-	appendTaskMessage: vi.fn().mockResolvedValue(undefined),
-	readTaskMessages: vi.fn().mockResolvedValue([]),
-	readTaskMessagesTail: vi.fn().mockResolvedValue([[], false]),
-	saveTaskMessages: vi.fn().mockResolvedValue(undefined),
-	disposeAppendHandleForTask: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock("../../task-persistence/apiMessages.js", () => ({
-	appendApiMessage: vi.fn().mockResolvedValue(undefined),
-	readApiMessages: vi.fn().mockResolvedValue([]),
-	readApiMessagesTail: vi.fn().mockResolvedValue([[], false]),
-	saveApiMessages: vi.fn().mockResolvedValue(undefined),
+// Mock the SQLite storage engine the default backend drives, keeping the tests
+// off disk without disturbing backend selection: `Task` resolves the real
+// `SqliteMessagePersistence`, which calls these primitives. The H29 test spies
+// on the same `storeAppend` vi.fn the test imports above, filtering on the
+// `kind` argument because api and UI writes share the one entry point.
+vi.mock("../../task-persistence/message-store.js", () => ({
+	storeAppend: vi.fn().mockResolvedValue(undefined),
+	storeReadAll: vi.fn().mockResolvedValue([]),
+	storeReadTail: vi.fn().mockResolvedValue([[], false]),
+	storeSaveAll: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock("../../task-persistence/taskMetadata.js", () => ({
 	taskMetadata: vi.fn().mockResolvedValue({
@@ -692,27 +685,28 @@ describe("Task H29 partial-append throttling", () => {
 	})
 
 	test("throttles consecutive partial appends within the window but always appends the final", async () => {
-		const append = vi.mocked(appendTaskMessage)
+		const append = vi.mocked(storeAppend)
+		const uiAppends = () => append.mock.calls.filter((call) => call[2] === "ui").length
 		const ts = Date.now()
 
 		// Creation of the streamed message appends once.
 		await (task as any).addToShoferMessages({ ts, type: "say", say: "text", text: "", partial: true })
-		expect(append).toHaveBeenCalledTimes(1)
+		expect(uiAppends()).toBe(1)
 		append.mockClear()
 
 		// Three partial chunks within the 250 ms window → only the first appends.
 		await (task as any).updateShoferMessage({ ts, type: "say", say: "text", text: "a", partial: true })
 		await (task as any).updateShoferMessage({ ts, type: "say", say: "text", text: "ab", partial: true })
 		await (task as any).updateShoferMessage({ ts, type: "say", say: "text", text: "abc", partial: true })
-		expect(append).toHaveBeenCalledTimes(1)
+		expect(uiAppends()).toBe(1)
 
 		// Past the throttle window → the next partial appends again.
 		vi.advanceTimersByTime(300)
 		await (task as any).updateShoferMessage({ ts, type: "say", say: "text", text: "abcd", partial: true })
-		expect(append).toHaveBeenCalledTimes(2)
+		expect(uiAppends()).toBe(2)
 
 		// Finalization always appends, regardless of how recently a partial did.
 		await (task as any).updateShoferMessage({ ts, type: "say", say: "text", text: "abcd done", partial: false })
-		expect(append).toHaveBeenCalledTimes(3)
+		expect(uiAppends()).toBe(3)
 	})
 })

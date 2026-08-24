@@ -1,15 +1,17 @@
 /**
  * apiMessages.ts — per-task `apiConversationHistory` persistence (§5).
  *
- * SQLite-backed via the shared message store. The function signatures are
- * unchanged so all callers (`Task`, `condense`, `context-management`,
- * `WaitForTaskTool`, etc.) are unaffected; the prior JSONL implementation and its
- * flat-file performance machinery have been removed.
+ * A FACADE over the task store this host SELECTED (`backend.ts`), the api-message
+ * twin of `taskMessages.ts` — see that file's header for why the indirection
+ * exists. On the default local host the selected backend IS
+ * `SqliteMessagePersistence`, so behaviour is byte-identical; on a host running
+ * a shared store these functions and `Task.getPersistence()` read the same
+ * transcript instead of two different ones.
  */
 
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import { storeAppend, storeReadAll, storeReadTail, storeSaveAll } from "./message-store.js"
+import { resolveTaskPersistence } from "./backend.js"
 
 export type ApiMessage = Anthropic.MessageParam & {
 	ts?: number
@@ -48,7 +50,7 @@ export async function readApiMessages({
 	taskId: string
 	globalStoragePath: string
 }): Promise<ApiMessage[]> {
-	return storeReadAll<ApiMessage>(globalStoragePath, taskId, "api")
+	return (await resolveTaskPersistence(globalStoragePath)).readApiMessages(taskId)
 }
 
 export type ReadApiMessagesTailOptions = {
@@ -68,7 +70,7 @@ export async function readApiMessagesTail({
 	globalStoragePath,
 	maxMessages,
 }: ReadApiMessagesTailOptions): Promise<[ApiMessage[], boolean]> {
-	return storeReadTail<ApiMessage>(globalStoragePath, taskId, "api", maxMessages)
+	return (await resolveTaskPersistence(globalStoragePath)).readApiMessagesTail(taskId, maxMessages)
 }
 
 export type AppendApiMessageOptions = {
@@ -82,18 +84,18 @@ export type AppendApiMessageOptions = {
  * re-append a mutated message in place (same `ts`).
  */
 export async function appendApiMessage({ message, taskId, globalStoragePath }: AppendApiMessageOptions): Promise<void> {
-	await storeAppend(globalStoragePath, taskId, "api", message)
+	await (await resolveTaskPersistence(globalStoragePath)).appendApiMessage(taskId, message)
 }
 
 export type SaveApiMessagesOptions = {
 	messages: ApiMessage[]
 	taskId: string
 	globalStoragePath: string
-	/** Accepted for signature compatibility; unused (SQLite needs no pre-serialized payload). */
+	/** Accepted for signature compatibility; unused (no backend needs a pre-serialized payload). */
 	serialized?: string
 }
 
 /** Replace the full API conversation history (overwrite / recovery). */
 export async function saveApiMessages({ messages, taskId, globalStoragePath }: SaveApiMessagesOptions): Promise<void> {
-	await storeSaveAll(globalStoragePath, taskId, "api", messages)
+	await (await resolveTaskPersistence(globalStoragePath)).saveApiMessages(taskId, messages)
 }

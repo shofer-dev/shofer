@@ -1,3 +1,9 @@
+import { FakeSharedTaskStore } from "../../__fixtures__/fakeSharedTaskStore.js"
+import {
+	TASK_STORE_ENV,
+	registerTaskPersistenceBackend,
+	resetTaskPersistenceBackends,
+} from "../../task-persistence/backend.js"
 import { CheckTaskStatusTool } from "../CheckTaskStatusTool.js"
 
 /**
@@ -353,5 +359,43 @@ describe("CheckTaskStatusTool", () => {
 		const cbs = buildCallbacks()
 		await tool.execute({ task_id: "peer-1" }, task, cbs)
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Mode: Architect"))
+	})
+
+	// ─── Result + activity read the SELECTED task store ───────────────
+	//
+	// Same live regression as WaitForTaskTool: reading the local SQLite file on
+	// a host whose tasks live in a shared store reported the child's STATUS with
+	// no `Result:` line and an empty activity feed, silently.
+
+	describe("with a shared task store selected", () => {
+		const sharedStore = new FakeSharedTaskStore()
+
+		beforeEach(() => {
+			sharedStore.clear()
+			registerTaskPersistenceBackend("fake-shared", () => sharedStore)
+			process.env[TASK_STORE_ENV] = "fake-shared"
+		})
+
+		afterEach(async () => {
+			delete process.env[TASK_STORE_ENV]
+			await resetTaskPersistenceBackends()
+		})
+
+		it("reports a completed child's result and activity from the selected backend", async () => {
+			sharedStore.setTaskMessages("child-1", [
+				{ ts: 1, type: "say", say: "text", text: "thinking about it" },
+				{ ts: 2, type: "say", say: "completion_result", text: "the child's answer" },
+			])
+
+			const task = buildTask()
+			task.backgroundChildren = new Map([["child-1", { taskId: "child-1", status: "completed", createdAt: 100 }]])
+			const cbs = buildCallbacks()
+			await tool.execute({ task_id: "child-1", include_activity: true }, task, cbs)
+
+			const result = cbs.pushToolResult.mock.calls[0]![0] as string
+			expect(result).toContain("Status: completed")
+			expect(result).toContain("Result: the child's answer")
+			expect(result).toContain("thinking about it")
+		})
 	})
 })

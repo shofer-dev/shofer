@@ -1,3 +1,9 @@
+import { FakeSharedTaskStore } from "../../__fixtures__/fakeSharedTaskStore.js"
+import {
+	TASK_STORE_ENV,
+	registerTaskPersistenceBackend,
+	resetTaskPersistenceBackends,
+} from "../../task-persistence/backend.js"
 import { WaitForTaskTool } from "../WaitForTaskTool.js"
 
 /**
@@ -352,5 +358,53 @@ describe("WaitForTaskTool", () => {
 
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Status: error"))
 		expect(provider.taskManager.off).toHaveBeenCalled()
+	})
+
+	// ─── Result assembly reads the SELECTED task store ───────────────
+	//
+	// Live regression: on the L2 worker, where tasks live in a shared Postgres
+	// store, the result assembly read the local SQLite file instead and reported
+	// "Status: completed" with no `Result:` line — the child's completion text
+	// existed, in a store nobody asked.
+
+	describe("with a shared task store selected", () => {
+		const sharedStore = new FakeSharedTaskStore()
+
+		beforeEach(() => {
+			sharedStore.clear()
+			registerTaskPersistenceBackend("fake-shared", () => sharedStore)
+			process.env[TASK_STORE_ENV] = "fake-shared"
+		})
+
+		afterEach(async () => {
+			delete process.env[TASK_STORE_ENV]
+			await resetTaskPersistenceBackends()
+		})
+
+		it("reports a completed child's result from the selected backend", async () => {
+			sharedStore.setTaskMessages("child-1", [
+				{ ts: 1, type: "say", say: "text", text: "working" },
+				{ ts: 2, type: "say", say: "completion_result", text: "the child's answer" },
+			])
+
+			const task = buildTask()
+			task.backgroundChildren = new Map([["child-1", { taskId: "child-1", status: "completed", createdAt: 100 }]])
+			const cbs = buildCallbacks()
+			await tool.execute({ task_ids: ["child-1"] }, task, cbs)
+
+			expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Status: completed"))
+			expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Result: the child's answer"))
+		})
+
+		it("reports a failed child's error from the selected backend", async () => {
+			sharedStore.setTaskMessages("child-1", [{ ts: 1, type: "say", say: "error", text: "it blew up" }])
+
+			const task = buildTask()
+			task.backgroundChildren = new Map([["child-1", { taskId: "child-1", status: "error", createdAt: 100 }]])
+			const cbs = buildCallbacks()
+			await tool.execute({ task_ids: ["child-1"] }, task, cbs)
+
+			expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Error: it blew up"))
+		})
 	})
 })

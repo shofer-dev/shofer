@@ -1,19 +1,9 @@
 import type { HistoryItem, ShoferMessage } from "@shofer/types"
 
-import {
-	type ApiMessage,
-	appendApiMessage,
-	readApiMessages,
-	readApiMessagesTail,
-	saveApiMessages,
-} from "./apiMessages.js"
-import {
-	appendTaskMessage,
-	disposeAppendHandleForTask,
-	readTaskMessages,
-	readTaskMessagesTail,
-	saveTaskMessages,
-} from "./taskMessages.js"
+// Type-only: `apiMessages.ts` is a facade that resolves THIS module's backend,
+// so a value import here would close a runtime cycle. `ApiMessage` is erased.
+import type { ApiMessage } from "./apiMessages.js"
+import { storeAppend, storeReadAll, storeReadTail, storeSaveAll } from "./message-store.js"
 import { FileTaskMetadataPersistence, type TaskMetadataPersistencePort } from "./taskMetadataStore.js"
 
 /**
@@ -21,12 +11,14 @@ import { FileTaskMetadataPersistence, type TaskMetadataPersistencePort } from ".
  * to keep the core host-agnostic).
  *
  * The single interface for task api/UI message reads/writes. The compiled-in
- * backend is SQLite (`message-store.ts`, accessed via the
- * `apiMessages`/`taskMessages` free functions); `SqliteMessagePersistence` is the
- * OO adapter that binds `globalStoragePath` once.
+ * backend is SQLite: `SqliteMessagePersistence` binds `globalStoragePath` once
+ * and drives `message-store.ts`, which is that backend's private storage engine
+ * and nobody else's.
  *
  * Which backend a host actually runs is decided in `backend.ts` — this file only
- * declares the shapes and ships the default.
+ * declares the shapes and ships the default. Callers reach the SELECTED backend
+ * through `Task.getPersistence()` or the `apiMessages`/`taskMessages` facades;
+ * none of them names this class.
  */
 export interface MessagePersistencePort {
 	// API conversation history (the LLM-facing message log).
@@ -104,6 +96,10 @@ export interface TaskPersistencePort extends MessagePersistencePort, TaskMetadat
  * every host whose task lives where its storage directory lives (VS Code, the
  * CLI, an L1 workspace) and offers no lease, because a local file has exactly
  * one writer by construction.
+ *
+ * Construct it only from `backend.ts`'s registry. Anything that instantiates it
+ * directly has hard-wired the local store and will read an empty transcript on a
+ * host whose tasks live in a shared one.
  */
 export class SqliteMessagePersistence implements TaskPersistencePort {
 	private readonly metadata: TaskMetadataPersistencePort
@@ -126,32 +122,33 @@ export class SqliteMessagePersistence implements TaskPersistencePort {
 	}
 
 	appendApiMessage(taskId: string, message: ApiMessage): Promise<void> {
-		return appendApiMessage({ message, taskId, globalStoragePath: this.globalStoragePath })
+		return storeAppend(this.globalStoragePath, taskId, "api", message)
 	}
 	readApiMessages(taskId: string): Promise<ApiMessage[]> {
-		return readApiMessages({ taskId, globalStoragePath: this.globalStoragePath })
+		return storeReadAll<ApiMessage>(this.globalStoragePath, taskId, "api")
 	}
 	readApiMessagesTail(taskId: string, maxMessages: number): Promise<[ApiMessage[], boolean]> {
-		return readApiMessagesTail({ taskId, globalStoragePath: this.globalStoragePath, maxMessages })
+		return storeReadTail<ApiMessage>(this.globalStoragePath, taskId, "api", maxMessages)
 	}
 	saveApiMessages(taskId: string, messages: ApiMessage[]): Promise<void> {
-		return saveApiMessages({ messages, taskId, globalStoragePath: this.globalStoragePath })
+		return storeSaveAll(this.globalStoragePath, taskId, "api", messages)
 	}
 
 	appendTaskMessage(taskId: string, message: ShoferMessage): Promise<void> {
-		return appendTaskMessage({ message, taskId, globalStoragePath: this.globalStoragePath })
+		return storeAppend(this.globalStoragePath, taskId, "ui", message)
 	}
 	readTaskMessages(taskId: string): Promise<ShoferMessage[]> {
-		return readTaskMessages({ taskId, globalStoragePath: this.globalStoragePath })
+		return storeReadAll<ShoferMessage>(this.globalStoragePath, taskId, "ui")
 	}
 	readTaskMessagesTail(taskId: string, maxMessages: number): Promise<[ShoferMessage[], boolean]> {
-		return readTaskMessagesTail({ taskId, globalStoragePath: this.globalStoragePath, maxMessages })
+		return storeReadTail<ShoferMessage>(this.globalStoragePath, taskId, "ui", maxMessages)
 	}
 	saveTaskMessages(taskId: string, messages: ShoferMessage[]): Promise<void> {
-		return saveTaskMessages({ messages, taskId, globalStoragePath: this.globalStoragePath })
+		return storeSaveAll(this.globalStoragePath, taskId, "ui", messages)
 	}
 
-	disposeAppendHandleForTask(taskId: string): Promise<void> {
-		return disposeAppendHandleForTask({ taskId, globalStoragePath: this.globalStoragePath })
+	/** No-op: SQLite keeps no long-lived per-task handle to release. */
+	async disposeAppendHandleForTask(_taskId: string): Promise<void> {
+		// nothing to release
 	}
 }

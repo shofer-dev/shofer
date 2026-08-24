@@ -495,12 +495,22 @@ USD amounts. Without this setting, only token counts are available.
 
 ### Message storage (§5)
 
-A task's conversation/UI messages are stored in **SQLite** (`node:sqlite`) — see
-[`message-store.ts`](../packages/core/src/task-persistence/message-store.ts) and the
-`SqliteMessagePersistence` adapter. Rows are keyed by `(task_id, kind, ts)` with
-last-write-wins per `ts`. This replaced the prior flat-file (JSONL) layer and its
-performance machinery (debounced saves, append logs, tail-window reads,
-atomic-rewrite compaction).
+On the default host a task's conversation/UI messages are stored in **SQLite**
+(`node:sqlite`) — see
+[`message-store.ts`](../packages/core/src/task-persistence/message-store.ts), the
+storage engine of the compiled-in `SqliteMessagePersistence` backend. Rows are
+keyed by `(task_id, kind, ts)` with last-write-wins per `ts`. This replaced the
+prior flat-file (JSONL) layer and its performance machinery (debounced saves,
+append logs, tail-window reads, atomic-rewrite compaction).
+
+SQLite is the DEFAULT, not the only store (see `SHOFER_TASK_STORE` below).
+Everything that reads or writes a transcript — `Task.getPersistence()` and the
+[`taskMessages.ts`](../packages/core/src/task-persistence/taskMessages.ts) /
+[`apiMessages.ts`](../packages/core/src/task-persistence/apiMessages.ts) free
+functions alike — goes through the backend the host SELECTED, so the two agree on
+a host running a shared store. Reaching `message-store.ts` directly is what makes
+them disagree, and it fails silently: an existing task reads back as an empty
+transcript.
 
 The connection runs `journal_mode=WAL` with `synchronous=NORMAL`, which is not a
 tuning preference: `node:sqlite` is synchronous, so a commit's fsyncs are charged
