@@ -168,6 +168,33 @@ describe("plugin-loader (§7 code loading, step 2.1)", () => {
 		expect(plugin.transformSystemPrompt?.("x", {})).toBe("x!")
 	})
 
+	it("rebundles when a non-entry source file changes (the cache covers the tree)", async () => {
+		// The bundle inlines the whole import graph, so a cache keyed on the entry
+		// file alone kept serving stale code after a sibling (or vendored dep)
+		// changed — that is how a vendored simple-git upgrade went unseen for
+		// weeks. The stamp must cover every source file under the entry's dir.
+		const root = writePlugin(
+			"tree-plugin",
+			"index.ts",
+			`import { VALUE } from "./sibling.js"
+			export default { name: "tree-plugin", transformSystemPrompt: (p: string) => p + VALUE }`,
+		)
+		const sibling = path.join(root, "sibling.ts")
+		fs.writeFileSync(sibling, `export const VALUE = "-v1"`)
+
+		const first = await loadPluginFromEntry({ name: "tree-plugin", root, main: "index.ts" }, { cacheDir })
+		expect(first.transformSystemPrompt?.("x", {})).toBe("x-v1")
+
+		// Edit ONLY the sibling; push its mtime well forward so the change is
+		// visible even on coarse-mtime filesystems.
+		fs.writeFileSync(sibling, `export const VALUE = "-v2"`)
+		const future = new Date(Date.now() + 10_000)
+		fs.utimesSync(sibling, future, future)
+
+		const second = await loadPluginFromEntry({ name: "tree-plugin", root, main: "index.ts" }, { cacheDir })
+		expect(second.transformSystemPrompt?.("x", {})).toBe("x-v2")
+	})
+
 	it("uses the createNodePluginCodeLoader seam", async () => {
 		const root = writePlugin("seam-plugin", "e.mjs", `export default { name: "seam-plugin" }`)
 		const loader = createNodePluginCodeLoader({ cacheDir })

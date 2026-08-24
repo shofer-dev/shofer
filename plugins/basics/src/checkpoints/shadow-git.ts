@@ -58,16 +58,46 @@ function createSanitizedGit(baseDir: string, log: (message: string) => void): Si
 	const sanitizedEnv: Record<string, string> = {}
 	const removedVars: string[] = []
 
+	// Two classes of inherited variables are dropped. The first redirects WHERE git
+	// operates (a wrong repo/index/object store corrupts the shadow repo). The second
+	// changes WHAT git runs — editors, pagers, ssh/proxy commands, config injection —
+	// which a non-interactive snapshot never needs, and which simple-git's own unsafe
+	// guard REFUSES outright: with `GIT_EDITOR` in the env (VS Code terminals and CI
+	// commonly set it) `git.env()` throws `allowUnsafeEditor`, and checkpoints were
+	// silently disabled for every task. The list mirrors simple-git's env blocklist
+	// (vendor `simple-git.mjs`, the `allowUnsafe*` env map) so nothing we pass can
+	// trip it.
+	const REMOVED_ENV_VARS = new Set([
+		// Repo location / plumbing redirection:
+		"GIT_DIR",
+		"GIT_WORK_TREE",
+		"GIT_INDEX_FILE",
+		"GIT_OBJECT_DIRECTORY",
+		"GIT_ALTERNATE_OBJECT_DIRECTORIES",
+		"GIT_CEILING_DIRECTORIES",
+		"GIT_TEMPLATE_DIR",
+		// Behavior hijacking (simple-git's unsafe-env set):
+		"EDITOR",
+		"GIT_EDITOR",
+		"GIT_SEQUENCE_EDITOR",
+		"PAGER",
+		"GIT_PAGER",
+		"GIT_ASKPASS",
+		"SSH_ASKPASS",
+		"GIT_SSH",
+		"GIT_SSH_COMMAND",
+		"GIT_PROXY_COMMAND",
+		"GIT_EXTERNAL_DIFF",
+		"GIT_CONFIG",
+		"GIT_CONFIG_GLOBAL",
+		"GIT_CONFIG_SYSTEM",
+		"GIT_CONFIG_COUNT",
+		"GIT_EXEC_PATH",
+		"PREFIX",
+	])
+
 	for (const [key, value] of Object.entries(process.env)) {
-		if (
-			key === "GIT_DIR" ||
-			key === "GIT_WORK_TREE" ||
-			key === "GIT_INDEX_FILE" ||
-			key === "GIT_OBJECT_DIRECTORY" ||
-			key === "GIT_ALTERNATE_OBJECT_DIRECTORIES" ||
-			key === "GIT_CEILING_DIRECTORIES" ||
-			key === "GIT_TEMPLATE_DIR"
-		) {
+		if (REMOVED_ENV_VARS.has(key)) {
 			removedVars.push(`${key}=${value}`)
 			continue
 		}
@@ -84,7 +114,17 @@ function createSanitizedGit(baseDir: string, log: (message: string) => void): Si
 		)
 	}
 
-	const options: Partial<SimpleGitOptions> = { baseDir, config: [] }
+	// `allowUnsafeTemplateDir` covers exactly one argument WE pass: init's
+	// `--template=""` below, which simple-git ≥3.x refuses by default. The
+	// guard exists for callers forwarding untrusted template PATHS; our value
+	// is the empty string — the defense AGAINST a template dir (a hooks
+	// injection vector), not a use of one. GIT_TEMPLATE_DIR and init.templateDir
+	// config are additionally neutralized by the env stripping above.
+	const options: Partial<SimpleGitOptions> = {
+		baseDir,
+		config: [],
+		unsafe: { allowUnsafeTemplateDir: true },
+	}
 	const git = simpleGit(options)
 	git.env(sanitizedEnv)
 	return git

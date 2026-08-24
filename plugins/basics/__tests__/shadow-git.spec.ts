@@ -852,6 +852,50 @@ describe("ShadowGitRepo", () => {
 				}
 			})
 
+			it("initializes and snapshots with hostile editor/pager/ssh variables in the environment", async () => {
+				// simple-git refuses an env carrying GIT_EDITOR (and its unsafe-env kin)
+				// unless allowUnsafe* is enabled — and VS Code terminals and CI images
+				// routinely set GIT_EDITOR. Before createSanitizedGit stripped these,
+				// that refusal disabled checkpoints for EVERY task in such
+				// environments, silently. A checkpoint git is non-interactive and
+				// never needs any of them.
+				const hostile: Record<string, string> = {
+					GIT_EDITOR: "true",
+					EDITOR: "false",
+					GIT_PAGER: "false",
+					GIT_SSH_COMMAND: "/nonexistent-ssh",
+					GIT_ASKPASS: "/nonexistent-askpass",
+				}
+				const saved: Record<string, string | undefined> = {}
+				for (const [key, value] of Object.entries(hostile)) {
+					saved[key] = process.env[key]
+					process.env[key] = value
+				}
+
+				const testShadowDir = path.join(tmpDir, `shadow-hostile-env-${Date.now()}`)
+				const testWorkspaceDir = path.join(tmpDir, `workspace-hostile-env-${Date.now()}`)
+				await initWorkspaceRepo({ workspaceDir: testWorkspaceDir })
+
+				try {
+					const testService = createRepo({
+						taskId: `test-hostile-env-${Date.now()}`,
+						shadowDir: testShadowDir,
+						workspaceDir: testWorkspaceDir,
+					})
+					await testService.init()
+					await fs.writeFile(path.join(testWorkspaceDir, "hostile.txt"), "written under a hostile env\n")
+					const commit = await testService.saveCheckpoint("hostile env snapshot")
+					expect(commit?.commit).toBeTruthy()
+				} finally {
+					for (const [key, value] of Object.entries(saved)) {
+						if (value !== undefined) process.env[key] = value
+						else delete process.env[key]
+					}
+					await fs.rm(testShadowDir, { recursive: true, force: true })
+					await fs.rm(testWorkspaceDir, { recursive: true, force: true })
+				}
+			})
+
 			it("isolates checkpoint operations from GIT_DIR environment variable", async () => {
 				// This test verifies the fix for the issue where GIT_DIR environment variable
 				// causes checkpoint commits to go to the wrong repository.

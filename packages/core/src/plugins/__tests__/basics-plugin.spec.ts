@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, afterAll } from "vitest"
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from "vitest"
 import { execFileSync } from "child_process"
 import fs from "fs"
 import fsp from "fs/promises"
@@ -39,7 +39,26 @@ import type { PluginTaskProvider } from "../plugin-task.js"
  */
 
 const PLUGIN_DIR = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../../../plugins/basics")
-const PLUGINS_PARENT = path.dirname(PLUGIN_DIR)
+
+/**
+ * A parent directory containing ONLY the basics plugin (as a symlink), so the
+ * manager discovers and activates exactly the plugin under test. Pointing
+ * `pluginDirs` at the real `plugins/` parent made every `build()` bundle and
+ * activate the OTHER code plugins too — measured: live-memory 4.3s +
+ * rag-indexing 3.5s + second-brain 3.4s of cold esbuild on top of basics' own
+ * 5.2s, all serial, all inside whichever test ran first with a cold bundle
+ * cache (the cache is keyed on the plugin's source-tree mtimes, so any source
+ * touch re-colds it). Under a saturated worker pool that first test blew its
+ * 30s budget.
+ *
+ * The path is STABLE (not mkdtemp) on purpose: the bundle cache hashes the
+ * entry path, so a fresh parent per run would defeat the cross-run cache.
+ */
+const PLUGINS_PARENT = path.join(os.tmpdir(), "shofer-basics-spec-plugins")
+fs.mkdirSync(PLUGINS_PARENT, { recursive: true })
+const basicsLink = path.join(PLUGINS_PARENT, "basics")
+fs.rmSync(basicsLink, { force: true })
+fs.symlinkSync(PLUGIN_DIR, basicsLink)
 
 class MemoryStore implements PluginStateStore {
 	constructor(
@@ -162,6 +181,18 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 		return { manager, storageBaseDir, ...task }
 	}
 
+	/**
+	 * Pay basics' one cold esbuild bundle (~5s idle, arbitrarily worse under a
+	 * saturated worker pool) HERE, under an explicit budget, instead of inside
+	 * whichever test happens to run first. Every test's own `build()` then hits
+	 * the warm content-addressed cache in milliseconds. The registry state this
+	 * leaves behind is torn down by the first `beforeEach` like any test's.
+	 */
+	beforeAll(async () => {
+		host = createInMemoryHost()
+		await build({ workspacePath: makeWorkspace() })
+	}, 120_000)
+
 	const request = <T>(method: string, params: unknown, cwd: string) =>
 		pluginRegistry.request("basics", method, params, { cwd, workspacePath: cwd }) as Promise<T>
 
@@ -188,14 +219,14 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 		const { manager } = await build({ workspacePath: makeWorkspace() })
 		expect(manager.isEnabled("basics")).toBe(true)
 		expect(pluginRegistry.has("basics")).toBe(true)
-	}, 30_000)
+	})
 
 	it("stays off once the user disables it", async () => {
 		const store = new MemoryStore([], ["basics"])
 		const { manager } = await build({ workspacePath: makeWorkspace(), store })
 		expect(manager.isEnabled("basics")).toBe(false)
 		expect(pluginRegistry.has("basics")).toBe(false)
-	}, 30_000)
+	})
 
 	it("reports the effective feature map over the `features` request", async () => {
 		const cwd = makeWorkspace()
@@ -205,7 +236,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 			"file-changes": true,
 			worktrees: true,
 		})
-	}, 30_000)
+	})
 
 	it("packs to a .shofer-plugin archive that round-trips (a single distributable file)", async () => {
 		const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "basics-pack-"))
@@ -251,7 +282,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 			expect(fs.readFileSync(path.join(workspacePath, "file.txt"), "utf8")).toBe("original\n")
 			expect(result.rewound).toBe(true)
 			expect(rewinds).toEqual([markers[0]!.ts])
-		}, 30_000)
+		})
 
 		it("takes no snapshot for a tool that cannot change files", async () => {
 			const workspacePath = makeWorkspace()
@@ -259,7 +290,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 
 			await pluginRegistry.applyBeforeToolCall("read_file", {}, { taskId: "task-1", cwd: workspacePath, turn: 0 })
 			expect(markers).toHaveLength(0)
-		}, 30_000)
+		})
 
 		it("takes no snapshot when the feature is suppressed via governance", async () => {
 			process.env.SHOFER_DISABLED_PLUGINS = "basics:checkpoints"
@@ -274,7 +305,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 			expect(markers).toHaveLength(0)
 			expect(await request("features", undefined, workspacePath)).toMatchObject({ checkpoints: false })
 			await expect(request("checkpoints:list", undefined, workspacePath)).rejects.toThrow(/disabled/)
-		}, 30_000)
+		})
 	})
 
 	describe("file-changes feature", () => {
@@ -288,7 +319,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 			expect(payload.entries).toEqual([
 				expect.objectContaining({ path: "file.txt", insertions: 1, deletions: 0, state: "modified" }),
 			])
-		}, 30_000)
+		})
 
 		it("reverts a file back to what it was before the task touched it", async () => {
 			const cwd = makeWorkspace()
@@ -305,7 +336,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 			expect(result.reverted).toBe(true)
 			expect(fs.readFileSync(path.join(cwd, "file.txt"), "utf8")).toBe("original\n")
 			expect((await list("task-1", cwd)).entries).toEqual([])
-		}, 30_000)
+		})
 
 		it("refuses to revert while the task is still writing", async () => {
 			const cwd = makeWorkspace()
@@ -321,7 +352,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 				),
 			).rejects.toThrow(/Pause or cancel/)
 			expect(fs.readFileSync(path.join(cwd, "file.txt"), "utf8")).toBe("mid-turn\n")
-		}, 30_000)
+		})
 
 		it("answers the `task-stats` question core asks every plugin on completion", async () => {
 			const cwd = makeWorkspace()
@@ -330,7 +361,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 
 			const answers = await pluginRegistry.requestAll("task-stats", undefined, { taskId: "task-1", cwd })
 			expect(answers).toEqual([{ insertions: 2, deletions: 0 }])
-		}, 30_000)
+		})
 
 		it("keeps two tasks' change lists apart in one workspace", async () => {
 			const cwd = makeWorkspace()
@@ -347,7 +378,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 			expect((await list("task-2", cwd)).entries).toEqual([
 				expect.objectContaining({ path: "file.txt", insertions: 1 }),
 			])
-		}, 30_000)
+		})
 
 		it("removes a deleted task's snapshots rather than leaving them in storage", async () => {
 			const cwd = makeWorkspace()
@@ -362,7 +393,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 			await new Promise((resolve) => setTimeout(resolve, 50))
 
 			expect(fs.existsSync(taskDir)).toBe(false)
-		}, 30_000)
+		})
 
 		it("contributes the get_changed_files tool, reporting the same list", async () => {
 			const cwd = makeWorkspace()
@@ -376,7 +407,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 			const output = await tool!.execute({}, { mode: "code", task: {} as never })
 			expect(output).toContain("file.txt")
 			expect(output).toContain("+1")
-		}, 30_000)
+		})
 
 		it("does nothing at all when the feature is suppressed via governance", async () => {
 			process.env.SHOFER_DISABLED_PLUGINS = "basics:file-changes"
@@ -391,7 +422,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 			expect(tools.find((t) => t.name === "get_changed_files")).toBeUndefined()
 			await expect(list("task-1", cwd)).rejects.toThrow(/disabled/)
 			await fsp.rm(path.join(cwd, "file.txt"), { force: true })
-		}, 30_000)
+		})
 	})
 
 	describe("worktrees feature", () => {
@@ -400,7 +431,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 			const contribution = manager.getContributedCommandDirs().find((c) => c.pluginName === "basics")
 			expect(contribution?.unqualified).toBe(true)
 			expect(fs.existsSync(path.join(PLUGIN_DIR, "commands", "merge-worktree.md"))).toBe(true)
-		}, 30_000)
+		})
 
 		it("lists the repository's worktrees", async () => {
 			const cwd = makeRepo()
@@ -410,7 +441,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 			expect(listing.isGitRepo).toBe(true)
 			expect(listing.error).toBeUndefined()
 			expect(listing.worktrees.some((w) => w.isCurrent)).toBe(true)
-		}, 30_000)
+		})
 
 		it("refuses a directory that is not a git repository", async () => {
 			const cwd = makePlainDir()
@@ -418,7 +449,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 
 			const listing = await request<Listing>("worktrees:list", undefined, cwd)
 			expect(listing).toMatchObject({ isGitRepo: false, error: "not-a-repo" })
-		}, 30_000)
+		})
 
 		it("refuses a multi-root window rather than guessing which repository is meant", async () => {
 			const cwd = makeRepo()
@@ -426,7 +457,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 
 			const listing = await request<Listing>("worktrees:list", undefined, cwd)
 			expect(listing).toMatchObject({ isMultiRoot: true, error: "multi-root" })
-		}, 30_000)
+		})
 
 		it("creates a worktree under the embedded convention and gitignores the directory", async () => {
 			const cwd = makeRepo()
@@ -538,13 +569,13 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 					optedOut: true,
 				})
 				expect(await placement(cwd)).toBeUndefined()
-			}, 30_000)
+			})
 
 			it("answers nothing outside a git repository — there is nothing to branch from", async () => {
 				const cwd = makePlainDir()
 				await build({ workspacePath: cwd })
 				expect(await placement(cwd)).toBeUndefined()
-			}, 30_000)
+			})
 
 			it("answers nothing when the feature is suppressed via governance — the task runs in the workspace", async () => {
 				process.env.SHOFER_DISABLED_PLUGINS = "basics:worktrees"
@@ -552,7 +583,7 @@ describe("Basics plugin (first-party, loaded off disk)", () => {
 				await build({ workspacePath: cwd })
 				expect(await placement(cwd)).toBeUndefined()
 				await expect(request("worktrees:list", undefined, cwd)).rejects.toThrow(/disabled/)
-			}, 30_000)
+			})
 		})
 	})
 })

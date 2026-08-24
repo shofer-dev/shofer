@@ -214,6 +214,34 @@ export function hostNodePaths(extensionPath?: string): string[] {
 }
 
 /**
+ * Cache stamp for a plugin's source tree: every file under `dir` (skipping
+ * `node_modules`), as sorted `relpath:mtimeMs:size` entries. The bundle inlines
+ * the whole import graph, so keying the cache on the ENTRY file alone served
+ * stale bundles whenever any other source changed — a vendored dependency
+ * upgrade (`src/vendor/simple-git.mjs`) shipped a behavior change that tests
+ * and hosts kept not seeing for three weeks because `main.ts`'s mtime never
+ * moved. `node_modules` stays out: installed deps are externalized at bundle
+ * time, so they are not bundle inputs (and hashing them would cost far more
+ * than the bundle).
+ */
+function sourceTreeStamp(dir: string): string {
+	const entries: string[] = []
+	const walk = (current: string) => {
+		for (const dirent of fs.readdirSync(current, { withFileTypes: true })) {
+			if (dirent.name === "node_modules") continue
+			const full = path.join(current, dirent.name)
+			if (dirent.isDirectory()) walk(full)
+			else if (dirent.isFile()) {
+				const s = fs.statSync(full)
+				entries.push(`${path.relative(dir, full)}:${s.mtimeMs}:${s.size}`)
+			}
+		}
+	}
+	walk(dir)
+	return entries.sort().join("|")
+}
+
+/**
  * Transpile (if TypeScript) and dynamic-import a plugin entry file, returning the
  * module namespace. Mirrors `CustomToolRegistry.import()`: TS is esbuild-bundled to
  * a content-addressed cache file (Node built-ins external, deps bundled with a
@@ -230,9 +258,11 @@ async function importEntry(entry: string, options: PluginCodeLoaderOptions): Pro
 		throw new Error(`unsupported plugin entry extension "${ext}" (expected .ts/.tsx/.js/.mjs)`)
 	}
 
-	const stat = fs.statSync(entry)
 	const cacheDir = options.cacheDir ?? path.join(os.tmpdir(), "shofer-plugins-cache")
-	const hash = createHash("sha256").update(`${entry}:${stat.mtimeMs}`).digest("hex").slice(0, 16)
+	const hash = createHash("sha256")
+		.update(`${entry}:${sourceTreeStamp(path.dirname(entry))}`)
+		.digest("hex")
+		.slice(0, 16)
 	const bundleDir = path.join(cacheDir, hash)
 	const bundle = path.join(bundleDir, "plugin.mjs")
 
