@@ -1193,6 +1193,14 @@ shipped esbuild-wasm CLI at `<extension>/dist/bin/esbuild` and resolves a
 self-contained `@shofer/types` SDK at `<extension>/dist/plugin-sdk` (see
 [§8](#8-distribution--discovery)).
 
+Transpiled bundles are cached content-addressed (an OS-temp dir by default),
+keyed on the entry path plus a stamp of the plugin's **whole source tree**
+(every file's mtime and size, `node_modules` excluded — installed deps are
+externalized, not bundle inputs). The tree-wide key matters: the bundle
+inlines the full import graph, so keying on the entry file alone once served a
+weeks-stale bundle after a vendored dependency changed without the entry's
+mtime moving.
+
 ### Registration
 
 `pluginRegistry.register(plugin, context)` — `context` includes the plugin's
@@ -1273,7 +1281,7 @@ Logging).
 
 Discovery classifies each plugin by where it was found (`PluginScope`):
 
-- **`bundled`** — first-party plugins shipped inside the extension build. **Non-uninstallable**, and opt-in unless the manifest sets `defaultEnabled` (a plugin that IS a Shofer feature does). The esbuild build (`src/esbuild.mjs`) copies `plugins/**` → `dist/plugins`, auto-builds each plugin's UI bundles (running its `build-ui.mjs`), and ships the runtime deps external bundles need: the esbuild-wasm CLI (`dist/bin/esbuild`), the shared-React shims (`webview-ui/build/plugin-host/*.js`), and a self-contained `@shofer/types` SDK (`dist/plugin-sdk/node_modules/@shofer/types`, so a bare `@shofer/types` import resolves at runtime). The bundled set is **Live Memory**, **Checkpoints**, **File Changes**, **Worktrees** and **Built-in Modes** (`plugins/<name>/`) — each self-contained, with its domain types living in the plugin (zero `@shofer/types` runtime footprint); see [`PLUGINS.md`](../PLUGINS.md). A bundled plugin may ship a **pre-built** entry (checkpoints bundles `simple-git` into `main.mjs` via its `build-ui.mjs`), which is what keeps it dependency-free at runtime and packable to a single archive.
+- **`bundled`** — first-party plugins shipped inside the extension build. **Non-uninstallable**, and opt-in unless the manifest sets `defaultEnabled` (a plugin that IS a Shofer feature does). The esbuild build (`src/esbuild.mjs`) copies `plugins/**` → `dist/plugins`, auto-builds each plugin's UI bundles (running its `build-ui.mjs`), and ships the runtime deps external bundles need: the esbuild-wasm CLI (`dist/bin/esbuild`), the shared-React shims (`webview-ui/build/plugin-host/*.js`), and a self-contained `@shofer/types` SDK (`dist/plugin-sdk/node_modules/@shofer/types`, so a bare `@shofer/types` import resolves at runtime). The bundled set is **basics** (checkpoints, file-changes, worktrees), **builtin-config** (the built-in modes), **live-memory**, **rag-indexing** and **second-brain** (`plugins/<name>/`) — each self-contained, with its domain types living in the plugin (zero `@shofer/types` runtime footprint); see [`PLUGINS.md`](../PLUGINS.md). A bundled plugin may ship **vendored** dependencies (basics vendors `simple-git` as `src/vendor/simple-git.mjs`), which is what keeps it dependency-free at runtime and packable to a single archive.
 - **`global`** — installed under `~/.shofer/plugins/` (all workspaces).
 - **`project`** — installed under `<workspace>/.shofer/plugins/` (checked into VCS or gitignored per team choice).
 

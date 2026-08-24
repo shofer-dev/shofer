@@ -90,8 +90,17 @@ the shadow repo's `.git` tells git it is the only repository, so a nested reposi
 the workspace (a submodule, a child clone, a git worktree) is staged as ordinary files
 rather than an empty gitlink (mode `160000`) whose contents no checkpoint would hold.
 Leaving `GIT_WORK_TREE` unset lets `core.worktree` supply the working tree. The
-inherited git environment is stripped first, so a Dev Container or a parent `git`
-process cannot redirect checkpoint operations at the wrong repository.
+inherited git environment is stripped first — both the repo-location variables
+(so a Dev Container or a parent `git` process cannot redirect checkpoint
+operations at the wrong repository) and the behavior-hijacking class
+(`GIT_EDITOR`, pagers, askpass, ssh/proxy commands, config injection), which a
+non-interactive snapshot never needs and which simple-git's unsafe guard
+refuses outright: with `GIT_EDITOR` inherited (VS Code terminals and CI set it)
+an unstripped env made `git.env()` throw `allowUnsafeEditor` and silently
+disabled checkpoints for every task. The one unsafe knob enabled on purpose is
+`allowUnsafeTemplateDir`, covering exactly our own `init --template=""` — an
+empty value is the defense _against_ template-hook injection, not a use of a
+template dir.
 
 ### When a checkpoint is taken
 
