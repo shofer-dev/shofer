@@ -102,7 +102,7 @@ first concrete answer.
 
 ```mermaid
 flowchart TD
-    NEW["newTask / createWorkflow /<br/>createParallelTask"]
+    NEW["newTask /<br/>createParallelTask"]
     RC["resolveTaskCwd(provider)"]
     BC["pluginRegistry.requestAll('resolve-task-cwd')"]
     P1["basics (worktrees feature)"]
@@ -210,7 +210,7 @@ at build time.
 | Seam                                                    | What worktrees uses it for                                                   |
 | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `pluginRegistry.requestAll("resolve-task-cwd")`         | Answering where a new task runs — a fresh worktree unless told otherwise     |
-| `ctx.task.setCwd`                                       | Re-pointing a workflow that has not started its agents                       |
+| `ctx.task.setCwd`                                       | Re-pointing an existing task at another checkout                             |
 | `ctx.task.openTask`                                     | Opening an idle task in a worktree just created from the chat input          |
 | `ShoferPlugin.handleRequest` + `PluginUIApi.request`    | Everything the two UI bundles do (`local:worktrees:`-prefixed — see §7)      |
 | `ctx.ui.postMessage`                                    | Create progress: `worktrees:step`, `worktrees:copy-progress`                 |
@@ -246,9 +246,8 @@ then drives.
 
 `set-task-cwd` is the other, and the one that can be refused: re-pointing a task that
 exists but has not begun work goes through `ctx.task.setCwd`, the mirror seam
-`ShoferProvider` exposes. The host refuses a `WorkflowTask` once `flowState.started` —
-by then its agents have work on disk in the old directory. The refusal surfaces in the
-picker rather than being swallowed.
+`ShoferProvider` exposes. The host throws when there is no task to re-point, and the
+refusal surfaces in the picker rather than being swallowed.
 
 ## 8. Headless
 

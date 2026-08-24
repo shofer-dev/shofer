@@ -4,7 +4,7 @@ import { getCapabilitiesSection } from "../capabilities.js"
 
 /**
  * The CAPABILITIES section must not advertise tools the agent doesn't have.
- * For workflow agents with a `.slang` `tools:` restriction (passed as the
+ * For a task with a declared tool-group restriction (passed as the
  * effective `groups` set), a `[questions]`-only coordinator must NOT be told it
  * can read/write/execute — that prose is what invites the model to hallucinate
  * read_file/list_files/execute_command that aren't in its native tool catalog.

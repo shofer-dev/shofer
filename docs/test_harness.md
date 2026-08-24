@@ -13,7 +13,7 @@ uniquely covers:
 | Layer                    | What                                                                                                                                                                                               | Runtime                                            | Doc                                                                    |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
 | **L0 — Unit**            | `*.spec.ts` / `*.test.ts` via vitest                                                                                                                                                               | in-process                                         | (co-located with source)                                               |
-| **L1 — CLI harness**     | **the subject of this doc** — drives Shofer core headlessly via the CLI `ExtensionHost`. Three parts (below).                                                                                      | headless CLI, no code-server, no browser           | this file + [`../TESTING.md`](../TESTING.md)                           |
+| **L1 — CLI harness**     | **the subject of this doc** — drives Shofer core headlessly via the CLI `ExtensionHost`. Two parts (below).                                                                                        | headless CLI, no code-server, no browser           | this file + [`../TESTING.md`](../TESTING.md)                           |
 | **L2 — code-server E2E** | Python/pytest runner driving Shofer **inside a real code-server** (orchestrator control endpoint + Playwright webview checks). Covers what L1 structurally can't: the web runtime + React webview. | code-server (Docker/native/k3s) + headless browser | **separate package** → `extensions/integration/README.md`, `DESIGN.md` |
 
 L0 and L1 are the fast inner loop and run hermetically by default. **Only L2
@@ -40,14 +40,13 @@ flowchart TD
 
 ## L1 — CLI harness
 
-The L1 harness has **three parts**, all sharing the same `ExtensionHost` /
+The L1 harness has **two parts**, both sharing the same `ExtensionHost` /
 `ShoferExtensionApi` infrastructure:
 
-| Part                                     | What                                                                                      | Driver                                         | Default provider   |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------ |
-| **1 — CLI smoke tests** (scenarios 1–25) | CLI surface + `ShoferExtensionApi`-as-library behaviour                                   | shell (`harness.sh`) + `api_test_runner.ts`    | mock               |
-| **2 — Integration protocol cases**       | stdin NDJSON stream protocol: cancellation, follow-ups, queue ordering, process lifecycle | `cases/*.ts` via `stream-harness.ts`           | real provider only |
-| **3 — Workflow conformance**             | Slang interpreter — `_`-prefixed `.slang` fixtures                                        | `workflow-conformance.ts` via `api-harness.ts` | mock               |
+| Part                                     | What                                                                                      | Driver                                      | Default provider   |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------ |
+| **1 — CLI smoke tests** (scenarios 1–24) | CLI surface + `ShoferExtensionApi`-as-library behaviour                                   | shell (`harness.sh`) + `api_test_runner.ts` | mock               |
+| **2 — Integration protocol cases**       | stdin NDJSON stream protocol: cancellation, follow-ups, queue ordering, process lifecycle | `cases/*.ts` via `stream-harness.ts`        | real provider only |
 
 > **Provider note.** L1 never touches a deployed Shofer or code-server — it runs
 > the CLI from your working tree (`tsx src/index.ts`). Its only external
@@ -58,14 +57,14 @@ The L1 harness has **three parts**, all sharing the same `ExtensionHost` /
 ### One command to run everything
 
 [`scripts/smoke/harness.sh`](../scripts/smoke/harness.sh) is the single entry
-point — it runs all three parts in order against a chosen **preset** and prints
-a per-part and overall PASS/FAIL summary (exit 0 iff everything passes):
+point — it runs both parts in order against a chosen **preset** and prints a
+per-part and overall PASS/FAIL summary (exit 0 iff everything passes):
 
 ```bash
-cd /home/alsterg/Projects/arkware.ai/extensions/shofer
+cd extensions/shofer
 pnpm --filter @shofer/cli test:harness          # = scripts/smoke/harness.sh mock
 pnpm --filter @shofer/cli test:harness ds       # DeepSeek via local llm-router
-pnpm --filter @shofer/cli test:integration      # SKIP_CLI=1 harness.sh ds (Parts 2+3 only)
+pnpm --filter @shofer/cli test:integration      # SKIP_CLI=1 harness.sh ds (Part 2 only)
 ```
 
 Two presets ship in-box; any other provider works via the `PROVIDER`/`MODEL`
@@ -74,14 +73,13 @@ env overrides:
 | Preset           | Provider                                                                              | Notes                                                                                                                                                                                 |
 | ---------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mock` (default) | hermetic mock                                                                         | no network/credentials/GPU. **Skips Part 2** (those cases need a provider that actually executes slow multi-turn tool flows) and the real-provider-only Part 1 scenarios (2, 14, 21). |
-| `ds`             | `shofer` → local llm-router (`http://localhost:30081/v1`, `deepseek/deepseek-v4-pro`) | runs all three parts end-to-end.                                                                                                                                                      |
+| `ds`             | `shofer` → local llm-router (`http://localhost:30081/v1`, `deepseek/deepseek-v4-pro`) | runs both parts end-to-end.                                                                                                                                                           |
 
-Key `harness.sh` knobs (env): `SKIP_CLI` / `SKIP_INTEGRATION` / `SKIP_WORKFLOW`
-to skip a part; `MATCH=<substring>` to filter Part 2 case names / Part 3 fixture
-names; `TIMEOUT` / `TIMEOUT_INT` / `TIMEOUT_WF` per-part timeouts;
-`INT_PARALLEL` / `WF_PARALLEL` concurrency (Parts 2 and 3 run process-per-case
-via `xargs`; Part 1 is sequential by design — scenarios share session/FS state).
-Failure logs for Parts 2/3 persist under a `mktemp -d` dir (path printed inline).
+Key `harness.sh` knobs (env): `SKIP_CLI` / `SKIP_INTEGRATION` to skip a part;
+`MATCH=<substring>` to filter Part 2 case names; `TIMEOUT` / `TIMEOUT_INT`
+per-part timeouts; `INT_PARALLEL` concurrency (Part 2 runs process-per-case via
+`xargs`; Part 1 is sequential by design — scenarios share session/FS state).
+Part 2 failure logs persist under a `mktemp -d` dir (path printed inline).
 
 The sections below document each part's scenarios and how to run them
 standalone (outside `harness.sh`) for focused debugging.
@@ -157,7 +155,7 @@ cd /home/alsterg/Projects/arkware.ai/extensions/shofer && pnpm --filter shofer b
 
 ---
 
-## Part 1 — CLI smoke tests (scenarios 1–25)
+## Part 1 — CLI smoke tests (scenarios 1–24)
 
 Run these against the mock (default) or any real provider configured in
 [Setup](#setup). With a real provider the llm-router (or equivalent) must be
@@ -172,7 +170,7 @@ driven:
   `harness.sh` Part 1 runs exactly these, sequentially. Each snippet below is
   also copy-pasteable standalone via the `shofer-local` alias from
   [Setup](#setup).
-- **`ShoferExtensionApi`-library scenarios (15–19, 23, 24, 25)** use `ExtensionHost`
+- **`ShoferExtensionApi`-library scenarios (15–19, 23, 24)** use `ExtensionHost`
   in-process. Scenarios **15–19** are automated by
   [`scripts/api_test_runner.ts`](../apps/cli/scripts/api_test_runner.ts), which
   emits one `Test NN: PASS|FAIL` line per scenario against the hermetic mock:
@@ -182,7 +180,7 @@ driven:
     pnpm --filter @shofer/cli exec tsx scripts/api_test_runner.ts
     ```
 
-    Scenarios 23–25 are documented as runnable snippets (paste into a `/tmp/*.ts`
+    Scenarios 23–24 are documented as runnable snippets (paste into a `/tmp/*.ts`
     and run with `pnpm --filter @shofer/cli exec tsx <file>` from
     `extensions/shofer/apps/cli`); they are not yet wired into a runner.
 
@@ -573,37 +571,6 @@ await api.setConfiguration(cfg)
 console.log("logLevel restored:", api.getConfiguration().logLevel === cfg.logLevel) // true
 ```
 
-### 25. ShoferExtensionApi library — workflows: discover + start + monitor
-
-Verifies `discoverWorkflows` enumerates available `.slang` flows and `createWorkflow` starts one as a monitored task.
-
-```typescript
-import { ShoferEventName } from "@shofer/types"
-
-const workflows = await api.discoverWorkflows()
-console.log("discovered workflows:", [...workflows.keys()])
-
-let completedId: string | undefined
-const completion = new Promise<void>((resolve) => {
-	api.on(ShoferEventName.TaskCompleted, (id: string, _t, _tools, info: { isSubtask?: boolean }) => {
-		if (info?.isSubtask) return
-		completedId = id
-		resolve()
-	})
-})
-
-// Use a real flow from discoverWorkflows() or pass inline slang source
-const source = [...workflows.values()][0]!
-const workflowTaskId = await api.createWorkflow(source, {})
-console.log("workflow task started:", workflowTaskId)
-
-await Promise.race([completion, new Promise((_, rej) => setTimeout(() => rej(new Error("workflow timeout")), 60_000))])
-
-console.log("workflow completed task id matches:", completedId === workflowTaskId) // true
-const md = await api.getTaskMarkdownExport(workflowTaskId)
-console.log("workflow transcript length:", md.length, md.length > 0 ? "OK" : "FAIL")
-```
-
 ---
 
 ## Part 2 — Integration protocol cases
@@ -612,8 +579,7 @@ Stream-protocol conformance for the stdin NDJSON control channel
 (`--stdin-prompt-stream`): cancellation, follow-ups, queue ordering, and process
 lifecycle. Each case in
 [`apps/cli/scripts/integration/cases/`](../apps/cli/scripts/integration/cases/)
-(every file **except** `workflow-conformance.ts`) is a standalone script that
-drives the CLI as a subprocess via the shared
+is a standalone script that drives the CLI as a subprocess via the shared
 [`stream-harness.ts`](../apps/cli/scripts/integration/lib/stream-harness.ts)
 driver and exits non-zero on assertion failure.
 
@@ -640,7 +606,7 @@ under any preset.
 ```bash
 cd extensions/shofer/apps/cli
 # all cases via the top-level runner (real provider, parallel):
-SKIP_CLI=1 SKIP_WORKFLOW=1 bash ../../scripts/smoke/harness.sh ds
+SKIP_CLI=1 bash ../../scripts/smoke/harness.sh ds
 # or one case standalone:
 PROVIDER=shofer API_KEY=shofer MODEL=deepseek/deepseek-v4-pro \
   BASE_URL=http://localhost:30081/v1 TIMEOUT_MS=180000 \
@@ -669,134 +635,9 @@ PROVIDER=shofer API_KEY=shofer MODEL=deepseek/deepseek-v4-pro \
 
 ---
 
-## Part 3 — Workflow conformance suite
-
-Automated conformance tests for the Slang interpreter. Each `_`-prefixed
-fixture in [`apps/cli/scripts/integration/fixtures/`](../apps/cli/scripts/integration/fixtures/)
-exercises one language or runtime feature. The runner
-([`workflow-conformance.ts`](../apps/cli/scripts/integration/cases/workflow-conformance.ts))
-discovers all fixtures locally, runs each via `ShoferExtensionApi` through the shared
-[`api-harness.ts`](../apps/cli/scripts/integration/lib/api-harness.ts) driver,
-auto-answers human escalations, and asserts the expected terminal
-`flowState.status`. A fresh `ExtensionHost` is created per fixture to isolate
-memory (the earlier shared-host design OOM-killed on real providers after ~23
-flows).
-
-### How a workflow runs
-
-A `WorkflowTask` emits the same `ShoferEventName` events as any task:
-
-| Step            | API                                                                                      | Notes                                                                                                     |
-| --------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Start           | `api.createWorkflow(slangSource, flowParams?)` → `Promise<string>`                       | Returns the workflow task id. Always pass `flowParams` — omitting them causes a per-param `followup` ask. |
-| Monitor         | `api.on(ShoferEventName.Message, …)`                                                     | Chat stream: `🔄 Round N`, `✓ Round N complete`, agent output.                                            |
-| Terminal signal | `api.on(ShoferEventName.TaskCompleted, (id, tokens, tools, { rating, isSubtask }) => …)` | `rating: "well"` ⇒ converged; `rating: "poor"` ⇒ failure.                                                 |
-| Terminal status | `api.getTaskHistoryItems().find(h => h.id === id)?.flowState?.status`                    | Exact status: `converged` \| `budget_exceeded` \| `deadlock` \| `error` \| `aborted`.                     |
-| Human asks      | `host.client.on("waitingForInput", …)` + `host.client.respond(reply)`                    | `escalate @Human`, `await <- @Human`, and agent `ask_followup_question` all surface as `followup` asks.   |
-
-### Run the full suite (mock provider, hermetic)
-
-```bash
-cd /home/alsterg/Projects/arkware.ai/extensions/shofer/apps/cli
-PROVIDER=mock API_KEY=x MODEL=mock-model \
-  WORKSPACE=/home/alsterg/Projects/arkware.ai \
-  TIMEOUT_MS=20000 \
-  pnpm --filter @shofer/cli exec tsx scripts/integration/cases/workflow-conformance.ts
-```
-
-Add `MATCH=<substring>` to run a single flow:
-
-```bash
-MATCH=_escalate-only ... pnpm --filter @shofer/cli exec tsx scripts/integration/cases/workflow-conformance.ts
-```
-
-### Expectation matrix
-
-| Fixture           | `flowParams`                         | Expected `flowState.status` | Human reply         | Feature                                        |
-| ----------------- | ------------------------------------ | --------------------------- | ------------------- | ---------------------------------------------- |
-| `_await-any`      | `{ topic: "test" }`                  | `converged`                 | —                   | `await <- @any` and `<- *` wildcard            |
-| `_await-human`    | `{ topic: "test" }`                  | `converged`                 | `"ACK"`             | `escalate @Human` + `await <- @Human`          |
-| `_budget-rounds`  | `{ task: "test" }`                   | `budget_exceeded`           | —                   | `budget: rounds(1)` exhaustion                 |
-| `_budget-tokens`  | `{ task: "test" }`                   | `budget_exceeded`           | —                   | `budget: tokens(N)` exhaustion                 |
-| `_commit-if`      | `{ flag: true }`                     | `converged`                 | —                   | `commit … if <expr>`                           |
-| `_converge-agent` | `{ task: "test" }`                   | `converged`                 | —                   | `converge when: @Agent.committed`              |
-| `_converge-all`   | `{ task: "test" }`                   | `converged`                 | —                   | `converge when: all_committed`                 |
-| `_converge-count` | `{ task: "test" }`                   | `converged`                 | —                   | `converge when: committed_count >= N` (quorum) |
-| `_deadlock`       | `{ topic: "test" }`                  | `deadlock`                  | —                   | mutual `await` deadlock detection              |
-| `_escalate-if`    | `{ limit: 10 }`                      | `converged`                 | `"OK"`              | `escalate @Human … if <expr>`                  |
-| `_escalate-only`  | `{ question: "What is your name?" }` | `converged`                 | `"Tester"`          | static advance-phase `escalate @Human`         |
-| `_expressions`    | `{ val: 5, text: "ok" }`             | `converged`                 | —                   | `== != > >= < <= contains &&` + dot-access     |
-| `_if-condition`   | `{ flag: true }`                     | `converged`                 | —                   | `stake … if <expr>` guard                      |
-| `_let-set`        | `{ initial_count: 0 }`               | `converged`                 | —                   | `let` / `set` / `when`                         |
-| `_list-arg`       | `{ topic: "t", query: "q" }`         | `converged`                 | —                   | list-literal stake args                        |
-| `_named-args`     | `{ topic: "t", num_value: 5 }`       | `converged`                 | —                   | named stake args (mixed types)                 |
-| `_output-schema`  | `{ topic: "test" }`                  | `converged`                 | —                   | `output: { field: type }` validation + retry   |
-| `_peer-messaging` | `{ topic: "Rust" }`                  | `converged`                 | —                   | `peers:` + least-privilege scoping             |
-| `_question-relay` | `{ topic: "Rust" }`                  | `converged`                 | `"Focus on basics"` | mid-stake `ask_followup_question` relay        |
-| `_repeat-until`   | `{ topic: "test" }`                  | `converged`                 | —                   | `repeat until <expr>` loop + `set`             |
-| `_stake-all`      | `{ message: "hello" }`               | `converged`                 | —                   | `stake … -> @all` broadcast                    |
-| `_tools-meta`     | `{ topic: "test" }`                  | `converged`                 | —                   | `tools: [read, execute, mcp]` (parse-only)     |
-| `_when-otherwise` | `{ text: "DONE" }`                   | `converged`                 | —                   | `when … otherwise …` + nested `when`           |
-
-> Param key = flow param name (e.g. `flow "expressions" (val: "number", text: "string")` → `{ val: 5, text: "ok" }`).
-
-### Debug a single flow
-
-```typescript
-// /tmp/one_workflow.ts — pnpm --filter @shofer/cli exec tsx /tmp/one_workflow.ts
-import fs from "node:fs/promises"
-import path from "node:path"
-import { ExtensionHost } from "./src/agent/extension-host.js"
-import { ShoferEventName } from "@shofer/types"
-
-const host = new ExtensionHost({
-	provider: "shofer",
-	apiKey: "x",
-	baseUrl: "http://localhost:30081/v1",
-	model: "deepseek/deepseek-v4-pro",
-	workspacePath: "/home/alsterg/Projects/arkware.ai",
-	exitOnComplete: false,
-	autoApprove: true,
-	disableOutput: false,
-})
-await host.activate()
-const api = host.api
-
-// Load fixture directly from the harness fixtures dir
-const fixturesDir = path.resolve("scripts/integration/fixtures")
-const source = await fs.readFile(path.join(fixturesDir, "_converge-all.slang"), "utf-8")
-
-api.on(ShoferEventName.Message, (p: any) => {
-	if (p.taskId && !p.message.partial && p.message.type === "say")
-		console.log(`[${p.message.say}]`, (p.message.text ?? "").slice(0, 160))
-})
-
-const id = await api.createWorkflow(source, { task: "demonstrate convergence" })
-await new Promise<void>((resolve) =>
-	api.on(ShoferEventName.TaskCompleted, (tid: string, _t, _u, info: any) => {
-		if (tid === id && !info?.isSubtask) resolve()
-	}),
-)
-
-const item = api.getTaskHistoryItems().find((h) => h.id === id)
-console.log("terminal status:", (item?.flowState as any)?.status)
-console.log("\n--- markdown transcript ---\n", await api.getTaskMarkdownExport(id))
-await host.dispose()
-```
-
-### Notes
-
-- **Negative-path flows are expected failures.** `_budget-rounds` / `_budget-tokens` → `budget_exceeded`; `_deadlock` → `deadlock`. They pass when the status matches the expectation.
-- **Terminal status, not rating, is the assertion.** `TaskCompleted` fires with `rating: "well"` (converged) or `"poor"` (failure). The harness asserts `flowState.status` directly to distinguish `budget_exceeded` from `deadlock`.
-- **Human-in-the-loop flows** (`_await-human`, `_escalate-only`, `_escalate-if` with `limit > 5`, `_question-relay`) surface `followup` asks; the harness auto-answers via `client.respond(reply)`. Pass `limit ≤ 5` to `_escalate-if` to take the no-escalation branch.
-- **Mock provider.** The hermetic `PROVIDER=mock` path uses `~110` tokens per LLM turn. `_budget-tokens` uses `tokens(50)` to guarantee exhaustion after the first stake; adjust if the mock token accounting changes.
-- **Model dependence (real provider).** `_output-schema` needs a model that emits strict JSON. `_peer-messaging` and `_question-relay` need reliable multi-agent tool calls. A weak model may push these into `error`/`budget_exceeded`.
-
----
-
 ## L2 — code-server E2E harness
 
-Everything above (Parts 1–3) is **L1**: it drives Shofer core headlessly via the
+Everything above (Parts 1–2) is **L1**: it drives Shofer core headlessly via the
 CLI, with no code-server and no browser. **L2** is the layer above — a separate
 **Python/pytest** package that drives the real Shofer extension **inside a
 code-server instance** and checks both outcomes and the React webview. It is

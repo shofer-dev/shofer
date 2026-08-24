@@ -110,7 +110,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 
 			// Use Package.name (dynamic at build time) as the VSCode configuration namespace.
 			// Supports multiple extension variants (e.g., stable/nightly) without hardcoded strings.
-			// A workflow agent's `.slang` `context { require_todos: <bool> }` overrides the
+			// A task's `agentContext.require_todos` overrides the
 			// global setting for that agent (undefined ⇒ inherit the global default).
 			const requireTodos =
 				task.agentContext?.require_todos ??
@@ -133,7 +133,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			if (todos) {
 				try {
 					todoItems = parseMarkdownChecklist(todos)
-				// eslint-disable-next-line @typescript-eslint/no-unused-vars
+					// eslint-disable-next-line @typescript-eslint/no-unused-vars
 				} catch (error) {
 					task.consecutiveMistakeCount++
 					task.recordToolError("new_task")

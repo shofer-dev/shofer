@@ -158,13 +158,6 @@ export const historyItemSchema = z.object({
 	 * active intervals are added to the persisted baseline.
 	 */
 	activeTimeMs: z.number().optional(),
-	// Workflow support — set when this HistoryItem represents a WorkflowTask.
-	/** Whether this task is a WorkflowTask (has a slang-driven loop). */
-	isWorkflow: z.boolean().optional(),
-	/** The .slang source content for WorkflowTasks. */
-	slangSource: z.string().optional(),
-	/** Serialized FlowState JSON blob for WorkflowTask checkpoint/resume. */
-	flowState: z.record(z.unknown()).optional(),
 })
 
 export type HistoryItem = z.infer<typeof historyItemSchema>

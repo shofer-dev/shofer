@@ -261,7 +261,7 @@ see [`native_tools.md`](../docs/native_tools.md).)
   Real refactor; design the context object once.
 - **Combinatorial tests.** Parse + output-contract correctness per dialect.
   _Mitigation:_ table-driven tests over `(dialect × hot-tool)`.
-- **Mid-task model switch.** A workflow agent that switches `api_configuration`
+- **Mid-task model switch.** A task that switches `api_configuration` mid-run
   re-skins its tools → prompt-cache invalidation on switch (inherent to switching).
 - **Over-fitting.** Adapting to one model's quirks can regress when it updates.
   _Mitigation:_ telemetry gates; revisit periodically; the §4 table needs an owner.

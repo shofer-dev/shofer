@@ -11,13 +11,13 @@ export interface FollowUpData {
 	/** Array of suggested answers that the user can select */
 	suggest?: Array<SuggestionItem>
 	/**
-	 * Typed input fields for a structured form. Used by workflow flow-parameter
-	 * collection: instead of asking one free-text question per parameter, the
-	 * WorkflowTask sends a single followup carrying every parameter's name,
-	 * type and default. The webview renders a typed form (string→text,
-	 * number→number, boolean→checkbox) and submits all answers at once as a
-	 * JSON object via the normal messageResponse path. When present, the form
-	 * is rendered instead of the free-text suggestion chips.
+	 * Typed input fields for a structured form (`ask_followup_question`'s form
+	 * mode): instead of asking one free-text question per value, the agent sends
+	 * a single followup carrying every field's name, type and default. The
+	 * webview renders a typed form (string→text, number→number,
+	 * boolean→checkbox) and submits all answers at once as a JSON object via the
+	 * normal messageResponse path. When present, the form is rendered instead of
+	 * the free-text suggestion chips.
 	 */
 	paramForm?: Array<ParamField>
 	/**

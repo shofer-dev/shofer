@@ -378,15 +378,15 @@ CLI-specific behaviour on top of the API; everything else is reached directly
 through the `host.api` accessor (the activated `ShoferExtensionApi`), so the CLI never
 drifts behind the interface:
 
-| CLI Method             | Behaviour                                                                        |
-| ---------------------- | -------------------------------------------------------------------------------- |
-| `runTask(prompt, …)`   | `api.startNewTask(...)` then blocks on task completion                           |
-| `resumeTask(taskId)`   | `api.resumeTask(taskId)` then blocks on task completion                          |
-| `cancelTask()`         | `api.cancelCurrentTask()`                                                        |
-| `sendMessage(text, …)` | `api.sendMessage(text, images)`                                                  |
-| `approveAction()`      | `api.pressPrimaryButton()`                                                       |
-| `rejectAction()`       | `api.pressSecondaryButton()`                                                     |
-| `host.api.<method>()`  | Full `ShoferExtensionApi` surface (config, profiles, history, export, workflows) |
+| CLI Method             | Behaviour                                                             |
+| ---------------------- | --------------------------------------------------------------------- |
+| `runTask(prompt, …)`   | `api.startNewTask(...)` then blocks on task completion                |
+| `resumeTask(taskId)`   | `api.resumeTask(taskId)` then blocks on task completion               |
+| `cancelTask()`         | `api.cancelCurrentTask()`                                             |
+| `sendMessage(text, …)` | `api.sendMessage(text, images)`                                       |
+| `approveAction()`      | `api.pressPrimaryButton()`                                            |
+| `rejectAction()`       | `api.pressSecondaryButton()`                                          |
+| `host.api.<method>()`  | Full `ShoferExtensionApi` surface (config, profiles, history, export) |
 
 Events from `ShoferExtensionApi` (`taskStarted`, `taskCompleted`, `message`, `modeChanged`,
 etc.) are bridged into the CLI's `ExtensionClient` event system via `forwardShoferEvents()`.
@@ -542,36 +542,6 @@ const jsonTrace = await api.getTaskJsonExport("task-uuid-here")
 
 These return the same content that `exportTaskWithId` / `exportTaskWithIdJson`
 would write to disk, but inline for programmatic consumption.
-
-### Workflow Management
-
-The CLI can launch Slang workflows directly:
-
-```typescript
-// Discover available workflows
-const workflows = await api.discoverWorkflows()
-// Map { "implement-feature" => "flow implement-feature { ... }", ... }
-
-// Launch a workflow from a .slang source string
-const taskId = await api.createWorkflow(slangSource, { paramName: "value" })
-
-// The workflow runs its multi-agent slang loop asynchronously.
-// Monitor its progress via events:
-api.on("taskStarted", (taskId) => {
-	/* ... */
-})
-api.on("taskCompleted", (taskId, tokens, tools, info) => {
-	/* ... */
-})
-```
-
-Workflows are discovered from:
-
-- `<workspace>/.shofer/workflows/*.slang` (project-level)
-- `~/.shofer/workflows/*.slang` (global/user-level)
-
-Both `createWorkflow` and `discoverWorkflows` are available through the IPC
-protocol as well (via `TaskCommandName.CreateWorkflow` / `DiscoverWorkflows`).
 
 ## Known Gaps
 

@@ -45,7 +45,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 	/**
 	 * Set to true once `ensureRestored()` is called.  Gates
-	 * `assertRestored()` — early-bird code paths (WorkflowTask hot
+	 * `assertRestored()` — early-bird code paths (a hot-constructor
 	 * constructor, etc.) must not throw before the async history store
 	 * settles.
 	 */
@@ -766,7 +766,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 *
 	 * Already-registered tasks are never overwritten — a task that was
 	 * registerBackgroundTask'd before restoreManagedTasks settles (e.g. from
-	 * a WorkflowTask hot constructor path) keeps its live state and is not
+	 * a hot constructor path) keeps its live state and is not
 	 * clobbered by the on-disk snapshot.
 	 */
 	async restoreManagedTasks(historyItems: HistoryItem[]): Promise<void> {
@@ -806,7 +806,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 *
 	 * This is the early-bird counterpart to `restoreManagedTasks`: called
 	 * before the async `initializeTaskHistoryStore` settles so that early
-	 * `registerBackgroundTask` calls (e.g. from WorkflowTask spawning an
+	 * `registerBackgroundTask` calls (e.g. from a task spawning an
 	 * agent child in the hot constructor path) don't throw.
 	 *
 	 * Uses the `restored` flag (gated by `assertRestored()`) only — does

@@ -111,7 +111,7 @@ pnpm --filter @shofer/cli exec tsx src/index.ts \
 #### Level 4 — Built-in Defaults
 
 When none of the above are set, the prompt is matched against a built-in table
-of 19 scenarios (case-insensitive substring match, longest match first):
+of 18 scenarios (case-insensitive substring match, longest match first):
 
 | Prompt contains  | Response                      |
 | ---------------- | ----------------------------- |
@@ -130,7 +130,6 @@ of 19 scenarios (case-insensitive substring match, longest match first):
 | `BANANA`         | `BANANA`                      |
 | `SHELL_OK`       | `SHELL_OK`                    |
 | `WRITE_OK`       | `WRITE_OK`                    |
-| `WORKFLOW_OK`    | `WORKFLOW_OK`                 |
 | `42`             | `42`                          |
 | `Hello`          | `Hello! Mock assistant here.` |
 | `number`         | `42`                          |

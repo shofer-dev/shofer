@@ -80,7 +80,7 @@ async function generatePrompt(
 	const { roleDefinition, baseInstructions } = getModeSelection(mode, promptComponent, customModeConfigs)
 
 	// Effective capability groups: the mode's tools, optionally narrowed by a
-	// workflow agent's `.slang` `tools:` restriction (settings.agentToolGroups).
+	// task's declared tool-group restriction (settings.agentToolGroups).
 	// When the restriction is set, the CAPABILITIES section is gated to only
 	// what the agent can actually do; undefined ⇒ no gating.
 	const modeGroupNames = new Set((modeConfig.tools ?? []).map((g) => getGroupName(g)))
@@ -97,7 +97,7 @@ async function generatePrompt(
 	const shouldIncludeMcp = hasMcpGroup && hasMcpServers && mcpAllowedByRestriction
 
 	// Per-task context overrides: each defaults to true (enabled) unless
-	// explicitly suppressed via a workflow agent's `.slang` `context { ... }`.
+	// explicitly suppressed via the task's `agentContext`.
 	const includeSkills = settings?.includeSkills ?? true
 	const includeSystemInfo = settings?.includeSystemInfo ?? true
 	const includeMcp = settings?.includeMcp ?? true

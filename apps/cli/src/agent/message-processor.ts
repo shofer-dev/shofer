@@ -262,7 +262,7 @@ export class MessageProcessor {
 	 * The extension host ships these incremental deltas (paired with a skinny
 	 * `state` push that deliberately OMITS `shoferMessages`) instead of the full
 	 * message array — see `Task.addToShoferMessages`. Without handling this
-	 * variant, newly appended asks (e.g. a workflow root's `escalate @Human`
+	 * variant, newly appended asks (e.g. a task's own
 	 * followup) never reach `detectAgentState`, so `waitingForInput` is never
 	 * emitted and the client blocks forever.
 	 */

@@ -2,7 +2,7 @@
 
 # Welcome to Shofer
 
-Shofer is a new (June 2026) open-source AI coding agent for VS Code with unparalleled parallelism, usability and observability. Specify multi-agent workflows declaratively, and watch them execute as live diagrams — on top of all the standard features you expect from your AI-powered development environment.
+Shofer is a new (June 2026) open-source AI coding agent for VS Code with unparalleled parallelism, usability and observability. Run many agents at once and watch the whole task tree execute as live diagrams — on top of all the standard features you expect from your AI-powered development environment.
 
 ## What You'll Learn
 

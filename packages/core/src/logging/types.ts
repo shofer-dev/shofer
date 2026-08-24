@@ -40,7 +40,7 @@ export interface CompactLogEntry {
 }
 
 /**
- * A log line attributed to a specific task/workflow instance, accumulated in
+ * A log line attributed to a specific task instance, accumulated in
  * the transport's per-task ring buffer and surfaced to the webview "Logs" tab.
  * Structurally identical to (and assignable to) `TaskLogLine` in `@shofer/types`.
  */

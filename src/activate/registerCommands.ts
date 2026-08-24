@@ -83,7 +83,7 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 
 		TelemetryService.instance.captureTitleButtonClicked("plus")
 
-		// Open the in-webview New Task / New Workflow chooser. It renders as a
+		// Open the in-webview launcher (the mode cards). It renders as a
 		// popover anchored to the top of the Shofer webview, directly under this
 		// "+" title-bar button — so it can show per-item icons and a one-line
 		// description, which a native view/title submenu / QuickPick cannot do

@@ -173,7 +173,7 @@ if (effectiveLimit > 0) {
 
 The error is a **tool error** (not an ask), so the LLM loop continues without blocking on user input — the model can decide to retry later or use alternative approaches.
 
-**Why gate in `NewTaskTool` rather than `ShoferProvider.createTask()`?** `createTask()` is also called for history rehydration (`createTaskWithHistoryItem()`) and workflow launches — those paths should not be subject to the concurrency limit. The `new_task` tool is the correct single choke point.
+**Why gate in `NewTaskTool` rather than `ShoferProvider.createTask()`?** `createTask()` is also called for history rehydration (`createTaskWithHistoryItem()`) — that path should not be subject to the concurrency limit. The `new_task` tool is the correct single choke point.
 
 ### `TaskManager.countActiveTasks()`
 
@@ -206,7 +206,7 @@ This is a thin public wrapper around the existing private `TaskManager.isActive(
 | Decision                                                             | Rationale                                                                                                      |
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Count uses `isActive()` (`running` \| `waiting`), not just `running` | `waiting` tasks hold an LLM context window and count against practical concurrency                             |
-| Gate in `NewTaskTool`, not `ShoferProvider.createTask()`             | `createTask()` is called for history rehydration and workflow launches — those should not be gated             |
+| Gate in `NewTaskTool`, not `ShoferProvider.createTask()`             | `createTask()` is called for history rehydration — that path should not be gated                               |
 | Default value is `10`, not unlimited                                 | A reasonable default prevents runaway concurrency for new users while being generous enough for most workflows |
 | Value `0` means unlimited                                            | Consistent with `archivedTaskRetentionDays` (`0 = disabled`) conventions                                       |
 | Error is a tool error, not an ask                                    | Keeps the agent loop moving; the LLM can retry or use alternative approaches                                   |

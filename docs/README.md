@@ -18,7 +18,6 @@ own directory — `DESIGN.md` (design and reasoning, including the core-side sea
 feature is built on), plus `README.md`/`TODO.md` where they exist:
 
 - [`plugins/builtin-config/docs/modes.md`](../plugins/builtin-config/docs/modes.md)
-- [`plugins/builtin-config/docs/workflows.md`](../plugins/builtin-config/docs/workflows.md)
 - [`plugins/basics/docs/checkpoints.md`](../plugins/basics/docs/checkpoints.md)
 - [`plugins/basics/docs/file-changes.md`](../plugins/basics/docs/file-changes.md)
 - [`plugins/live-memory/DESIGN.md`](../plugins/live-memory/DESIGN.md)

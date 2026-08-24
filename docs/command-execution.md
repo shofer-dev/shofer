@@ -234,7 +234,7 @@ This flows through:
 
 ### 5.2 Reject Button on `command_output` Ask (UI)
 
-**Source:** [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx:1303-1305) and [`WorkflowView.tsx`](../webview-ui/src/components/chat/WorkflowView.tsx:1278-1280)
+**Source:** [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)
 
 When the LLM is in a `command_output` ask (the "Kill Command" secondary button), clicking it posts `{ type: "terminalOperation", terminalOperation: "abort" }`, routing through the same path as §5.1.
 

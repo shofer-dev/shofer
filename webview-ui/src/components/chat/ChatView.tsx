@@ -540,8 +540,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	const playSound = useCallback(
 		(audioType: AudioType) => {
-			// When this view is hidden (e.g. a WorkflowTask is focused and
-			// WorkflowView is visible instead), defer audio to the visible view so
+			// When this view is hidden, defer audio to the visible view so
 			// the permanently-mounted hidden instance does not double-play sounds.
 			if (isHidden || !soundEnabled) {
 				return
@@ -2072,8 +2071,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		[handleSendMessage, setInputValue, switchToMode, alwaysAllowModeSwitch, shoferAsk, markFollowUpAsAnswered],
 	)
 
-	// Submit a typed input form (ask_followup_question form mode, or workflow
-	// flow-params). Sent as an `objectResponse`, NOT a `messageResponse`: this
+	// Submit a typed input form (ask_followup_question form mode). Sent as an
+	// `objectResponse`, NOT a `messageResponse`: this
 	// resolves the pending followup ask with the JSON answer WITHOUT echoing a raw
 	// user_feedback message into the chat. The host writes the values back onto the
 	// question message (answeredValues) so the form renders read-only afterwards.

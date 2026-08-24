@@ -629,8 +629,8 @@ workspace's read-only global `.shofer/`
 ([`docs/configuration.md`](../../docs/configuration.md) for the three scopes and the
 merge). For that to reach this plugin, **the parameter has to be a key a bundle can
 express** — the bundle's `config` tree has a closed key set (`settings`, `modes`,
-`mcp`, `commands`, `rules`, `skills`, `workflows`, `plugins`) mapped to fixed
-`.shofer/` paths, and `Materialize` silently drops anything else.
+`mcp`, `commands`, `rules`, `skills`, `providers`, `plugins`, `locked`) mapped to
+fixed `.shofer/` paths, and materializing silently drops anything else.
 
 So the Second Brain keeps **all** of its configuration in the plugin's own config —
 tunables and the detector catalogue alike:

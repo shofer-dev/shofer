@@ -3,8 +3,7 @@ import type { ShoferMessage, ApiRequestFinishedPayload } from "@shofer/types"
 /**
  * Shared active-time breakdown logic for the Stats views.
  *
- * `TaskStatsView` renders a single task's donut; `WorkflowStatsView` aggregates
- * the same breakdown across an entire task tree. Both compute per-category
+ * `TaskStatsView` renders a single task's donut. It computes per-category
  * non-overlapping totals by painting each request's spans onto a single
  * monotonic offset timeline and reading off the highest-priority covering
  * segment — see `breakdownFromPayloads`. Aggregation across tasks is a plain

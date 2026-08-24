@@ -1,7 +1,7 @@
 {
 	"landing": {
 		"greeting": "Welcome to Shofer!",
-		"introduction": "With built-in and extensible Modes, Shofer lets you plan, architect, code and debug — run multi-agent workflows, track everything with beautiful analytics, and keep each task isolated. Boost your productivity like never before.",
+		"introduction": "With built-in and extensible Modes, Shofer lets you plan, architect, code and debug — run many agents in parallel, track everything with beautiful analytics, and keep each task isolated. Boost your productivity like never before.",
 		"getStarted": "Bring your own key",
 		"walkthrough": "Take the guided walkthrough",
 		"stepsHeading": "Three steps to get going",

@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "Shoferdev",
-	"version": "2.66.0",
+	"version": "2.67.0",
 	"icon": "assets/icons/icon128x128.png",
 	"galleryBanner": {
 		"color": "#1e293b",
@@ -57,17 +57,6 @@
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
-		"customEditors": [
-			{
-				"viewType": "shofer.slangEditor",
-				"displayName": "Slang Visualization",
-				"selector": [
-					{
-						"filenamePattern": "*.slang"
-					}
-				]
-			}
-		],
 		"viewsContainers": {
 			"activitybar": [
 				{
@@ -580,7 +569,7 @@
 					{
 						"id": "claudeCodeUsers",
 						"title": "Migrating from Claude Code",
-						"description": "Coming from Claude Code? Keep the agentic power, but bring any model (incl. local/offline), a visual cockpit, deterministic Slang Workflows, code+git RAG, native worktrees, and hard cost caps.\n\n[Read the Claude Code Migration Guide](command:shofer.walkthrough.openClaudeCodeGuide)",
+						"description": "Coming from Claude Code? Keep the agentic power, but bring any model (incl. local/offline), a visual cockpit, code+git RAG, native worktrees, and hard cost caps.\n\n[Read the Claude Code Migration Guide](command:shofer.walkthrough.openClaudeCodeGuide)",
 						"media": {
 							"markdown": "media/walkthrough/claude-code-users.md"
 						},
@@ -591,7 +580,7 @@
 					{
 						"id": "opencodeUsers",
 						"title": "Migrating from OpenCode",
-						"description": "Coming from OpenCode? Same open-source, model-agnostic philosophy — plus a graphical VS Code cockpit, parallel orchestration, code+git RAG, native worktrees, and a deterministic Workflow engine. Your AGENTS.md rules carry over.\n\n[Read the OpenCode Migration Guide](command:shofer.walkthrough.openOpencodeGuide)",
+						"description": "Coming from OpenCode? Same open-source, model-agnostic philosophy — plus a graphical VS Code cockpit, parallel orchestration, code+git RAG, and native worktrees. Your AGENTS.md rules carry over.\n\n[Read the OpenCode Migration Guide](command:shofer.walkthrough.openOpencodeGuide)",
 						"media": {
 							"markdown": "media/walkthrough/opencode-users.md"
 						},
@@ -691,7 +680,6 @@
 		"cheerio": "^1.0.0",
 		"chokidar": "^4.0.1",
 		"clone-deep": "^4.0.1",
-		"dagre": "0.8.5",
 		"default-shell": "^2.2.0",
 		"delay": "^6.0.0",
 		"diff": "^5.2.2",

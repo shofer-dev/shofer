@@ -70,8 +70,8 @@ dropped. A gate is read in three layers, first answer wins, and the last layer i
 always "include it" — so a caller that sets nothing assembles the prompt
 byte-for-byte as it was before the gates existed:
 
-1. the task's `agentContext` (a workflow agent's `.slang` `context { … }` block),
-   keyed in snake_case — `include_markdown_formatting`, `include_tool_use`,
+1. the task's `agentContext` — a per-task override carried on
+   [`CreateTaskOptions`](../packages/types/src/task.ts), keyed in snake_case — `include_markdown_formatting`, `include_tool_use`,
    `include_capabilities`, `include_modes`, `include_rules`, `include_objective`,
    plus the older `include_skills`, `include_system_info`, `include_mcp`,
    `include_mode_rules`, `include_user_rules`, `include_agents_md`,

@@ -411,7 +411,7 @@ describe("NativeToolCallParser", () => {
 						`<<<<<<< SEARCH\n:start_line:1532\n\told code\n` +
 						`=======\n\tnew code\n` +
 						`>>>>>>> REPLACE\n` +
-						`<parameter name="path" string="true">extensions/shofer/src/core/workflow/WorkflowTask.ts`
+						`<parameter name="path" string="true">extensions/shofer/src/core/webview/ShoferProvider.ts`
 
 					const result = NativeToolCallParser.parseToolCall({
 						id: "toolu_xml_leak",

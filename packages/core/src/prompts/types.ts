@@ -2,7 +2,7 @@
  * Settings passed to system prompt generation functions.
  *
  * All `include*` / `require*` fields default to `true` (enabled) unless overridden
- * by a per-task `agentContext` from a workflow agent's `.slang` `context { ... }` block.
+ * by a per-task `agentContext`.
  */
 export interface SystemPromptSettings {
 	todoListEnabled: boolean
@@ -22,7 +22,7 @@ export interface SystemPromptSettings {
 	/** When true, model should hide vendor/company identity in responses */
 	isStealthModel?: boolean
 	/**
-	 * Per-task tool-group allow-list (workflow agents' `.slang` `tools:`). When
+	 * Per-task tool-group allow-list. When
 	 * set, the CAPABILITIES section is gated to only the capabilities the agent
 	 * actually has (mode groups ∩ these), so a restricted agent isn't told it can
 	 * read/write/execute when those tools aren't in its catalog. Undefined ⇒ no
@@ -30,7 +30,7 @@ export interface SystemPromptSettings {
 	 */
 	agentToolGroups?: string[]
 	/**
-	 * Per-agent context overrides from `.slang` `context { ... }` block.
+	 * Per-agent context overrides.
 	 * Each boolean gates a system-prompt component for this task. Absent/default
 	 * ⇒ inherit the global setting.
 	 */

@@ -185,19 +185,6 @@ interface JsonExportToolCall {
 }
 ```
 
-### Workflow Export
-
-A **WorkflowTask** runs the slang loop (`slangLoop()`) and makes **no direct LLM calls**, so its `apiConversationHistory` is empty and `calls` is `[]` (token/cost totals are `0`). The orchestration is captured instead, so the export is not empty:
-
-| Field         | Source                                         | Contents                                                                                                                                                                                          |
-| ------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `isWorkflow`  | `HistoryItem.isWorkflow`                       | `true` for workflow exports.                                                                                                                                                                      |
-| `flowState`   | `HistoryItem.flowState` (`serializeFlowState`) | The slang **state machine + the data passing through it**: `flowName`, `params`, per-agent `status`/`bindings`/`output`, `round`, `status`, and the inter-agent `mailbox` + **`mailboxHistory`**. |
-| `slangSource` | `HistoryItem.slangSource`                      | The `.slang` flow definition.                                                                                                                                                                     |
-| `events`      | `ui_messages.jsonl`                            | Chronological UI state-transition / status log (`say` / `ask` with `ts` + `text`). **Excludes `peer_message`** — peer-to-peer agent messages don't flow through the workflow state machine.       |
-
-**Reproducing the diagrams:** `flowState.mailboxHistory` is the ordered `from → to` message log (each `MailboxEntry` has `from`, `to`, `value`, `timestamp`, and `funcName`/`tokensUsed`/`costUsd`/`durationMs`/`mode`). Together with `slangSource`, this is exactly the input to `buildWorkflowVizHtml(slangSource, flowState, …)`, so the **sequence / swimlane / topology diagrams can be reconstructed post-mortem** from the export alone. (The agents the workflow spawns are separate tasks with their own per-call exports; the workflow export covers only the orchestration.)
-
 ### Token Estimation
 
 When the LLM provider does not emit `usage` chunks in streaming mode (e.g., some OpenAI-compatible providers), token counts are estimated using a character/4 heuristic and the call is marked with `"_tokensEstimated": true`. When usage data is available from the provider, real values are used without this flag.
@@ -247,7 +234,7 @@ The JSON exporter resolves the default save filename before calling `downloadJso
 
 ### Serialization (off the main thread)
 
-A **workflow** JSON export is the entire descendant task tree — the workflow node plus every per-agent sub-task, each contributing its full `apiConversationHistory`. That trace can reach many megabytes, so two steps that were once inline on the extension-host thread are now handled carefully:
+A JSON export is the entire descendant task tree — the exported task plus every sub-task, each contributing its full `apiConversationHistory`. That trace can reach many megabytes, so two steps that were once inline on the extension-host thread are now handled carefully:
 
 1. **Serialize + write run in a worker thread.** `downloadJsonTask()` calls [`stringifyJsonToFile()`](../src/utils/exportJsonWorker.ts), which hands the trace to a `workerpool` worker ([`workers/exportJson.ts`](../src/workers/exportJson.ts)) that does the `JSON.stringify(…, null, 2)` **and** the file write, returning only a byte count. This keeps the heavy serialization and the big-string round-trip off the event loop so the webview stays responsive (mirrors how [`countTokens`](../src/utils/countTokens.ts) offloads tokenization). If the worker can't be spawned or errors, it falls back to an in-process write. The write runs inside a `withProgress("Writing JSON export…")` notification — indeterminate (`JSON.stringify` is atomic), but it actually animates now that the main thread is free.
 2. **Large exports are not auto-opened.** Opening a multi-MB JSON document makes VS Code tokenize/fold it on the **UI thread**, which is itself a freeze. Files at or below `LARGE_EXPORT_BYTES` (5 MB) still auto-open in a preview tab; above it, an information message offers **Open** / **Reveal in File Explorer** instead.

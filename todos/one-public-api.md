@@ -44,10 +44,10 @@ onto the wire by accident.
 
 ## The two halves of today's `ShoferExtensionApi`
 
-| Half                    | Members                                                                                                                                         | Fate                                                        |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| **Control**             | `startNewTask`, `sendMessage`, `cancelCurrentTask`, `pressPrimaryButton`/`pressSecondaryButton`, `respondToAsk`, `pluginRequest`, task events   | Becomes the inherited `ShoferApi` surface (below)           |
-| **Host administration** | provider-profile CRUD, config import/export, task-history mutation (rename/archive/pin/delete/show), inline exports, `getOutputLogs`, workflows | Stays — this is what `ShoferExtensionApi` _adds_, host-only |
+| Half                    | Members                                                                                                                                       | Fate                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **Control**             | `startNewTask`, `sendMessage`, `cancelCurrentTask`, `pressPrimaryButton`/`pressSecondaryButton`, `respondToAsk`, `pluginRequest`, task events | Becomes the inherited `ShoferApi` surface (below)           |
+| **Host administration** | provider-profile CRUD, config import/export, task-history mutation (rename/archive/pin/delete/show), inline exports, `getOutputLogs`          | Stays — this is what `ShoferExtensionApi` _adds_, host-only |
 
 The administration half deliberately gets no wire counterpart: a host's
 configuration is provisioned, never pushed over the wire.
@@ -120,8 +120,8 @@ programmatically", in the order the contract nests:
 2. **Transport bindings** — the HTTP/SSE routes, auth + version handshake,
    `shofer serve` flags.
 3. **`ShoferExtensionApi`** — the host-only additions (profiles, config
-   import/export, history management, exports, logs, workflows) and how a
-   companion extension or the CLI acquires it.
+   import/export, history management, exports, logs) and how a companion
+   extension or the CLI acquires it.
 4. **ACP** — the adapter onto the external Agent Client Protocol: the method
    map, the event/permission mapping, and what it cannot express.
 

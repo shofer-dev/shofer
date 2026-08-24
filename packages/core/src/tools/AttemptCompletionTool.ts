@@ -94,11 +94,11 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		const { result, rating, feedback } = params
 		const { handleError, pushToolResult } = callbacks
 
-		// When the task has a `completionSchema` (set by workflow output contracts),
+		// When the task has a `completionSchema` (set by the caller's output contract),
 		// the LLM returns `result` as a structured object rather than a free-form
 		// string.  Normalise to a string for display + persistence so the rest of
 		// the pipeline — `say("completion_result", …)`, `completionResultSummary`,
-		// and the post-hoc validator in `collectStakeResults()` — sees a stable
+		// and the caller's own check on the returned result — sees a stable
 		// string representation.
 		const effectiveResult: string =
 			typeof result === "object" && result !== null

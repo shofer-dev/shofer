@@ -509,7 +509,7 @@ export function useScrollLifecycle({
 	//
 	// Previously the button only appeared after the phase had transitioned to
 	// USER_BROWSING_HISTORY, which required an explicit scroll-up gesture
-	// first.  Now the caller (ChatView / WorkflowView) can layer a blink
+	// first.  Now the caller (ChatView) can layer a blink
 	// animation on the button when a pending approval also exists, prompting
 	// the user to scroll down before they can see and act on the buttons.
 

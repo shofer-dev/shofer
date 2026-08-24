@@ -31,62 +31,13 @@ import type { ModelRecord, RouterModels } from "./model.js"
 import type { OpenAiCodexRateLimitInfo } from "./providers/openai-codex-rate-limits.js"
 import type { SkillMetadata } from "./skills.js"
 
-/** Workflow metadata for the launcher UI — mirrors FlowDecl + FlowParam fields from the Slang AST. */
-export interface LauncherWorkflow {
-	/** Machine identifier — used for `createWorkflow` IPC. */
-	name: string
-	/** Human-readable title for the card. Falls back to `name` if unset. */
-	title: string
-	/** Markdown description. Rendered as secondary text in the card. */
-	description?: string
-	/** Icon key (e.g. "rocket", "gear", "search", "code"). Mapped to lucide icon in the webview. */
-	icon?: string
-	/** Agent names extracted from `AgentDecl` nodes in the flow body. */
-	agents: string[]
-	/** Input parameters with optional descriptions. */
-	params: Array<{ name: string; type: string; description?: string }>
-}
-
 /**
- * Pushed once alongside workflowVizHtml. Contains the flow header metadata
- * that was previously rendered inside the srcdoc iframe. Now rendered natively
- * in TaskHeader (integrated with existing token/cost/context info) so the
- * iframe only needs to hold the diagram + zoom controls.
- */
-export interface WorkflowVizMeta {
-	/**
-	 * Id of the WorkflowTask this metadata (and its companion `workflowVizHtml`)
-	 * belongs to. These viz fields are pushed through *global* ExtensionState keys
-	 * that any live workflow writes to, so the webview uses this to scope them to
-	 * the task it is actually displaying — preventing a background workflow's
-	 * diagram from bleeding into another task's view.
-	 */
-	taskId?: string
-	/** Icon key (e.g. "rocket", "gear"). TaskHeader maps to a lucide icon. */
-	icon?: string
-	/** Display title (flow.title || flow.name). */
-	displayTitle: string
-	/** Machine name of the flow (shown only when title ≠ name). */
-	flowName?: string
-	/** Markdown description of the flow. */
-	description?: string
-	/** Input parameters with optional descriptions. */
-	params?: Array<{ name: string; type: string; description?: string }>
-	/** Convergence condition expression (from ConvergeStmt). */
-	convergeCondition?: string
-	/** Budget items (from BudgetStmt). */
-	budgets?: Array<{ kind: string; value: string }>
-	/** Number of agents in this flow. */
-	agentCount: number
-}
-
-/**
- * A single log line attributed to a specific Task / Workflow instance.
+ * A single log line attributed to a specific Task instance.
  *
  * Produced by the logging transport: every entry emitted while a task's run
  * loop is on the async call stack is stamped with that task's id (via the
  * AsyncLocalStorage log context) and accumulated in a per-task ring buffer.
- * Rendered by the "Logs" tab in ChatView / WorkflowView.
+ * Rendered by the "Logs" tab in ChatView.
  */
 export interface TaskLogLine {
 	/** Absolute timestamp in ms (Date.now() when the line was written). */
@@ -118,11 +69,9 @@ export interface ExtensionMessage {
 		| "messageUpdated"
 		| "shoferMessageAppended"
 		| "shoferMessagesPrepended"
-		// Per-task/workflow logs for the "Logs" tab: snapshot response + live append.
+		// Per-task logs for the "Logs" tab: snapshot response + live append.
 		| "taskLogs"
 		| "taskLogAppended"
-		// Aggregated active-time stats for the workflow "Stats" tab.
-		| "workflowStats"
 		| "blobContent"
 		| "mcpServers"
 		| "enhancedPrompt"
@@ -174,8 +123,6 @@ export interface ExtensionMessage {
 		| "parallelTasksUpdated"
 		| "taskNotification"
 		| "taskNotificationCleared"
-		// Workflow response types
-		| "workflowsList"
 		| "folderSelected"
 		| "skills"
 		| "loadedSkills"
@@ -244,16 +191,8 @@ export interface ExtensionMessage {
 	taskLogs?: TaskLogLine[]
 	/** taskLogAppended: newly-emitted log lines for the watched task (coalesced batch). */
 	taskLogLines?: TaskLogLine[]
-	/** taskLogs / taskLogAppended: the task/workflow id these logs belong to. */
+	/** taskLogs / taskLogAppended: the task id these logs belong to. */
 	taskLogTaskId?: string
-	/** workflowStats: the root task id this aggregation is for (correlation). */
-	workflowStatsRootId?: string
-	/**
-	 * workflowStats: per-task `api_req_finished` payloads (the message `.text`
-	 * JSON strings), keyed by task id. The webview breaks each task down on its
-	 * own timeline, then sums — see `taskStats.ts`.
-	 */
-	workflowStatsRequests?: Record<string, string[]>
 	/** §4.3 blob fetch response: sha256 ↔ content (or undefined if missing). */
 	blob?: { sha256: string; bytes: number; content?: string; error?: string }
 	routerModels?: RouterModels
@@ -319,8 +258,6 @@ export interface ExtensionMessage {
 		tokensOut: number
 	}
 	taskInteractions?: TaskInteractionPayload[] // For taskInteractions response (Sequence view)
-	// Workflow response properties
-	workflows?: Array<LauncherWorkflow>
 	// Parallel task response properties
 	parallelTasks?: Array<{
 		id: string
@@ -483,14 +420,6 @@ export type ExtensionState = Pick<
 
 	renderContext: "sidebar" | "editor"
 
-	// Workflow management
-	workflows?: Array<LauncherWorkflow>
-	/** Self-contained HTML page for the workflow visualization iframe (diagram only, pushed once). */
-	workflowVizHtml?: string
-	/** Serialized FlowState pushed on each round/step for in-place viz overlays. */
-	workflowVizRunState?: Record<string, unknown>
-	/** Flow metadata rendered natively in TaskHeader (deduped from iframe header). */
-	workflowVizMeta?: WorkflowVizMeta
 	// Parallel task management
 	parallelTasks?: Array<{
 		id: string
@@ -765,20 +694,12 @@ export interface WebviewMessage {
 		| "approveBackgroundTask"
 		| "requestParallelTasks"
 		| "updateCostLimit"
-		// Workflow messages
-		| "listWorkflows"
-		| "createWorkflow"
-		// Resume a stopped (aborted) WorkflowTask: re-enter the slang loop and
-		// continue every agent that still exists.
-		| "resumeWorkflow"
 		// Launcher: start a fresh task in the chosen mode (replaces the old plus → new chat)
 		| "launchTask"
 		// Diagnostic logging from webview → extension OutputChannel
 		| "webviewLog"
-		// Logs tab: request the current snapshot of a task/workflow's logs (uses `taskId`)
+		// Logs tab: request the current snapshot of a task's logs (uses `taskId`)
 		| "requestTaskLogs"
-		// Stats tab: request aggregated active-time data for a set of tasks (a tree)
-		| "requestWorkflowStats"
 		// Metrics push from webview → extension host registry (Phase 4)
 		| "pushMetrics"
 		// Plugins (Settings → Plugins tab) — list + enable/disable
@@ -791,8 +712,6 @@ export interface WebviewMessage {
 	plugin?: PluginRequest
 	/** For `pluginUiMessage`: a scoped plugin-UI channel message (the plugin's UI → extension). */
 	pluginUiMessage?: PluginUiMessageEnvelope
-	/** requestWorkflowStats: the subtree task ids to aggregate stats over. */
-	workflowStatsTaskIds?: string[]
 	/** §4.3: sha256 of a blob to fetch on `getBlobContent`. */
 	sha256?: string
 	editedMessageContent?: string
@@ -903,9 +822,6 @@ export interface WebviewMessage {
 	taskConfiguration?: ShoferSettings
 	// Parallel task properties
 	taskName?: string
-	// Workflow properties — launching a discovered .slang flow as a WorkflowTask.
-	flowName?: string
-	flowParams?: Record<string, string>
 }
 
 export interface RequestOpenAiCodexRateLimitsMessage {

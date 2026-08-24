@@ -4,11 +4,10 @@ This document describes how scrolling works in the task message panel (the list 
 
 ## Components Involved
 
-| File                                                                                                    | Role                                                                   |
-| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| [`webview-ui/src/hooks/useScrollLifecycle.ts`](../webview-ui/src/hooks/useScrollLifecycle.ts)           | All scroll state and logic                                             |
-| [`webview-ui/src/components/chat/ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)         | Renders the Virtuoso list for regular Tasks; wires up the hook         |
-| [`webview-ui/src/components/chat/WorkflowView.tsx`](../webview-ui/src/components/chat/WorkflowView.tsx) | Renders the Virtuoso list for WorkflowTasks; identical scroll behavior |
+| File                                                                                            | Role                                         |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| [`webview-ui/src/hooks/useScrollLifecycle.ts`](../webview-ui/src/hooks/useScrollLifecycle.ts)   | All scroll state and logic                   |
+| [`webview-ui/src/components/chat/ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx) | Renders the Virtuoso list; wires up the hook |
 
 ## Virtualization
 
@@ -170,12 +169,11 @@ Files changed:
 
 **Problem:** [`atBottomThreshold={1}` caused Virtuoso to report not-at-bottom the instant content exceeded scroll position by more than 1 px, triggering the safety-net re-scroll almost continuously during streaming.
 
-**Applied:** Raised to [`atBottomThreshold={16}`](../webview-ui/src/components/chat/ChatView.tsx:2254) in ChatView and to [`atBottomThreshold={16}`](../webview-ui/src/components/chat/WorkflowView.tsx:2145) in WorkflowView. With 16 px of slack, Virtuoso no longer fires `atBottomStateChange(false)` on every frame of streaming growth, eliminating the scroll storm that compounded Cause A.
+**Applied:** Raised to [`atBottomThreshold={16}`](../webview-ui/src/components/chat/ChatView.tsx) in ChatView. With 16 px of slack, Virtuoso no longer fires `atBottomStateChange(false)` on every frame of streaming growth, eliminating the scroll storm that compounded Cause A.
 
 Files changed:
 
-- [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx) — line 2254.
-- [`WorkflowView.tsx`](../webview-ui/src/components/chat/WorkflowView.tsx) — line 2145.
+- [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)
 
 ### Fix 5 — Gated scroll logging behind `SCROLL_DEBUG` (Cause F)
 

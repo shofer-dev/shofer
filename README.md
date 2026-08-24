@@ -8,7 +8,7 @@
 
 <p align="center">
   <strong>Shofer is the open-source AI coding agent for VS Code with unparalleled parallelism, usability and observability.</strong><br>
-  Specify multi-agent workflows declaratively, and watch them execute as live diagrams — on top of all the standard features you expect from your AI-powered development environment.
+  Run many agents at once, watch the whole task tree execute as live diagrams, and keep every command inside a kernel-level sandbox — on top of all the standard features you expect from your AI-powered development environment.
 </p>
 
 <p align="center">
@@ -27,15 +27,15 @@
 </p>
 
 <p align="center">
-  Deterministic multi-agent workflows · live agent visualization · kernel-level sandboxing · code + git-history search — plus 50+ tools, custom modes, parallel tasks, and BYO model. Open source under <a href="https://github.com/shofer-dev/shofer/blob/master/LICENSE">Apache 2.0</a>.
+  Parallel multi-agent tasks · live agent visualization · kernel-level sandboxing · code + git-history search — plus 50+ tools, custom modes, git worktrees, hard cost caps, and BYO model. Open source under <a href="https://github.com/shofer-dev/shofer/blob/master/LICENSE">Apache 2.0</a>.
 </p>
 
 ## What Sets Shofer Apart
 
 Parallel tasks, custom modes, MCP, and bring-your-own-model are strong — and, honestly, table stakes for a modern agent. What's harder to find anywhere else:
 
-- **Deterministic multi-agent workflows** — specify a pipeline declaratively in a [`.slang`](docs/slang_specs.md) file (agents, message routing, control flow, `converge`, budgets). A non-LLM executor drives it, so runs are repeatable and inspectable — not ad-hoc runtime delegation.
-- **Live agent visualization** — watch the agent tree execute: [topology, sequence, and swimlane diagrams](docs/workflow_visualization.md), an active-time/cost **Stats** breakdown across the whole tree, and a filterable **Logs** tab — all in-editor.
+- **Real parallel agents, in a tree you can steer** — background subtasks fan out without blocking the parent, and peer tasks message each other directly under a least-privilege grant. Every task keeps its own mode, provider and context.
+- **Live agent visualization** — watch the task tree execute: a [hierarchy view, an inter-task sequence diagram, an active-time/cost **Stats** breakdown, and a filterable **Logs** tab](docs/task_visualization.md) — all in-editor.
 - **Kernel-level command sandboxing** — shell commands run in an OS-level write-only sandbox ([Landlock/bwrap](docs/worktree-shell-sandboxing.md)) scoped to the active worktree — a deterministic guarantee, not a model-based heuristic (Linux).
 - **Semantic search over code _and_ git history** — `git_search` finds _why_ and _when_ a change was made, not just where.
 - **Hard cost caps** — per-task / per-session USD limits that halt runaway loops, across any provider.
@@ -81,27 +81,12 @@ Create your own modes (and override the built-ins) via [`.shofer/shofermodes`](U
 
 Learn more: [User Manual](USER_MANUAL.md) • [Custom Modes](USER_MANUAL.md#4-custom-modes)
 
-## Workflows
-
-Shofer ships with **two built-in multi-agent workflows** — formal, deterministic coordination of multiple AI agents specified in `.slang` files:
-
-| Workflow                   | Description                                                                                     |
-| -------------------------- | ----------------------------------------------------------------------------------------------- |
-| 🪲 **Collaborative Debug** | Two developers triage independently, converge on root cause, one fixes while the other reviews  |
-| 🔧 **Implement a Feature** | Architect designs → you approve → Developer implements → Reviewer inspects — iterate until done |
-
-<img src="media/debug.png" alt="Debug Workflow" width="440" />
-<img src="media/implement feature.png" alt="Implement a Feature Workflow" width="440" />
-
-Launch a workflow via **New… → New Workflow** in the chat toolbar. Create your own custom workflows as `.slang` files under `.shofer/workflows/` (project) or `~/.shofer/workflows/` (global).
-
-Learn more: [User Manual → Workflows](USER_MANUAL.md#9-workflows) • [Built-in Workflows SoT](plugins/builtin-config/docs/workflows.md) • [Slang Language Spec](docs/slang_specs.md)
-
 ## Parallel Tasks & Worktrees
 
 Shofer supports **true parallel tasks** organized in a tree hierarchy. Start multiple conversations simultaneously — each runs independently with its own mode, provider, and context.
 
-- **Background subtasks** — fan out work without blocking the parent. The Orchestrator mode delegates to specialized sub-tasks automatically.
+- **Background subtasks** — fan out work without blocking the parent. An agent spawns children with `new_task`, checks on them, answers their questions, and waits for their results.
+- **Peer messaging** — sibling tasks talk to each other directly under an explicit, least-privilege grant, instead of routing everything through the parent.
 - **Message queuing** — type ahead while the AI is working. Click **Send Now** to redirect it immediately.
 - **Task states** — colored dots show each task's status: idle, running, waiting for input, waiting on subtask, completed, or errored.
 
@@ -184,9 +169,9 @@ Key recommendations: start with auto-approval toggles **OFF** and enable increme
 
 **Coming from GitHub Copilot?** Shofer gives you full model choice, local-first privacy, 50+ native tools, and parallel task execution. Run `/migrate-from-copilot` to migrate your configuration. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_copilot_users.md)
 
-**Coming from Claude Code?** Keep the agentic power, but bring any model (including local/offline), a graphical cockpit, deterministic Slang Workflows, semantic code & git-log search, native worktrees, and hard cost caps. Run `/migrate-from-claude` to migrate your configuration. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_claude_code_users.md)
+**Coming from Claude Code?** Keep the agentic power, but bring any model (including local/offline), a graphical cockpit, parallel background subtasks, semantic code & git-log search, native worktrees, and hard cost caps. Run `/migrate-from-claude` to migrate your configuration. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_claude_code_users.md)
 
-**Coming from OpenCode?** Same open-source, model-agnostic philosophy — plus a graphical VS Code cockpit, parallel orchestration, semantic code & git-log search, native worktrees, and a deterministic multi-agent Workflow engine. Your `AGENTS.md` rules carry over directly. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_opencode_users.md)
+**Coming from OpenCode?** Same open-source, model-agnostic philosophy — plus a graphical VS Code cockpit, parallel orchestration, semantic code & git-log search, native worktrees, and hard per-task cost caps. Your `AGENTS.md` rules carry over directly. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_opencode_users.md)
 
 ## Community
 

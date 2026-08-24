@@ -227,15 +227,6 @@ async function main() {
 					fs.mkdirSync(sandboxDestDir, { recursive: true })
 					fs.copyFileSync(sandboxBin, sandboxDest)
 					fs.chmodSync(sandboxDest, 0o755)
-					copyPaths(
-						[
-							["core/webview/slang-render.js", "slang-render.js"],
-							["core/webview/slang-render.css", "slang-render.css"],
-							["node_modules/dagre/dist/dagre.min.js", "dagre.min.js"],
-						],
-						srcDir,
-						distDir,
-					)
 					// Ship the esbuild-wasm CLI so the runtime loader can transpile
 					// TypeScript at `<extensionPath>/dist/bin/esbuild` (the production
 					// path in custom-tools/esbuild-runner.ts getEsbuildScriptPath). This

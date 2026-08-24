@@ -60,7 +60,7 @@ interface BuildToolsOptions {
 	 */
 	titleLocked?: boolean
 	/**
-	 * Per-task tool-group allow-list (workflow agents' `.slang` `tools:`).
+	 * Per-task tool-group allow-list.
 	 * Threaded from {@link Task.agentToolGroups}. When set, the final tool list
 	 * is intersected with these groups — a tool survives only if its group is
 	 * declared (native tools resolved via `TOOL_GROUPS`, MCP tools via the
@@ -269,7 +269,7 @@ export interface ToolCategories {
 }
 
 /**
- * Apply a workflow agent's declared `.slang` `tools:` restriction to the
+ * Apply a task's declared tool-group restriction to the
  * already-mode-filtered tool set. Pure intersection — only removes tools,
  * never adds them.
  *
@@ -398,7 +398,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	// Build the invoke-command lookup map for the execution layer (core registry).
 	setPrivateToolInvokeMap(privateMeta.map((m) => [getToolName(m.tool), m.invokeCommand]))
 
-	// Per-task `.slang` `tools:` restriction (no-op when the field is absent).
+	// Per-task tool-group restriction (no-op when the field is absent).
 	const {
 		native: restrictedNative,
 		mcp: restrictedMcp,

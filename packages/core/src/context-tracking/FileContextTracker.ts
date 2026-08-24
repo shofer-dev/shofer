@@ -63,7 +63,7 @@ export class FileContextTracker {
 
 	/**
 	 * Re-points the tracker's working directory. Called by {@link Task.reassignCwd}
-	 * when a running WorkflowTask is moved to a different worktree so that
+	 * when a running task is moved to a different worktree so that
 	 * subsequent file-change tracking resolves against the new tree.
 	 */
 	reassignCwd(newCwd: string): void {

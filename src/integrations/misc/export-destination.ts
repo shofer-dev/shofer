@@ -3,7 +3,7 @@ import * as vscode from "vscode"
 import { t } from "@shofer/core"
 
 /**
- * Where a task/workflow export should be written.
+ * Where a task export should be written.
  *
  * - `"browser"` — stream the bytes to the webview so the user's browser saves
  *   them locally. Only meaningful on a web host (see {@link isWebHost}).

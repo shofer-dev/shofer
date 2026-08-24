@@ -36,17 +36,6 @@ vi.mock("@src/components/chat/ChatView", () => ({
 	},
 }))
 
-vi.mock("@src/components/chat/WorkflowView", () => ({
-	__esModule: true,
-	default: function WorkflowView({ isHidden }: { isHidden: boolean }) {
-		return (
-			<div data-testid="workflow-view" data-hidden={isHidden}>
-				Workflow View
-			</div>
-		)
-	},
-}))
-
 vi.mock("@src/components/settings/SettingsView", () => ({
 	__esModule: true,
 	default: function SettingsView({ onDone }: { onDone: () => void }) {
@@ -280,5 +269,4 @@ describe("App", () => {
 		expect(chatView.getAttribute("data-hidden")).toBe("false")
 		expect(screen.queryByTestId(`${view}-view`)).not.toBeInTheDocument()
 	})
-
 })

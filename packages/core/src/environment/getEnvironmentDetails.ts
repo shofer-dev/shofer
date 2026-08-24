@@ -215,7 +215,7 @@ export async function getEnvironmentDetails(shofer: Task, includeFileDetails: bo
 
 	// Use the task's own mode rather than the global `state.mode`. The global
 	// mode only mirrors the currently focused task, so reading it here would
-	// make a background or workflow task report the focused task's mode in its
+	// make a background task report the focused task's mode in its
 	// environment details (e.g. a task running in Architect mode reporting
 	// `<slug>code</slug>`). Mode is task-scoped, like the API configuration.
 	const currentMode = (await shofer.getTaskMode()) || defaultModeSlug

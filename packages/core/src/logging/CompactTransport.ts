@@ -230,7 +230,7 @@ export class CompactTransport implements ICompactTransport {
 
 		// Per-task buffering: attribute this line to the task whose run loop is
 		// currently on the async call stack (if any) so the webview "Logs" tab can
-		// show logs scoped to a single task/workflow.
+		// show logs scoped to a single task.
 		this.captureForTask(entry)
 
 		// Optional JSON-lines file output (compact, delta-timestamps)

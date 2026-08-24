@@ -15,7 +15,6 @@
 		"contextWindow": "Context Length",
 		"closeAndStart": "Close task and start a new one",
 		"export": "Export task history",
-		"exportWorkflow": "Export workflow history",
 		"exportJson": "Export task trace as JSON",
 		"share": "Share task",
 		"delete": "Delete Task (Shift + Click to skip confirmation)",
@@ -151,9 +150,6 @@
 		"autoDescription": "Round-robin across available workers",
 		"unavailable": "not available"
 	},
-	"workflow": "Workflow",
-	"workflowReadonly": "Workflow name (read-only)",
-	"workflowStarting": "Starting workflow…",
 	"lockApiConfigAcrossModes": "Lock API configuration across all modes in this workspace",
 	"unlockApiConfigAcrossModes": "API configuration is locked across all modes in this workspace (click to unlock)",
 	"enhancePrompt": "Enhance prompt with additional context",

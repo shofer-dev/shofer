@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
 
@@ -16,11 +15,10 @@ import { PluginManager, createNodePluginFs, setSharedPluginManager, type PluginS
 import { effectiveModes } from "../plugin-modes.js"
 
 /**
- * Shofer's built-in configuration — the six default modes AND the two shipped
- * workflows — ships as ONE bundled plugin (`plugins/builtin-config/`) rather than as
- * constants/files inside core. These specs pin what that must keep true: the modes
- * are contributed under their **canonical slugs** (`code`, `architect`, …, not
- * `builtin-config:code`), the `.slang` sources are contributed by the plugin, all of
+ * Shofer's built-in configuration — the six default modes — ships as ONE bundled
+ * plugin (`plugins/builtin-config/`) rather than as constants/files inside core.
+ * These specs pin what that must keep true: the modes are contributed under their
+ * **canonical slugs** (`code`, `architect`, …, not `builtin-config:code`), all of
  * it is on out of the box, a user or project definition still overrides one by
  * slug/name, and an org can still take the whole set away.
  */
@@ -140,11 +138,10 @@ describe("builtin-config plugin", () => {
 
 	it("contributes nothing when an org suppressed it", async () => {
 		// `SHOFER_DISABLED_PLUGINS=builtin-config` — an org can define the entire
-		// mode/workflow set through a config bundle.
+		// mode set through a config bundle.
 		const manager = await build({ forceDisabled: ["builtin-config"] })
 		expect(manager.isEnabled("builtin-config")).toBe(false)
 		expect(manager.getContributedModes()).toEqual([])
-		expect(manager.getContributedWorkflowDirs()).toEqual([])
 
 		// Only the org's own modes remain — the built-ins are not silently re-added.
 		const orgModes: ModeConfig[] = [
@@ -163,22 +160,5 @@ describe("builtin-config plugin", () => {
 		const manager = await build({ disabled: ["builtin-config"] })
 		expect(manager.isEnabled("builtin-config")).toBe(false)
 		expect(effectiveModes([])).toEqual([])
-	})
-
-	it("ships the two workflows as real .slang files under the plugin", () => {
-		const dir = path.join(PLUGIN_DIR, "workflows")
-		expect(fs.existsSync(path.join(dir, "debug.slang"))).toBe(true)
-		expect(fs.existsSync(path.join(dir, "implement-feature.slang"))).toBe(true)
-		// The flow name inside the source is what a workflow is addressed by — the file
-		// name only decides which layer wins on override.
-		expect(fs.readFileSync(path.join(dir, "debug.slang"), "utf8")).toMatch(/flow\s/i)
-	})
-
-	it("contributes its workflows directory, enabled out of the box", async () => {
-		const manager = await build()
-		expect(manager.isEnabled("builtin-config")).toBe(true)
-		expect(manager.getContributedWorkflowDirs()).toEqual([
-			{ pluginName: "builtin-config", dir: path.join(PLUGIN_DIR, "workflows") },
-		])
 	})
 })

@@ -1,7 +1,7 @@
 # Inter-Task Peer Messaging
 
 > **Status:** ✅ Implemented in Shofer v1.0.84. The core `send_message_to_task` tool, scope-relaxed peer tools (`check_task_status`, `wait_for_task`, `list_background_tasks` with `scope=peers`), `peer_task_ids` opt-in restrictor, and telemetry are all wired and compile clean.  
-> ✅ **Least-privilege `knownPeers` default** (Shofer v1.0.85): `knownPeers` is always set for background tasks; `undefined` means deny-all (was: full same-root access). Baseline at spawn: `{ parentTaskId }` only — siblings require an explicit grant via `peer_task_ids` on `new_task`, or the `peers: [@Ref]` meta field in a slang agent declaration.  
+> ✅ **Least-privilege `knownPeers` default** (Shofer v1.0.85): `knownPeers` is always set for background tasks; `undefined` means deny-all (was: full same-root access). Baseline at spawn: `{ parentTaskId }` only — siblings require an explicit grant via `peer_task_ids` on `new_task`.  
 > ✅ **Symmetric peer grants** (Shofer v1.0.86): a `peer_task_ids` grant is now bidirectional — the granted peer also gets the new child in its `knownPeers`, so a single grant opens a two-way channel. Mirrors the explicit edge only (not transitive). See [Symmetric peering](#symmetric-peering-bidirectional-grants).  
 > ✅ **Persisted peer grants** (Shofer v1.0.86): `knownPeers` is now seeded at construction (`CreateTaskOptions.initialKnownPeers`) and persisted onto `HistoryItem.peerIds` on every save, so grants survive restarts and the spawner no longer races the child's not-yet-created history row (the old `Failed to persist peerIds … Task not found` error). See [State Restore](#state-restore).  
 > See [Remaining & Future Items](#remaining--future-items) for known gaps.
@@ -448,8 +448,6 @@ Rationale and limits:
 
 Peer tools (`check_task_status`, `wait_for_task`, `send_message_to_task`, `list_background_tasks` with `scope=peers`) consult `knownPeers` before allowing access. `knownPeers` is **always set** (never `undefined`) for any background task participating in peer messaging; when `undefined`, all peer-tool access is denied. The guard is `if (!task.knownPeers || !task.knownPeers.has(id))` — always enforced.
 
-> **Slang workflows:** within a `.slang` flow, the canonical way to grant sibling access is the `peers: [@Ref]` agent meta field — the executor resolves refs to live task IDs at spawn time and sets `knownPeers` accordingly. `peer_task_ids` on `new_task` remains the mechanism for non-workflow or programmatic use.
-
 ---
 
 ## Delivery Mechanics
@@ -562,13 +560,14 @@ flowchart TD
 pendingPeerMessages: PendingPeerMessage[] = []
 
 /**
- * Least-privilege peer scope. Always set for background tasks participating
- * in peer messaging. Peer tools only allow communication with task IDs
- * present in this set. When undefined, all peer-tool access is denied.
+ * Least-privilege peer scope restriction. Peer tools only allow
+ * communication with task IDs present in this set. The baseline
+ * always includes the parent (if any) and children this task spawns
+ * (dynamically added). When undefined, no peer communication is
+ * allowed at all — every peer-tool access is denied.
  *
- * Baseline at spawn: { parentTaskId } only. Children are added dynamically
- * as they are spawned (NewTaskTool / WorkflowTask.spawnAgentTask). Sibling
- * grants require explicit peer_task_ids (new_task) or peers: [@Ref] (slang).
+ * Set explicitly by {@link NewTaskTool} at spawn time (baseline: parent
+ * only) and extended as the task spawns children.
  */
 knownPeers?: Set<string>
 ```
@@ -608,7 +607,7 @@ On extension restart:
 1. `TaskManager.restoreManagedTasks()` rehydrates the managed-task map from persisted history.
 2. Tasks are re-created with their `rootTaskId` from `HistoryItem`.
 3. `pendingPeerMessages` are **not** persisted — undelivered Form A notifications are lost across restarts. This is acceptable: the sender's sync call would have aborted on timeout, and async notifications are fire-and-forget by nature.
-4. `knownPeers` grants **survive restarts** (as of Shofer v1.0.86). The live `knownPeers` set is a runtime construct, but its contents are persisted onto `HistoryItem.peerIds` on every metadata save (derived from `knownPeers` in [`_refreshTaskMetadata`](../packages/core/src/task/Task.ts)). On restore, the [`Task` constructor](../packages/core/src/task/Task.ts:887) rehydrates `knownPeers` from `peerIds ∪ childIds ∪ backgroundChildIds`. A freshly-spawned task is seeded at construction via `CreateTaskOptions.initialKnownPeers` (set by `NewTaskTool` / `WorkflowTask.spawnAgentTask`), so its first persisted `peerIds` already carries the grant — there is no longer a post-spawn `updateTaskHistory({ peerIds })` write by the spawner (which previously failed with "Task not found" because the child's row did not exist yet, and left the grant runtime-only).
+4. `knownPeers` grants **survive restarts** (as of Shofer v1.0.86). The live `knownPeers` set is a runtime construct, but its contents are persisted onto `HistoryItem.peerIds` on every metadata save (derived from `knownPeers` in [`_refreshTaskMetadata`](../packages/core/src/task/Task.ts)). On restore, the [`Task` constructor](../packages/core/src/task/Task.ts:887) rehydrates `knownPeers` from `peerIds ∪ childIds ∪ backgroundChildIds`. A freshly-spawned task is seeded at construction via `CreateTaskOptions.initialKnownPeers` (set by `NewTaskTool`), so its first persisted `peerIds` already carries the grant — there is no longer a post-spawn `updateTaskHistory({ peerIds })` write by the spawner (which previously failed with "Task not found" because the child's row did not exist yet, and left the grant runtime-only).
 
 ---
 
@@ -636,7 +635,7 @@ Resolved by the [Recipient delivery model](#recipient-delivery-model) at send ti
 
 ### Target task has no active instance
 
-When the target has no live `Task` instance but **resumable persisted history** (non-`error` lifecycle), the [`SendMessageToTaskTool`](../packages/core/src/tools/SendMessageToTaskTool.ts) handler **rehydrates** the target via [`provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })`](../src/core/webview/ShoferProvider.ts:1490) — the same pattern used by [`WorkflowTask.resumeAgentTask`](../src/core/workflow/WorkflowTask.ts). The freshly rehydrated instance gets a live `MessageQueueService` and the message is enqueued/queued normally.
+When the target has no live `Task` instance but **resumable persisted history** (non-`error` lifecycle), the [`SendMessageToTaskTool`](../packages/core/src/tools/SendMessageToTaskTool.ts) handler **rehydrates** the target via [`provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })`](../src/core/webview/ShoferProvider.ts). The freshly rehydrated instance gets a live `MessageQueueService` and the message is enqueued/queued normally.
 
 - **Sync** — always delivered as Form B (annotated user-turn + `cancelAndProcessQueuedMessages` wake). The sender blocks until the recipient's `attempt_completion` or timeout.
 - **Async to a non-busy peer** (`completed`/`idle`/`paused`) — delivered as Form B (annotated user-turn + wake).
@@ -671,7 +670,7 @@ The human user can prompt or resume any task at any time; this must not perturb 
 
 So if a Coder sync-messages a Reviewer (an async/background recipient) and the Reviewer needs clarification, the Reviewer's question is fielded by the Reviewer's **parent** (e.g. the Orchestrator), while the Coder stays blocked awaiting the Reviewer's `attempt_completion`. If instead the Reviewer were a _foreground_ subtask of a now-suspended parent, its question would fall through to the user — the same `isBackgroundTask` gate that protects against the deadlock.
 
-**Design implication for the workflow modes:** a supervisor (e.g. Orchestrator) that wants to answer its children's questions MUST drive them via **async `new_task` + `wait_for_task`** (whose `onNeedsParentInput` path wakes the supervisor to answer and re-enter the wait), _not_ via blocking `new_task`. Blocking `new_task` is for children that won't need to ask the parent anything — their questions go to the user.
+**Design implication for supervisor modes:** a supervisor (e.g. Orchestrator) that wants to answer its children's questions MUST drive them via **async `new_task` + `wait_for_task`** (whose `onNeedsParentInput` path wakes the supervisor to answer and re-enter the wait), _not_ via blocking `new_task`. Blocking `new_task` is for children that won't need to ask the parent anything — their questions go to the user.
 
 ### Self-messaging
 

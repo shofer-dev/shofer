@@ -42,12 +42,8 @@ export const configLog = getLogger().child({ ctx: "Config" })
 /** Skills subsystem */
 export const skillsLog = getLogger().child({ ctx: "Skills" })
 
-
 /** Metrics / Prometheus */
 export const metricsLog = getLogger().child({ ctx: "Metrics" })
-
-/** Workflow engine (.slang) */
-export const workflowLog = getLogger().child({ ctx: "Workflow" })
 
 /** Tool execution — one line per native tool call (start / finish / error). */
 export const toolsLog = getLogger().child({ ctx: "Tools" })

@@ -467,7 +467,7 @@ export const webviewMessageHandler = async (provider: ShoferProvider, message: W
 		}
 		case "requestTaskLogs": {
 			// On-demand snapshot for the "Logs" tab. The webview asks for a
-			// specific task/workflow id; we return the buffered lines. Live
+			// specific task id; we return the buffered lines. Live
 			// updates thereafter arrive via the `taskLogAppended` stream.
 			const taskLogTaskId = typeof message.taskId === "string" ? message.taskId : undefined
 			// Resolve the import BEFORE touching the watch, so setting the watch and
@@ -480,38 +480,6 @@ export const webviewMessageHandler = async (provider: ShoferProvider, message: W
 				type: "taskLogs",
 				taskLogTaskId,
 				taskLogs: getTaskLogs(taskLogTaskId),
-			})
-			break
-		}
-		case "requestWorkflowStats": {
-			// "Stats" tab: aggregate active-time across a task tree. The webview
-			// passes the subtree task ids (it already has the tree from history);
-			// we read each task's `api_req_finished` payloads and return them so the
-			// webview can break each down on its own timeline and sum.
-			const ids = Array.isArray(message.workflowStatsTaskIds) ? message.workflowStatsTaskIds : []
-			const rootId = typeof message.taskId === "string" ? message.taskId : undefined
-			const { readTaskMessages } = await import("@shofer/core")
-			const globalStoragePath = provider.contextProxy.globalStorageUri.fsPath
-			const requests: Record<string, string[]> = {}
-			await Promise.all(
-				ids.map(async (id) => {
-					try {
-						const msgs = await readTaskMessages({ taskId: id, globalStoragePath })
-						const payloads = msgs
-							.filter((m) => m.type === "say" && m.say === "api_req_finished" && !!m.text)
-							.map((m) => m.text as string)
-						if (payloads.length > 0) requests[id] = payloads
-					} catch (err) {
-						webviewLog.warn(
-							`[requestWorkflowStats] could not read messages for ${id}: ${err instanceof Error ? err.message : String(err)}`,
-						)
-					}
-				}),
-			)
-			await provider.postMessageToWebview({
-				type: "workflowStats",
-				workflowStatsRootId: rootId,
-				workflowStatsRequests: requests,
 			})
 			break
 		}
@@ -3266,8 +3234,6 @@ export const webviewMessageHandler = async (provider: ShoferProvider, message: W
 			break
 		}
 
-		// ── Workflow messages ──
-
 		case "launchTask": {
 			// Launcher "New Task" path: pop the current task to the background
 			// (parallel execution, without aborting it) and reset the webview to a
@@ -3291,195 +3257,6 @@ export const webviewMessageHandler = async (provider: ShoferProvider, message: W
 				await provider.postMessageToWebview({ type: "action", action: "focusInput" })
 			} catch (error) {
 				provider.log(`Error launching task: ${error}`)
-			}
-			break
-		}
-
-		case "listWorkflows": {
-			try {
-				const { discoverWorkflows, parseSlang } = await import("../workflow/index")
-				const workflows = await discoverWorkflows(provider.cwd)
-				// Parse each workflow to extract full metadata (title, description,
-				// icon, agents, param descriptions) from the Slang AST.
-				const parsedWorkflows = Array.from(workflows.entries()).map(([name, source]) => {
-					try {
-						const { ast } = parseSlang(source)
-						const flow = ast.flows[0]
-						if (!flow) {
-							return { name, title: name, description: "", icon: undefined, agents: [], params: [] }
-						}
-
-						// Extract agent names from AgentDecl nodes in the flow body
-						const agents = (flow.body ?? [])
-							.filter((b: any) => b.type === "AgentDecl")
-							.map((a: any) => a.name)
-
-						// Include param descriptions — they're already parsed by the AST
-						const params = (flow.params ?? []).map((p: any) => ({
-							name: p.name,
-							type: p.paramType,
-							description: p.description,
-						}))
-
-						return {
-							name, // machine identifier (for createWorkflow lookup)
-							title: flow.title || name, // human-readable (fall back to name)
-							description: flow.description || "",
-							icon: flow.icon, // e.g. "rocket", "gear", "search", "code"
-							agents,
-							params,
-						}
-					} catch {
-						// Graceful fallback for unparseable .slang files
-						return { name, title: name, description: "", icon: undefined, agents: [], params: [] }
-					}
-				})
-				await provider.postMessageToWebview({
-					type: "workflowsList",
-					workflows: parsedWorkflows,
-				})
-			} catch (error) {
-				provider.log(`Error listing workflows: ${error}`)
-			}
-			break
-		}
-
-		case "createWorkflow": {
-			try {
-				const flowName = message.flowName
-				const flowParams = message.flowParams
-				if (!flowName) {
-					provider.log("[createWorkflow] ERROR: missing flowName")
-					break
-				}
-
-				provider.log(
-					`[createWorkflow] Launching workflow '${flowName}' with params=${JSON.stringify(flowParams ?? {})}`,
-				)
-
-				const { createWorkflowTask } = await import("../workflow/index")
-				const { discoverWorkflows } = await import("../workflow/index")
-				const workflows = await discoverWorkflows(provider.cwd)
-				provider.log(
-					`[createWorkflow] Discovered ${workflows.size} workflow(s): ${[...workflows.keys()].join(", ") || "(none)"}`,
-				)
-				const slangSource = workflows.get(flowName)
-				if (!slangSource) {
-					provider.log(`[createWorkflow] ERROR: flow '${flowName}' not found among discovered workflows`)
-					await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
-					break
-				}
-
-				provider.log(
-					`[createWorkflow] Slang source for '${flowName}' is ${slangSource.length} chars. First 200: ${slangSource.slice(0, 200)}`,
-				)
-				// Where the whole workflow tree runs — the WorkflowTask and every agent it
-				// spawns (see spawnAgentTask). Same placement question as `newTask`, same
-				// answer: whichever plugin manages directories decides.
-				let cwd: string | undefined
-				try {
-					cwd = await resolveTaskCwd(provider)
-				} catch (error) {
-					await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
-					getHost().notifier.error(error instanceof Error ? error.message : String(error))
-					break
-				}
-
-				const task = await createWorkflowTask(provider, slangSource, flowParams, cwd)
-				provider.log(
-					`[createWorkflow] Created WorkflowTask ${task.taskId} for flow '${flowName}'` +
-						`${cwd ? ` in ${cwd}` : ""} — ${task.flowState.agents.size} agent(s): ${[...task.flowState.agents.keys()].join(", ")}`,
-				)
-
-				// Pop the current task to the background (parallel execution)
-				// without aborting it, so the launched workflow becomes the
-				// focused task while any prior task keeps running.
-				const poppedTask = provider.popFromStackWithoutAborting()
-				if (poppedTask) {
-					provider.taskManager.registerBackgroundTask(poppedTask)
-					provider.log(`[createWorkflow] Task ${poppedTask.taskId} moved to background (workflow launch)`)
-				} else {
-					provider.log(`[createWorkflow] No task to pop — stack was empty (normal for first task)`)
-				}
-
-				// Register with TaskManager and show in TaskSelector
-				await provider.addShoferToStack(task)
-
-				// Register with TaskManager so focusTask() can find the live
-				// instance via getManagedTaskInstance() on switch-back. Without
-				// this, switching away and back using TaskSelector rehydrates
-				// a plain Task (not WorkflowTask) and renders "Starting workflow…".
-				provider.taskManager.registerBackgroundTask(task)
-
-				// Focus the workflow task so that its interactive asks don't
-				// trigger desktop notifications (focusedTaskId guards the
-				// needs_input notification in TaskManager.onInteractive).
-				try {
-					await provider.taskManager.focusTask(task.taskId)
-				} catch {
-					// focusTask may throw if the task wasn't seeded in managedTasks
-					// yet (shouldn't happen as registerBackgroundTask does that).
-					provider.log(
-						`[createWorkflow] Failed to focus task ${task.taskId} — notification guard may mis-fire`,
-					)
-				}
-
-				// Seed the workflow extension into persisted history BEFORE the
-				// first state broadcast so `currentTaskItem.isWorkflow` is set on
-				// the initial frame and the webview routes to WorkflowView
-				// immediately (otherwise it briefly renders ChatView until the
-				// first in-loop checkpoint lands).
-				await task.seedHistory()
-				provider.log(`[createWorkflow] Seeded history for ${task.taskId} (isWorkflow=true)`)
-
-				// Notify UI and start the slang loop
-				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
-				await provider.postInitState()
-
-				// Start the workflow loop
-				provider.log(
-					`[createWorkflow] Calling task.start() for ${task.taskId} — slangLoopStarted=${(task as any).slangLoopStarted}`,
-				)
-				task.start()
-				provider.log(
-					`[createWorkflow] task.start() returned for ${task.taskId} (fire-and-forget — slang loop runs async)`,
-				)
-			} catch (error) {
-				provider.log(`Error creating workflow: ${error}`)
-				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
-			}
-			break
-		}
-
-		case "resumeWorkflow": {
-			// Resume a stopped workflow. Stopping aborts the whole tree and leaves
-			// the flow at status "aborted" (a non-terminal status) with each agent's
-			// taskId / program counter persisted. Resuming flips the persisted status
-			// back to "running" and rehydrates the task: _restoreWorkflowTask then
-			// re-instantiates a clean (non-aborted) WorkflowTask and, since "running"
-			// is non-terminal, calls start() → the slang loop resumes from the saved
-			// program counters and re-attaches/continues each agent that still exists
-			// (resumeAgentTask rehydrates a missing one from history, or marks it
-			// errored if it's gone). The aborted instance is NOT reused — _cancelTask
-			// leaves it in place but disposed, so a fresh rehydrate is required.
-			const current = provider.getCurrentTask()
-			const taskId = current?.taskId
-			if (taskId) {
-				try {
-					const { historyItem } = await provider.getTaskWithId(taskId)
-					const fs = historyItem.flowState as (Record<string, unknown> & { status?: string }) | undefined
-					if (historyItem.isWorkflow && fs && fs.status === "aborted") {
-						const resumed = { ...historyItem, flowState: { ...fs, status: "running" } }
-						await provider.updateTaskHistory(resumed)
-						await provider.createTaskWithHistoryItem(resumed)
-					} else {
-						provider.log(
-							`[resumeWorkflow] ignored — task ${taskId} is not a stopped workflow (isWorkflow=${historyItem.isWorkflow}, status=${fs?.status})`,
-						)
-					}
-				} catch (error) {
-					provider.log(`Error resuming workflow: ${error}`)
-				}
 			}
 			break
 		}

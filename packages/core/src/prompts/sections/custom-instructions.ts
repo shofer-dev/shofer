@@ -543,7 +543,7 @@ export async function addCustomInstructions(
 	// and `paths:`-scoped rules are then included without gating.
 	const touchedPaths = options.settings?.touchedPaths
 
-	// Per-agent `.slang` `context { ... }` overrides for custom-instruction
+	// Per-agent context overrides for custom-instruction
 	// sections. Default to enabled (true) when absent.
 	const includeModeRules = options.settings?.includeModeRules ?? true
 	const includeUserRules = options.settings?.includeUserRules ?? true

@@ -2,14 +2,13 @@
 	"name": "builtin-config",
 	"version": "0.1.0",
 	"shoferPluginApiVersion": "1.0.0",
-	"description": "Shofer's built-in configuration: the six default modes (Code, Architect, Debug, Code Search, Web Search and Reviewer — each a role definition plus a tool-group allow-list; a user or project mode of the same slug overrides one) and the built-in multi-agent workflows (Debug and Implement a Feature, plain .slang sources a user or project can override by name).",
+	"description": "Shofer's built-in configuration: the six default modes (Code, Architect, Debug, Code Search, Web Search and Reviewer — each a role definition plus a tool-group allow-list; a user or project mode of the same slug overrides one).",
 	"author": "Shofer",
 	"license": "Apache-2.0",
 	"defaultEnabled": true,
 	"unqualifiedContributions": true,
 	"permissions": {
-		"modes": true,
-		"workflows": true
+		"modes": true
 	},
 	"contributes": {
 		"modes": [
@@ -89,16 +88,6 @@
 				"description": "Review code and identify issues",
 				"tools": ["read", "execute", "browser", "mcp", "subtasks", "questions"],
 				"customInstructions": "When reviewing code:\n1. Read the relevant files thoroughly using read_file.\n2. Run static analysis or linting tools via execute_command when helpful.\n3. Query logs, metrics, or traces via MCP tools (Loki, Mimir, Tempo) if runtime behavior is relevant.\n4. Present findings clearly: what the issue is, why it matters, where it occurs (file:line), and a specific proposed fix.\n5. Do NOT edit any files. Do NOT use write_to_file, apply_diff, or insert_edit. Your role stops at proposing fixes."
-			}
-		],
-		"workflows": [
-			{
-				"name": "debug",
-				"description": "Two developers investigate a bug read-only; the orchestrator consolidates one fix plan, one implements it, the other reviews until satisfied."
-			},
-			{
-				"name": "implement-feature",
-				"description": "Plan, implement and review a feature end to end across specialised agents."
 			}
 		]
 	}

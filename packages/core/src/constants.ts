@@ -24,8 +24,6 @@
  *     constraint on tool-call ids; fixed by the provider's API.
  *   - `EPSILON` (auto-approval/AutoApprovalHandler.ts) — floating-point compare
  *     epsilon; an algorithmic constant, not a preference.
- *   - `MAX_CONTROL_FLOW_STEPS` (workflow/slang-interpreter.ts) — interpreter
- *     infinite-loop guard; an algorithmic safety invariant.
  *   - `BLOB_REF_REGEX` and the `<shofer-blob .../>` token shape
  *     (blob-store/BlobStore.ts) — a persisted wire format, not a number.
  *   - `MIN_CONDENSE_THRESHOLD` / `MAX_CONDENSE_THRESHOLD` (condense/index.ts) —

@@ -22,7 +22,6 @@ vi.mock("../_deps.js", async (importOriginal) => {
 		mcpLog: { error: noop, info: noop, warn: noop },
 		skillsLog: { error: noop, info: noop, warn: noop },
 		metricsLog: { error: noop, info: noop, warn: noop },
-		workflowLog: { error: noop, info: noop, warn: noop },
 		i18nLog: { error: noop, info: noop, warn: noop },
 		scrollLog: { error: noop, info: noop, warn: noop },
 	}

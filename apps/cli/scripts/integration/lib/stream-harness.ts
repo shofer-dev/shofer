@@ -67,7 +67,7 @@ export async function runStreamCase(options: RunStreamCaseOptions): Promise<void
 	const cliRoot = process.env.ROO_CLI_ROOT ? path.resolve(process.env.ROO_CLI_ROOT) : defaultCliRoot
 	const timeoutMs = options.timeoutMs ?? 120_000
 
-	// Provider/model are env-driven (same var names the workflow runner uses) so
+	// Provider/model are env-driven (same var names the CLI harness uses) so
 	// the unified harness can drive these stream-protocol cases under any preset
 	// — `mock` (hermetic) or `ds` (local llm-router) — not just the shofer cloud.
 	// Defaults preserve the original behaviour (shofer provider, settings model).

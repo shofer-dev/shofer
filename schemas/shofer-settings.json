@@ -235,16 +235,6 @@
 					},
 					"activeTimeMs": {
 						"type": "number"
-					},
-					"isWorkflow": {
-						"type": "boolean"
-					},
-					"slangSource": {
-						"type": "string"
-					},
-					"flowState": {
-						"type": "object",
-						"additionalProperties": {}
 					}
 				},
 				"required": ["id", "number", "ts", "task", "tokensIn", "tokensOut", "totalCost"],

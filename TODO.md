@@ -54,6 +54,26 @@
   a second non-webview consumer needs interactive approvals (L2 runs auto-approve, so
   it doesn't today).
 
+- **Three per-task shaping options have no caller.** `agentRole`,
+  `agentToolGroups` and `agentContext` on `CreateTaskOptions` (and their
+  `Task` fields) are live plumbing with nothing that sets them:
+  `agentRole` prepends an `# Agent Role` block to the task's custom
+  instructions, `agentToolGroups` narrows the assembled tool list to the
+  declared groups (`restrictToolsToDeclaredGroups` in `build-tools.ts`), and
+  `agentContext` is the first layer of the system-prompt section gates
+  (`docs/system_prompt.md`). All three are threaded into the system-prompt cache
+  key, so they work — nobody asks. Their sibling `completionSchema` is the
+  exception: it IS driven, through `ctx.agent.spawn({ completionSchema })`
+  (`docs/output_contract_enforcement.md`), which is also the shape of the fix.
+  They were kept rather than deleted because they are general per-task shaping
+  options and the plugin / agent-spawn seam is where a caller would want them.
+  Two ways out, and one must be picked rather than left: **(a)** expose all
+  three on `PluginAgentSpawnOptions` beside `completionSchema`, so one caller
+  can describe a spawned task's role, tool surface and prompt sections through a
+  single seam; or **(b)** delete them along with their prompt-assembly and
+  build-tools threading. Leaving them is the status quo, which reads to the next
+  reader as a supported feature.
+
 - **Index identity is controller-scoped, not globally unique.** `_resolveIndexKeyPath`
   prefers the controller-assigned `codebaseIndexKey`, which fixes the case that bit us
   (executor pods all running `--workspace /home/node/workspace` colliding on one Qdrant

@@ -45,19 +45,9 @@ function getModeAllowedGroups(
 interface AutoApproveDropdownProps {
 	disabled?: boolean
 	triggerClassName?: string
-	/**
-	 * When true, every auto-approval group is shown regardless of the current
-	 * mode's allowed groups. Used for WorkflowTasks, whose children can run in
-	 * any mode and inherit the workflow root's auto-approval settings.
-	 */
-	allGroups?: boolean
 }
 
-export const AutoApproveDropdown = ({
-	disabled = false,
-	triggerClassName = "",
-	allGroups = false,
-}: AutoApproveDropdownProps) => {
+export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }: AutoApproveDropdownProps) => {
 	const [open, setOpen] = React.useState(false)
 	const portalContainer = useShoferPortal("shofer-portal")
 	const { t } = useAppTranslation()
@@ -139,14 +129,9 @@ export const AutoApproveDropdown = ({
 	const allSettingsArray = React.useMemo(() => Object.values(autoApproveSettingsConfig), [])
 
 	// Filter to only show toggles for groups accessible in the current mode.
-	// Workflows (allGroups) expose every group, since their children can run
-	// in any mode and inherit these settings from the workflow root.
 	const allowedGroups = React.useMemo(
-		() =>
-			allGroups
-				? new Set(allSettingsArray.map((s) => s.toolGroup))
-				: getModeAllowedGroups(mode, (customModes as any) ?? []),
-		[allGroups, allSettingsArray, mode, customModes],
+		() => getModeAllowedGroups(mode, (customModes as any) ?? []),
+		[mode, customModes],
 	)
 	const settingsArray = React.useMemo(
 		() => allSettingsArray.filter((s) => allowedGroups.has(s.toolGroup)),

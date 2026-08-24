@@ -1,5 +1,5 @@
 // Prevent the transitive import graph from loading extension.ts,
-// which pulls in WorkflowTask (which extends Task — circular).
+// which pulls in the extension entrypoint (circular).
 vi.mock("../../../extension", () => ({}))
 
 vi.mock("../../logging/subsystems.js", async (importOriginal) => ({

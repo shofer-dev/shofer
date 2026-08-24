@@ -17,7 +17,7 @@ import attemptCompletion from "./attempt_completion.js"
  * rating, feedback }`).
  *
  * The contract schema is within the universal + strict-safe subset
- * (§4.3 of todos/output_contract_enforcement.md) so it is safe to send to
+ * (§4 of docs/output_contract_enforcement.md) so it is safe to send to
  * every provider.  Providers with constrained decoding (OpenAI/Gemini)
  * enforce it at decode time; providers without (DeepSeek Cloud) treat it
  * as a strong semantic hint.

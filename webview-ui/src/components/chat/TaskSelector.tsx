@@ -310,29 +310,8 @@ export interface TaskSelectorProps {
 /**
  * Returns the display name for a history item, preferring the user-set name
  * then falling back to the first 60 chars of the task text (same as HistoryView).
- *
- * For WorkflowTasks, shows `Workflow: <flow name>` — matching the title rendered
- * in WorkflowView/WorkflowHeader. Both derive the flow name from `slangSource`
- * (the `flow "<name>"` declaration), so the two stay in sync; e.g.
- * implement-feature.slang → "Workflow: implement-feature".
  */
 export function getTaskDisplayName(item: HistoryItem): string {
-	// WorkflowTask: show flow name
-	if (item.isWorkflow) {
-		// Authoritative source: the flow name as written in the .slang, same as
-		// WorkflowHeader parses. Anchored to the start of a line so a `flow "…"`
-		// inside a comment can't be matched by accident.
-		if (item.slangSource) {
-			const match = /^flow\s+"([^"]+)"/m.exec(item.slangSource)
-			if (match) return `Workflow: ${match[1]}`
-		}
-		// Fallback: the mode field also holds the flow name for workflow tasks.
-		if (item.mode) {
-			return `Workflow: ${item.mode}`
-		}
-		return `Workflow ${item.number}`
-	}
-
 	if (item.name) return item.name
 	if (item.task) {
 		const trimmed = item.task.trim()
@@ -464,9 +443,8 @@ function renderTaskRow({
 				</span>
 			)}
 
-			{/* Leading status icon — the same lifecycle/state icon for tasks and
-			    workflows, so a workflow shows its run state (running, done, error…)
-			    exactly like a task rather than a distinct badge. */}
+			{/* Leading status icon — the task's lifecycle/state (running, done,
+			    error…). */}
 			<StandardTooltip content={stateConfig.label}>
 				<span
 					className={cn(
@@ -926,7 +904,7 @@ export const TaskSelector = memo(
 				{/* Drawer */}
 				<aside
 					role="complementary"
-					aria-label={t("chat:taskSelector.title", "Tasks & Workflows")}
+					aria-label={t("chat:taskSelector.title", "Tasks")}
 					className={cn(
 						"fixed top-0 right-0 bottom-0 z-50 flex flex-col w-[22rem] max-w-[85vw]",
 						"bg-[var(--vscode-sideBar-background,var(--vscode-editorWidget-background,#252526))]",
@@ -945,7 +923,7 @@ export const TaskSelector = memo(
 							"border-b border-[var(--vscode-sideBar-border,var(--vscode-editorWidget-border,#454545))]",
 						)}>
 						<div className="flex items-center gap-2">
-							<span>{t("chat:taskSelector.title", "Tasks & Workflows")}</span>
+							<span>{t("chat:taskSelector.title", "Tasks")}</span>
 							<span className="text-[var(--vscode-descriptionForeground)] font-normal normal-case">
 								{totalTaskCount}
 							</span>

@@ -611,7 +611,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	 * The activated `ShoferExtensionApi` control plane.
 	 *
 	 * This is the single, drift-free surface for all task / configuration /
-	 * profile / history / workflow operations — the exact same object companion
+	 * profile / history operations — the exact same object companion
 	 * extensions obtain from
 	 * `vscode.extensions.getExtension('shoferdev.shofer').exports`. Prefer
 	 * `host.api.<method>()` over adding bespoke pass-through wrappers on

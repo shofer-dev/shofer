@@ -13,13 +13,11 @@ import { telemetryClient } from "./utils/TelemetryClient"
 import { initializeSourceMaps, exposeSourceMapsForDebugging } from "./utils/sourceMapInitializer"
 import { ExtensionStateContextProvider, useExtensionState } from "./context/ExtensionStateContext"
 import ChatView, { ChatViewRef } from "./components/chat/ChatView"
-import WorkflowView, { WorkflowViewRef } from "./components/chat/WorkflowView"
 import { TaskSelector } from "./components/chat/TaskSelector"
 import HistoryView from "./components/history/HistoryView"
 import SettingsView, { SettingsViewRef } from "./components/settings/SettingsView"
 import WelcomeView from "./components/welcome/WelcomeViewProvider"
 import { LauncherView } from "./components/launcher/LauncherView"
-import { LauncherMenu } from "./components/launcher/LauncherMenu"
 import { MessageRewindDialog } from "./components/chat/MessageRewindDialog"
 import { DeleteMessageDialog, EditMessageDialog } from "./components/chat/MessageModificationConfirmationDialog"
 import ErrorBoundary from "./components/ErrorBoundary"
@@ -86,8 +84,8 @@ const App = () => {
 		[customModes],
 	)
 
-	// Richer mode metadata for the launcher "New Task" stage — each card shows
-	// the mode name plus a short description so the user can pick intentionally.
+	// Richer mode metadata for the launcher — each card shows the mode name plus
+	// a short description so the user can pick intentionally.
 	const launcherModes = useMemo(
 		() =>
 			getAllModes(customModes).map((m) => ({
@@ -134,7 +132,6 @@ const App = () => {
 
 	const settingsRef = useRef<SettingsViewRef>(null)
 	const chatViewRef = useRef<ChatViewRef>(null)
-	const workflowViewRef = useRef<WorkflowViewRef>(null)
 
 	const switchTab = useCallback(
 		(newTab: Tab) => {
@@ -158,20 +155,6 @@ const App = () => {
 	)
 
 	const [currentSection, setCurrentSection] = useState<string | undefined>(undefined)
-	// Which stage the launcher opens at, set by the native New Task / New
-	// Workflow title-bar dropdown items ("task" → mode cards, "workflow" →
-	// workflow cards).
-	const [launcherStage, setLauncherStage] = useState<"task" | "workflow">("task")
-
-	// The native "+" title-bar button opens this in-webview chooser (anchored
-	// below the button) rather than a native QuickPick, so it can show per-item
-	// icons + a one-line description. Picking an item opens LauncherView.
-	const [newMenuOpen, setNewMenuOpen] = useState(false)
-	// Timestamp of the last dismissal, used to make the "+" button toggle
-	// robustly: if the menu was dismissed (e.g. by a focus-out triggered by the
-	// same "+" click) just before the host's toggle message arrives, we must not
-	// immediately reopen it.
-	const newMenuClosedAtRef = useRef(0)
 
 	const onMessage = useCallback(
 		(e: MessageEvent) => {
@@ -180,7 +163,7 @@ const App = () => {
 			if (message.type === "action" && message.action) {
 				// The welcome/onboarding panel stays up while the user explores the
 				// title-bar buttons (their pop-ups/drawers overlay it). Only actually
-				// creating a task/workflow — i.e. opening the launcher — replaces it.
+				// creating a task — i.e. opening the launcher — replaces it.
 				if (message.action === "launcherButtonClicked") {
 					setWelcomeClosed(true)
 				}
@@ -202,23 +185,12 @@ const App = () => {
 					return
 				}
 
-				// The "+" title-bar button opens the in-webview New Task / New
-				// Workflow chooser (anchored under the button), staying on the
-				// current tab until the user picks.
+				// The "+" title-bar button opens the launcher (the mode cards).
+				// It toggles: a second "+" click returns to chat without starting
+				// anything.
 				if (message.action === "newMenuButtonClicked") {
-					// Toggle: a second "+" click closes the chooser without a choice.
-					setNewMenuOpen((prev) => {
-						if (prev) {
-							return false
-						}
-						// If it was dismissed in the last 300ms, this same "+" click is
-						// what closed it (via focus-out) — leave it closed instead of
-						// reopening.
-						if (Date.now() - newMenuClosedAtRef.current < 300) {
-							return false
-						}
-						return true
-					})
+					setWelcomeClosed(true)
+					switchTab(tabRef.current === "launcher" ? "chat" : "launcher")
 					return
 				}
 
@@ -251,10 +223,6 @@ const App = () => {
 					if (newTab) {
 						switchTab(newTab)
 						setCurrentSection(section)
-						if (message.action === "launcherButtonClicked") {
-							const stage = message.values?.launcherStage as "task" | "workflow" | undefined
-							setLauncherStage(stage === "workflow" ? "workflow" : "task")
-						}
 					}
 				}
 			}
@@ -277,10 +245,10 @@ const App = () => {
 				})
 			}
 
-			// When the host launches a new task or workflow it sends invoke:"newChat"
-			// to reset ChatView/WorkflowView state. App-level routing must also switch
-			// to the "chat" tab so the correct view becomes visible (e.g. after clicking
-			// a workflow from LauncherView which leaves the tab on "launcher").
+			// When the host launches a new task it sends invoke:"newChat" to reset
+			// ChatView state. App-level routing must also switch to the "chat" tab so
+			// the view becomes visible (e.g. after picking a mode in LauncherView,
+			// which leaves the tab on "launcher").
 			if (message.type === "invoke" && message.invoke === "newChat") {
 				switchTab("chat")
 			}
@@ -294,14 +262,10 @@ const App = () => {
 			}
 
 			if (message.type === "acceptInput") {
-				if (currentTaskItem?.isWorkflow) {
-					workflowViewRef.current?.acceptInput()
-				} else {
-					chatViewRef.current?.acceptInput()
-				}
+				chatViewRef.current?.acceptInput()
 			}
 		},
-		[switchTab, currentTaskItem?.isWorkflow],
+		[switchTab],
 	)
 
 	useEvent("message", onMessage)
@@ -365,29 +329,13 @@ const App = () => {
 			) : (
 				<>
 					{tab === "history" && <HistoryView onDone={() => switchTab("chat")} />}
-					{tab === "launcher" && (
-						<LauncherView
-							modes={launcherModes}
-							initialStage={launcherStage}
-							onClose={() => switchTab("chat")}
-						/>
-					)}
+					{tab === "launcher" && <LauncherView modes={launcherModes} onClose={() => switchTab("chat")} />}
 					{tab === "settings" && (
 						<SettingsView ref={settingsRef} onDone={() => setTab("chat")} targetSection={currentSection} />
 					)}
 					<ChatView
 						ref={chatViewRef}
-						isHidden={tab !== "chat" || !!currentTaskItem?.isWorkflow}
-						showAnnouncement={showAnnouncement}
-						hideAnnouncement={() => setShowAnnouncement(false)}
-					/>
-					{/* WorkflowView mirrors ChatView for WorkflowTasks. Both stay mounted
-					 * and are toggled via isHidden so webview-local state survives task
-					 * switches; visibility is mutually exclusive based on whether the
-					 * focused task is a workflow. */}
-					<WorkflowView
-						ref={workflowViewRef}
-						isHidden={tab !== "chat" || !currentTaskItem?.isWorkflow}
+						isHidden={tab !== "chat"}
 						showAnnouncement={showAnnouncement}
 						hideAnnouncement={() => setShowAnnouncement(false)}
 					/>
@@ -461,36 +409,19 @@ const App = () => {
 					{/* Single shared portal target for popovers/dropdowns (AutoApproveDropdown,
 					 * plugin popovers, …). Lives at the App root —
 					 * always visible — so popovers never mount into a `display:none` view.
-					 * ChatView and WorkflowView must NOT render their own `#shofer-portal`:
-					 * duplicate ids made `getElementById` resolve to the hidden ChatView copy,
-					 * which is why workflow-mode dropdowns rendered behind/under the view. */}
+					 * ChatView must NOT render its own `#shofer-portal`: a duplicate id makes
+					 * `getElementById` resolve to the hidden copy, so dropdowns render
+					 * behind/under the view. */}
 				</>
 			)}
-			{/* The portal target for always-mounted popovers (the "+" chooser and
-			 * Tasks drawer). It must live OUTSIDE the welcome/main branch so it is
-			 * never unmounted — useShoferPortal resolves it once on mount, so a
+			{/* The portal target for always-mounted popovers (the Tasks drawer).
+			 * It must live OUTSIDE the welcome/main branch so it is never unmounted — useShoferPortal resolves it once on mount, so a
 			 * conditionally-rendered container would leave those popovers with a
 			 * detached/missing node when the welcome panel (or any non-chat view)
 			 * is active. Rendered exactly once to keep the id unique. */}
 			<div id="shofer-portal" />
-			{/* Overlays mounted regardless of the welcome panel, so the title-bar
-			 * "+" chooser and Tasks drawer pop up over it without dismissing it.
-			 * Only picking New Task/Workflow (which opens the launcher) replaces it. */}
-			<LauncherMenu
-				open={newMenuOpen}
-				onOpenChange={(open) => {
-					if (!open) {
-						newMenuClosedAtRef.current = Date.now()
-					}
-					setNewMenuOpen(open)
-				}}
-				onPick={(stage) => {
-					setNewMenuOpen(false)
-					setWelcomeClosed(true)
-					setLauncherStage(stage)
-					switchTab("launcher")
-				}}
-			/>
+			{/* Mounted regardless of the welcome panel, so the title-bar Tasks
+			 * drawer pops up over it without dismissing it. */}
 			<TaskSelector
 				taskHistory={taskHistory || []}
 				parallelTasks={parallelTasks || []}

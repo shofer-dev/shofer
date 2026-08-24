@@ -131,7 +131,6 @@ export { taskMetadata } from "./task-persistence/taskMetadata.js"
 export * from "./prompts/responses.js"
 export * from "./protect/ShoferProtectedController.js"
 export * from "./webview/aggregateTaskCosts.js"
-export * from "./workflow/index.js"
 export * from "./auto-approval/commands.js"
 // tree-sitter code-definition parsing (portable, wasm-backed). Public surface:
 // parseSourceCodeDefinitionsForFile / extensions / get|setMinComponentLines (index)
@@ -287,7 +286,7 @@ export { getBuiltInCommands, getBuiltInCommand, getBuiltInCommandNames } from ".
 // Task + build-tools + the 56 tools + presentAssistantMessage + getEnvironmentDetails
 // + FileContextTracker + mentions + ChangedFilesService + message-manager +
 // getFullModeDetails. These now live in @shofer/core; the barrel surfaces them for
-// the VS Code `src` consumers (ShoferProvider / TaskManager / workflow / webview).
+// the VS Code `src` consumers (ShoferProvider / TaskManager / webview).
 export * from "./task/Task.js"
 export * from "./task/build-tools.js"
 export * from "./tools/index.js"

@@ -4,8 +4,8 @@
  *
  * The SaaS `resource-manager` sets these on the executor / code-server pod (the
  * same delivery channel as `SHOFER_GLOBAL_DIR`), letting an org fully define the
- * available mode / workflow set via a config bundle: naming `builtin-config` in
- * `SHOFER_DISABLED_PLUGINS` removes the built-in modes and workflows so that ONLY
+ * available mode set via a config bundle: naming `builtin-config` in
+ * `SHOFER_DISABLED_PLUGINS` removes the built-in modes so that ONLY
  * user/project/bundle-provided ones remain.
  *
  * The built-ins ship as a **bundled plugin** (`builtin-config`), so suppression has
@@ -36,7 +36,7 @@ import * as path from "path"
 /**
  * Plugin names the deployment has suppressed (`SHOFER_DISABLED_PLUGINS`,
  * comma-separated) — enforced by `PluginManager` (`forceDisabledPlugins`), which
- * ignores the user's enable state for them. "Remove the built-in modes/workflows" is
+ * ignores the user's enable state for them. "Remove the built-in modes" is
  * `builtin-config` here; any bundled plugin can be named.
  */
 export function governanceDisabledPlugins(): string[] {

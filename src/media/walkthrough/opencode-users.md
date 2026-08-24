@@ -1,12 +1,11 @@
 # Migrating from OpenCode
 
-Coming from OpenCode? You already share Shofer's philosophy — open-source, model-agnostic, local-first. Shofer keeps all of that and adds a graphical VS Code cockpit, parallel task orchestration, semantic code/git indexing, native worktrees, and a deterministic multi-agent Workflow engine.
+Coming from OpenCode? You already share Shofer's philosophy — open-source, model-agnostic, local-first. Shofer keeps all of that and adds a graphical VS Code cockpit, parallel task orchestration, semantic code/git indexing, native worktrees, and hard per-task cost caps.
 
 ## Key Differences from OpenCode
 
-- **VS Code-native cockpit** — task tree plus live Topology/Sequence/Swimlane diagrams, Stats, and Logs, with the agent graph visualized in-editor
-- **Deterministic Workflows** — declarative Slang where the _control flow itself_ is the spec (message routing, `converge`, budgets), with output-contract validation
-- **Whole-tree task orchestration** — many concurrent conversations and full workflow trees, with cross-tree cost/stats
+- **VS Code-native cockpit** — live Tree, Sequence, Stats and Logs tabs, with the whole task tree visualized in-editor
+- **Whole-tree task orchestration** — many concurrent conversations and deep subtask trees, with cross-tree cost and stats
 - **Semantic RAG over code _and_ git history** — `git_search` finds _why_ and _when_, not just keywords (OpenCode's edge is its real-time LSP/compiler feedback)
 - **Live Memory** — a persistent, cross-session context window other tasks reuse to cut token spend
 - **Native worktrees + OS-level sandboxing** — parallel branches in one window; shell commands confined via Landlock/bwrap

@@ -442,7 +442,7 @@ Pauses agent execution for the given number of seconds. Useful for polling exter
 
 ---
 
-## Task & Workflow Management
+## Task Management
 
 | Tool                      | Origin | Group | Always Available | Status | Description                                                                                                            |
 | ------------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------------------------------------------------------------------------------- |
@@ -497,8 +497,7 @@ answer-collection mechanisms** — supply EITHER (or both):
 - **`form`** — a typed input form rendering rich widgets. Best for structured,
   validated, or multiple values collected at once. Answers are returned to the
   model as a single JSON object keyed by each field's `name`. Rendered by
-  `WorkflowParamForm` — the same component used for workflow flow-parameter
-  collection.
+  `WorkflowParamForm`.
 
 | Param       | Type          | Required | Description                                                                   |
 | ----------- | ------------- | :------: | ----------------------------------------------------------------------------- |
@@ -649,7 +648,7 @@ The spawned child's `Task` instance always has `knownPeers: Set<string>` set. It
 
 **Symmetric peering:** when a child is spawned with `peer_task_ids=[B]`, `NewTaskTool` mirrors the edge — it adds the child to `B`'s `knownPeers` (live instance) and persists it onto `B`'s `HistoryItem.peerIds` (rehydrated on restart), so `B` can message/discover the child in return. This opens a two-way channel from a single grant, which matters because a spawn-time grant can only name an already-existing task (so it is unavoidably one-directional as written). It mirrors the **explicit** edge only — it is **not transitive**, so a parent holding two siblings does not connect them; to make two siblings talk, spawn the later one with `peer_task_ids=[earlierSibling]`. Symmetry changes reachability, not blocking semantics — the sync-deadlock fail-fast and timeouts are unaffected. See [`task_messaging.md` § Symmetric peering](task_messaging.md#symmetric-peering-bidirectional-grants).
 
-In a workflow, agents spawned by `WorkflowTask` also receive `knownPeers` derived from their declared `peers: [@Agent1, @Agent2]` list (see [slang_specs.md § Agent Declaration](slang_specs.md#agent-declaration)). The PEER RESOURCES block injected into agent prompts matches the enforced `knownPeers` set exactly.
+The PEER RESOURCES block injected into a child's prompt matches the enforced `knownPeers` set exactly.
 
 ### `check_task_status`
 

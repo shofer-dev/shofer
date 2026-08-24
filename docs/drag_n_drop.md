@@ -272,22 +272,22 @@ fixing the Desktop experience:
 
 ---
 
-# Proposed: Drag & drop into workflow input forms (design — NOT yet implemented)
+# Proposed: Drag & drop into structured followup forms (design — NOT yet implemented)
 
 > Status: **design only**. Nothing below is built. This section captures how
-> drag & drop could populate the **typed input form** that collects a workflow's
-> inputs, and what plumbing it would require. Implement separately.
+> drag & drop could populate the **typed input form** an agent raises with
+> `ask_followup_question`, and what plumbing it would require. Implement
+> separately.
 
 ## The opportunity
 
-When a workflow declares typed parameters, Shofer collects them up front with a
-single structured followup that the webview renders as a form — `WorkflowParamForm`
+When the agent calls [`ask_followup_question`](native_tools.md#ask_followup_question)
+with a `form` argument, the question is delivered as a single structured followup
+that the webview renders as a typed form — `WorkflowParamForm`
 ([webview-ui/src/components/chat/WorkflowParamForm.tsx](../webview-ui/src/components/chat/WorkflowParamForm.tsx)),
 driven by `FollowUpData.paramForm`
-([packages/types/src/followup.ts](../packages/types/src/followup.ts)). The same
-component now also renders **mid-flow** `escalate … form:` prompts (see
-[`slang_specs.md` § escalate](slang_specs.md)), so anything designed here benefits
-**both** initial flow-param collection and mid-flow escalate forms.
+([packages/types/src/followup.ts](../packages/types/src/followup.ts)). All fields
+are submitted at once as one JSON object.
 
 Many of these fields naturally want a **file or folder** as their value — a path
 to analyse, a directory to scaffold into, a config file to read. Today the user
@@ -319,7 +319,7 @@ fallback.
 ## Which fields accept a drop, and what a drop inserts
 
 Not every string field wants a path, so drop intent should be **declared**, not
-inferred. Proposed model — one new optional trait on `ParamField` / `FlowParam`:
+inferred. Proposed model — one new optional trait on `ParamField`:
 
 | Declared intent      | Droppable widget(s)         | A dropped file/folder inserts…                                         |
 | -------------------- | --------------------------- | ---------------------------------------------------------------------- |
@@ -342,8 +342,8 @@ the field. `"path"`/`"paths"` need no host read and are the simpler first cut.
 
 This is the central UX question for the form (it does not arise in chat, which has
 a single input). **The chat model cannot answer it.** Today a drop anywhere on
-WorkflowView is funnelled by `handleWebviewDrop`
-([WorkflowView.tsx](../webview-ui/src/components/chat/WorkflowView.tsx)) into one
+ChatView is funnelled by `handleWebviewDrop`
+([ChatView.tsx](../webview-ui/src/components/chat/ChatView.tsx)) into one
 `droppedContextFiles` list, then prepended to the message on Send — a **single
 sink** with no notion of "which field." A multi-field form has N possible
 destinations, so targeting must be **explicit**.
@@ -368,8 +368,8 @@ Supporting behaviour:
   and **glow only the fields whose `accepts` is set**, so the user sees the legal
   destinations before releasing. The field under the cursor gets a stronger ring.
 - **Each field stops propagation.** The per-field `onDrop` must call
-  `stopPropagation()` so the WorkflowView **root** handler does NOT _also_ add the
-  file to the chat-context sink. While a param form is pending, a drop belongs to a
+  `stopPropagation()` so the ChatView **root** handler does NOT _also_ add the
+  file to the chat-context sink. While a form is pending, a drop belongs to a
   field, not to `droppedContextFiles`. (On Desktop the root handler is already inert
   — the overlay only reaches form controls — but web/code-server would double-handle
   without this.)
@@ -427,51 +427,50 @@ only the **particular text fields** that opt in are droppable.
 
 - **`cwd` must reach the form.** Producing `src/app.ts` instead of an absolute
   path needs `cwd` threaded into `WorkflowParamForm` (via `ChatRow`). This is the
-  **same wiring gap as Known-issues #3** — `ChatTextArea` and the WorkflowView root
-  handler both fall back to an unset `window.CWD`, so paths come out absolute.
-  Fixing the cwd plumbing is a shared prerequisite, not form-specific.
+  **same wiring gap as Known-issues #3** — `ChatTextArea` falls back to an unset
+  `window.CWD`, so paths come out absolute. Fixing the cwd plumbing is a shared
+  prerequisite, not form-specific.
 - **`.shofer/shoferignore` filtering.** Dropped paths should be filtered through
   `ShoferIgnoreController` (the chat path doesn't today — see "Documentation
-  gaps"). A workflow input form is a good place to do it right from the start.
+  gaps"). A structured input form is a good place to do it right from the start.
 - **Type coercion stays downstream.** The form already coerces values to each
-  field's declared type on submit (and `WorkflowTask.requestFlowParams` /
-  `handleEscalation` coerce again via `coerceParam`). A dropped path is a string,
-  so `string`/`paths` fields are unaffected; don't let a drop bypass coercion.
+  field's declared `ParamField.type` on submit. A dropped path is a string, so
+  `string` fields are unaffected; don't let a drop bypass coercion.
 - **`answeredValues` replay.** Dropped values participate in the normal
   submit/`objectResponse` path, so the read-only replay-after-reload
   (`markFollowupFormAnswered`) needs no change.
 
-## Slang-author surface (sketch)
+## Tool-schema surface (sketch)
 
-Drop intent would be declared with the existing param-meta grammar (the same block
-`escalate … form:` and flow `param <name> { … }` already parse via
-`parseParamMetaFields`), e.g. a new soft-keyword:
+Drop intent would be declared per field, as a new optional key on `ParamField`
+([packages/types/src/followup.ts](../packages/types/src/followup.ts)) that the
+`ask_followup_question` `form` schema exposes to the model:
 
-```slang
-flow "audit" (target: "string") {
-  param target { accepts: "path", description: "File or folder to audit" }
-}
--- or mid-flow:
-escalate @Human reason: "Pick inputs:" form: {
-  spec:    "string" { accepts: "path" }
-  exclude: "string" { accepts: "paths" }   -- multi: drop several, value is string[]
+```json
+{
+	"question": "Which inputs should I audit?",
+	"form": [
+		{ "name": "spec", "type": "string", "accepts": "path" },
+		{ "name": "exclude", "type": "string", "accepts": "paths" }
+	]
 }
 ```
 
-This keeps drop a **declared, validated** capability rather than magic on every
-text box, and threads through the already-shared `FlowParam` shape.
+`"paths"` is the multi-value variant: drop several, and the submitted value is a
+`string[]`. This keeps drop a **declared, validated** capability rather than magic
+on every text box, and threads through the one shape both halves already share.
 
 ## Non-goals / open questions
 
 - **OS-file drops** into the form remain unsupported (Electron). Document, don't
   fight it.
-- **Images / binary** into a workflow field: out of scope; workflow params are
-  scalar text/number/boolean.
+- **Images / binary** into a form field: out of scope; `ParamField` values are
+  scalar text/number/boolean (or a `string[]` for multi-select).
 - **Folder semantics**: should a dropped folder expand to its files, or stay a
   single directory path? Lean toward a single path for `path`, let the agent
   expand it.
-- **Where does `accepts` live** — only on `ParamField` (webview render) and
-  `FlowParam` (slang), or also surfaced to `ask_followup_question`'s `form`
-  schema so the LLM can request a droppable field? (Probably yes, for symmetry.)
+- **Does `accepts` reach the model** — is it only a webview-render hint on
+  `ParamField`, or is it surfaced in the `ask_followup_question` `form` schema so
+  the agent can deliberately request a droppable field? (Probably the latter.)
 - **Discoverability**: the field needs a visible "drop a file here" hint, since
   drag-onto-textbox isn't obvious.

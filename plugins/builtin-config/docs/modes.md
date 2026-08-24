@@ -1,7 +1,7 @@
 # Built-in Modes — Design
 
-> Half of the bundled **builtin-config** plugin — see [`../DESIGN.md`](../DESIGN.md)
-> for why modes and workflows ship as one plugin.
+> The bundled **builtin-config** plugin — see [`../DESIGN.md`](../DESIGN.md)
+> for why the built-in modes ship as a plugin.
 
 ## Purpose
 
@@ -292,8 +292,8 @@ variable (`SHOFER_DISABLED_PLUGINS=builtin-config`, comma-separated), delivered 
 executor / code-server pod (the same channel as `SHOFER_GLOBAL_DIR`). It is **not** a
 persisted user setting: it never appears in `globalSettingsSchema` or the Settings UI
 and cannot be toggled from the webview. Note the granularity: disabling
-`builtin-config` removes the built-in workflows along with the modes — a deployment
-that replaces the defaults replaces the whole set.
+`builtin-config` removes the whole built-in mode set — a deployment that replaces the
+defaults replaces all of it.
 
 Because the built-ins are a plugin, suppression has exactly one expression:
 
@@ -347,5 +347,3 @@ Because the built-ins are a plugin, suppression has exactly one expression:
 - [`docs/tool-categories.md`](../../../docs/tool-categories.md) — what each tool group
   contains and why.
 - [`docs/tool_access.md`](../../../docs/tool_access.md) — the full mode × tool access model.
-- [`workflows.md`](workflows.md) — the
-  sibling bundled plugin that contributes the platform's default workflows.

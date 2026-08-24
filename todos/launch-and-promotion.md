@@ -1,5 +1,27 @@
 # Shofer — Launch & Promotion
 
+> **Status: 🚫 BLOCKED — the central hook no longer exists. Do not post any copy
+> below as written.** Every "deterministic multi-agent workflow", `.slang`,
+> "non-LLM executor" and "topology / sequence / swimlane diagram" claim in this
+> doc describes Shofer's in-editor Slang workflow engine, which has been removed
+> from the product. The Slang language itself now lives outside Shofer, run by a
+> platform pipeline service rather than the editor, so it is not a Shofer selling
+> point at all.
+>
+> Every phase step needs its lead rewritten around what Shofer actually does —
+> parallel multi-agent tasks in an inspectable tree, peer messaging, the
+> Tree/Sequence/Stats/Logs tabs, git worktrees, kernel-level command sandboxing,
+> semantic code + git-history search, Live Memory, and hard USD cost caps. The
+> steps carrying void copy are: §2 Step 1 (README lead), §2 Step 2 (demo video
+> script), §2 Step 3 (long-form article), §3 Step 4 (Show HN title + text), §3
+> Step 5 (X thread), §3 Step 6 (LinkedIn), §5 Step 8 (dev platforms), §6 Step 11
+> (aggregator blurb), plus the venue table's "recommended orientation" column
+> (§1), the positioning summary in §9 and the visual-asset note in §10.
+>
+> The rewrite is a positioning decision, not a mechanical edit, so it is recorded
+> here rather than guessed at. `README.md`, `USER_MANUAL.md` and the migration
+> guides have already been corrected and are the model for the new angle.
+
 A single working doc for taking Shofer to market. It is organized as a **five-phase execution plan** (§2–§6): each phase contains numbered steps, and every step carries its ready-to-post copy inline — the phases are the single source of truth for all launch copy. Supporting reference material follows: a master venue table (§1), post flair/tags (§7), a playbook drawn from comparable tools (§8), the competitive landscape (§9), and platform-specific mechanics for X/Twitter (§10) and tech-news aggregators (§11).
 
 **Contents**

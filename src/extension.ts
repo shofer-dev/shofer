@@ -75,7 +75,6 @@ import {
 	registerTerminalActions,
 	CodeActionProvider,
 } from "./activate"
-import { SlangEditorProvider } from "./core/webview/SlangEditorProvider"
 import { initializeI18n } from "@shofer/core"
 
 /**
@@ -91,7 +90,7 @@ let extensionContext: vscode.ExtensionContext
 
 // Re-export from the leaf module so existing `import { getOutputChannel } from
 // ".../extension"` call sites keep working, while the canonical source lives in
-// a dependency-free module (avoids the WorkflowTask import cycle). New callers
+// a dependency-free module (avoids an import cycle through this entrypoint). New callers
 // should import from "@shofer/core" directly.
 export { getOutputChannel } from "@shofer/core"
 
@@ -108,7 +107,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	setHost(createVsCodeHost(context))
 	outputChannel = vscode.window.createOutputChannel(Package.outputChannel)
 	// Publish to the dependency-free holder so tools/leaf modules can read it
-	// without importing this entrypoint (avoids the WorkflowTask import cycle).
+	// without importing this entrypoint (avoids an import cycle).
 	setOutputChannel(outputChannel)
 
 	// Bootstrap the shared logging transport — must happen before any module
@@ -304,7 +303,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Finish initializing the provider.
 	TelemetryService.instance.setProvider(provider)
 
-	// Discover plugins before anything reads a mode, a workflow or a skill. Shofer's
+	// Discover plugins before anything reads a mode or a skill. Shofer's
 	// built-in modes ship as the bundled `builtin-config` plugin, so an enumeration that
 	// ran first would see — and `CustomModesManager` would then cache and persist — a
 	// mode list with no modes in it. Only declarative discovery is awaited here; code
@@ -369,9 +368,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	registerCommands({ context, outputChannel, provider })
-
-	// Register custom editor for .slang files (opens as an editor tab)
-	SlangEditorProvider.register(context)
 
 	/**
 	 * We use the text document content provider API to show the left side for diff

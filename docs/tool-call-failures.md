@@ -109,7 +109,7 @@ Where `\<parseError\>` is the actionable parser error from `NativeToolCallParser
 
 ### A3. Valid JSON but Required Fields Missing (vscode-lm XML Leak)
 
-**Trigger:** A vscode-lm model (particularly composite `shofer/*` models via `LanguageModelToolCallPart`) emits structurally valid JSON but embeds a trailing `<parameter name="..." string="true">VALUE` XML suffix inside one of the string values instead of as a separate JSON key. Example: `{"diff": "...SEARCH/REPLACE content...\n<parameter name=\"path\" string=\"true\">extensions/shofer/packages/core/src/workflow/WorkflowTask.ts"}`. `JSON.parse()` succeeds because the `<parameter>` text is just literal content inside the diff string. The parser's `apply_diff` guard `(args.path !== undefined || ...)` then fails because `args.path` is `undefined`.
+**Trigger:** A vscode-lm model (particularly composite `shofer/*` models via `LanguageModelToolCallPart`) emits structurally valid JSON but embeds a trailing `<parameter name="..." string="true">VALUE` XML suffix inside one of the string values instead of as a separate JSON key. Example: `{"diff": "...SEARCH/REPLACE content...\n<parameter name=\"path\" string=\"true\">extensions/shofer/packages/core/src/task/Task.ts"}`. `JSON.parse()` succeeds because the `<parameter>` text is just literal content inside the diff string. The parser's `apply_diff` guard `(args.path !== undefined || ...)` then fails because `args.path` is `undefined`.
 
 **Error message:**
 

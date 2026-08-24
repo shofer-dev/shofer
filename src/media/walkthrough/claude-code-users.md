@@ -1,13 +1,13 @@
 # Migrating from Claude Code
 
-Coming from Anthropic's Claude Code? Shofer gives you the same agentic power in a graphical VS Code cockpit — and frees you from a single vendor's models, adds visual multi-agent orchestration, semantic code/git indexing, native worktrees, and hard cost caps.
+Coming from Anthropic's Claude Code? Shofer gives you the same agentic power in a graphical VS Code cockpit — and frees you from a single vendor's models, adds visual multi-agent observability, semantic code/git indexing, native worktrees, and hard cost caps.
 
 ## Key Differences from Claude Code
 
 - **Bring any model** — Anthropic, OpenAI, OpenRouter, xAI, Bedrock, or local via Ollama/LM Studio (Claude Code runs Anthropic models only)
 - **Runs offline** — fully air-gapped with local models
-- **VS Code-native cockpit** — task tree plus live Topology/Sequence/Swimlane diagrams, Stats, and Logs, with the agent graph visualized in-editor
-- **Deterministic Workflows** — declarative Slang multi-agent orchestration, not ad-hoc runtime delegation
+- **VS Code-native cockpit** — live Tree, Sequence, Stats and Logs tabs, with the whole task tree visualized in-editor
+- **Parallel agents you can steer** — background subtasks that don't block the parent, and peer messaging between siblings under a least-privilege grant
 - **Semantic RAG over code _and_ git history** — `git_search` finds _why_ and _when_, not just keywords
 - **Live Memory** — a persistent, cross-session context window that other tasks reuse to cut token spend
 - **Native worktrees + OS-level sandboxing** — parallel branches in one window; shell commands confined via Landlock/bwrap

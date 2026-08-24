@@ -178,7 +178,7 @@ through Category I (`getHost()` + the registries above):
 - **The transport layer** (`packages/core/src/transport/`) — the HTTP/SSE
   server + typed client and the ACP stack, all over the transport-agnostic
   [`ShoferApi`](shofer-api.md).
-- **`slang`/workflow interpreter**, **`apply-patch`**, **`auto-approval`**,
+- **`apply-patch`**, **`auto-approval`**,
   **`glob`**, the **`McpHub`**, **`shofer-config`**, **`extract-text`**, the
   **`diff`** strategies, tiktoken/token-counter, `safeWriteJson`, storage,
   i18n (`@shofer/core/i18n`, static locale imports), and the utils.

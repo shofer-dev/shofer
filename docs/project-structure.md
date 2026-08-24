@@ -67,7 +67,7 @@ extensions/shofer/
 │   │       ├── api/              # 36 portable providers + transform + buildApiHandler + native-handler-registry
 │   │       ├── prompts/          # system.ts + sections + native-tool descriptions
 │   │       ├── task-persistence/ # task store: ports (PersistencePort/taskMetadataStore), backend selection (backend.ts), SQLite default (message-store.ts) + taskMessages/apiMessages/taskMetadata
-│   │       ├── terminal/ blob-store/ metrics/ condense/ context-management/ workflow/ …
+│   │       ├── terminal/ blob-store/ metrics/ condense/ context-management/ …
 │   │       ├── services/         # tree-sitter, code-index engine, mcp (McpHub), …
 │   │       └── transport/        # HTTP/SSE server + ACP stack (serveHttpOverShoferApi, runAcpAgentOverShoferApi)
 │   ├── types/                    # @shofer/types — vscode-free shared types + host seams
@@ -244,7 +244,7 @@ Issues discovered during factual-accuracy verification of this document.
 The tree shows a simplified subset of the monorepo. Missing from the diagram:
 
 - `packages/types/src/events.ts` — ShoferEventName enum (TaskStarted, TaskCompleted, etc.), referenced in Key Components.
-- `packages/core/` — `@shofer/core`, the host-agnostic agent engine (`api/`, prompts, condense, context-management, tree-sitter, the code-index engine, slang/workflow, McpHub, terminal, blob-store, metrics, SQLite persistence, transport/ACP, tool infrastructure, …). Reaches the editor only via `getHost()` + registries.
+- `packages/core/` — `@shofer/core`, the host-agnostic agent engine (`api/`, prompts, condense, context-management, tree-sitter, the code-index engine, McpHub, terminal, blob-store, metrics, SQLite persistence, transport/ACP, tool infrastructure, …). Reaches the editor only via `getHost()` + registries.
 - `packages/telemetry/` — TelemetryService, PostHogTelemetryClient.
 - `packages/ipc/` — IPC client/server for CLI ↔ extension communication.
 - `packages/core/src/tools/` — `BaseTool` + the ~55 concrete native tool handlers (`ApplyDiffTool.ts`, `AttemptCompletionTool.ts`, …) plus the tool _infrastructure_ (`defineNativeTool`, the private/native tool registries, tool aliases, the repetition detector).

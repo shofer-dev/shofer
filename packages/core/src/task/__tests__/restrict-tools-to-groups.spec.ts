@@ -6,7 +6,7 @@ import type { ToolGroup } from "@shofer/types"
 import { restrictToolsToDeclaredGroups, type ToolCategories } from "../build-tools.js"
 
 /**
- * Regression coverage for the workflow `.slang` `agent { tools: [...] }`
+ * Regression coverage for the per-task `agentToolGroups`
  * restriction (the structural fix that prevents an orchestrator agent from
  * doing the workers' job — e.g. an architect-mode orchestrator investigating
  * or editing instead of coordinating).

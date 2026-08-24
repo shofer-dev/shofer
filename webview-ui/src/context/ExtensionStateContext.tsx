@@ -194,11 +194,9 @@ export const mergeExtensionState = (prevState: ExtensionState, newState: Partial
 	// state push without currentTaskItem (JSON-stripped undefined — happens
 	// after launchTask pops the current task leaving an empty stack), the
 	// webview MUST clear its stale currentTaskItem. Falling back to
-	// prevRest.currentTaskItem is exactly what causes the "Starting
-	// workflow…" view to persist after launching a new task from a
-	// WorkflowView — the old workflow task's HistoryItem (with
-	// isWorkflow:true) survives across state pushes and keeps WorkflowView
-	// visible when ChatView should be shown.
+	// prevRest.currentTaskItem is exactly what makes a popped task's view
+	// persist after launching a new one — the old HistoryItem survives across
+	// state pushes and keeps the stale surface visible.
 	const currentTaskId = newRest.currentTaskId ?? prevRest.currentTaskId
 	const rest = {
 		...prevRest,
@@ -207,8 +205,8 @@ export const mergeExtensionState = (prevState: ExtensionState, newState: Partial
 		currentTaskId,
 		// Only keep the old currentTaskItem when the backend explicitly
 		// sent one. When absent (JSON-stripped undefined), clear to
-		// undefined so the webview does not render a stale workflow or
-		// task that has already been popped from the stack.
+		// undefined so the webview does not render a stale task that has
+		// already been popped from the stack.
 		currentTaskItem: newRest.currentTaskItem ?? undefined,
 	}
 

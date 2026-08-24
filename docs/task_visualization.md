@@ -1,9 +1,9 @@
 # Task Visualization
 
-This document describes four visualizations for a Shofer Task and its subtask tree, accessible via tabs in `ChatView` (matching the pattern used by [`WorkflowView`](../webview-ui/src/components/chat/WorkflowView.tsx) with its `[ Events ] [ Tree ] [ Sequence ] [ State ]` tabs; WorkflowView's per-round topology is rendered inline in Events):
+This document describes four visualizations for a Shofer Task and its subtask tree, accessible via tabs in `ChatView`:
 
 1. **Tree** — hierarchical view showing parent/child task relationships under a common root, like `TaskSelector` renders.
-2. **Sequence** — a lifeline-based sequence diagram showing task-to-task communication (spawn, message, await, answer, cancel, question) across the task tree, analogous to `compileSequenceSVG` in [`slang-render.js`](../src/core/webview/slang-render.js:671).
+2. **Sequence** — a lifeline-based sequence diagram showing task-to-task communication (spawn, message, await, answer, cancel, question) across the task tree.
 3. **Trace** — a Chrome DevTools Network-panel-style waterfall for a single task, showing every API request and tool execution on a horizontal time axis.
 4. **Stats** — a donut chart breaking down the focused task's active time by phase (model wait, thinking, streaming, tool execution, waiting for task, sleeping, overhead).
 
@@ -45,7 +45,7 @@ flowchart LR
 - `"Trace"` — the waterfall timeline for the currently focused task.
 - `"Stats"` — the active-time breakdown donut for the currently focused task.
 
-Tab state is local to `ChatView`, reset to `"Chat"` on task switch. The tabs use the same visual style as `WorkflowView`'s tab buttons (`text-xs font-medium px-3 py-1 rounded`, active = `--vscode-button-background`, inactive = `transparent` with `opacity-60`).
+Tab state is local to `ChatView`, reset to `"Chat"` on task switch. The tab buttons are styled `text-xs font-medium px-3 py-1 rounded` (active = `--vscode-button-background`, inactive = `transparent` with `opacity-60`).
 
 ## Scope Per Visualization
 
@@ -93,7 +93,7 @@ Siblings are sorted by creation time (newest first, matching `TaskSelector`), ch
 
 ## 2. Sequence — Task Interaction Diagram (v1)
 
-A lifeline-based sequence diagram showing inter-task communication across the task tree, analogous to `compileSequenceSVG` in [`slang-render.js`](../src/core/webview/slang-render.js:671).
+A lifeline-based sequence diagram showing inter-task communication across the task tree.
 
 > **Implemented** in [`TaskSequenceView.tsx`](../webview-ui/src/components/chat/TaskSequenceView.tsx). Because `task_interaction` events live in every task's `ui_messages.json` (not just the focused task), they're aggregated host-side via the `getTaskInteractions` request → `ShoferProvider.getTaskInteractions(rootTaskId)`, which reads every task under the root and returns the events sorted by `rootOffsetMs`. The `kind` set now also includes `"question"` (`ask_followup_question` → parent). The notes below describe the original design.
 
@@ -133,7 +133,7 @@ See the [`TaskInteractionPayload`](#task-interaction-events) shape under Data Mo
 ── Tooltips on arrows: label + duration
 ```
 
-The diagram mirrors `compileSequenceSVG`'s aesthetics (dashed lifeline tracks, rounded header boxes, `<marker>` arrowheads, activation boxes on both endpoints). The key difference: lifelines represent tasks (not Slang agents), arrows represent control-plane tool invocations, and lifelines are ordered left-to-right by task creation time (root leftmost). Arrowheads use one SVG `<marker>` per kind colour so they auto-orient and land exactly on the target lifeline. Pan/zoom is shared with the Trace via the [`useSvgPanZoom`](../webview-ui/src/hooks/useSvgPanZoom.ts) hook.
+The diagram uses dashed lifeline tracks, rounded header boxes, `<marker>` arrowheads and activation boxes on both endpoints. Lifelines represent tasks, arrows represent control-plane tool invocations, and lifelines are ordered left-to-right by task creation time (root leftmost). Arrowheads use one SVG `<marker>` per kind colour so they auto-orient and land exactly on the target lifeline. Pan/zoom is shared with the Trace via the [`useSvgPanZoom`](../webview-ui/src/hooks/useSvgPanZoom.ts) hook.
 
 ### Scope
 
@@ -448,7 +448,7 @@ prevents a double-emit when the normal path already fired.
 
 ## Rendering Technology — Custom SVG
 
-The Trace view uses **custom SVG** rendered inside a React component, matching the project's existing pattern in [`slang-render.js`](../src/core/webview/slang-render.js).
+The Trace view uses **custom SVG** rendered inside a React component.
 
 **Why SVG, not Canvas:**
 
@@ -462,14 +462,11 @@ The Trace view uses **custom SVG** rendered inside a React component, matching t
 - `recharts` / `@nivo` — chart libraries, not waterfall timeline purpose-built.
 - `react-chrome-waterfall` — niche, unmaintained.
 
-**Reuse from `slang-render.js`:**
-
-- Scroll-to-zoom on SVG `viewBox`
-- Hover highlight infrastructure
-- Drag-to-pan for the background
-- Zoom-in/out/fit buttons
-
-The timeline visualization is structurally simpler than what `slang-render.js` already does — horizontal `<rect>` bars on a time axis with colored phases.
+**Shared interaction infrastructure** — scroll-to-zoom on the SVG `viewBox`,
+hover highlighting, drag-to-pan and the zoom-in/out/fit buttons come from the
+[`useSvgPanZoom`](../webview-ui/src/hooks/useSvgPanZoom.ts) hook, shared with the
+Sequence view. The timeline itself is structurally simple — horizontal `<rect>`
+bars on a time axis with colored phases.
 
 ### Layout
 

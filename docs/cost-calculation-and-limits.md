@@ -150,49 +150,6 @@ messages.forEach((message) => {
 - **Cancelled/aborted requests** — partial cost is preserved via `updateApiReqMsg(cancelReason, ...)`
 - **Background-subtask requests** — aggregated into the parent task's total (shown with `*` indicator for subtask-inclusive totals)
 
-### Workflow Header — Whole-Tree Cost & Tokens
-
-A `WorkflowTask` is a deterministic orchestrator that makes **no LLM calls of its
-own**, so its own cost/tokens are ~0 and per-task metrics like **Context Length**
-and **Size** don't apply. The workflow surface therefore uses a dedicated
-[`WorkflowHeader`](../webview-ui/src/components/chat/WorkflowHeader.tsx) (a fork of
-[`TaskHeader`](../webview-ui/src/components/chat/TaskHeader.tsx)) that:
-
-- **drops** Context Length, the context-window progress bar, Cache, and Size, and
-- shows **API Cost** and **Tokens** aggregated across the **entire task tree**
-  (the workflow + every agent it spawned, recursively).
-
-The aggregates come from [`aggregateTaskCostsRecursive`](../packages/core/src/webview/aggregateTaskCosts.ts),
-which walks `HistoryItem.childIds` and now sums `tokensIn`/`tokensOut` alongside
-`totalCost`. They are requested via `getTaskWithAggregatedCosts` and delivered on
-the `taskWithAggregatedCosts` message (`aggregatedCosts: { totalCost, ownCost,
-childrenCost, tokensIn, tokensOut }`). Cost was already aggregated; **token
-aggregation was added** so the workflow header's Tokens row reflects real
-tree-wide usage instead of the orchestrator's empty own-count.
-
-#### Cost cap on workflows
-
-The per-root cost cap **does apply to workflows**, even though the `WorkflowTask`
-orchestrator makes no LLM calls of its own: the cap lives on the workflow root,
-and the agent subtasks (which _do_ call the model) resolve it by walking
-`parentTask` to that root and aggregate their spend into it — exactly the
-root-plus-subtree model §Part 2 describes. Three pieces make this work:
-
-- **Seeding.** `createWorkflowTask()` / `createWorkflowTaskFromHistory()` build
-  the root with `new WorkflowTask(...)`, bypassing `ShoferProvider.createTask()`
-  (the usual `defaultCostLimit` seeding point), so they call
-  `seedWorkflowCostLimit()` to apply the global default to the workflow root.
-  The cap then persists with the workflow's HistoryItem via the normal
-  `this.costLimit` metadata path.
-- **Display + edit.** [`WorkflowHeader`](../webview-ui/src/components/chat/WorkflowHeader.tsx)
-  renders `$spent / $limit` and the `BudgetLimitDialog` pencil; `WorkflowView`
-  wires `onUpdateCostLimit` (→ `updateCostLimit` message) so the cap is
-  live-editable just like in `TaskHeader`.
-- **Enforcement + pause.** Enforcement fires from the agent subtasks' streaming
-  loops (`checkInFlightCostLimit` / `checkCostLimit`); the `pause`-mode
-  `budget_limit` ask is handled by `WorkflowView` with the same
-  "Continue without limit" / "Abort task" / new-amount outcomes.
-
 ### What Is NOT Counted (Known Gap)
 
 **Orphaned `api_req_started` messages** — if a request was started (`api_req_started` emitted) but the extension crashed or the task was force-closed before ANY response data arrived, the message has no `cost` and no `cancelReason`. These are removed during `saveShoferMessages()`:
@@ -222,6 +179,15 @@ Parent tasks aggregate costs from all child subtasks. The [`TaskHeader`](../webv
 - `aggregatedCost` — this task + all subtask costs (when `hasSubtasks` is true)
 
 A `*` indicator shows that the total includes subtask costs.
+
+The aggregate itself comes from [`aggregateTaskCostsRecursive`](../packages/core/src/webview/aggregateTaskCosts.ts),
+which walks `HistoryItem.childIds` and sums `tokensIn`/`tokensOut` alongside
+`totalCost`. `ChatView` requests it for any task with `childIds` via the
+`getTaskWithAggregatedCosts` message, and the host answers on
+`taskWithAggregatedCosts` with `aggregatedCosts: { totalCost, ownCost,
+childrenCost, tokensIn, tokensOut }`. Summing tokens as well as cost is what lets
+a parent that makes few calls of its own show the tree's real usage rather than
+its own near-empty count.
 
 ### Cost Data Paths
 

@@ -8,7 +8,7 @@ import type { McpHub } from "../../services/mcp/McpHub.js"
 const DEFERRED_SCHEMA_BULLET = `- Most of your tools are listed as stubs: a name and one line, with their parameters omitted. They are real capabilities and you call them normally — you just have to read their contract first with describe_tools. Treat the stub list as your full inventory, not as a summary of it.`
 
 /**
- * @param groups When provided (workflow agents with a `.slang` `tools:`
+ * @param groups When provided (a task with a declared tool-group
  *   restriction), the capability prose is gated to only the groups the agent
  *   actually has — so e.g. a `[questions]`-only coordinator isn't told it can
  *   read/write files or run commands (which would invite it to hallucinate

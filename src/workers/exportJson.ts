@@ -8,7 +8,7 @@ import { type StringifyAndWriteResult } from "@shofer/core"
  * Pretty-print `value` to JSON and write it to `filePath` — entirely off the
  * extension-host thread.
  *
- * A workflow JSON export is the whole descendant task tree (every sub-task's
+ * A JSON export is the whole descendant task tree (every sub-task's
  * full conversation history), so serializing it on the main thread would block
  * the event loop for seconds and freeze the webview. The worker also performs
  * the file write so the (potentially multi-MB) string never has to be cloned

@@ -103,47 +103,12 @@ export interface JsonExportTrace {
 	/** Number of tool calls across all API calls. */
 	totalToolCalls: number
 	/**
-	 * Set for Workflow tasks. A workflow makes no direct LLM calls (so `calls` is
-	 * empty and the token/cost totals are 0); its execution is captured by the
-	 * state machine + the UI event log below.
-	 */
-	isWorkflow?: boolean
-	/**
-	 * Serialized slang FlowState for a workflow — the state machine AND the data
-	 * passing through it: flow name, params, per-agent state/bindings/output,
-	 * round, status, and the inter-agent mailbox + mailboxHistory.
-	 */
-	flowState?: Record<string, unknown>
-	/**
-	 * Chronological UI event log for a workflow: the say/ask state-transition and
-	 * status messages it emitted. Excludes `peer_message` — peer-to-peer agent
-	 * messages do not flow through the workflow state machine.
-	 */
-	events?: JsonExportWorkflowEvent[]
-	/**
-	 * The `.slang` flow definition source for a workflow. Together with
-	 * `flowState` (especially `mailboxHistory`, the ordered from→to message log)
-	 * this is exactly what `buildWorkflowVizHtml(slangSource, flowState, …)` needs
-	 * to reproduce the sequence / swimlane / topology diagrams post-mortem.
-	 */
-	slangSource?: string
-	/**
-	 * Nested traces for this task's spawned sub-tasks, in `childIds` order. For a
-	 * workflow these are its per-agent tasks (each a full trace with its own LLM
-	 * calls); each child may in turn carry its own `subtasks`, so the field is the
-	 * complete descendant tree. Present (and non-empty) only when the task spawned
+	 * Nested traces for this task's spawned sub-tasks, in `childIds` order. Each
+	 * child may in turn carry its own `subtasks`, so the field is the complete
+	 * descendant tree. Present (and non-empty) only when the task spawned
 	 * children.
 	 */
 	subtasks?: JsonExportTrace[]
-}
-
-/** A single UI event (state transition / status message) in a workflow export. */
-export interface JsonExportWorkflowEvent {
-	ts: number
-	type: string
-	say?: string
-	ask?: string
-	text?: string
 }
 
 /**
@@ -255,10 +220,7 @@ export function getJsonExportFileName(dateTs: number): string {
  * @param createdAt - ISO 8601 creation timestamp.
  * @param apiConversationHistory - The full API conversation (Anthropic format).
  * @param uiMessages - Parsed ui_messages.json array.
- * @param options - Extras: the display `title` (`HistoryItem.name`); plus the
- *   workflow fields `isWorkflow` and the serialized `flowState`/`slangSource`.
- *   A workflow has no `apiConversationHistory`, so its trace is the state machine
- *   (`flowState`) + the UI event log derived from `uiMessages`.
+ * @param options - Extras: the display `title` (`HistoryItem.name`).
  */
 export function buildJsonTrace(
 	taskId: string,
@@ -267,7 +229,7 @@ export function buildJsonTrace(
 	createdAt: string,
 	apiConversationHistory: Anthropic.Messages.MessageParam[],
 	uiMessages: Array<{ type: string; say?: string; ask?: string; ts: number; text?: string }>,
-	options?: { title?: string; isWorkflow?: boolean; flowState?: Record<string, unknown>; slangSource?: string },
+	options?: { title?: string },
 ): JsonExportTrace {
 	const calls: JsonExportCall[] = []
 
@@ -438,17 +400,6 @@ export function buildJsonTrace(
 		totalToolCalls += call.toolCalls.length
 	}
 
-	// Workflow tasks make no direct LLM calls, so `calls` is empty. Capture their
-	// execution instead: the state machine + data passing (flowState) and a
-	// chronological UI event log (state transitions / status), excluding the
-	// peer-to-peer `peer_message` say type (those don't flow through the workflow).
-	const isWorkflow = options?.isWorkflow ?? false
-	const events: JsonExportWorkflowEvent[] | undefined = isWorkflow
-		? uiMessages
-				.filter((m) => !(m.type === "say" && m.say === "peer_message"))
-				.map((m) => ({ ts: m.ts, type: m.type, say: m.say, ask: m.ask, text: m.text }))
-		: undefined
-
 	return {
 		version: 1,
 		taskId,
@@ -466,9 +417,6 @@ export function buildJsonTrace(
 		totalCostUsd: totalCost,
 		totalCalls: calls.length,
 		totalToolCalls,
-		...(isWorkflow
-			? { isWorkflow: true, flowState: options?.flowState, slangSource: options?.slangSource, events }
-			: {}),
 	}
 }
 
@@ -476,7 +424,7 @@ export function buildJsonTrace(
  * Build a task's trace plus the full descendant tree of its spawned sub-tasks.
  *
  * `loadTask(id)` returns the single-task trace and that task's direct `childIds`
- * (the persisted parent→child links — for a workflow, its per-agent tasks). Each
+ * (the persisted parent→child links). Each
  * child is loaded and walked the same way, so the result carries the complete
  * descendant tree under nested `subtasks` (in `childIds` order).
  *
@@ -570,8 +518,8 @@ export async function downloadJsonTask(
 		return undefined
 	}
 
-	// Serialize + write off the extension-host thread. A workflow trace is the
-	// full descendant task tree (every sub-task's history), so doing this inline
+	// Serialize + write off the extension-host thread. A trace is the full
+	// descendant task tree (every sub-task's history), so doing this inline
 	// would block the event loop for seconds and freeze the webview. The progress
 	// notification is indeterminate — JSON.stringify is atomic — but it now
 	// actually animates, because the heavy work no longer holds the main thread.

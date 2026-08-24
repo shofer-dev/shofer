@@ -6,7 +6,7 @@ export interface AggregatedCosts {
 	childrenCost: number // Sum of all direct children costs (recursive)
 	totalCost: number // ownCost + childrenCost
 	// Token totals across the whole subtree (own + all descendants). The
-	// WorkflowTask root makes no LLM calls of its own, so its header relies on
+	// A parent that makes no LLM calls of its own has a header that relies on
 	// these to show the tree's real token usage.
 	tokensIn: number
 	tokensOut: number

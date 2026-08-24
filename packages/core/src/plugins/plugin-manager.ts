@@ -259,8 +259,7 @@ export interface PluginDirContribution {
 	 * `private` — resolvable/invocable by qualified name but hidden from user-facing
 	 * enumerations. Empty when the plugin declares no private entries of this kind.
 	 *
-	 * Absent for contribution kinds that have no private concept (workflows, which are
-	 * not namespaced and so cannot be "invocable only by qualified name").
+	 * Absent for contribution kinds that have no private concept.
 	 */
 	privateNames?: string[]
 	/**
@@ -356,7 +355,7 @@ export interface PluginManagerOptions {
 	 * Plugin names an **organization** has suppressed (delivered as pod env vars, see
 	 * `config/governance.ts`). Unlike the user's enable/disable these are not a
 	 * preference: a listed plugin never loads and the user cannot turn it back on, which
-	 * is what lets an org fully define the available mode/workflow set.
+	 * is what lets an org fully define the available mode set.
 	 */
 	forceDisabledPlugins?: string[]
 	/**
@@ -1246,25 +1245,6 @@ export class PluginManager {
 	}
 
 	/**
-	 * `<root>/workflows` directories for enabled plugins that ship `.slang` workflows.
-	 *
-	 * Not namespaced, unlike skills/commands: a workflow is addressed by the flow name
-	 * in its source, and discovery is a priority merge where a user's or project's file
-	 * of the same name wins — the behaviour the built-in workflows had before they
-	 * became a plugin, and what lets someone fork a shipped workflow by copying it.
-	 */
-	getContributedWorkflowDirs(): PluginDirContribution[] {
-		const out: PluginDirContribution[] = []
-		for (const plugin of this.enabledWithPermission("workflows")) {
-			const workflows = plugin.manifest.contributes?.workflows ?? []
-			if (workflows.length > 0) {
-				out.push({ pluginName: plugin.name, dir: path.join(plugin.root, "workflows") })
-			}
-		}
-		return out
-	}
-
-	/**
 	 * MCP server configs contributed by enabled plugins. On a name collision the
 	 * last enabled plugin wins (a warning is logged). `McpHub` re-validates each
 	 * config with its own schema before connecting.
@@ -1472,8 +1452,8 @@ export function adoptSharedPluginManager(manager: PluginManager): void {
  *
  * Clearing unconditionally is the bug this exists to prevent: the disposing owner is
  * not necessarily the last live one, and every subsystem reads contributions through
- * the slot ({@link getContributedModes} via `effectiveModes`, workflow dirs, skills,
- * MCP servers, commands). Emptying it while another manager is alive makes the whole
+ * the slot ({@link getContributedModes} via `effectiveModes`, skills, MCP servers,
+ * commands). Emptying it while another manager is alive makes the whole
  * platform behave as if no plugin were installed — which, because Shofer's own modes
  * ship as the bundled `builtin-config` plugin, silently removes the built-in modes.
  *

@@ -2,22 +2,16 @@
 #
 # Shofer CLI test harness — the single entry point for all CLI test suites.
 #
-# Runs THREE parts:
+# Runs TWO parts:
 #
 #   Part 1 — CLI scenarios (docs/test_harness.md §1-25).
 #            Sequential by design (some scenarios share session/filesystem state).
 #
-#   Part 2 — Integration protocol cases (apps/cli/scripts/integration/cases/*.ts,
-#            excluding workflow-conformance). Stream-protocol cases for
-#            cancellation, follow-ups, queue ordering and process lifecycle.
-#            Parallelised via xargs (process-per-case). They drive genuinely slow
-#            multi-turn tool flows, so they need a real provider and are skipped
-#            on the hermetic `mock` preset.
-#
-#   Part 3 — Workflow conformance (23 _-prefixed .slang fixtures).
-#            Parallelised via xargs (process-per-flow isolation) to keep total
-#            wall-clock time reasonable against real providers. Uses the MATCH=
-#            knob so each child process runs exactly one fixture.
+#   Part 2 — Integration protocol cases (apps/cli/scripts/integration/cases/*.ts).
+#            Stream-protocol cases for cancellation, follow-ups, queue ordering
+#            and process lifecycle. Parallelised via xargs (process-per-case).
+#            They drive genuinely slow multi-turn tool flows, so they need a real
+#            provider and are skipped on the hermetic `mock` preset.
 #
 # Presets:
 #   mock    Hermetic mock provider — no network, no credentials, deterministic.
@@ -30,13 +24,10 @@
 #   DS_MODEL        model for the `ds` preset    (default deepseek/deepseek-v4-pro)
 #   TIMEOUT         per-scenario timeout seconds, Part 1 (default 120)
 #   TIMEOUT_INT     per-case timeout seconds, Part 2    (default 180)
-#   TIMEOUT_WF      per-workflow timeout seconds, Part 3 (default 600)
 #   INT_PARALLEL    max concurrent integration cases (default 4)
-#   WF_PARALLEL     max concurrent workflow processes (default 4)
-#   MATCH           substring filter for Part 2 case names / Part 3 fixture names
+#   MATCH           substring filter for Part 2 case names
 #   SKIP_CLI        skip Part 1 (default 0)
 #   SKIP_INTEGRATION skip Part 2 (default 0)
-#   SKIP_WORKFLOW   skip Part 3 (default 0; legacy alias: SKIP_PART2)
 #
 # Exit code: 0 if all scenarios in every part pass, 1 otherwise.
 set -u
@@ -54,23 +45,18 @@ ROUTER_URL="${ROUTER_URL:-http://localhost:30081/v1}"
 DS_MODEL="${DS_MODEL:-deepseek/deepseek-v4-pro}"
 # Per-scenario timeouts. The `ds` preset drives a real, slow reasoning model
 # (deepseek-v4-pro emits verbose reasoning before answering), so multi-turn
-# integration cases and workflows need a much larger ceiling than the hermetic,
+# integration cases need a much larger ceiling than the hermetic,
 # instantaneous mock provider. Explicit env overrides still win.
 if [[ "${PRESET}" == "ds" ]]; then
 	TIMEOUT="${TIMEOUT:-300}"
 	TIMEOUT_INT="${TIMEOUT_INT:-600}"
-	TIMEOUT_WF="${TIMEOUT_WF:-900}"
 else
 	TIMEOUT="${TIMEOUT:-120}"
 	TIMEOUT_INT="${TIMEOUT_INT:-180}"
-	TIMEOUT_WF="${TIMEOUT_WF:-600}"
 fi
 INT_PARALLEL="${INT_PARALLEL:-4}"
-WF_PARALLEL="${WF_PARALLEL:-4}"
 SKIP_CLI="${SKIP_CLI:-0}"
 SKIP_INTEGRATION="${SKIP_INTEGRATION:-0}"
-# SKIP_PART2 is the legacy name for the workflow-conformance skip.
-SKIP_WORKFLOW="${SKIP_WORKFLOW:-${SKIP_PART2:-0}}"
 
 # Provider/model presets (override via env to use any other provider).
 case "${PRESET}" in
@@ -276,12 +262,11 @@ else
 	# Provider env each case inherits (stream-harness.ts reads these).
 	INT_ENV="PROVIDER=shofer API_KEY=shofer MODEL=${DS_MODEL} BASE_URL=${ROUTER_URL}"
 
-	# Discover case files, excluding workflow-conformance (its own Part 3).
+	# Discover case files.
 	shopt -s nullglob
 	CASES=()
 	for f in "${INT_DIR}"/*.ts; do
 		base="$(basename "$f" .ts)"
-		[[ "$base" == "workflow-conformance" ]] && continue
 		# Optional MATCH substring filter for single-case runs.
 		if [[ -n "${MATCH:-}" && "$base" != *"${MATCH}"* ]]; then continue; fi
 		CASES+=( "$base" )
@@ -341,120 +326,6 @@ IWORKER_EOF
 	echo ""
 	echo "================= PART 2 SUMMARY (${PRESET}) ================="
 	echo "PASS=${INT_PASS}  FAIL=${INT_FAIL}"
-	echo "------------------------------------------------------"
-fi
-
-# ─────────────────────────────────────────────────────────────────────────
-# Part 3 — Workflow conformance (process-per-flow parallel)
-# ─────────────────────────────────────────────────────────────────────────
-if [[ "${SKIP_WORKFLOW}" == "1" ]]; then
-	echo ""
-	echo "Part 3 (workflow conformance) — SKIPPED (SKIP_WORKFLOW=1)"
-else
-	echo ""
-	echo "============================================"
-	echo " Part 3: Workflow conformance (parallel x${WF_PARALLEL})"
-	echo "============================================"
-
-	WF_DIR="${CLI_DIR}/scripts/integration/fixtures"
-	WF_RUNNER="pnpm --filter @shofer/cli exec tsx scripts/integration/cases/workflow-conformance.ts"
-	WF_ENV="PROVIDER=shofer API_KEY=shofer MODEL=${DS_MODEL} BASE_URL=${ROUTER_URL}"
-	if [[ "${PRESET}" == "mock" ]]; then
-		WF_ENV="PROVIDER=mock API_KEY=x MODEL=mock-model"
-	fi
-
-	# Collect fixture names (without .slang extension).
-	shopt -s nullglob
-	FIXTURES=()
-	for f in "${WF_DIR}"/_*.slang; do
-		base="$(basename "$f" .slang)"
-		# Optional MATCH substring filter for single-fixture runs.
-		if [[ -n "${MATCH:-}" && "$base" != *"${MATCH}"* ]]; then continue; fi
-		FIXTURES+=( "$base" )
-	done
-
-	WF_LOG_DIR="$(mktemp -d)"
-	# Logs are NOT auto-cleaned — they persist after the script exits so
-	# failures can be inspected.  Clean up manually when done:
-	#   rm -rf /tmp/tmp.XXXX
-
-	# Export env vars so xargs child processes can access them.
-	# CLI_DIR is the absolute path to apps/cli, already computed at line ~40.
-	WF_CLI_DIR="${CLI_DIR}"
-	export WF_ENV WF_LOG_DIR TIMEOUT_WF WF_CLI_DIR
-
-	WF_PASS=0
-	WF_FAIL=0
-
-	WF_SCRIPT="${WF_LOG_DIR}/_wf_worker.sh"
-	cat > "${WF_SCRIPT}" <<'WORKER_EOF'
-#!/usr/bin/env bash
-set -u
-name="$1"
-log="${WF_LOG_DIR}/${name}.log"
-
-# cd into the CLI directory — WF_CLI_DIR is exported by the parent
-# (absolute path, already resolved from BASH_SOURCE up there).
-cd "${WF_CLI_DIR}" || exit 2
-
-env MATCH="${name}" TIMEOUT_MS="$((TIMEOUT_WF * 1000))" ${WF_ENV} \
-	pnpm --filter @shofer/cli exec tsx scripts/integration/cases/workflow-conformance.ts \
-	> "${log}" 2>&1
-WORKER_EOF
-	chmod +x "${WF_SCRIPT}"
-
-	# Process-per-flow isolation: each fixture runs in its own child
-	# process, avoiding the singleton collision and process.exit(0)
-	# issues in the in-process concurrency path.  xargs -P N drives
-	# the desired level of parallelism.
-	#
-	# Guard against the nullglob edge case where no _*.slang files exist
-	# (the printf would trip set -u on bash < 4.4).
-	if [[ ${#FIXTURES[@]} -gt 0 ]]; then
-		if [[ "${WF_PARALLEL}" -gt 1 ]]; then
-			printf '%s\n' "${FIXTURES[@]}" | \
-				xargs -P "${WF_PARALLEL}" -I{} "${WF_SCRIPT}" "{}"
-		else
-			# Serial mode (WF_PARALLEL=0 or 1): run fixtures one at a time.
-			for name in "${FIXTURES[@]}"; do
-				"${WF_SCRIPT}" "${name}"
-			done
-		fi
-	fi
-
-	# Collect results.
-	for name in "${FIXTURES[@]}"; do
-		log="${WF_LOG_DIR}/${name}.log"
-		# grep -F avoids regex interpretation of fixture names containing
-		# special characters (currently all safe, but this is defensive).
-		if grep -qF "✅ ${name}:" "$log" 2>/dev/null; then
-			echo "  ✅ ${name}"
-			WF_PASS=$((WF_PASS + 1))
-			TOTAL_PASS=$((TOTAL_PASS + 1))
-		else
-			# Parse the per-flow result line for the actual terminal status.
-			# The runner's summary block never executes under MATCH=<single>
-			# because api-harness.ts dispose() calls process.exit(0) after
-			# the first iteration.  So we extract from the per-flow line
-			# (workflow-conformance.ts:217-219), which uses `status=` not `got=`.
-			reason=""
-			reason="$(grep -oE "✗ ${name}: status=[^ ]+" "$log" 2>/dev/null | grep -oE "status=[^ ]+" | sed 's/status=//')"
-			# Fall back: timeout line carries no status= prefix (workflow-conformance.ts:201).
-			# The actual timeout line is "✗ <name>: waitForCompletion timed out after …"
-			# (workflow-conformance.ts:201 + api-harness.ts:365), not "✗ <name>: timed out".
-			if [[ -z "${reason}" ]] && grep -q "✗ ${name}:.*timed out" "$log" 2>/dev/null; then
-				reason="TIMEOUT"
-			fi
-			echo "  ✗  ${name}  -- status=${reason:-NO_OUTPUT}"
-			echo "     log: ${log}"
-			WF_FAIL=$((WF_FAIL + 1))
-			TOTAL_FAIL=$((TOTAL_FAIL + 1))
-		fi
-	done
-
-	echo ""
-	echo "================= PART 3 SUMMARY (${PRESET}) ================="
-	echo "PASS=${WF_PASS}  FAIL=${WF_FAIL}"
 	echo "------------------------------------------------------"
 fi
 

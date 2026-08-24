@@ -213,7 +213,7 @@ export function getRecentLogs(maxLines: number = 2000): string {
 
 /**
  * Return a snapshot of the buffered log lines attributed to a specific task /
- * workflow instance (oldest first). Powers the on-demand fetch for the "Logs"
+ * task instance (oldest first). Powers the on-demand fetch for the "Logs"
  * tab. Returns an empty array before bootstrap or for unknown task ids.
  */
 export function getTaskLogs(taskId: string): TaskScopedLogLine[] {

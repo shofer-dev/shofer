@@ -1,6 +1,6 @@
 // cd src && npx vitest run core/task/__tests__/say-stream-block-identity.spec.ts
 // Prevent the transitive import graph from loading extension.ts,
-// which pulls in WorkflowTask (which extends Task — circular).
+// which pulls in the extension entrypoint (circular).
 vi.mock("../../../extension", () => ({}))
 
 import type { ShoferMessage } from "@shofer/types"
