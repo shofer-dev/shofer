@@ -180,6 +180,77 @@ describe("PluginRegistry — onTimelineRewind / onTaskDeleted", () => {
 		expect(seen).toEqual([{ info: { taskId: "t1", text: "let me run the tests", turn: 3 }, taskId: "t1", turn: 3 }])
 	})
 
+	it("brackets one LLM request with onApiRequestStart / onApiRequestFinish", async () => {
+		const reg = new PluginRegistry()
+		const seen: string[] = []
+		await reg.register(
+			{
+				name: "meter",
+				lifecycle: {
+					onApiRequestStart: (info, ctx) =>
+						void seen.push(`start:${info.model}:${info.requestIndex}:${ctx.mode}`),
+					onApiRequestFinish: (info) => void seen.push(`finish:${info.requestIndex}:${info.ttfbMs}`),
+				},
+			},
+			{},
+			{ lifecycle: true },
+		)
+
+		await reg.notifyApiRequestStart(
+			{ taskId: "t1", requestIndex: 0, model: "m", apiProtocol: "anthropic", retryAttempt: 0 },
+			{ mode: "code" },
+		)
+		await reg.notifyApiRequestFinish({
+			requestIndex: 0,
+			taskId: "t1",
+			parentTaskId: null,
+			startedAtOffsetMs: 10,
+			finishedAtOffsetMs: 900,
+			ttfbMs: 120,
+			genStartOffsetMs: 300,
+			model: "m",
+			apiProtocol: "anthropic",
+			retryAttempt: 0,
+			tokensIn: 1,
+			tokensOut: 2,
+			cacheWrites: 0,
+			cacheReads: 0,
+			cost: 0.5,
+			status: "completed",
+			toolSpans: [],
+		})
+
+		expect(seen).toEqual(["start:m:0:code", "finish:0:120"])
+	})
+
+	it("gives an afterAsk hook the ask id on its context as well as in the payload", async () => {
+		const reg = new PluginRegistry()
+		const seen: Array<{ askId?: string; ctxAskId?: string; decidedBy?: string }> = []
+		await reg.register(
+			{
+				name: "verdicts",
+				lifecycle: {
+					afterAsk: (info, ctx) =>
+						void seen.push({ askId: info.askId, ctxAskId: ctx.askId, decidedBy: info.decidedBy }),
+				},
+			},
+			{},
+			{ lifecycle: true },
+		)
+
+		await reg.notifyAfterAsk({
+			taskId: "t1",
+			askId: "ask-9",
+			askType: "tool",
+			outcome: "answered",
+			response: "yesButtonClicked",
+			decidedBy: "auto-approval",
+			autoApproved: true,
+		})
+
+		expect(seen).toEqual([{ askId: "ask-9", ctxAskId: "ask-9", decidedBy: "auto-approval" }])
+	})
+
 	it("isolates a throwing rewind hook so the rewind still proceeds", async () => {
 		const reg = new PluginRegistry()
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})

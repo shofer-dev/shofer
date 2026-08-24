@@ -9,13 +9,18 @@ import { createRequestHandler, type ShoferApi, type ServerEvent } from "../http-
  * validation, and SSE framing.
  */
 
-function mockReq(method: string, url: string, body?: unknown): IncomingMessage & { fireClose: () => void } {
+function mockReq(
+	method: string,
+	url: string,
+	body?: unknown,
+	headers: Record<string, string> = {},
+): IncomingMessage & { fireClose: () => void } {
 	const closeHandlers: Array<() => void> = []
 	const raw = body === undefined ? "" : JSON.stringify(body)
 	const req = {
 		method,
 		url,
-		headers: {} as Record<string, string>,
+		headers,
 		on(event: string, cb: () => void) {
 			if (event === "close") closeHandlers.push(cb)
 			return req
@@ -110,6 +115,54 @@ describe("createRequestHandler (§11)", () => {
 			taskId: undefined,
 			apiConfiguration: undefined,
 		})
+	})
+
+	it("POST /api/v1/task carries the W3C trace context stated in the body", async () => {
+		const res = mockRes()
+		const trace = { traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", tracestate: "a=1" }
+		await run(
+			mockReq("POST", "/api/v1/task", { prompt: "hello", mode: "code", trace }),
+			res as unknown as ServerResponse,
+		)
+		expect(api.createTask).toHaveBeenCalledWith(expect.objectContaining({ trace }))
+	})
+
+	it("POST /api/v1/task falls back to the standard traceparent/tracestate HEADERS", async () => {
+		// What a generically instrumented HTTP client sends: it knows the W3C
+		// headers and nothing about this transport's body shape.
+		const res = mockRes()
+		await run(
+			mockReq(
+				"POST",
+				"/api/v1/task",
+				{ prompt: "hello", mode: "code" },
+				{
+					traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+					tracestate: "vendor=xyz",
+				},
+			),
+			res as unknown as ServerResponse,
+		)
+		expect(api.createTask).toHaveBeenCalledWith(
+			expect.objectContaining({
+				trace: {
+					traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+					tracestate: "vendor=xyz",
+				},
+			}),
+		)
+	})
+
+	it("POST /api/v1/task drops a malformed trace rather than refusing the task", async () => {
+		// Propagation is best-effort: the lens must never be able to break the
+		// thing it observes.
+		const res = mockRes()
+		await run(
+			mockReq("POST", "/api/v1/task", { prompt: "hello", mode: "code", trace: { nonsense: true } }),
+			res as unknown as ServerResponse,
+		)
+		expect(res.statusCode).toBe(201)
+		expect(api.createTask).toHaveBeenCalledWith(expect.objectContaining({ trace: undefined }))
 	})
 
 	it("POST /api/v1/task forwards the per-task apiConfiguration to createTask", async () => {

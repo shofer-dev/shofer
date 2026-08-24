@@ -2719,6 +2719,12 @@ export class ShoferProvider
 					: await this.createTask(prompt, opts?.images, undefined, {
 							...(opts?.completionSchema ? { completionSchema: opts.completionSchema } : {}),
 							...(opts?.mode ? { initialMode: opts.mode } : {}),
+							// The trace context of whatever work this spawn serves — a job
+							// runner's dispatch, a queue pickup. Carried onto the task so
+							// `beforeTaskStart` observers can continue the caller's trace;
+							// a resumed session keeps the trace it was created with, which
+							// is right: the session is the same run.
+							...(opts?.trace ? { trace: opts.trace } : {}),
 						})
 				const taskId = task.taskId
 				const metadata = opts?.metadata

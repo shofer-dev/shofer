@@ -1,6 +1,8 @@
 import http from "node:http"
 
-import type { ShoferApi, ProviderSettings, ServerEvent } from "@shofer/types"
+import { traceContextFromHeaders, traceContextSchema } from "@shofer/types"
+
+import type { ShoferApi, ProviderSettings, ServerEvent, TraceContext } from "@shofer/types"
 
 /**
  * HTTP + SSE transport boundary (v3 architecture §11).
@@ -56,6 +58,28 @@ function eventTaskId(event: ServerEvent): string | undefined {
 	return typeof first === "string" ? first : undefined
 }
 
+/**
+ * The W3C trace context a `createTask` request carries — the body's `trace`
+ * field, else the standard `traceparent`/`tracestate` headers.
+ *
+ * Both, because the two kinds of caller differ: a client using this transport's
+ * own SDK states the context in the body (which survives transports that have no
+ * headers), while a generically instrumented HTTP client sets only the headers
+ * and knows nothing about our body shape. Honouring one would silently drop the
+ * other's context, and a dropped context fails as a trace that simply starts in
+ * the wrong place — never as an error. The body wins when both are present: it
+ * is the explicit statement.
+ *
+ * A malformed `trace` field is dropped rather than rejected: propagation is
+ * best-effort, and refusing to start an agent because an observability header
+ * was wrong would let the lens break the thing it observes.
+ */
+function requestTraceContext(req: http.IncomingMessage, body: Record<string, unknown>): TraceContext | undefined {
+	const stated = traceContextSchema.safeParse(body.trace)
+	if (stated.success) return stated.data
+	return traceContextFromHeaders(req.headers)
+}
+
 async function readJson(req: http.IncomingMessage): Promise<Record<string, unknown>> {
 	const chunks: Buffer[] = []
 	for await (const chunk of req) chunks.push(chunk as Buffer)
@@ -88,7 +112,8 @@ export interface HttpServerOptions {
  *   GET  /api/v1/event               → SSE event stream (worker-wide: ALL tasks)
  *   GET  /api/v1/task/:id/event      → SSE event stream filtered to ONE task
  *   GET  /api/v1/task/:id/snapshot   → 200 TaskSnapshot | 404 (attach backfill)
- *   POST /api/v1/task                → { prompt, mode, taskId?, apiConfiguration?, title? } → { taskId }
+ *   POST /api/v1/task                → { prompt, mode, taskId?, apiConfiguration?, title?, trace? } → { taskId }
+ *                                      (also honours W3C `traceparent`/`tracestate` headers)
  *   POST /api/v1/task/:id/message    → { message }
  *   POST /api/v1/task/:id/cancel
  *   POST /api/v1/task/:id/ask        → { askResponse, text?, images?, askId?, mode? } (interactive approval)
@@ -191,6 +216,10 @@ export function createRequestHandler(
 				// Supplying a title LOCKS it: the task cannot rename itself, and
 				// `set_task_title` leaves its tool list.
 				title: typeof body.title === "string" ? body.title : undefined,
+				// W3C trace context of the creating request, so the run the controller
+				// asked for continues the controller's trace instead of starting an
+				// unrelated one.
+				trace: requestTraceContext(req, body),
 			})
 			return send(res, 201, result)
 		}

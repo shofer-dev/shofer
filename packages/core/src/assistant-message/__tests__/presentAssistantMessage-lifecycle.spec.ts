@@ -177,6 +177,36 @@ describe("presentAssistantMessage — lifecycle hooks (design §6.9, Phase 3)", 
 		expect(result.content).toBe("[wrapped] original-result")
 	})
 
+	it("carries the provider's tool-call id on both tool hooks' context", async () => {
+		vi.mocked(customToolRegistry.getDispatchable).mockReturnValue({
+			name: "identify",
+			description: "d",
+			parameters: { parse: (x: unknown) => x } as any,
+			execute: vi.fn().mockResolvedValue("done"),
+		} as any)
+
+		const seen: (string | undefined)[] = []
+		await useLifecyclePlugin({
+			name: "identifier",
+			lifecycle: {
+				beforeToolCall: (_n, _a, ctx) => {
+					seen.push(ctx.toolCallId)
+					return { allow: true }
+				},
+				afterToolCall: (_n, _a, _r, ctx) => void seen.push(ctx.toolCallId),
+			},
+		})
+
+		const task = makeMockTask()
+		task.assistantMessageContent = [toolUseBlock("identify", {})]
+		await presentAssistantMessage(task)
+
+		// The RAW id the model emitted — the same string the `tool_result` echoes
+		// (sanitized) and an MCP call's `_meta` carries. `taskId` + `turn` cannot
+		// identify one call in a turn that issues several.
+		expect(seen).toEqual(["call_identify", "call_identify"])
+	})
+
 	it("fast-path: with no lifecycle plugin the tool runs and result is untouched", async () => {
 		const execute = vi.fn().mockResolvedValue("plain-result")
 		vi.mocked(customToolRegistry.getDispatchable).mockReturnValue({

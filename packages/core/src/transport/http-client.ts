@@ -1,4 +1,4 @@
-import { taskSnapshotSchema } from "@shofer/types"
+import { taskSnapshotSchema, traceContextToHeaders } from "@shofer/types"
 
 import type { ShoferApi, AskResponse, CreateTaskInput, ServerEvent, TaskSnapshot } from "@shofer/types"
 
@@ -17,24 +17,42 @@ export interface ShoferHttpClientOptions {
 	token?: string
 	/** Override for tests / non-global fetch. */
 	fetch?: typeof fetch
+	/**
+	 * Extra headers to attach to every request, resolved per call.
+	 *
+	 * A function rather than a fixed bag because the interesting headers are the
+	 * ones that change per request — W3C trace context, a correlation id, a
+	 * rotating token — and a value captured at construction would pin the first
+	 * one forever. Returning nothing leaves the request byte-for-byte what it
+	 * was; the client's own `authorization` and `content-type` always win, so a
+	 * supplier cannot accidentally unauthenticate the connection.
+	 */
+	headers?: () => Record<string, string> | undefined
 }
 
 export class ShoferHttpClient implements ShoferApi {
 	private readonly base: string
 	private readonly doFetch: typeof fetch
 	private readonly authHeaders: Record<string, string>
+	private readonly extraHeaders: () => Record<string, string> | undefined
 
 	constructor(options: ShoferHttpClientOptions) {
 		this.base = `${options.baseUrl.replace(/\/$/, "")}/api/v1`
 		this.doFetch = options.fetch ?? fetch
 		this.authHeaders = options.token ? { authorization: `Bearer ${options.token}` } : {}
+		this.extraHeaders = options.headers ?? (() => undefined)
 	}
 
 	async createTask(input: CreateTaskInput): Promise<{ taskId: string }> {
 		// The whole input (incl. `apiConfiguration`, when present) is forwarded as
 		// the POST body — the server applies the config per-task unless it has a
 		// local CLI override.
-		return (await this.post("/task", input)) as { taskId: string }
+		//
+		// `trace` additionally rides as the standard W3C headers, so a server (or
+		// any proxy between here and it) that reads trace context the ordinary way
+		// sees it without knowing this body shape. Both halves are the same value;
+		// the server prefers the body.
+		return (await this.post("/task", input, traceContextToHeaders(input.trace))) as { taskId: string }
 	}
 
 	async sendMessage(taskId: string, message: string, images?: string[]): Promise<void> {
@@ -101,7 +119,7 @@ export class ShoferHttpClient implements ShoferApi {
 	private async get(path: string, opts: { notFoundAsUndefined?: boolean } = {}): Promise<unknown> {
 		const res = await this.doFetch(`${this.base}${path}`, {
 			method: "GET",
-			headers: { ...this.authHeaders },
+			headers: { ...this.extraHeaders(), ...this.authHeaders },
 		})
 		if (res.status === 404 && opts.notFoundAsUndefined) return undefined
 		if (!res.ok) throw new Error(`shofer server ${path} → ${res.status}`)
@@ -109,10 +127,15 @@ export class ShoferHttpClient implements ShoferApi {
 		return text ? JSON.parse(text) : undefined
 	}
 
-	private async post(path: string, body: unknown): Promise<unknown> {
+	private async post(path: string, body: unknown, headers: Record<string, string> = {}): Promise<unknown> {
 		const res = await this.doFetch(`${this.base}${path}`, {
 			method: "POST",
-			headers: { "content-type": "application/json", ...this.authHeaders },
+			headers: {
+				...this.extraHeaders(),
+				...headers,
+				"content-type": "application/json",
+				...this.authHeaders,
+			},
 			body: JSON.stringify(body),
 		})
 		if (!res.ok) throw new Error(`shofer server ${path} → ${res.status}`)
@@ -128,7 +151,7 @@ export class ShoferHttpClient implements ShoferApi {
 		let res: Response
 		try {
 			res = await this.doFetch(`${this.base}${path}`, {
-				headers: { accept: "text/event-stream", ...this.authHeaders },
+				headers: { ...this.extraHeaders(), accept: "text/event-stream", ...this.authHeaders },
 				signal,
 			})
 		} catch {

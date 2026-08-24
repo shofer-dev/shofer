@@ -89,6 +89,43 @@ describe("ShoferHttpClient (typed SDK)", () => {
 		)
 	})
 
+	it("createTask mirrors the trace context onto the standard W3C headers", async () => {
+		// The body carries it for transports with no headers; the headers carry it
+		// for any server or proxy that reads trace context the ordinary way.
+		const fetchMock = vi.fn(
+			async (_url: string, _init?: RequestInit) =>
+				new Response(JSON.stringify({ taskId: "t1" }), { status: 200 }),
+		)
+		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
+		const trace = { traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", tracestate: "a=1" }
+		await client.createTask({ prompt: "hi", mode: "code", trace })
+		const init = fetchMock.mock.calls[0]![1]!
+		expect(init.headers).toMatchObject({ traceparent: trace.traceparent, tracestate: "a=1" })
+		expect(init.body).toBe(JSON.stringify({ prompt: "hi", mode: "code", trace }))
+	})
+
+	it("attaches the per-request headers supplier to every request, without unseating auth", async () => {
+		let n = 0
+		const fetchMock = vi.fn(
+			async (_url: string, _init?: RequestInit) =>
+				new Response(JSON.stringify({ taskId: "t1" }), { status: 200 }),
+		)
+		const client = new ShoferHttpClient({
+			baseUrl: "http://host:1",
+			token: "secret",
+			fetch: fetchMock as unknown as typeof fetch,
+			// Resolved per call: the interesting headers are the ones that change.
+			headers: () => ({ traceparent: `header-${++n}`, authorization: "Bearer spoofed" }),
+		})
+		await client.createTask({ prompt: "hi", mode: "code" })
+		await client.cancelTask("t1")
+		expect(fetchMock.mock.calls[0]![1]!.headers).toMatchObject({
+			traceparent: "header-1",
+			authorization: "Bearer secret",
+		})
+		expect(fetchMock.mock.calls[1]![1]!.headers).toMatchObject({ traceparent: "header-2" })
+	})
+
 	it("sendMessage + cancelTask POST to the task subroutes", async () => {
 		const fetchMock = vi.fn(async () => new Response("", { status: 202 }))
 		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })

@@ -3,7 +3,9 @@ import { z } from "zod"
 import type { CustomToolDefinition } from "./custom-tool.js"
 import type { HostDiagnostic, HostDisposable, HostEnv, HostFileSystem, HostSymbol, Notifier } from "./host.js"
 import type { McpToolCallResponse } from "./mcp.js"
+import type { ApiRequestFinishedPayload } from "./message.js"
 import { modeConfigObjectSchema } from "./mode.js"
+import type { TraceContext } from "./trace-context.js"
 
 /**
  * Typed plugin API (v3 architecture §10).
@@ -96,9 +98,14 @@ export interface ShoferPlugin {
  * - `beforeAsk` — **observe / modify / auto-answer** an ask. A returned `text`
  *   modifies the surfaced ask; a `decision` of `"approve"`/`"deny"` auto-answers it
  *   (short-circuiting the user prompt), `"ask"`/absent lets it proceed.
+ * - `afterAsk` — **observe** how that ask ended, including WHO ended it. The
+ *   counterpart `beforeAsk` cannot be: it runs before the host's own
+ *   auto-approval policy, so it never learns the verdict.
  * - `beforeTaskStart` / `afterTaskComplete` — **observers** (owner decision for
  *   Phase 3: kept off the latency-critical path, fired non-blocking). Their return
  *   value is ignored in Phase 3.
+ * - `onApiRequestStart` / `onApiRequestFinish` — **observers** bracketing one LLM
+ *   request, for a plugin that measures the model rather than the agent.
  */
 export interface LifecycleHooks {
 	/**
@@ -145,6 +152,51 @@ export interface LifecycleHooks {
 		payload: unknown,
 		context: PluginContext,
 	): BeforeAskResult | void | Promise<BeforeAskResult | void>
+
+	/**
+	 * Called when an ask reaches a terminal outcome — answered, superseded by a
+	 * newer ask, or unwound because the task was torn down while it waited.
+	 *
+	 * This is the hook that makes the host's own **auto-approval** decision
+	 * observable. `beforeAsk` deliberately runs *before* that decision (a plugin
+	 * may pre-empt it), so a `beforeAsk` observer can see that an ask was raised
+	 * and never learn whether a human decided it. Guessing from how fast the ask
+	 * resolved is not a substitute: it is a threshold presented as a fact.
+	 *
+	 * Fires for exactly the asks `beforeAsk` fires for — complete asks, never
+	 * streaming partials — so the two pair up one-for-one on {@link AskResolvedInfo.askId}.
+	 * Fire-and-forget observer: the ask's answer never waits for it.
+	 */
+	afterAsk?(info: AskResolvedInfo, context: PluginContext): void | Promise<void>
+
+	/**
+	 * Called when the agent is about to issue an LLM request, before the first
+	 * byte is sent.
+	 *
+	 * The pair with {@link onApiRequestFinish} brackets one model call, which no
+	 * other hook does: the tool-call hooks see what the agent *did* with an
+	 * answer, never how long the answer took to arrive or what it cost. An
+	 * observer that measures the MODEL rather than the agent (latency, retries,
+	 * tokens) needs both ends, and needs the start end to be the real one — the
+	 * finish payload carries offsets, not wall-clock instants.
+	 *
+	 * Fire-and-forget observer: it must never sit in front of a request.
+	 */
+	onApiRequestStart?(info: ApiRequestStartInfo, context: PluginContext): void | Promise<void>
+
+	/**
+	 * Called when an LLM request has finished — normally, cancelled, or in error.
+	 *
+	 * The payload is the host's own per-request record ({@link ApiRequestFinishedPayload}),
+	 * handed over rather than reassembled: it already carries time-to-first-byte,
+	 * the offset at which output generation began (the end of the model's
+	 * reasoning phase), the retry attempt, token counts, cost, and the tool calls
+	 * the request produced. An observer re-deriving those from events would get a
+	 * second, worse copy of a record the host already has.
+	 *
+	 * Fires at most once per request. Fire-and-forget observer.
+	 */
+	onApiRequestFinish?(info: ApiRequestFinishedPayload, context: PluginContext): void | Promise<void>
 
 	/**
 	 * Called **before** the host rewinds a task's chat timeline to `info.ts` — the user
@@ -230,6 +282,56 @@ export interface AssistantMessageInfo {
 	readonly turn?: number
 }
 
+/**
+ * What a {@link LifecycleHooks.afterAsk} hook is being told — how an ask ended.
+ *
+ * The three outcomes are kept apart on purpose: **only `"answered"` means a
+ * decision was made.** An ask that was superseded or unwound was never decided,
+ * and a consumer that flattened either into "denied" would be recording a
+ * refusal nobody issued.
+ */
+export interface AskResolvedInfo {
+	readonly taskId: string
+	/** The host's own id for this ask — the same one {@link PluginContext.askId} carried to `beforeAsk`. */
+	readonly askId: string
+	/** The ask kind (`"tool"`, `"command"`, `"followup"`, …). */
+	readonly askType: string
+	/**
+	 * `"answered"` — a decision arrived (see {@link decidedBy}); `"superseded"` — a
+	 * newer ask replaced this one before it was decided; `"aborted"` — the task was
+	 * torn down while it waited.
+	 */
+	readonly outcome: "answered" | "superseded" | "aborted"
+	/** The answer verb (`"yesButtonClicked"`, `"noButtonClicked"`, `"messageResponse"`, …). Only on `"answered"`. */
+	readonly response?: string
+	/**
+	 * Who decided it: the person at the surface, the host's auto-approval policy
+	 * (including its delayed variant), or a plugin's own `beforeAsk` decision.
+	 * Only on `"answered"`.
+	 */
+	readonly decidedBy?: "user" | "auto-approval" | "plugin"
+	/**
+	 * Whether nobody was asked — the flag the host records on the ask itself.
+	 * Stated rather than left to be derived from {@link decidedBy}, so a future
+	 * decider does not silently change what every consumer's derivation means.
+	 * Only on `"answered"`.
+	 */
+	readonly autoApproved?: boolean
+}
+
+/** What a {@link LifecycleHooks.onApiRequestStart} hook is being told. */
+export interface ApiRequestStartInfo {
+	readonly taskId: string
+	/** 0-based index of this request within the task — pairs with `ApiRequestFinishedPayload.requestIndex`. */
+	readonly requestIndex: number
+	/** The model id being requested. */
+	readonly model: string
+	/** The wire protocol the request will use. */
+	readonly apiProtocol: "anthropic" | "openai"
+	/** Retry attempt number (0 = first try). */
+	readonly retryAttempt: number
+}
+
 /** What a {@link LifecycleHooks.onTimelineRewind} hook is being told (design §5.9). */
 export interface TimelineRewindInfo {
 	/** Timestamp of the message the timeline is being rewound to. */
@@ -280,6 +382,17 @@ export interface TaskLifecycleContext extends PluginContext {
 	readonly prompt?: string
 	/** Why the task ended, for `afterTaskComplete` (`"completed"` vs `"aborted"`). */
 	readonly reason?: "completed" | "aborted"
+	/**
+	 * The W3C trace context of the request that STARTED this task, when its
+	 * creator supplied one ({@link CreateTaskInput.trace} over the wire,
+	 * {@link PluginAgentSpawnOptions.trace} in process).
+	 *
+	 * Present on `beforeTaskStart`. This is the only point at which the causal
+	 * chain across the process boundary is recoverable: by the time the task is
+	 * running, the request that asked for it has returned. Absent means the task
+	 * was started outside a trace, which is a fact and not a failure.
+	 */
+	readonly trace?: TraceContext
 }
 
 /** Result of a {@link LifecycleHooks.beforeToolCall} hook (design §6.9). */
@@ -733,6 +846,17 @@ export interface PluginAgentSpawnOptions {
 	 * the same mistake.
 	 */
 	sessionId?: string
+	/**
+	 * The W3C trace context of the work this task is being started ON BEHALF OF.
+	 *
+	 * The case this exists for: a plugin serving a job runner (a queue consumer,
+	 * a workflow activity) receives trace context on the dispatch and spawns an
+	 * agent to do the work. Without a seam the context stops at the plugin, and
+	 * the run it caused becomes an unrelated trace — the boundary a reader most
+	 * needs to cross is exactly the one that breaks. Reaches
+	 * {@link TaskLifecycleContext.trace} on `beforeTaskStart`.
+	 */
+	trace?: TraceContext
 }
 
 /**
@@ -1098,6 +1222,31 @@ export interface PluginContext {
 	 * boundaries. Present on contexts built for a running task.
 	 */
 	readonly turn?: number
+	/**
+	 * The provider's own id for the tool call this hook is observing — the
+	 * `tool_use` id the model emitted, which the host also echoes on the matching
+	 * `tool_result` and puts in an MCP request's `_meta`.
+	 *
+	 * Present on the contexts built for {@link LifecycleHooks.beforeToolCall} and
+	 * {@link LifecycleHooks.afterToolCall}, absent everywhere else: a hook that
+	 * fires per tool call must be able to say WHICH call it is looking at, and
+	 * `taskId` + `turn` do not narrow it — a turn issues several. Without it a
+	 * plugin's record of a call cannot be joined to the transcript's, to the
+	 * server's, or to the model's own `tool_calls[].id`.
+	 */
+	readonly toolCallId?: string
+	/**
+	 * The host's own id for the ask this hook is observing.
+	 *
+	 * Present on the contexts built for {@link LifecycleHooks.beforeAsk} and
+	 * {@link LifecycleHooks.afterAsk}. The host mints one per ask invocation and
+	 * carries it on the persisted ask message and on the answer that resolves it,
+	 * so it is the join key between a plugin's view of an approval and whatever
+	 * durable record the surface that decided it wrote. A plugin-local counter is
+	 * not a substitute: it can distinguish asks within one process and nothing
+	 * beyond it.
+	 */
+	readonly askId?: string
 	/** This plugin's private persistent storage (design §6.11 G2; Phase 6). */
 	readonly storage?: PluginStorage
 	/**

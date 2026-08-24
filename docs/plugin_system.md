@@ -622,6 +622,44 @@ export interface LifecycleHooks {
 		payload: unknown,
 		context: PluginContext,
 	): Promise<{ decision?: "approve" | "deny" | "ask"; text?: string } | void>
+	/**
+	 * How that ask ended. The observer half `beforeAsk` cannot be: `beforeAsk` runs BEFORE
+	 * the host's own auto-approval decision (so a plugin may pre-empt it), which means a
+	 * `beforeAsk` observer can watch an ask be raised and never learn whether a human
+	 * decided it. Only `outcome: "answered"` means a decision was made — `"superseded"`
+	 * and `"aborted"` mean the wait ended, never that anything was refused. Observer.
+	 */
+	afterAsk?(
+		info: {
+			taskId: string
+			askId: string
+			askType: string
+			outcome: "answered" | "superseded" | "aborted"
+			response?: string
+			decidedBy?: "user" | "auto-approval" | "plugin"
+			autoApproved?: boolean
+		},
+		context: PluginContext,
+	): void | Promise<void>
+	/** An LLM request is about to be issued — the real wall-clock start of a model call. Observer. */
+	onApiRequestStart?(
+		info: {
+			taskId: string
+			requestIndex: number
+			model: string
+			apiProtocol: "anthropic" | "openai"
+			retryAttempt: number
+		},
+		context: PluginContext,
+	): void | Promise<void>
+	/**
+	 * That request finished (normally, cancelled, or in error), with the host's OWN
+	 * per-request record — time-to-first-byte, the offset at which output generation
+	 * began (the end of the model's reasoning phase), the retry attempt, tokens, cost and
+	 * the tool calls it produced. Handed over rather than reassembled, so an observer does
+	 * not build a second, worse copy of a record that already exists. Observer.
+	 */
+	onApiRequestFinish?(info: ApiRequestFinishedPayload, context: PluginContext): void | Promise<void>
 	/** The user sent a message into a running task (a step the tool hooks cannot see). Observer. */
 	onUserMessage?(
 		info: { taskId: string; text?: string; imageCount?: number },

@@ -39,7 +39,21 @@ export interface ShoferApiAgentOptions {
  * Everything else delegates straight through.
  */
 
-/** Agent events a transport forwards to its subscribers. */
+/**
+ * Agent events a transport forwards to its subscribers.
+ *
+ * The set is the task's LIFECYCLE, not the host's internals: everything here is
+ * a fact about a task the controller drives, and every one of them is already
+ * re-emitted host-wide with the task id as its first argument (which is what the
+ * per-task stream filter reads). Deliberately absent: `taskFocused` /
+ * `taskUnfocused` (which window a human is looking at — the host's own UI
+ * state), `queuedMessagesUpdated` (an echo of what the controller itself sent),
+ * and the configuration/query-response events, which describe the host rather
+ * than any task.
+ *
+ * The rule to apply when adding one: a controller with no view onto this host
+ * must be able to act on it, and it must carry its task id.
+ */
 export const FORWARDED_EVENTS = [
 	ShoferEventName.TaskCreated,
 	ShoferEventName.TaskStarted,
@@ -52,6 +66,32 @@ export const FORWARDED_EVENTS = [
 	// Full-fidelity remote rendering: a client's token/context meter needs
 	// authoritative token usage from the executor.
 	ShoferEventName.TaskTokenUsageUpdated,
+
+	// Blocking states. A controller that cannot see these cannot tell a task
+	// waiting on a human from one that is thinking, which is the difference
+	// between "show the approval" and "show a spinner" — and, on a headless
+	// controller, between escalating an ask and letting it sit forever.
+	ShoferEventName.TaskActive,
+	ShoferEventName.TaskInteractive,
+	ShoferEventName.TaskResumable,
+	ShoferEventName.TaskIdle,
+	// The other half of that pair: an ask stopped being outstanding. Without it a
+	// controller only learns an approval was resolved by re-reading the transcript.
+	ShoferEventName.TaskAskResponded,
+
+	// Delegation. A task that spawns children is a tree, and the edges are only
+	// ever announced here — a controller watching the parent otherwise sees a
+	// silent gap where the child's whole run happened.
+	ShoferEventName.TaskPaused,
+	ShoferEventName.TaskUnpaused,
+	ShoferEventName.TaskSpawned,
+	ShoferEventName.TaskDelegated,
+	ShoferEventName.TaskDelegationCompleted,
+	ShoferEventName.TaskDelegationResumed,
+
+	// A tool failed, named. The transcript carries the failure text; this carries
+	// which tool, which is what an observer aggregates on.
+	ShoferEventName.TaskToolFailed,
 ] as const
 
 /**

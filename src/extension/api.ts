@@ -317,6 +317,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 		mode: initialMode,
 		apiConfiguration,
 		title,
+		trace,
 	}: ExtensionCreateTaskInput): Promise<{ taskId: string }> {
 		const text = prompt
 		// `configuration` is the host-only full-settings seed; `apiConfiguration` is
@@ -362,6 +363,10 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 			// A controller-supplied title LOCKS the name (same path as NewTaskTool's
 			// `title`), which also drops `set_task_title` from the tool list.
 			...(title ? { initialTitle: title } : {}),
+			// W3C trace context of the request that asked for this task, carried so
+			// `beforeTaskStart` observers can continue the caller's trace instead of
+			// opening an unrelated one. Core never reads it.
+			...(trace ? { trace } : {}),
 		}
 
 		// Where does this task run? The same question the chat input asks, asked here too:

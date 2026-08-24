@@ -16,6 +16,7 @@ import { z } from "zod"
 import { taskStateSchema } from "./history.js"
 import { shoferAskSchema, shoferMessageSchema, tokenUsageSchema } from "./message.js"
 import type { ProviderSettings } from "./provider-settings.js"
+import type { TraceContext } from "./trace-context.js"
 
 /** A streamed agent event. `type` is the event name; other fields are event-specific. */
 export interface ServerEvent {
@@ -151,6 +152,17 @@ export interface CreateTaskInput {
 	 * Omit it and the task names itself, exactly as before.
 	 */
 	title?: string
+	/**
+	 * W3C trace context of the request creating this task, so the run the
+	 * controller asked for continues the controller's trace instead of starting
+	 * an unrelated one.
+	 *
+	 * Transport-agnostic on purpose — it rides the body, so it survives a
+	 * transport with no headers. Over HTTP the standard `traceparent`/`tracestate`
+	 * headers are honoured too (that is what a generic instrumented client
+	 * sends), with this field winning when both are present.
+	 */
+	trace?: TraceContext
 }
 
 /** A reply to an outstanding `ask` (interactive tool approval / follow-up). */

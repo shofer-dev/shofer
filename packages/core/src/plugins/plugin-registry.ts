@@ -1,4 +1,7 @@
 import type {
+	ApiRequestFinishedPayload,
+	ApiRequestStartInfo,
+	AskResolvedInfo,
 	BeforeAskResult,
 	BeforeToolCallResult,
 	CustomToolDefinition,
@@ -377,6 +380,52 @@ export class PluginRegistry {
 	}
 
 	/**
+	 * Tell permitted plugins how an ask ended (design §6.9) — the observer half
+	 * `beforeAsk` cannot be, since that hook runs before the host's own
+	 * auto-approval decision and therefore never sees the verdict.
+	 *
+	 * Observer-only; callers invoke it **without awaiting**, so a plugin can never
+	 * delay an answer reaching the code that was blocked on it.
+	 */
+	async notifyAfterAsk(info: AskResolvedInfo, context: PluginContext = {}): Promise<void> {
+		await this.applyLifecycleHook(
+			"afterAsk",
+			async (hook, _plugin, ctx) => {
+				await hook(info, ctx)
+			},
+			{ taskId: info.taskId, askId: info.askId, ...context },
+		)
+	}
+
+	/**
+	 * Tell permitted plugins an LLM request is about to be issued (design §6.9).
+	 * Observer-only and **not awaited** — nothing may sit in front of a request.
+	 */
+	async notifyApiRequestStart(info: ApiRequestStartInfo, context: PluginContext = {}): Promise<void> {
+		await this.applyLifecycleHook(
+			"onApiRequestStart",
+			async (hook, _plugin, ctx) => {
+				await hook(info, ctx)
+			},
+			{ taskId: info.taskId, ...context },
+		)
+	}
+
+	/**
+	 * Hand permitted plugins the host's own per-request record when an LLM request
+	 * finishes (design §6.9). Observer-only, not awaited.
+	 */
+	async notifyApiRequestFinish(info: ApiRequestFinishedPayload, context: PluginContext = {}): Promise<void> {
+		await this.applyLifecycleHook(
+			"onApiRequestFinish",
+			async (hook, _plugin, ctx) => {
+				await hook(info, ctx)
+			},
+			{ taskId: info.taskId, ...context },
+		)
+	}
+
+	/**
 	 * Notify permitted plugins that a task is starting (design §6.9). Observer-only in
 	 * Phase 3: timeout-guarded and error-isolated. Callers invoke this **without
 	 * awaiting** (owner decision: off the latency-critical path), so a plugin's work
@@ -386,7 +435,7 @@ export class PluginRegistry {
 		await this.applyLifecycleHook(
 			"beforeTaskStart",
 			async (hook, _plugin, ctx) => {
-				await hook({ ...ctx, prompt: context.prompt, reason: context.reason })
+				await hook({ ...ctx, prompt: context.prompt, reason: context.reason, trace: context.trace })
 			},
 			context,
 		)

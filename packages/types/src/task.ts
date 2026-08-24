@@ -8,6 +8,7 @@ import type { TaskState, CompletionRating } from "./history.js"
 import type { ToolUsage, ToolName } from "./tool.js"
 import type { StaticAppProperties, GitProperties, TelemetryProperties } from "./telemetry.js"
 import type { TodoItem } from "./todo.js"
+import type { TraceContext } from "./trace-context.js"
 
 /**
  * TaskProviderLike
@@ -141,6 +142,16 @@ export interface CreateTaskOptions {
 	 * new task from a pre-task dropdown selection.
 	 */
 	initialApiConfigName?: string
+	/**
+	 * W3C trace context of the work this task is being created on behalf of —
+	 * a controller's `createTask` request, or a job runner's dispatch.
+	 *
+	 * The host stores it and hands it to `beforeTaskStart` observers
+	 * (`TaskLifecycleContext.trace`) and nothing else: core does not parse it and
+	 * has no opinion about tracing. Absent means the task was created outside a
+	 * trace, which is a fact rather than a failure.
+	 */
+	trace?: TraceContext
 	/**
 	 * Persona/role text injected into this task's system prompt, on top of the
 	 * mode's roleDefinition. Used by workflow agents to make the `.slang`

@@ -40,6 +40,8 @@ import {
 	type ApiReqError,
 	type ToolSpan,
 	type ApiRequestFinishedPayload,
+	type AskResolvedInfo,
+	type TraceContext,
 	type TaskInteractionPayload,
 	type TaskHandle,
 	type PendingParentQuestionInfo,
@@ -533,6 +535,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * roleDefinition for this task only; see {@link CreateTaskOptions.agentRole}.
 	 */
 	agentRole?: string
+
+	/**
+	 * The W3C trace context of the work this task was created on behalf of, when
+	 * its creator supplied one ({@link CreateTaskOptions.trace}).
+	 *
+	 * Core stores it and hands it to `beforeTaskStart` observers; it never parses
+	 * it and never acts on it. Keeping it on the task rather than passing it
+	 * straight through is what lets a plugin registered AFTER creation still
+	 * learn where the run came from.
+	 */
+	readonly trace?: TraceContext
 
 	/**
 	 * Per-task tool-group allow-list (workflow agents pass their `.slang`
@@ -1067,6 +1080,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		agentRole,
 		agentToolGroups,
 		agentContext,
+		trace,
 	}: TaskOptions) {
 		super()
 
@@ -1156,6 +1170,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.trustedWritePaths = [...(parentTask?.trustedWritePaths ?? [])]
 		this.taskNumber = taskNumber
 		this.agentRole = agentRole
+		this.trace = trace
 		this.agentToolGroups = agentToolGroups
 		this.agentContext = agentContext
 		this.softResultLength = softResultLength
@@ -2620,6 +2635,47 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return undefined
 	}
 
+	/**
+	 * Tell `afterAsk` observers how an ask ended (design §6.9).
+	 *
+	 * Every terminal path of {@link ask} routes through here — the three
+	 * auto-answer fast paths, the plugin auto-answer, the two `AskIgnoredError`
+	 * unwinds, and the ordinary answered path — so a plugin sees each ask exactly
+	 * once and can tell a DECISION from a mere closure. Flattening the last two
+	 * into a refusal would record a "no" nobody said.
+	 *
+	 * Fire-and-forget, and guarded by `hasLifecycleHook` so a host with no such
+	 * plugin does not allocate: the answer must never wait on an observer.
+	 */
+	private notifyAskResolved(
+		askId: string,
+		askType: ShoferAsk,
+		outcome: AskResolvedInfo["outcome"],
+		decision?: { response: string; decidedBy: NonNullable<AskResolvedInfo["decidedBy"]> },
+	): void {
+		if (!pluginRegistry.hasLifecycleHook("afterAsk")) return
+		void pluginRegistry
+			.notifyAfterAsk(
+				{
+					taskId: this.taskId,
+					askId,
+					askType,
+					outcome,
+					response: decision?.response,
+					decidedBy: decision?.decidedBy,
+					autoApproved: decision ? decision.decidedBy !== "user" : undefined,
+				},
+				{
+					parentTaskId: this.parentTaskId,
+					rootTaskId: this.rootTaskId,
+					cwd: this.cwd,
+					mode: this._taskMode,
+					turn: this.turnCount,
+				},
+			)
+			.catch(() => {})
+	}
+
 	// Note that `partial` has three valid states true (partial message),
 	// false (completion of partial message), undefined (individual complete
 	// message).
@@ -2659,6 +2715,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				cwd: this.cwd,
 				mode: this._taskMode,
 				turn: this.turnCount,
+				// The host's own id for this ask, so an observer can join its record
+				// of the approval to whatever surface ends up deciding it — and to the
+				// matching `afterAsk`.
+				askId,
 			})
 			if (hookResult) {
 				if (typeof hookResult.text === "string") {
@@ -2683,8 +2743,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					})
 					this._currentAskId = undefined
 					this.emit(ShoferEventName.TaskAskResponded)
+					const pluginResponse: ShoferAskResponse =
+						hookResult.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
+					this.notifyAskResolved(askId, type, "answered", {
+						response: pluginResponse,
+						decidedBy: "plugin",
+					})
 					return {
-						response: hookResult.decision === "approve" ? "yesButtonClicked" : "noButtonClicked",
+						response: pluginResponse,
 						text: hookResult.text,
 						images: undefined,
 					}
@@ -2804,6 +2870,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						this.emit(ShoferEventName.TaskAskResponded)
 						const synthesized: ShoferAskResponse =
 							quickApproval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
+						this.notifyAskResolved(askId, type, "answered", {
+							response: synthesized,
+							decidedBy: "auto-approval",
+						})
 						return { response: synthesized, text: undefined, images: undefined }
 					}
 				}
@@ -2855,6 +2925,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.emit(ShoferEventName.TaskAskResponded)
 				const synthesized: ShoferAskResponse =
 					quickApproval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
+				this.notifyAskResolved(askId, type, "answered", {
+					response: synthesized,
+					decidedBy: "auto-approval",
+				})
 				return { response: synthesized, text: undefined, images: undefined }
 			}
 		}
@@ -2894,13 +2968,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.emit(ShoferEventName.TaskAskResponded)
 			const synthesized: ShoferAskResponse =
 				approval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
+			this.notifyAskResolved(askId, type, "answered", { response: synthesized, decidedBy: "auto-approval" })
 			return { response: synthesized, text: undefined, images: undefined }
 		}
+
+		// Set when the DELAYED auto-approval timer, rather than a person, supplies
+		// the answer this invocation is about to return. Without it the timer's
+		// answer arrives through the same `handleWebviewAskResponse` a human uses
+		// and would be reported to observers as a human decision.
+		let decidedByTimer = false
 
 		if (approval.decision === "timeout") {
 			// Store the auto-approval timeout so it can be cancelled if user interacts
 			this.autoApprovalTimeoutRef = setTimeout(() => {
 				const { askResponse, text, images } = approval.fn()
+				decidedByTimer = true
 				this.handleWebviewAskResponse(askResponse, text, images)
 				this.autoApprovalTimeoutRef = undefined
 			}, approval.timeout)
@@ -3063,6 +3145,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// can proceed. We treat this the same as a superseded ask: a
 		// recoverable, expected control-flow exception.
 		if (this.abort && this.askResponse === undefined && this._currentAskId === askId) {
+			// Unwound, NOT decided: nothing was approved and nothing was refused.
+			this.notifyAskResolved(askId, type, "aborted")
 			throw new AskIgnoredError("aborted while awaiting ask response")
 		}
 
@@ -3072,6 +3156,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// pWaitFor. The ask this promise represents is no longer
 			// the active one — surface a clean control-flow exception so
 			// the caller can unwind without corrupting state.
+			this.notifyAskResolved(askId, type, "superseded")
 			throw new AskIgnoredError("superseded")
 		}
 
@@ -3093,6 +3178,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		this.emit(ShoferEventName.TaskAskResponded)
+		this.notifyAskResolved(askId, type, "answered", {
+			response: result.response,
+			decidedBy: decidedByTimer ? "auto-approval" : "user",
+		})
 		return result
 	}
 
@@ -3779,6 +3868,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				cwd: this.cwd,
 				mode: this._taskMode,
 				prompt: task,
+				// The one point at which the causal chain across the process boundary
+				// is still recoverable: the request that asked for this task has
+				// already returned by the time the loop is running.
+				trace: this.trace,
 			})
 			.catch(() => {})
 
@@ -5048,6 +5141,32 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this._pendingGenStartMs = null
 			this._pendingApiReqNeedsEmit = true
 			this._pendingRequestStartOffset = performance.now() - this.timelineOriginMs
+
+			// Lifecycle `onApiRequestStart` (design §6.9): the real wall-clock start of
+			// one LLM request, which the finish payload cannot supply (it carries
+			// offsets). Fire-and-forget and guarded, so nothing sits in front of the
+			// request. Fired here — after the rate-limit wait, before the request is
+			// built — so the bracket measures the model, not our own queueing.
+			if (pluginRegistry.hasLifecycleHook("onApiRequestStart")) {
+				void pluginRegistry
+					.notifyApiRequestStart(
+						{
+							taskId: this.taskId,
+							requestIndex: this._currentRequestIndex,
+							model: modelId ?? "",
+							apiProtocol: apiProtocol as "anthropic" | "openai",
+							retryAttempt: currentItem.retryAttempt ?? 0,
+						},
+						{
+							parentTaskId: this.parentTaskId,
+							rootTaskId: this.rootTaskId,
+							cwd: this.cwd,
+							mode: this._taskMode,
+							turn: this.turnCount,
+						},
+					)
+					.catch(() => {})
+			}
 
 			await this.say(
 				"api_req_started",
@@ -8710,6 +8829,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		await this.say("api_req_finished", JSON.stringify(payload))
+
+		// Lifecycle `onApiRequestFinish` (design §6.9): the host's own per-request
+		// record, handed to observers rather than reassembled by each of them from
+		// events. Fired after the say so the transcript is written first — an
+		// observer must never be able to reorder the record it observes.
+		if (pluginRegistry.hasLifecycleHook("onApiRequestFinish")) {
+			void pluginRegistry
+				.notifyApiRequestFinish(payload, {
+					parentTaskId: this.parentTaskId,
+					rootTaskId: this.rootTaskId,
+					cwd: this.cwd,
+					mode: this._taskMode,
+					turn: this.turnCount,
+				})
+				.catch(() => {})
+		}
+
 		this._currentRequestIndex++
 	}
 

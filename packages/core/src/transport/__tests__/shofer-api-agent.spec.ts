@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from "vitest"
 import { EventEmitter } from "node:events"
 
+import { ShoferEventName } from "@shofer/types"
+
 import type { ShoferExtensionApi, ShoferMessage } from "@shofer/types"
 
-import { ShoferApiAgent, findOutstandingAsk } from "../shofer-api-agent.js"
+import { ShoferApiAgent, FORWARDED_EVENTS, findOutstandingAsk } from "../shofer-api-agent.js"
 
 /**
  * `ShoferExtensionApi` is itself a `ShoferApi`, so this adapter carries only what
@@ -210,5 +212,49 @@ describe("findOutstandingAsk", () => {
 
 	it("reports nothing for an empty transcript", () => {
 		expect(findOutstandingAsk([])).toBeUndefined()
+	})
+})
+
+/**
+ * The forwarded set is the boundary between "the host knows this" and "a
+ * controller can act on it". A lifecycle event missing from it is not an error
+ * anywhere — the controller simply never learns the fact, which is the failure
+ * mode this test exists to make loud.
+ */
+describe("FORWARDED_EVENTS", () => {
+	it("forwards the blocking states, the ask resolution and the delegation edges", () => {
+		for (const name of [
+			ShoferEventName.TaskActive,
+			ShoferEventName.TaskInteractive,
+			ShoferEventName.TaskResumable,
+			ShoferEventName.TaskIdle,
+			ShoferEventName.TaskAskResponded,
+			ShoferEventName.TaskPaused,
+			ShoferEventName.TaskUnpaused,
+			ShoferEventName.TaskSpawned,
+			ShoferEventName.TaskDelegated,
+			ShoferEventName.TaskDelegationCompleted,
+			ShoferEventName.TaskDelegationResumed,
+			ShoferEventName.TaskToolFailed,
+		]) {
+			expect(FORWARDED_EVENTS).toContain(name)
+		}
+	})
+
+	it("does NOT forward the host's own UI state or its configuration chatter", () => {
+		for (const name of [
+			ShoferEventName.TaskFocused,
+			ShoferEventName.TaskUnfocused,
+			ShoferEventName.QueuedMessagesUpdated,
+			ShoferEventName.ModeChanged,
+			ShoferEventName.ProviderProfileChanged,
+			ShoferEventName.ModelsResponse,
+		]) {
+			expect(FORWARDED_EVENTS).not.toContain(name)
+		}
+	})
+
+	it("carries no duplicates — a duplicate would double every such event on the wire", () => {
+		expect(new Set(FORWARDED_EVENTS).size).toBe(FORWARDED_EVENTS.length)
 	})
 })

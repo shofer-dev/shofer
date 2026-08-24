@@ -292,17 +292,20 @@ Plugins run in registration order. Each hook is bounded by a **500 ms** per-hook
 per-plugin error isolation: a hook that throws or exceeds the budget is skipped with a shown+logged
 warning — it can never stall or crash the agent loop, and its would-be mutation is not applied.
 
-| Hook                 | Return                              | Effect                                                                                                                                                                                      |
-| -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `beforeToolCall`     | `{ allow, modifiedArgs?, reason? }` | **Allow / modify / block.** `modifiedArgs` threads into later hooks and the tool; the first `allow:false` short-circuits the tool (surfaced like a denied tool, with `reason`).             |
-| `afterToolCall`      | `string \| void`                    | **Observe / transform** the result string. A returned string replaces it for later hooks and the model.                                                                                     |
-| `beforeAsk`          | `{ decision?, text? } \| void`      | **Modify / auto-answer** an ask. `text` edits the surfaced ask; `decision` of `"approve"`/`"deny"` auto-answers (short-circuit); `"ask"`/absent lets it proceed to the user.                |
-| `beforeTaskStart`    | ignored                             | **Observer.** Fire-and-forget (off the latency-critical path). `ctx.prompt` carries the initial prompt.                                                                                     |
-| `afterTaskComplete`  | ignored                             | **Observer.** `ctx.reason` is `"completed"` or `"aborted"`.                                                                                                                                 |
-| `onUserMessage`      | ignored                             | **Observer.** The user sent a message into a running task — the step boundary the tool hooks cannot see.                                                                                    |
-| `onAssistantMessage` | ignored                             | **Observer.** The agent completed a narration text block — its prose between tool calls, which no other hook carries. Never fired for streaming partials.                                   |
-| `onTimelineRewind`   | ignored (**awaited**)               | The chat is about to be rewound to `info.ts`. Runs BEFORE the messages go, so state anchored to them can be rolled back. `info.restoreState: false` ⇒ chat-only, don't touch the workspace. |
-| `onTaskDeleted`      | ignored                             | **Observer.** A task was deleted — drop per-task state kept outside its task dir.                                                                                                           |
+| Hook                 | Return                              | Effect                                                                                                                                                                                                                                                                      |
+| -------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `beforeToolCall`     | `{ allow, modifiedArgs?, reason? }` | **Allow / modify / block.** `modifiedArgs` threads into later hooks and the tool; the first `allow:false` short-circuits the tool (surfaced like a denied tool, with `reason`).                                                                                             |
+| `afterToolCall`      | `string \| void`                    | **Observe / transform** the result string. A returned string replaces it for later hooks and the model.                                                                                                                                                                     |
+| `beforeAsk`          | `{ decision?, text? } \| void`      | **Modify / auto-answer** an ask. `text` edits the surfaced ask; `decision` of `"approve"`/`"deny"` auto-answers (short-circuit); `"ask"`/absent lets it proceed to the user.                                                                                                |
+| `afterAsk`           | ignored                             | **Observer.** How that ask ended: `outcome` (`answered`/`superseded`/`aborted`), and on `answered` the `response`, `decidedBy` (`user`/`auto-approval`/`plugin`) and `autoApproved`. The only way to see the host's own auto-approval verdict — `beforeAsk` runs before it. |
+| `beforeTaskStart`    | ignored                             | **Observer.** Fire-and-forget (off the latency-critical path). `ctx.prompt` carries the initial prompt.                                                                                                                                                                     |
+| `afterTaskComplete`  | ignored                             | **Observer.** `ctx.reason` is `"completed"` or `"aborted"`.                                                                                                                                                                                                                 |
+| `onUserMessage`      | ignored                             | **Observer.** The user sent a message into a running task — the step boundary the tool hooks cannot see.                                                                                                                                                                    |
+| `onAssistantMessage` | ignored                             | **Observer.** The agent completed a narration text block — its prose between tool calls, which no other hook carries. Never fired for streaming partials.                                                                                                                   |
+| `onApiRequestStart`  | ignored                             | **Observer.** An LLM request is about to be issued: `{ taskId, requestIndex, model, apiProtocol, retryAttempt }`. The real wall-clock start of a model call.                                                                                                                |
+| `onApiRequestFinish` | ignored                             | **Observer.** That request finished. Carries the host's own record — time-to-first-byte, the offset at which generation began (end of the reasoning phase), retries, tokens, cost, tool spans.                                                                              |
+| `onTimelineRewind`   | ignored (**awaited**)               | The chat is about to be rewound to `info.ts`. Runs BEFORE the messages go, so state anchored to them can be rolled back. `info.restoreState: false` ⇒ chat-only, don't touch the workspace.                                                                                 |
+| `onTaskDeleted`      | ignored                             | **Observer.** A task was deleted — drop per-task state kept outside its task dir.                                                                                                                                                                                           |
 
 `ctx.turn` (a per-task turn counter) lets a hook that fires per _tool call_ act once per
 turn. A hook that legitimately needs longer than 500 ms declares `hookTimeoutMs` in its
@@ -315,23 +318,26 @@ manifest — see [§3](#3-manifest-reference-pluginjson).
 Every hook receives a `PluginContext`. Which fields are populated depends on the host and the
 plugin's grants:
 
-| Field                  | Availability                                                                                                                   |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `workspacePath`        | Active workspace path, if any.                                                                                                 |
-| `mode`                 | Current mode slug.                                                                                                             |
-| `taskId`               | Id of the task the hook runs for, if applicable.                                                                               |
-| `parentTaskId`         | The spawning parent's task id, when the task is a subtask — how an observer attributes a child's events.                       |
-| `rootTaskId`           | The delegation tree's root task id, when the task is a subtask.                                                                |
-| `cwd`                  | Current working directory.                                                                                                     |
-| `config`               | This plugin's validated, default-merged settings.                                                                              |
-| `host`                 | The restricted host surface (below). Present when the host wired its bridge.                                                   |
-| `ai`                   | Host LLM/embeddings. Present **only** with `permissions.ai` + a wired AI seam.                                                 |
-| `agent`                | Proactive agent-steering. Present when the host wired its agent seam; denying stub without `permissions.agent`.                |
-| `mcp`                  | Invoke tools on connected MCP servers. Present when the host wired its MCP seam; denying stub without `permissions.mcpInvoke`. |
-| `task`                 | Timeline markers + rewind. Present when the host wired its task seam; denying stub without `permissions.task`.                 |
-| `turn`                 | The task's current turn index (one per assistant turn), for once-per-turn hook behaviour.                                      |
-| `storage`              | Per-plugin persistent dir. Present when the host wired a storage base dir.                                                     |
-| `registerService(svc)` | Register a background service. Present when the host wired the supervisor.                                                     |
+| Field                  | Availability                                                                                                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `workspacePath`        | Active workspace path, if any.                                                                                                                                                 |
+| `mode`                 | Current mode slug.                                                                                                                                                             |
+| `taskId`               | Id of the task the hook runs for, if applicable.                                                                                                                               |
+| `parentTaskId`         | The spawning parent's task id, when the task is a subtask — how an observer attributes a child's events.                                                                       |
+| `rootTaskId`           | The delegation tree's root task id, when the task is a subtask.                                                                                                                |
+| `cwd`                  | Current working directory.                                                                                                                                                     |
+| `config`               | This plugin's validated, default-merged settings.                                                                                                                              |
+| `host`                 | The restricted host surface (below). Present when the host wired its bridge.                                                                                                   |
+| `ai`                   | Host LLM/embeddings. Present **only** with `permissions.ai` + a wired AI seam.                                                                                                 |
+| `agent`                | Proactive agent-steering. Present when the host wired its agent seam; denying stub without `permissions.agent`.                                                                |
+| `mcp`                  | Invoke tools on connected MCP servers. Present when the host wired its MCP seam; denying stub without `permissions.mcpInvoke`.                                                 |
+| `task`                 | Timeline markers + rewind. Present when the host wired its task seam; denying stub without `permissions.task`.                                                                 |
+| `turn`                 | The task's current turn index (one per assistant turn), for once-per-turn hook behaviour.                                                                                      |
+| `toolCallId`           | The provider's own id for the tool call being observed. Present on `beforeToolCall` / `afterToolCall` — a turn issues several calls, so `taskId` + `turn` do not identify one. |
+| `askId`                | The host's id for the ask being observed. Present on `beforeAsk` / `afterAsk`; the join key to whatever surface decided it.                                                    |
+| `trace`                | (`beforeTaskStart` only) W3C trace context of the request that created the task, when its creator supplied one.                                                                |
+| `storage`              | Per-plugin persistent dir. Present when the host wired a storage base dir.                                                                                                     |
+| `registerService(svc)` | Register a background service. Present when the host wired the supervisor.                                                                                                     |
 
 ### `ctx.host` — the restricted host surface
 
