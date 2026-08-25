@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import type { IncomingMessage, ServerResponse } from "node:http"
 
-import { createRequestHandler, createStreamSubscribers, type ShoferApi, type ServerEvent } from "../http-server.js"
+import {
+	createRequestHandler,
+	createStreamSubscribers,
+	SUBSCRIBER_REATTACH_GRACE_MS,
+	type ShoferApi,
+	type ServerEvent,
+} from "../http-server.js"
 
 /**
  * §11 HTTP/SSE transport. Drives the request handler with mock req/res (no
@@ -62,8 +68,16 @@ describe("createRequestHandler (§11)", () => {
 	let events: Array<(e: ServerEvent) => void>
 	let handler: ReturnType<typeof createRequestHandler>
 	let api: ShoferApi
+	/**
+	 * The census's monotonic clock, injected so the re-attach grace is stepped
+	 * explicitly rather than waited out. Global fake timers are the wrong tool
+	 * here: this file's `flush()` yields through a real `setTimeout(0)` to let the
+	 * request handler's async body run, and faking timers would deadlock it.
+	 */
+	let clock: number
 
 	beforeEach(() => {
+		clock = 1_000
 		events = []
 		api = {
 			createTask: vi.fn(async ({ prompt }) => ({ taskId: `task-for-${prompt}` })),
@@ -460,6 +474,105 @@ describe("createRequestHandler (§11)", () => {
 
 			second.fireClose()
 			expect(subscribers.has("t1")).toBe(false)
+		})
+
+		it("still reports a dropped stream as reachable inside the re-attach grace", async () => {
+			const subscribers = createStreamSubscribers({ now: () => clock })
+			const scoped = createRequestHandler(api, { subscribers })
+			const req = mockReq("GET", "/api/v1/task/t1/event")
+
+			scoped(req, mockRes() as unknown as ServerResponse)
+			await flush()
+			req.fireClose()
+
+			// `has` is the instantaneous fact and must stay exact; `mightReach` is
+			// the one a refuse-to-ask decision may be taken on.
+			expect(subscribers.has("t1")).toBe(false)
+			expect(subscribers.mightReach("t1")).toBe(true)
+
+			clock += SUBSCRIBER_REATTACH_GRACE_MS - 1
+			expect(subscribers.mightReach("t1")).toBe(true)
+		})
+	})
+
+	/**
+	 * The grace window on the census: a controller detaching and re-attaching is
+	 * ordinary operation (an SSE drop, a proxy idle cycle, a rollout), so a
+	 * momentary absence is not evidence that a conversation has no audience.
+	 * Beyond the window it IS — which is what keeps the fail-fast it feeds from
+	 * degenerating into "never refuse".
+	 */
+	describe("re-attach grace", () => {
+		const attachDetach = (subscribers: ReturnType<typeof createStreamSubscribers>, taskId: string) =>
+			subscribers.add(taskId)()
+
+		it("reports a task that never had a subscriber as unreachable, with no grace", () => {
+			const subscribers = createStreamSubscribers({ now: () => clock })
+			expect(subscribers.mightReach("never-seen")).toBe(false)
+		})
+
+		it("expires the grace once the last detach is older than the window", () => {
+			const subscribers = createStreamSubscribers({ now: () => clock })
+			attachDetach(subscribers, "t1")
+
+			clock += SUBSCRIBER_REATTACH_GRACE_MS - 1
+			expect(subscribers.mightReach("t1")).toBe(true)
+
+			clock += 1
+			expect(subscribers.mightReach("t1")).toBe(false)
+		})
+
+		it("restarts the window from the LATEST detach, not the first", () => {
+			const subscribers = createStreamSubscribers({ now: () => clock })
+			attachDetach(subscribers, "t1")
+
+			clock += SUBSCRIBER_REATTACH_GRACE_MS - 100
+			attachDetach(subscribers, "t1")
+
+			clock += SUBSCRIBER_REATTACH_GRACE_MS - 1
+			expect(subscribers.mightReach("t1")).toBe(true)
+		})
+
+		it("counts the worker-wide firehose for a task with no stream of its own", () => {
+			const subscribers = createStreamSubscribers({ now: () => clock })
+			const release = subscribers.add(undefined)
+
+			expect(subscribers.mightReach("never-seen")).toBe(true)
+			release()
+			expect(subscribers.mightReach("never-seen")).toBe(false)
+		})
+
+		it("does not let a detach recorded on one task speak for another", () => {
+			const subscribers = createStreamSubscribers({ now: () => clock })
+			attachDetach(subscribers, "t1")
+
+			expect(subscribers.mightReach("t1")).toBe(true)
+			expect(subscribers.mightReach("t2")).toBe(false)
+		})
+
+		it("prunes detach entries past the window instead of growing forever", () => {
+			const subscribers = createStreamSubscribers({ now: () => clock })
+			for (let i = 0; i < 50; i++) attachDetach(subscribers, `stale-${i}`)
+
+			clock += SUBSCRIBER_REATTACH_GRACE_MS
+			// The write that follows the window sweeps every entry it made stale, so
+			// the ledger holds only what is still inside the window (plus this one).
+			attachDetach(subscribers, "fresh")
+
+			expect(subscribers.mightReach("fresh")).toBe(true)
+			for (let i = 0; i < 50; i++) expect(subscribers.mightReach(`stale-${i}`)).toBe(false)
+			expect(subscribers.detachLedgerSize()).toBe(1)
+		})
+
+		it("drops a task's detach entry when it re-attaches", () => {
+			const subscribers = createStreamSubscribers({ now: () => clock })
+			attachDetach(subscribers, "t1")
+			const release = subscribers.add("t1")
+
+			expect(subscribers.detachLedgerSize()).toBe(0)
+			expect(subscribers.mightReach("t1")).toBe(true)
+			release()
+			expect(subscribers.detachLedgerSize()).toBe(1)
 		})
 	})
 })

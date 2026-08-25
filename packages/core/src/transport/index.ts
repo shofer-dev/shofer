@@ -30,7 +30,9 @@ export { runAcpAgent } from "./run-acp-agent.js"
  * `brokerInteractiveAsks`, so an interactive ask here is answered by a subscribed
  * controller or by nobody at all. The server's subscriber census is published
  * through {@link setConversationDriverProbe} for exactly that question — see
- * `conversation-driver.ts`.
+ * `conversation-driver.ts`. It publishes `mightReach`, not `has`: a controller
+ * that dropped and is reconnecting is still the audience, and answering from the
+ * instantaneous count would report a millisecond gap as "nobody is watching".
  */
 export function serveHttpOverShoferApi(
 	api: ShoferExtensionApi,
@@ -43,7 +45,7 @@ export function serveHttpOverShoferApi(
 		version: opts.version ?? Package.version,
 		subscribers,
 	})
-	setConversationDriverProbe((taskId) => subscribers.has(taskId))
+	setConversationDriverProbe((taskId) => subscribers.mightReach(taskId))
 	server.on("close", () => setConversationDriverProbe(undefined))
 	server.listen(opts.port, opts.host)
 	return server

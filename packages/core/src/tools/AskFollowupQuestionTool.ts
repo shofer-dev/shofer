@@ -3,7 +3,7 @@ import type { ParamField } from "@shofer/types"
 import { Task } from "../task/Task.js"
 import { formatResponse } from "../prompts/responses.js"
 import { type ToolUse } from "@shofer/types"
-import { isConversationDriverAttached } from "../transport/conversation-driver.js"
+import { confirmNoConversationDriver } from "../transport/conversation-driver.js"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
 
@@ -113,8 +113,16 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			// `undefined` means the host is not remotely driven (the VS Code webview,
 			// a terminal `shofer` run), where the local ask surface IS the audience
 			// and nothing changes.
+			//
+			// "Provably" is the whole weight of this branch, so the question is put
+			// through `confirmNoConversationDriver` rather than sampled once: a
+			// controller detaching and re-attaching is normal operation, and a single
+			// sample turns a reconnect that lasts milliseconds into a permanent
+			// refusal of a question a human WAS waiting for. It costs a bounded
+			// in-line wait on the path that is about to give up, and nothing at all
+			// on the path that asks.
 			const rootTaskId = task.parentTaskId && !task.isBackgroundTask ? task.rootTaskId : undefined
-			if (rootTaskId && isConversationDriverAttached(rootTaskId) === false) {
+			if (rootTaskId && (await confirmNoConversationDriver(rootTaskId))) {
 				task.recordToolError("ask_followup_question")
 				pushToolResult(formatResponse.toolError(NO_AUDIENCE_MESSAGE))
 				return

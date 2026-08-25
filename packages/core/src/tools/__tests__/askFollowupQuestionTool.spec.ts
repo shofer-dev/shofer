@@ -1,5 +1,6 @@
 import { askFollowupQuestionTool } from "../AskFollowupQuestionTool.js"
-import { setConversationDriverProbe } from "../../transport/conversation-driver.js"
+import { setConversationDriverProbe, DRIVER_ATTACH_RECHECK_MS } from "../../transport/conversation-driver.js"
+import { createStreamSubscribers, SUBSCRIBER_REATTACH_GRACE_MS } from "../../transport/http-server.js"
 import { ToolUse } from "@shofer/types"
 import { NativeToolCallParser } from "../../assistant-message/NativeToolCallParser.js"
 
@@ -715,6 +716,12 @@ describe("askFollowupQuestionTool", () => {
 	 * `new_task` waiting for this child), so when nobody is driving the
 	 * conversation either, the question must FAIL rather than park — a parked one
 	 * takes the parent down with it and shows nothing anywhere.
+	 *
+	 * "Nobody is driving" is a claim about an INTERVAL, not an instant: the
+	 * controller reconnects as a matter of course, so the tool re-asks once after
+	 * `DRIVER_ATTACH_RECHECK_MS` before it refuses. These tests therefore drive
+	 * fake timers — a call that ends in a refusal only completes once that wait is
+	 * advanced.
 	 */
 	describe("a sync child with no reachable audience", () => {
 		const syncChild = (overrides: Record<string, unknown> = {}) => ({
@@ -734,7 +741,19 @@ describe("askFollowupQuestionTool", () => {
 			partial: false,
 		}
 
+		const invoke = (task: any) =>
+			askFollowupQuestionTool.handle(task, question as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+		beforeEach(() => {
+			vi.useFakeTimers()
+		})
+
 		afterEach(() => {
+			vi.useRealTimers()
 			setConversationDriverProbe(undefined)
 		})
 
@@ -742,26 +761,22 @@ describe("askFollowupQuestionTool", () => {
 			setConversationDriverProbe(() => false)
 			const task = syncChild()
 
-			await askFollowupQuestionTool.handle(task as any, question as ToolUse<"ask_followup_question">, {
-				askApproval: vi.fn(),
-				handleError: vi.fn(),
-				pushToolResult: mockPushToolResult,
-			})
+			const done = invoke(task)
+			await vi.advanceTimersByTimeAsync(DRIVER_ATTACH_RECHECK_MS)
+			await done
 
 			expect(task.ask).not.toHaveBeenCalled()
 			expect(toolResult).toContain("No user is reachable")
 			expect(task.recordToolError).toHaveBeenCalledWith("ask_followup_question")
 		})
 
-		it("asks normally when a driver IS attached", async () => {
+		it("asks normally when a driver IS attached, without paying the re-check wait", async () => {
 			setConversationDriverProbe(() => true)
 			const task = syncChild()
 
-			await askFollowupQuestionTool.handle(task as any, question as ToolUse<"ask_followup_question">, {
-				askApproval: vi.fn(),
-				handleError: vi.fn(),
-				pushToolResult: mockPushToolResult,
-			})
+			// No timer advance: an attached driver is answered on the first sample,
+			// so the ask must already have happened.
+			await invoke(task)
 
 			expect(task.ask).toHaveBeenCalledWith("followup", expect.any(String), false)
 		})
@@ -771,11 +786,7 @@ describe("askFollowupQuestionTool", () => {
 			// host's own ask surface is the audience. `undefined` is not `false`.
 			const task = syncChild()
 
-			await askFollowupQuestionTool.handle(task as any, question as ToolUse<"ask_followup_question">, {
-				askApproval: vi.fn(),
-				handleError: vi.fn(),
-				pushToolResult: mockPushToolResult,
-			})
+			await invoke(task)
 
 			expect(task.ask).toHaveBeenCalledWith("followup", expect.any(String), false)
 		})
@@ -786,13 +797,105 @@ describe("askFollowupQuestionTool", () => {
 			setConversationDriverProbe(() => false)
 			const task = { ...mockShofer, taskId: "root-1" }
 
-			await askFollowupQuestionTool.handle(task as any, question as ToolUse<"ask_followup_question">, {
+			await invoke(task)
+
+			expect(task.ask).toHaveBeenCalledWith("followup", expect.any(String), false)
+		})
+
+		it("asks after all when the driver attaches during the re-check window", async () => {
+			// The attach-in-progress race at the start of a turn: the controller has
+			// decided to subscribe and its request is in flight. One sample would
+			// refuse a question a human is about to be shown.
+			let attached = false
+			setConversationDriverProbe(() => attached)
+			const task = syncChild()
+
+			const done = invoke(task)
+			await vi.advanceTimersByTimeAsync(DRIVER_ATTACH_RECHECK_MS - 1)
+			expect(task.ask).not.toHaveBeenCalled()
+
+			attached = true
+			await vi.advanceTimersByTimeAsync(1)
+			await done
+
+			expect(task.ask).toHaveBeenCalledWith("followup", expect.any(String), false)
+			expect(task.recordToolError).not.toHaveBeenCalled()
+		})
+	})
+
+	/**
+	 * The other half of the tolerance, one layer down: the probe the transport
+	 * registers is the census's `mightReach`, so a controller that dropped and is
+	 * reconnecting still counts as the audience. Composed here against a real
+	 * census so the two windows are exercised together — a within-grace drop must
+	 * reach `task.ask` (the question PARKS for the returning controller), and a
+	 * beyond-grace one must not.
+	 */
+	describe("a sync child whose driver dropped and may come back", () => {
+		let clock: number
+
+		const syncChild = () => ({
+			...mockShofer,
+			taskId: "child-1",
+			rootTaskId: "root-1",
+			parentTaskId: "root-1",
+			isBackgroundTask: false,
+		})
+
+		const question: ToolUse = {
+			type: "tool_use",
+			name: "ask_followup_question",
+			params: { question: "Which region?" },
+			nativeArgs: { question: "Which region?", follow_up: [{ text: "eu-west" }] },
+			partial: false,
+		}
+
+		const invoke = (task: any) =>
+			askFollowupQuestionTool.handle(task, question as ToolUse<"ask_followup_question">, {
 				askApproval: vi.fn(),
 				handleError: vi.fn(),
 				pushToolResult: mockPushToolResult,
 			})
 
+		/** A census wired exactly as `serveHttpOverShoferApi` wires it. */
+		const censusWithDetachedRoot = () => {
+			const subscribers = createStreamSubscribers({ now: () => clock })
+			subscribers.add("root-1")()
+			setConversationDriverProbe((taskId) => subscribers.mightReach(taskId))
+		}
+
+		beforeEach(() => {
+			clock = 1_000
+			vi.useFakeTimers()
+		})
+
+		afterEach(() => {
+			vi.useRealTimers()
+			setConversationDriverProbe(undefined)
+		})
+
+		it("parks the question when the controller detached within the grace window", async () => {
+			censusWithDetachedRoot()
+			clock += SUBSCRIBER_REATTACH_GRACE_MS - 1
+			const task = syncChild()
+
+			await invoke(task)
+
 			expect(task.ask).toHaveBeenCalledWith("followup", expect.any(String), false)
+			expect(task.recordToolError).not.toHaveBeenCalled()
+		})
+
+		it("refuses once the detach is older than the grace window", async () => {
+			censusWithDetachedRoot()
+			clock += SUBSCRIBER_REATTACH_GRACE_MS
+			const task = syncChild()
+
+			const done = invoke(task)
+			await vi.advanceTimersByTimeAsync(DRIVER_ATTACH_RECHECK_MS)
+			await done
+
+			expect(task.ask).not.toHaveBeenCalled()
+			expect(toolResult).toContain("No user is reachable")
 		})
 	})
 })

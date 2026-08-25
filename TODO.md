@@ -20,10 +20,13 @@
   holds the stream open while nobody is watching (a browser tab closed with the
   server-side consumer still running, which is the DESIGNED behaviour) reads as
   an audience, so the fail-fast in `AskFollowupQuestionTool` catches only the
-  unambiguous case: nothing subscribed at all. Bounding the resulting wait is the
-  controller's job (it owns the durable question row and its deadline), and this
-  host deliberately has no timer of its own — a timer that resolved an ask would
-  be fabricating an answer.
+  unambiguous case: nothing subscribed for long enough that no reconnect explains
+  it (`SUBSCRIBER_REATTACH_GRACE_MS` in the census plus the one re-check in
+  `confirmNoConversationDriver` — `docs/parallelism.md`). Bounding the resulting
+  wait is the controller's job (it owns the durable question row and its
+  deadline), and this host deliberately has no timer that resolves an ask; the
+  two tolerance windows only bound how confidently it may assert that a question
+  reaches nobody, and neither supplies an answer, an approval or a refusal.
 
 - The marketplace removal left the `plugin` channel's `installFromFile` /
   `installFromUrl` / `uninstall` actions (and their host handlers) with no webview
