@@ -124,6 +124,7 @@ interface JsonExportCall {
 	toolCalls: JsonExportToolCall[] // Tool calls from the assistant message
 	reasoning?: string // Extracted reasoning / thinking
 	retryAttempt?: number // Number of retries before this attempt (0 = first try)
+	durationMs?: number // Whole ms, request open → stream end; absent when no stream end was reached
 	error?: {
 		// Structured error info when this call failed
 		message: string
@@ -199,6 +200,15 @@ API calls that fail entirely (connection errors, rate limits, empty streams) are
 - `retryAttempt` indicating how many retries preceded this attempt
 
 This ensures the trace shows every attempted API call, not just the successful ones.
+
+### Call Duration
+
+Each call may include `durationMs` — whole milliseconds from request open to
+stream end, measured with a monotonic clock (see `api-req-timing.ts`). It is
+present exactly when the request reached a stream end (including cancelled and
+failed streams); a call still in flight when the task was persisted, or one the
+host died holding, carries no `durationMs` at all — absence means no end is
+known, never "took zero time".
 
 ### Wire Request
 
@@ -404,6 +414,7 @@ Both capture points call [`snapshotApiReqError()`](../packages/core/src/task/Tas
 
 | Version | Date       | Changes                                                                                                        |
 | ------- | ---------- | -------------------------------------------------------------------------------------------------------------- |
+| 2.71.0  | 2026-08-25 | Added `durationMs` (request open → stream end; absent when no stream end was reached)                          |
 | 0.11.7  | 2026-05-16 | Added `error`, `retryAttempt`, `wireRequest` fields; fixed field name mismatch; added error-only call handling |
 | 0.11.6  | 2026-05-14 | Initial JSON export with `api_req_started`-based metadata                                                      |
 
