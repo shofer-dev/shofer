@@ -46,6 +46,12 @@ export interface JsonExportCall {
 	reasoning?: string
 	/** Number of retries before this attempt (0 = first try). */
 	retryAttempt?: number
+	/**
+	 * Whole milliseconds the request took, request open → stream end. Absent
+	 * when the request never reached a stream end (still in flight when the
+	 * task was persisted, or the host died holding it).
+	 */
+	durationMs?: number
 	/** Structured error information if this call failed. */
 	error?: {
 		message: string
@@ -134,6 +140,8 @@ interface UiApiReqStartedPayload {
 	cancelReason?: string
 	streamingFailedMessage?: string
 	retryAttempt?: number
+	/** Present only once the payload has been rewritten at stream end. */
+	durationMs?: number
 	error?: {
 		message: string
 		type?: string
@@ -323,6 +331,7 @@ export function buildJsonTrace(
 				toolCalls,
 				reasoning: reasoning || undefined,
 				retryAttempt: payload.retryAttempt,
+				durationMs: payload.durationMs,
 				error: payload.error,
 				wireRequest: payload.wireRequest,
 			})
@@ -362,6 +371,7 @@ export function buildJsonTrace(
 			messages: [],
 			toolCalls: [],
 			retryAttempt: payload.retryAttempt,
+			durationMs: payload.durationMs,
 			error: payload.error,
 			wireRequest: payload.wireRequest,
 		})

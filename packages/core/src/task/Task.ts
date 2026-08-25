@@ -5,6 +5,7 @@ import { v7 as uuidv7 } from "uuid"
 import EventEmitter from "events"
 
 import { AskIgnoredError } from "./AskIgnoredError.js"
+import { startApiRequestTimer, openedApiReqInfo, endedApiReqInfo } from "./api-req-timing.js"
 
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
@@ -5311,13 +5312,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					.catch(() => {})
 			}
 
+			// Monotonic open-time for this request. The elapsed span it yields is
+			// stamped onto every stream-end rewrite of the `api_req_started`
+			// payload below, which is the only account of the request's timing a
+			// consumer gets when no `api_req_finished` span is written.
+			const apiReqTimer = startApiRequestTimer()
+
 			await this.say(
 				"api_req_started",
-				JSON.stringify({
-					apiProtocol,
-					model: modelId,
-					retryAttempt: currentItem.retryAttempt ?? 0,
-				}),
+				JSON.stringify(
+					openedApiReqInfo({
+						apiProtocol,
+						model: modelId,
+						retryAttempt: currentItem.retryAttempt ?? 0,
+					}),
+				),
 			)
 
 			const provider = this.providerRef.deref()
@@ -5440,11 +5449,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// message.
 			const lastApiReqIndex = findLastIndex(this.shoferMessages, (m) => m.say === "api_req_started")
 
-			this.shoferMessages[lastApiReqIndex]!.text = JSON.stringify({
-				apiProtocol,
-				model: modelId,
-				retryAttempt: currentItem.retryAttempt ?? 0,
-			} satisfies ShoferApiReqInfo)
+			// Still the OPENING payload — the request has not been sent yet — so it
+			// carries no `durationMs`. See `api-req-timing.ts`.
+			this.shoferMessages[lastApiReqIndex]!.text = JSON.stringify(
+				openedApiReqInfo({
+					apiProtocol,
+					model: modelId,
+					retryAttempt: currentItem.retryAttempt ?? 0,
+				}),
+			)
 
 			// Must flush synchronously — the API call that follows reads
 			// on-disk state and depends on this save being visible.
@@ -5514,17 +5527,27 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									cacheReadTokens,
 								)
 
-					this.shoferMessages[lastApiReqIndex].text = JSON.stringify({
-						...existingData,
-						tokensIn: costResult.totalInputTokens,
-						tokensOut: costResult.totalOutputTokens,
-						cacheWrites: cacheWriteTokens,
-						cacheReads: cacheReadTokens,
-						cost: totalCost ?? costResult.totalCost,
-						cancelReason,
-						streamingFailedMessage,
-						...(metaOverrides ?? {}),
-					} satisfies ShoferApiReqInfo)
+					// Every call site of this closure is a stream END — the usage
+					// drain, the provider's end-of-stream metadata marker, or an
+					// aborted/failed stream — so the payload is stamped with the
+					// request's duration. Re-measured on each rewrite, so a
+					// progressive update leaves the final value at open→stream-end.
+					this.shoferMessages[lastApiReqIndex].text = JSON.stringify(
+						endedApiReqInfo(
+							{
+								...existingData,
+								tokensIn: costResult.totalInputTokens,
+								tokensOut: costResult.totalOutputTokens,
+								cacheWrites: cacheWriteTokens,
+								cacheReads: cacheReadTokens,
+								cost: totalCost ?? costResult.totalCost,
+								cancelReason,
+								streamingFailedMessage,
+								...(metaOverrides ?? {}),
+							} satisfies ShoferApiReqInfo,
+							apiReqTimer,
+						),
+					)
 				}
 
 				const abortStream = async (cancelReason: ShoferApiReqCancelReason, streamingFailedMessage?: string) => {

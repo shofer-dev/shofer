@@ -1131,6 +1131,23 @@ export interface ShoferApiReqInfo {
 	attempts?: number
 	/** Error message from the LLM provider when the request failed. */
 	responseError?: string
+	/**
+	 * Whole milliseconds the request took, from when `api_req_started` was
+	 * emitted to when this payload was rewritten at stream end.
+	 *
+	 * PRESENT means the stream ended (or is progressively updating toward its
+	 * end, in which case the last rewrite wins); ABSENT means no end is known —
+	 * the request is still in flight, or the host died holding it. A consumer
+	 * that has no `api_req_finished` span for the request relies on exactly that
+	 * distinction, so this field is never written speculatively.
+	 *
+	 * It is a plain ELAPSED duration, not an offset from the task's timeline
+	 * origin as `ToolSpan.startedAtOffsetMs` is: the origin is derived from the
+	 * `api_req_finished` message, which is the message this field exists to
+	 * survive the absence of. Measured with a monotonic clock — see
+	 * `startApiRequestTimer` in `@shofer/core`.
+	 */
+	durationMs?: number
 }
 
 export type ShoferApiReqCancelReason = "streaming_failed" | "user_cancelled"
