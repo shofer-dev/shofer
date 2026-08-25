@@ -17,6 +17,26 @@ export interface ApiHandlerCreateMessageMetadata {
 	 */
 	taskId: string
 	/**
+	 * The task this one was spawned from, when it is a subtask.
+	 *
+	 * Absent on a root task — a root has no parent — which is the same shape the
+	 * task's own `HistoryItem` carries, and providers that forward it must omit
+	 * the field rather than substitute the task's own id.
+	 */
+	parentTaskId?: string
+	/**
+	 * The top-level task of the tree this one belongs to, when it is a subtask.
+	 *
+	 * This is the ROOT, at any depth — one hop, never a walk up the parents — so
+	 * a grandchild names the same task as its parent does. Absent on a root task,
+	 * for the same reason `parentTaskId` is.
+	 *
+	 * It is per-REQUEST rather than per-handler on purpose: one handler instance
+	 * is shared across every concurrent task, so anything the handler remembered
+	 * about a task tree would be the wrong tree for the next request through it.
+	 */
+	rootTaskId?: string
+	/**
 	 * Current mode slug for provider-specific tracking:
 	 * - Requesty: Sent in extra metadata
 	 */

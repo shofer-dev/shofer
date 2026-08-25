@@ -3489,6 +3489,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
+	/**
+	 * This task's place in the task tree, as request metadata — spread into every
+	 * `ApiHandlerCreateMessageMetadata` this task builds so the agent loop, the
+	 * condenser and context management all state the same thing.
+	 *
+	 * BOTH KEYS ARE ABSENT ON A ROOT TASK. A root has no parent and is below no
+	 * root, so an empty value is omitted rather than sent: a provider forwarding
+	 * this must be able to tell "no tree" from "a tree naming itself", and the
+	 * task's own `HistoryItem` carries neither key on a root either.
+	 */
+	private taskTreeMetadata(): Pick<ApiHandlerCreateMessageMetadata, "parentTaskId" | "rootTaskId"> {
+		return {
+			...(this.parentTaskId ? { parentTaskId: this.parentTaskId } : {}),
+			...(this.rootTaskId ? { rootTaskId: this.rootTaskId } : {}),
+		}
+	}
+
 	public async condenseContext(): Promise<void> {
 		// CRITICAL: Flush any pending tool results before condensing
 		// to ensure tool_use/tool_result pairs are complete in history
@@ -3533,6 +3550,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const metadata: ApiHandlerCreateMessageMetadata = {
 			mode,
 			taskId: this.taskId,
+			...this.taskTreeMetadata(),
 			...(allTools.length > 0
 				? {
 						tools: allTools,
@@ -7340,6 +7358,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const metadata: ApiHandlerCreateMessageMetadata = {
 			mode,
 			taskId: this.taskId,
+			...this.taskTreeMetadata(),
 			...(allTools.length > 0
 				? {
 						tools: allTools,
@@ -7556,6 +7575,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const contextMgmtMetadata: ApiHandlerCreateMessageMetadata = {
 				mode,
 				taskId: this.taskId,
+				...this.taskTreeMetadata(),
 				...(contextMgmtTools.length > 0
 					? {
 							tools: contextMgmtTools,
@@ -7749,6 +7769,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const metadata: ApiHandlerCreateMessageMetadata = {
 			mode: mode,
 			taskId: this.taskId,
+			...this.taskTreeMetadata(),
 			suppressPreviousResponseId: this.skipPrevResponseIdOnce,
 			// Include tools whenever they are present.
 			...(shouldIncludeTools

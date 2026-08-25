@@ -5,15 +5,18 @@
  *
  * This provider is designed for connecting Shofer to a locally-running
  * llm-router instance via `--base-url`.  It behaves like OpenRouter except for
- * the three fields llm-router owns on the request body: `task_id`
- * (`metadata.taskId`, the per-task UUID v7 identifier, required), `human_text`
- * (the human's own words on turns that have them) and `reasoning` (the router's
- * thinking directive — see {@link shoferReasoningDirective}).
+ * the fields llm-router owns on the request body: `task_id`
+ * (`metadata.taskId`, the per-task UUID v7 identifier, required),
+ * `parent_task_id` / `root_task_id` (this task's place in the task tree, absent
+ * on a root), `human_text` (the human's own words on turns that have them) and
+ * `reasoning` (the router's thinking directive — see
+ * {@link shoferReasoningDirective}).
  *
  * Conversation IDs are per-session (per task), not per-provider-instance,
  * because a single provider/handler is shared across all concurrent tasks.
  * Using `metadata.taskId` gives each task its own stable conversation identity
- * for the lifetime of that task.
+ * for the lifetime of that task — and it is why the tree ids are read from the
+ * same per-request metadata rather than remembered on the handler.
  */
 
 import { Anthropic } from "@anthropic-ai/sdk"
@@ -100,6 +103,20 @@ export class ShoferHandler extends OpenRouterHandler {
 		// with HTTP 400, which is the correct behaviour — we want to know.
 		const taskId = metadata!.taskId
 
+		// Where this task sits in the TASK TREE, from the same per-request
+		// metadata `task_id` comes from — never from the handler, which is shared
+		// across every concurrent task and would answer with someone else's tree.
+		//
+		// Both are absent on a ROOT task, and they are then omitted from the body
+		// rather than filled in with the task's own id. That is the task tree's
+		// own convention (a root's `HistoryItem` carries neither key), and
+		// restating it here keeps the two records of the tree — the task history
+		// and whatever the router persists — saying the same thing. Substituting
+		// `root_task_id: taskId` would instead assert that a root is a subtask of
+		// itself, which no reader could tell from a genuine one-node tree.
+		const parentTaskId = metadata!.parentTaskId
+		const rootTaskId = metadata!.rootTaskId
+
 		// The human's own words in this request's last message, recovered from the
 		// block Shofer marked when it assembled the turn (`utils/user-message`).
 		// `undefined` for a tool-result round or an environment refresh, which is
@@ -144,6 +161,8 @@ export class ShoferHandler extends OpenRouterHandler {
 			const { reasoning: _openRouterReasoning, ...rest } = (params ?? {}) as any
 			const body = {
 				task_id: taskId,
+				...(parentTaskId ? { parent_task_id: parentTaskId } : {}),
+				...(rootTaskId ? { root_task_id: rootTaskId } : {}),
 				...(humanText ? { human_text: humanText } : {}),
 				...rest,
 				...(reasoning ? { reasoning } : {}),

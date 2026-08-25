@@ -51,6 +51,7 @@ import { ShoferHandler, normalizeReasoningStream } from "../shofer.js"
 import { OpenRouterHandler } from "../openrouter.js"
 import { getModels } from "../fetchers/modelCache.js"
 import type { ApiHandlerOptions } from "../_deps.js"
+import type { ApiHandlerCreateMessageMetadata } from "../../api-handler-types.js"
 import { convertToOpenAiMessages } from "../../transform/openai-format.js"
 import { humanMessageBlock } from "../../../utils/user-message.js"
 
@@ -130,7 +131,10 @@ describe("ShoferHandler request stamping", () => {
 	 * ShoferHandler intercepts — with the REAL Anthropic→OpenAI conversion, so
 	 * the captured `messages` are the ones a live request would carry.
 	 */
-	async function capture(messages: Anthropic.Messages.MessageParam[]): Promise<Record<string, unknown>> {
+	async function capture(
+		messages: Anthropic.Messages.MessageParam[],
+		metadata: ApiHandlerCreateMessageMetadata = { taskId: "task-1" },
+	): Promise<Record<string, unknown>> {
 		const captured: Record<string, unknown>[] = []
 		const stub = async function* (
 			this: { client: { chat: { completions: { create: (body: Record<string, unknown>) => Promise<void> } } } },
@@ -157,7 +161,7 @@ describe("ShoferHandler request stamping", () => {
 					},
 				},
 			})
-			for await (const chunk of handler.createMessage("SYSTEM", messages, { taskId: "task-1" })) {
+			for await (const chunk of handler.createMessage("SYSTEM", messages, metadata)) {
 				void chunk
 			}
 		} finally {
@@ -203,6 +207,59 @@ describe("ShoferHandler request stamping", () => {
 
 		expect(body.task_id).toBe("task-1")
 		expect("human_text" in body).toBe(false)
+	})
+
+	// A SUBTASK states its place in the task tree beside its own id, so whatever
+	// records the conversation can attribute the subtask's work to the tree it
+	// was spawned in without reconstructing the tree from somewhere else.
+	it("sends the task tree alongside task_id for a subtask", async () => {
+		const body = await capture([{ role: "user", content: [humanMessageBlock("Do the thing.")] }], {
+			taskId: "child-1",
+			parentTaskId: "parent-1",
+			rootTaskId: "root-1",
+		})
+
+		expect(body.task_id).toBe("child-1")
+		expect(body.parent_task_id).toBe("parent-1")
+		expect(body.root_task_id).toBe("root-1")
+	})
+
+	// The root-hop shape: a task nested two levels down names the ROOT, not its
+	// grandparent, so every descendant of a conversation carries the same
+	// root_task_id whatever its depth.
+	it("names the root at any depth, never an intermediate ancestor", async () => {
+		const body = await capture([{ role: "user", content: [humanMessageBlock("Deeper.")] }], {
+			taskId: "grandchild-1",
+			parentTaskId: "child-1",
+			rootTaskId: "root-1",
+		})
+
+		expect(body.parent_task_id).toBe("child-1")
+		expect(body.root_task_id).toBe("root-1")
+	})
+
+	// A ROOT task has no parent and is below no root, so BOTH fields are absent
+	// from the body. Substituting the task's own id would assert that a root is a
+	// subtask of itself, which no reader could tell from a genuine one-node tree.
+	it("omits both tree fields for a root task", async () => {
+		const body = await capture([{ role: "user", content: [humanMessageBlock("Start.")] }], { taskId: "root-1" })
+
+		expect(body.task_id).toBe("root-1")
+		expect("parent_task_id" in body).toBe(false)
+		expect("root_task_id" in body).toBe(false)
+	})
+
+	// A caller that knows only half the tree sends only that half — the missing
+	// key is omitted rather than sent empty, which is the difference between "not
+	// stated" and "stated as nothing" for anything reading the body.
+	it("omits the half of the tree the caller did not state", async () => {
+		const body = await capture([{ role: "user", content: [humanMessageBlock("Half.")] }], {
+			taskId: "child-1",
+			rootTaskId: "root-1",
+		})
+
+		expect(body.root_task_id).toBe("root-1")
+		expect("parent_task_id" in body).toBe(false)
 	})
 })
 

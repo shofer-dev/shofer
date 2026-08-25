@@ -175,15 +175,15 @@ Used when `SHOFER_CLOUD_ORG_SETTINGS` is set. Parses a base64-encoded JSON strin
 
 The `organizationSettingsSchema` includes:
 
-| Field                 | Type                                     | Description                               |
-| --------------------- | ---------------------------------------- | ----------------------------------------- |
-| `version`             | `number`                                 | Monotonic version for change detection    |
-| `cloudSettings`       | `OrganizationCloudSettings`              | Cloud feature flags                       |
-| `defaultSettings`     | `OrganizationDefaultSettings`            | Enforced default settings for org members |
-| `allowList`           | `OrganizationAllowList`                  | Provider/model allow/deny lists           |
-| `features`            | `OrganizationFeatures`                   | Organization feature flags                |
-| `hiddenMcps`          | `string[]`                               | MCP servers hidden from members           |
-| `providerProfiles`    | `Record<string, ProviderSettingsWithId>` | Cloud-managed provider profiles           |
+| Field              | Type                                     | Description                               |
+| ------------------ | ---------------------------------------- | ----------------------------------------- |
+| `version`          | `number`                                 | Monotonic version for change detection    |
+| `cloudSettings`    | `OrganizationCloudSettings`              | Cloud feature flags                       |
+| `defaultSettings`  | `OrganizationDefaultSettings`            | Enforced default settings for org members |
+| `allowList`        | `OrganizationAllowList`                  | Provider/model allow/deny lists           |
+| `features`         | `OrganizationFeatures`                   | Organization feature flags                |
+| `hiddenMcps`       | `string[]`                               | MCP servers hidden from members           |
+| `providerProfiles` | `Record<string, ProviderSettingsWithId>` | Cloud-managed provider profiles           |
 
 **Cloud Settings (`OrganizationCloudSettings`):**
 
@@ -343,11 +343,17 @@ and is designed for connecting Shofer to a **locally-running llm-router** instan
 (default base URL `http://localhost:30081/v1`), not a hosted cloud proxy. It behaves
 identically to OpenRouter except for three deliberate differences:
 
-- **`task_id` injection:** every `createMessage` patches the OpenAI client so
+- **Task-identity injection:** every `createMessage` patches the OpenAI client so
   each `/v1/chat/completions` body carries `task_id = metadata.taskId` (the
   per-task UUID v7). llm-router requires this on every call; conversation IDs are
   per-task (a single handler is shared across concurrent tasks). See
-  [`taskId.md`](taskId.md).
+  [`taskId.md`](taskId.md). A **subtask** additionally carries its place in the
+  task tree — `parent_task_id = metadata.parentTaskId` and
+  `root_task_id = metadata.rootTaskId`, the latter naming the ROOT at any depth,
+  one hop rather than a walk up the parents. Both are read from the same
+  per-request metadata `task_id` is, never remembered on the handler, and both
+  are **omitted for a root task**: a root has no parent and is below no root, and
+  substituting its own id would assert that it is a subtask of itself.
 - **No default model:** `getModel()` throws if no model is configured rather than
   silently falling back to OpenRouter's default — misrouting every request to a model
   the user never asked for is worse than a loud failure.
@@ -357,13 +363,13 @@ identically to OpenRouter except for three deliberate differences:
 
 ```mermaid
 flowchart TD
-    T["Task — metadata.taskId, per-task UUID v7"]
+    T["Task — metadata.taskId, per-task UUID v7<br/>plus parentTaskId / rootTaskId when it is a subtask"]
     BAH["buildApiHandler()"]
     OPT["options: shoferBaseUrl / shoferApiKey<br/>falling back to the openRouter fields"]
     SH["ShoferHandler extends OpenRouterHandler"]
     GM{"model configured?"}
     ERR["throw — the Shofer provider has no default model"]
-    PATCH["patched OpenAI client — every<br/>/v1/chat/completions body carries task_id"]
+    PATCH["patched OpenAI client — every<br/>/v1/chat/completions body carries task_id<br/>(+ parent_task_id / root_task_id for a subtask)"]
     ROUTER["locally-running llm-router"]
 
     BAH --> SH
@@ -538,11 +544,11 @@ The Astro app at `website/` hosts marketing and product pages:
 
 ## Configuration & Environment Variables
 
-| Variable                 | Default                        | Description                                            |
-| ------------------------ | ------------------------------ | ------------------------------------------------------ |
-| `SHOFER_PROVIDER_URL`    | `https://api.shofer.dev/proxy` | Shofer Router proxy base URL                           |
-| `TELEMETRY_ENABLED`      | `false`                        | Set to `"true"` to enable telemetry (PostHog/cloud)    |
-| `SHOFER_IPC_SOCKET_PATH` | _(empty)_                      | Unix socket path for IPC API                           |
+| Variable                 | Default                        | Description                                         |
+| ------------------------ | ------------------------------ | --------------------------------------------------- |
+| `SHOFER_PROVIDER_URL`    | `https://api.shofer.dev/proxy` | Shofer Router proxy base URL                        |
+| `TELEMETRY_ENABLED`      | `false`                        | Set to `"true"` to enable telemetry (PostHog/cloud) |
+| `SHOFER_IPC_SOCKET_PATH` | _(empty)_                      | Unix socket path for IPC API                        |
 
 > **Note:** `CLERK_BASE_URL`, `SHOFER_CLOUD_TOKEN`, `SHOFER_CLOUD_ORG_SETTINGS`, and `SHOFER_DISABLE_TELEMETRY` are referenced in the legacy sections below but do not exist in the current codebase. The telemetry toggle in the actual code is `TELEMETRY_ENABLED` (set to `"true"`), not `SHOFER_DISABLE_TELEMETRY`.
 
