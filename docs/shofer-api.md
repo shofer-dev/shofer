@@ -656,13 +656,33 @@ An in-process listener on `ShoferExtensionApi` still sees everything.
 
 #### Task Execution
 
-| Event                                                         | Payload                         | Description                                                                                                                                      |
-| ------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`message`](../packages/types/src/events.ts:38)               | `[{ taskId, action, message }]` | A message was created or updated. `action` is `"created"` or `"updated"`. Contains the full [`ShoferMessage`](../packages/types/src/message.ts). |
-| [`taskModeSwitched`](../packages/types/src/events.ts:39)      | `[taskId, mode]`                | Task mode changed.                                                                                                                               |
-| [`taskAskResponded`](../packages/types/src/events.ts:40)      | `[taskId]`                      | User responded to an ask.                                                                                                                        |
-| [`taskUserMessage`](../packages/types/src/events.ts:41)       | `[taskId]`                      | User sent a message.                                                                                                                             |
-| [`queuedMessagesUpdated`](../packages/types/src/events.ts:42) | `[taskId, queuedMessages[]]`    | Queued messages for a task changed.                                                                                                              |
+| Event                                                         | Payload                         | Description                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`message`](../packages/types/src/events.ts:38)               | `[{ taskId, action, message }]` | A message was created or updated. `action` is `"created"` or `"updated"`. Contains a full [`ShoferMessage`](../packages/types/src/message.ts) **snapshot** — the state the message had when the event was raised, never a live reference (see below). |
+| [`taskModeSwitched`](../packages/types/src/events.ts:39)      | `[taskId, mode]`                | Task mode changed.                                                                                                                                                                                                                                    |
+| [`taskAskResponded`](../packages/types/src/events.ts:40)      | `[taskId]`                      | User responded to an ask.                                                                                                                                                                                                                             |
+| [`taskUserMessage`](../packages/types/src/events.ts:41)       | `[taskId]`                      | User sent a message.                                                                                                                                                                                                                                  |
+| [`queuedMessagesUpdated`](../packages/types/src/events.ts:42) | `[taskId, queuedMessages[]]`    | Queued messages for a task changed.                                                                                                                                                                                                                   |
+
+##### `message` carries a snapshot, and an ask on it is already decided
+
+Two guarantees a consumer of `message` may rely on, both of them properties of
+how `Task` raises the event rather than of how a subscriber handles it:
+
+- **The payload is a snapshot taken at emit time.** `Task` mutates a streamed
+  message in place across its chunks and again when it finalizes, so a live
+  reference would let a subscriber that serializes later — an SSE writer, a
+  queued store write — publish a state the message only reached afterwards. Both
+  `addToShoferMessages` and `updateShoferMessage` therefore emit a copy. A
+  subscriber must not use reference identity to correlate events; correlate on
+  `ts` (position) or `askId` (decision).
+- **A finalized `ask` is never published undecided and decided afterwards.** All
+  three complete-message paths in `Task.ask()` — including the partial→final
+  transition every streamed native tool call takes — resolve auto-approval before
+  the message is persisted or emitted, and the decision is taken once per ask. So
+  an ask that arrives without `autoApproved` is genuinely outstanding and a
+  controller may open a durable approval row for it; there is no later update that
+  retracts one.
 
 #### Task Analytics
 

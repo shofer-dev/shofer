@@ -150,7 +150,7 @@ import { processUserContentMentions } from "../mentions/processUserContentMentio
 import { getMessagesSinceLastSummary, summarizeConversation, getEffectiveApiHistory } from "../condense/index.js"
 import { MessageQueueService } from "../message-queue/MessageQueueService.js"
 import { AutoApprovalHandler } from "../auto-approval/AutoApprovalHandler.js"
-import { checkAutoApproval } from "../auto-approval/index.js"
+import { checkAutoApproval, type CheckAutoApprovalResult } from "../auto-approval/index.js"
 import { MessageManager } from "../message-manager/index.js"
 import { validateAndFixToolResultIds } from "./validateToolResultIds.js"
 import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages.js"
@@ -2330,11 +2330,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// the LLM-bound `apiConversationHistory` path (see `addToApiConversationHistory`
 		// and `flushPendingToolResultsToHistory`).
 		this.shoferMessages.push(message)
+		// Everything published or persisted from here on is a SNAPSHOT of the
+		// message as it is NOW, never the live object — see `updateShoferMessage`
+		// for why (both paths are deferred by at least one await, and callers
+		// mutate these objects in place afterwards).
+		const snapshot: ShoferMessage = { ...message }
 		// §4.1: O(1) JSONL append — must happen BEFORE the debounced metadata
 		// refresh so a crash between the in-memory push and the next compaction
 		// does not lose the message.
 		try {
-			await (await this.getPersistence()).appendTaskMessage(this.taskId, message)
+			await (await this.getPersistence()).appendTaskMessage(this.taskId, snapshot)
 		} catch (error) {
 			taskLog.error("Failed to append Shofer message:", error)
 		}
@@ -2360,14 +2365,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			(provider.taskManager?.getFocusedTaskId() === this.taskId ||
 				provider.getCurrentTask()?.taskId === this.taskId)
 		) {
-			await provider.postMessageToWebview({ type: "shoferMessageAppended", shoferMessage: message })
+			await provider.postMessageToWebview({ type: "shoferMessageAppended", shoferMessage: snapshot })
 		}
 		// H11: maintain the token-bearing count incrementally so
 		// _refreshTaskMetadata can skip the O(n) _countTokenBearingMessages walk.
 		if (this._isTokenBearingMessage(message)) {
 			this._tokenBearingMessageCount++
 		}
-		this.emit(ShoferEventName.Message, { action: "created", message })
+		this.emit(ShoferEventName.Message, { action: "created", message: snapshot })
 		await this._debouncedSaveShoferMessages()
 	}
 
@@ -2384,6 +2389,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	private async updateShoferMessage(message: ShoferMessage) {
+		// What this update PUBLISHES and PERSISTS is a snapshot of the message as
+		// it is right now — never the live object. Callers mutate these objects in
+		// place (the partial→final transition in `ask()` is the canonical case),
+		// and every consumer below is reached after at least one await: the store
+		// may queue the write, and a subscriber on the ShoferApi transport
+		// serializes the event at write time. Handing out the reference therefore
+		// publishes whatever state the object has reached by then, not the state
+		// this call was made about — which is how a finalized-but-undecided ask
+		// reached controllers once per queued append and minted a pending approval
+		// for each.
+		const snapshot: ShoferMessage = { ...message }
 		const provider = this.providerRef.deref()
 		// Only push messageUpdated to the webview when this task is the one the
 		// user sees — either focused via TaskManager or at the top of the
@@ -2396,7 +2412,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			(provider.taskManager?.getFocusedTaskId() === this.taskId ||
 				provider.getCurrentTask()?.taskId === this.taskId)
 		) {
-			await provider.postMessageToWebview({ type: "messageUpdated", shoferMessage: message })
+			await provider.postMessageToWebview({ type: "messageUpdated", shoferMessage: snapshot })
 		}
 		// §4.1: persist the in-place mutation by appending a new JSONL line
 		// with the same `ts`. `readTaskMessages` collapses duplicates so the
@@ -2411,15 +2427,30 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// mid-stream (an incomplete, non-resumable response). A finalized message
 		// (`partial` false/undefined) always appends so the turn's canonical
 		// value is durable even before the next compaction.
+		//
+		// The stamp is taken at ENQUEUE time, before the append is awaited, so the
+		// throttle measures the spacing of our intent to write rather than the
+		// store's latency. Stamping it after the await compares against the last
+		// COMPLETED append, so a store whose write takes longer than the window —
+		// a shared backend that serializes writes per task, under load — admits
+		// every subsequent chunk, and each admitted write makes the next one land
+		// later still. That positive feedback disables the throttle exactly when it
+		// is needed, and is what stalled a streamed tool call for seconds at a time.
+		//
+		// The throttled-out tail needs no trailing flush: a message's FINAL state is
+		// persisted by the finalize path (`saveShoferMessages` plus the
+		// unconditional `partial: false` append above), so the only lines dropped
+		// are intermediate partials, read back solely after a crash mid-stream (an
+		// incomplete, non-resumable response).
 		const isPartial = message.partial === true
 		const now = Date.now()
 		const shouldAppend = !isPartial || now - this._lastPartialAppendTs >= Task.PARTIAL_APPEND_THROTTLE_MS
 		if (shouldAppend) {
+			if (isPartial) {
+				this._lastPartialAppendTs = now
+			}
 			try {
-				await (await this.getPersistence()).appendTaskMessage(this.taskId, message)
-				if (isPartial) {
-					this._lastPartialAppendTs = now
-				}
+				await (await this.getPersistence()).appendTaskMessage(this.taskId, snapshot)
 			} catch (error) {
 				taskLog.error("Failed to append updated Shofer message:", error)
 			}
@@ -2433,7 +2464,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this._tokenBearingMessageCount++
 			}
 		}
-		this.emit(ShoferEventName.Message, { action: "updated", message })
+		this.emit(ShoferEventName.Message, { action: "updated", message: snapshot })
 	}
 
 	/**
@@ -2740,6 +2771,53 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 		}
 
+		// The auto-approval decision for THIS ask invocation, taken at most once.
+		//
+		// Every branch that publishes a complete ask has to know the decision
+		// BEFORE it publishes — `autoApproved` must already be on the message that
+		// reaches the webview and the ShoferApi transport, or an observer records a
+		// pending approval for an ask nobody will ever be asked about (and the
+		// webview flickers Accept/Reject until a later `messageUpdated` retracts
+		// them). Asking twice is not merely wasteful: the second read of provider
+		// state can disagree with the answer already on the wire, so the memo is
+		// part of the contract, not an optimization.
+		let autoApproval: CheckAutoApprovalResult | undefined
+		const decideAutoApproval = async (): Promise<CheckAutoApprovalResult> => {
+			if (autoApproval) {
+				return autoApproval
+			}
+			const stateProvider = this.providerRef.deref()
+			const state = stateProvider ? await stateProvider.getState() : undefined
+			const decision = await checkAutoApproval({
+				state: this.withTaskTrust(state),
+				ask: type,
+				text,
+				isProtected,
+			})
+			// Suppress auto-approval for a background child's routed followup
+			// question — it must wait for the parent agent or the user to answer,
+			// not be auto-answered with the first suggestion.
+			if (type === "followup" && this.isRoutedFollowupPending()) {
+				decision.decision = "ask"
+			}
+			autoApproval = decision
+			return decision
+		}
+
+		/**
+		 * Close this ask with the answer auto-approval supplied, exactly as each of
+		 * the three complete-message branches needs to: clear the outstanding ask,
+		 * tell observers it was resolved by policy rather than by a person, and
+		 * return the synthesized response to the caller.
+		 */
+		const resolveAutoApproved = (decision: "approve" | "deny") => {
+			this._currentAskId = undefined
+			this.emit(ShoferEventName.TaskAskResponded)
+			const synthesized: ShoferAskResponse = decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
+			this.notifyAskResolved(askId, type, "answered", { response: synthesized, decidedBy: "auto-approval" })
+			return { response: synthesized, text: undefined, images: undefined }
+		}
+
 		if (partial !== undefined) {
 			const lastMessage = this.shoferMessages.at(-1)
 
@@ -2791,6 +2869,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					askTs = lastMessage.ts
 					this.lastMessageTs = askTs
 					this._currentAskId = askId
+
+					// Decide auto-approval BEFORE this ask is persisted or published.
+					// This is the branch EVERY streamed native tool call takes, so a
+					// decision taken afterwards means the finalized ask reaches the
+					// webview and the ShoferApi transport undecided — and a
+					// controller that records asks durably (user-console's
+					// `user_approvals`) opens an approval row for a decision the
+					// posture had already made. Same ordering as the two
+					// complete-message branches below; keep all three in sync.
+					const streamedDecision = (await decideAutoApproval()).decision
+					const isStreamedAutoApproved = streamedDecision === "approve" || streamedDecision === "deny"
+
 					lastMessage.text = text
 					lastMessage.partial = false
 					lastMessage.progressStatus = progressStatus
@@ -2802,9 +2892,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// enforce it matches the current ask instead of resolving whatever
 					// ask is outstanding — closing wrong-ask / double-submit races.
 					lastMessage.askId = askId
+					if (isStreamedAutoApproved) {
+						lastMessage.autoApproved = true
+						if (streamedDecision === "approve" && type === "tool") {
+							lastMessage.isAnswered = true
+						}
+					}
 					this._debouncedSaveShoferMessages.cancel()
 					await this.saveShoferMessages()
 					this.updateShoferMessage(lastMessage)
+
+					if (streamedDecision === "approve" || streamedDecision === "deny") {
+						return resolveAutoApproved(streamedDecision)
+					}
 				} else {
 					// This is a new and complete message, so add it like normal.
 					this.askResponse = undefined
@@ -2818,23 +2918,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// `autoApproved` flag is already set on the initial message.
 					// This prevents the Accept/Reject buttons from flickering
 					// momentarily before the follow-up `messageUpdated` arrives.
-					const provider = this.providerRef.deref()
-					const state = provider ? await provider.getState() : undefined
-					const quickApproval = await checkAutoApproval({
-						state: this.withTaskTrust(state),
-						ask: type,
-						text,
-						isProtected,
-					})
-					// Suppress auto-approval for a background child's routed
-					// followup question — it must wait for the parent agent or
-					// the user to answer, not be auto-answered with the first
-					// suggestion.
-					if (type === "followup" && this.isRoutedFollowupPending()) {
-						quickApproval.decision = "ask"
-					}
-					const isAutoApproved = quickApproval.decision === "approve" || quickApproval.decision === "deny"
-					const isAutoApprovedTool = isAutoApproved && quickApproval.decision === "approve" && type === "tool"
+					const quickDecision = (await decideAutoApproval()).decision
+					const isAutoApproved = quickDecision === "approve" || quickDecision === "deny"
+					const isAutoApprovedTool = quickDecision === "approve" && type === "tool"
 
 					await this.addToShoferMessages({
 						ts: askTs,
@@ -2848,15 +2934,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					})
 
 					if (isAutoApproved) {
-						this._currentAskId = undefined
-						this.emit(ShoferEventName.TaskAskResponded)
-						const synthesized: ShoferAskResponse =
-							quickApproval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
-						this.notifyAskResolved(askId, type, "answered", {
-							response: synthesized,
-							decidedBy: "auto-approval",
-						})
-						return { response: synthesized, text: undefined, images: undefined }
+						return resolveAutoApproved(quickDecision)
 					}
 				}
 			}
@@ -2873,23 +2951,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// `autoApproved` flag is already set on the initial message.
 			// This prevents the Accept/Reject buttons from flickering
 			// momentarily before the follow-up `messageUpdated` arrives.
-			const provider = this.providerRef.deref()
-			const state = provider ? await provider.getState() : undefined
-			const quickApproval = await checkAutoApproval({
-				state: this.withTaskTrust(state),
-				ask: type,
-				text,
-				isProtected,
-			})
-			// Suppress auto-approval for a background child's routed
-			// followup question — it must wait for the parent agent or
-			// the user to answer, not be auto-answered with the first
-			// suggestion.
-			if (type === "followup" && this.isRoutedFollowupPending()) {
-				quickApproval.decision = "ask"
-			}
-			const isAutoApproved = quickApproval.decision === "approve" || quickApproval.decision === "deny"
-			const isAutoApprovedTool = isAutoApproved && quickApproval.decision === "approve" && type === "tool"
+			const quickDecision = (await decideAutoApproval()).decision
+			const isAutoApproved = quickDecision === "approve" || quickDecision === "deny"
+			const isAutoApprovedTool = quickDecision === "approve" && type === "tool"
 
 			await this.addToShoferMessages({
 				ts: askTs,
@@ -2903,56 +2967,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			})
 
 			if (isAutoApproved) {
-				this._currentAskId = undefined
-				this.emit(ShoferEventName.TaskAskResponded)
-				const synthesized: ShoferAskResponse =
-					quickApproval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
-				this.notifyAskResolved(askId, type, "answered", {
-					response: synthesized,
-					decidedBy: "auto-approval",
-				})
-				return { response: synthesized, text: undefined, images: undefined }
+				return resolveAutoApproved(quickDecision)
 			}
 		}
 
 		const timeouts: NodeJS.Timeout[] = []
 
-		// Automatically approve if the ask according to the user's settings.
+		// The decision the three branches above already took and published on the
+		// ask message, reused rather than re-asked. All three return as soon as it
+		// is "approve"/"deny", and the fourth path (`partial: true`) throws, so by
+		// construction only "ask" and "timeout" reach here — there is no fallback
+		// stamping of `autoApproved` after publication, and no ask can be published
+		// undecided and decided afterwards.
 		const provider = this.providerRef.deref()
-		const state = provider ? await provider.getState() : undefined
-		const approval = await checkAutoApproval({ state: this.withTaskTrust(state), ask: type, text, isProtected })
-
-		// Suppress auto-approval for a background child's routed followup
-		// question — it must wait for the parent agent or the user to
-		// answer, not be auto-answered with the first suggestion.
-		if (type === "followup" && this.isRoutedFollowupPending()) {
-			approval.decision = "ask"
-		}
-
-		// Note: the auto-approved / auto-denied fast-path was moved inside the
-		// two complete-message branches above so the `autoApproved` flag is
-		// set before `addToShoferMessages` sends the message to the webview.
-		// If we reach this point the decision is either "ask" or "timeout".
-		if (approval.decision === "approve" || approval.decision === "deny") {
-			// Edge case: should not normally be reached (fast path handled
-			// above), but guard against it.
-			const askMessage = this.findMessageByTimestamp(askTs)
-			if (askMessage) {
-				askMessage.autoApproved = true
-				if (approval.decision === "approve" && askMessage.type === "ask" && askMessage.ask === "tool") {
-					askMessage.isAnswered = true
-				}
-				this._debouncedSaveShoferMessages.cancel()
-				await this.saveShoferMessages()
-				this.updateShoferMessage(askMessage)
-			}
-			this._currentAskId = undefined
-			this.emit(ShoferEventName.TaskAskResponded)
-			const synthesized: ShoferAskResponse =
-				approval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
-			this.notifyAskResolved(askId, type, "answered", { response: synthesized, decidedBy: "auto-approval" })
-			return { response: synthesized, text: undefined, images: undefined }
-		}
+		const approval = await decideAutoApproval()
 
 		// Set when the DELAYED auto-approval timer, rather than a person, supplies
 		// the answer this invocation is about to return. Without it the timer's
