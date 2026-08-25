@@ -52,6 +52,17 @@ export interface JsonExportCall {
 	 * task was persisted, or the host died holding it).
 	 */
 	durationMs?: number
+	/**
+	 * Whole milliseconds from request open to the first stream chunk of any
+	 * kind. Absent when the stream produced nothing at all.
+	 */
+	firstChunkMs?: number
+	/**
+	 * Whole milliseconds the model spent reasoning — first chunk → first
+	 * non-reasoning chunk. Absent means there was NO reasoning phase; it is
+	 * never zero.
+	 */
+	thinkingMs?: number
 	/** Structured error information if this call failed. */
 	error?: {
 		message: string
@@ -142,6 +153,12 @@ interface UiApiReqStartedPayload {
 	retryAttempt?: number
 	/** Present only once the payload has been rewritten at stream end. */
 	durationMs?: number
+	/** Present only once the payload has been rewritten at stream end, and only
+	 *  when the stream produced at least one chunk. */
+	firstChunkMs?: number
+	/** Present only when a reasoning phase was observed AND closed by output;
+	 *  absence means there was none, and it is never written as zero. */
+	thinkingMs?: number
 	error?: {
 		message: string
 		type?: string
@@ -332,6 +349,8 @@ export function buildJsonTrace(
 				reasoning: reasoning || undefined,
 				retryAttempt: payload.retryAttempt,
 				durationMs: payload.durationMs,
+				firstChunkMs: payload.firstChunkMs,
+				thinkingMs: payload.thinkingMs,
 				error: payload.error,
 				wireRequest: payload.wireRequest,
 			})
@@ -372,6 +391,8 @@ export function buildJsonTrace(
 			toolCalls: [],
 			retryAttempt: payload.retryAttempt,
 			durationMs: payload.durationMs,
+			firstChunkMs: payload.firstChunkMs,
+			thinkingMs: payload.thinkingMs,
 			error: payload.error,
 			wireRequest: payload.wireRequest,
 		})

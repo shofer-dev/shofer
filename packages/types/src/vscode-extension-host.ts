@@ -1123,7 +1123,9 @@ export interface ShoferApiReqInfo {
 	/** The underlying model that actually served the request (may differ from
 	 *  'model' when failover or multi-provider routing is active). */
 	actualModel?: string
-	/** Time to first byte in milliseconds. */
+	/** Time to first byte in milliseconds, as SHOFER-ROUTER reported it for
+	 *  itself. Present only for router-served requests, and not the same
+	 *  measurement as `firstChunkMs` below — see that field. */
 	ttfbMs?: number
 	/** Total time in milliseconds. */
 	ttlbMs?: number
@@ -1148,6 +1150,37 @@ export interface ShoferApiReqInfo {
 	 * `startApiRequestTimer` in `@shofer/core`.
 	 */
 	durationMs?: number
+	/**
+	 * Whole milliseconds from the request's open to the FIRST stream chunk of
+	 * any kind, as the agent loop observed it.
+	 *
+	 * Written by the same stream-end rewrites as `durationMs` and over the same
+	 * span, so a consumer may place it inside that window directly. ABSENT when
+	 * the stream produced nothing at all (an immediate provider failure): there
+	 * was no first byte, and zero would claim there was one.
+	 *
+	 * Not to be confused with `ttfbMs` above, which is what shofer-router
+	 * reported about ITS OWN request to the provider. This one is the host's own
+	 * measurement, and it is the very number `api_req_finished` publishes as
+	 * `ttfbMs` — the two are never measured twice.
+	 */
+	firstChunkMs?: number
+	/**
+	 * Whole milliseconds the model spent REASONING: the window between the first
+	 * chunk and the first non-reasoning chunk (text or a tool call).
+	 *
+	 * PRESENT means a reasoning phase was observed AND closed by output, and
+	 * lasted at least a whole millisecond. **ABSENT means there is no reasoning
+	 * window** — the model emitted none, or the stream ended still reasoning so
+	 * the boundary was never reached. Zero is NEVER written: a consumer that
+	 * splits a request's bar into waiting / thinking / output phases reads the
+	 * absence as "this request has no thinking phase", and a zero placeholder
+	 * would make that unreadable.
+	 *
+	 * Derived from the same two marks `api_req_finished` publishes as `ttfbMs`
+	 * and `genStartOffsetMs`; see `streamPhaseFields` in `@shofer/core`.
+	 */
+	thinkingMs?: number
 }
 
 export type ShoferApiReqCancelReason = "streaming_failed" | "user_cancelled"

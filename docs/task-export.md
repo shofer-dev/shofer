@@ -125,6 +125,8 @@ interface JsonExportCall {
 	reasoning?: string // Extracted reasoning / thinking
 	retryAttempt?: number // Number of retries before this attempt (0 = first try)
 	durationMs?: number // Whole ms, request open → stream end; absent when no stream end was reached
+	firstChunkMs?: number // Whole ms, request open → first stream chunk; absent when the stream produced none
+	thinkingMs?: number // Whole ms the model spent reasoning; ABSENT means no reasoning phase, never 0
 	error?: {
 		// Structured error info when this call failed
 		message: string
@@ -209,6 +211,29 @@ present exactly when the request reached a stream end (including cancelled and
 failed streams); a call still in flight when the task was persisted, or one the
 host died holding, carries no `durationMs` at all — absence means no end is
 known, never "took zero time".
+
+### Call Phases
+
+The same stream-end rewrites split that duration into the phases a reader can
+act on, using the marks the streaming loop already records for the
+`api_req_finished` span — nothing is measured twice:
+
+- `firstChunkMs` — request open → the first stream chunk of any kind. Absent
+  when the stream produced nothing at all (an immediate provider failure): there
+  was no first byte, and zero would claim there was one. This is the HOST's
+  measurement. It is deliberately not called `ttfbMs`, because the
+  `api_req_started` payload already carries a `ttfbMs` that shofer-router
+  reports about its own request to the provider — a different observer.
+- `thinkingMs` — the first chunk → the first non-reasoning chunk, i.e. how long
+  the model reasoned before producing output. Present only when a reasoning
+  phase was observed AND closed by output, and lasted at least a whole
+  millisecond. **Absence means there is no reasoning window**; zero is never
+  written, so a consumer that segments a call into waiting / thinking / output
+  reads "no thinking phase" straight off the field being missing.
+
+The remainder — `durationMs - firstChunkMs - thinkingMs` — is the output phase.
+Each figure is rounded independently, so a consumer drawing them must clamp the
+sum to the duration rather than assume it fits exactly.
 
 ### Wire Request
 
@@ -412,11 +437,12 @@ Both capture points call [`snapshotApiReqError()`](../packages/core/src/task/Tas
 
 ### Version History
 
-| Version | Date       | Changes                                                                                                        |
-| ------- | ---------- | -------------------------------------------------------------------------------------------------------------- |
-| 2.71.0  | 2026-08-25 | Added `durationMs` (request open → stream end; absent when no stream end was reached)                          |
-| 0.11.7  | 2026-05-16 | Added `error`, `retryAttempt`, `wireRequest` fields; fixed field name mismatch; added error-only call handling |
-| 0.11.6  | 2026-05-14 | Initial JSON export with `api_req_started`-based metadata                                                      |
+| Version | Date       | Changes                                                                                                         |
+| ------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
+| 2.72.0  | 2026-08-26 | Added `firstChunkMs` and `thinkingMs` (the phase split inside `durationMs`; `thinkingMs` absent = no reasoning) |
+| 2.71.0  | 2026-08-25 | Added `durationMs` (request open → stream end; absent when no stream end was reached)                           |
+| 0.11.7  | 2026-05-16 | Added `error`, `retryAttempt`, `wireRequest` fields; fixed field name mismatch; added error-only call handling  |
+| 0.11.6  | 2026-05-14 | Initial JSON export with `api_req_started`-based metadata                                                       |
 
 ## Comparison with Chrome Extension Trace
 

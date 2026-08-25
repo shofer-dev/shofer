@@ -5532,6 +5532,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// aborted/failed stream — so the payload is stamped with the
 					// request's duration. Re-measured on each rewrite, so a
 					// progressive update leaves the final value at open→stream-end.
+					//
+					// The phase marks come from `_markStreamProgress`, which the
+					// streaming loop below already maintains for the
+					// `api_req_finished` span: one measurement, two accounts of it,
+					// so a consumer reading either can never see them disagree.
 					this.shoferMessages[lastApiReqIndex].text = JSON.stringify(
 						endedApiReqInfo(
 							{
@@ -5546,6 +5551,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								...(metaOverrides ?? {}),
 							} satisfies ShoferApiReqInfo,
 							apiReqTimer,
+							{ ttfbMs: this._pendingTtfbMs, genStartOffsetMs: this._pendingGenStartMs },
 						),
 					)
 				}
