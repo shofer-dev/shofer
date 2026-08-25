@@ -275,7 +275,11 @@ describe("Task message events carry a snapshot, not the live object", () => {
 		const message: ShoferMessage = { ts: 1, type: "ask", ask: "tool", text: "streaming", partial: true }
 
 		const inFlight = (task as any).updateShoferMessage(message) as Promise<void>
-		await Promise.resolve()
+		// Enough microtask turns for the queued publication to REACH the store
+		// (`updateShoferMessage` enqueues on the per-task publish chain, so the
+		// append starts a few continuations later); the slow store then holds it
+		// in flight until `drain()`.
+		await flushAsync()
 
 		// This is the finalize branch overtaking a queued append: the object the
 		// call was made about is mutated before the emission is reached.
@@ -343,10 +347,19 @@ describe("Task partial-append throttle measures intent, not store latency", () =
 		// Deltas land at t = 0,100,…,1000 against a 250 ms window, so the ones
 		// admitted are t = 0, 300, 600, 900 — four, no matter how deep the store's
 		// backlog gets. Eleven would mean the throttle stopped throttling.
+		//
+		// The admitted appends run one behind another on the per-task publish
+		// chain (each publication waits out its predecessor's store write), so
+		// the store must be drained repeatedly before the total is countable —
+		// which is itself the ordering guarantee: a slow store delays
+		// publications, it no longer reorders them.
+		for (let i = 0; i <= deltas; i++) {
+			persistence.drain()
+			await flushAsync()
+		}
 		expect(persistence.appendTaskMessage).toHaveBeenCalledTimes(4)
 		expect(TASK_PARTIAL_APPEND_THROTTLE_MS).toBe(250)
 
-		persistence.drain()
 		await Promise.all(inFlight)
 	})
 

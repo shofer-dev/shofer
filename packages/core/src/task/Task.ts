@@ -1022,6 +1022,34 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private static readonly PARTIAL_APPEND_THROTTLE_MS = TASK_PARTIAL_APPEND_THROTTLE_MS
 	private _lastPartialAppendTs = 0
 
+	// Serializes every `updateShoferMessage` publication for this task, FIFO in
+	// call order. Each publication reaches its consumers only after at least one
+	// await (the webview post, the task-store append), and those awaits take
+	// variable time — a Postgres-backed store under load holds one for tens of
+	// milliseconds. Un-serialized, two in-flight publications can therefore
+	// EMIT in the opposite of call order, and the caller cannot await around it
+	// because most call sites are fire-and-forget. Both consequences were
+	// observed on the ShoferApi transport: cumulative partial snapshots of one
+	// streamed message arriving out of order (a controller's delta view re-emits
+	// the whole text, doubling it), and — the worst case — a finalized
+	// `completion_result` whose emission was still parked behind its store
+	// append when `TaskCompleted` went out, so every controller that correctly
+	// stops reading at `taskCompleted` lost the tail of the reply.
+	//
+	// Lazily initialized (see `enqueueMessagePublication`) rather than a field
+	// initializer, so instances built without the constructor — test doubles via
+	// `Object.create(Task.prototype)` — still publish instead of throwing.
+	private _messagePublishChain: Promise<void> | undefined
+
+	// enqueueMessagePublication appends one publication to the per-task FIFO and
+	// returns ITS completion. The chain swallows the link's failure so one failed
+	// publication cannot wedge every later one.
+	private enqueueMessagePublication(publish: () => void | Promise<void>): Promise<void> {
+		const link = (this._messagePublishChain ?? Promise.resolve()).then(publish)
+		this._messagePublishChain = link.catch(() => undefined)
+		return link
+	}
+
 	// H2.bis — Incremental token-usage caching.
 	// tokenMetadata() re-walks the entire message array on every save to
 	// recompute token usage.  Most saves happen during streaming where only
@@ -2372,7 +2400,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (this._isTokenBearingMessage(message)) {
 			this._tokenBearingMessageCount++
 		}
-		this.emit(ShoferEventName.Message, { action: "created", message: snapshot })
+		// The created-event rides the same per-task FIFO as every updated-event
+		// (`_messagePublishChain`): a queued publication of an EARLIER message
+		// must not land after this creation on the ShoferApi transport, where
+		// consumers reconstruct streams from event order. Awaited — this method's
+		// callers already await it — so the event is on the wire when it returns.
+		await this.enqueueMessagePublication(() => {
+			this.emit(ShoferEventName.Message, { action: "created", message: snapshot })
+		})
 		await this._debouncedSaveShoferMessages()
 	}
 
@@ -2388,7 +2423,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		await this.saveShoferMessages()
 	}
 
-	private async updateShoferMessage(message: ShoferMessage) {
+	private updateShoferMessage(message: ShoferMessage): Promise<void> {
 		// What this update PUBLISHES and PERSISTS is a snapshot of the message as
 		// it is right now — never the live object. Callers mutate these objects in
 		// place (the partial→final transition in `ask()` is the canonical case),
@@ -2400,6 +2435,55 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// reached controllers once per queued append and minted a pending approval
 		// for each.
 		const snapshot: ShoferMessage = { ...message }
+		// H11: a partial→final api_req_started transition flips text from empty
+		// to non-empty — this is a new token-bearing message. Check the prior
+		// state by locating the existing message with the same ts. Done here at
+		// call time (not in the queued publication) because it inspects
+		// `shoferMessages` as they are NOW, against the live object's identity.
+		if (this._isTokenBearingMessage(message)) {
+			const existing = this.shoferMessages.find((m) => m.ts === message.ts && m !== message)
+			if (!existing || !this._isTokenBearingMessage(existing)) {
+				this._tokenBearingMessageCount++
+			}
+		}
+		// H29: a `partial` message is mid-stream — it is re-appended on every
+		// chunk and immediately superseded, so throttle those appends to at most
+		// one per PARTIAL_APPEND_THROTTLE_MS. The in-memory value is already
+		// canonical and the live webview gets every chunk via `messageUpdated`;
+		// the throttled-out lines would only ever be read after a crash
+		// mid-stream (an incomplete, non-resumable response). A finalized message
+		// (`partial` false/undefined) always appends so the turn's canonical
+		// value is durable even before the next compaction.
+		//
+		// The decision and the stamp are taken HERE, at enqueue time, so the
+		// throttle measures the spacing of our intent to write rather than the
+		// store's latency. Taken inside the queued publication it would compare
+		// against the last COMPLETED append, so a store whose write takes longer
+		// than the window — a shared backend that serializes writes per task,
+		// under load — admits every subsequent chunk, and each admitted write
+		// makes the next one land later still. That positive feedback disables
+		// the throttle exactly when it is needed, and is what stalled a streamed
+		// tool call for seconds at a time.
+		const isPartial = snapshot.partial === true
+		const now = Date.now()
+		const shouldAppend = !isPartial || now - this._lastPartialAppendTs >= Task.PARTIAL_APPEND_THROTTLE_MS
+		if (shouldAppend && isPartial) {
+			this._lastPartialAppendTs = now
+		}
+		// FIFO per task: the publication (webview post, store append, event emit)
+		// runs behind every publication enqueued before it, so consumers see
+		// updates in call order — see `_messagePublishChain` for why that cannot
+		// be left to the awaits at call sites. The returned promise is THIS
+		// publication's completion, so a finalize path that awaits it has its
+		// event on the wire before proceeding to the turn's lifecycle events.
+		return this.enqueueMessagePublication(() => this.publishShoferMessageUpdate(snapshot, shouldAppend))
+	}
+
+	// publishShoferMessageUpdate is the body of one queued `updateShoferMessage`
+	// publication. Only ever called through `_messagePublishChain`.
+	// `shouldAppend` was decided at enqueue time (the H29 throttle in
+	// `updateShoferMessage`); this body must not re-derive it from the clock.
+	private async publishShoferMessageUpdate(snapshot: ShoferMessage, shouldAppend: boolean) {
 		const provider = this.providerRef.deref()
 		// Only push messageUpdated to the webview when this task is the one the
 		// user sees — either focused via TaskManager or at the top of the
@@ -2412,56 +2496,30 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			(provider.taskManager?.getFocusedTaskId() === this.taskId ||
 				provider.getCurrentTask()?.taskId === this.taskId)
 		) {
-			await provider.postMessageToWebview({ type: "messageUpdated", shoferMessage: snapshot })
+			// Never throws out of the publication: most call sites are
+			// fire-and-forget, and a webview hiccup must neither surface as an
+			// unhandled rejection nor stop the event emit below.
+			try {
+				await provider.postMessageToWebview({ type: "messageUpdated", shoferMessage: snapshot })
+			} catch (error) {
+				taskLog.error("Failed to post updated Shofer message to the webview:", error)
+			}
 		}
 		// §4.1: persist the in-place mutation by appending a new JSONL line
 		// with the same `ts`. `readTaskMessages` collapses duplicates so the
 		// last appended copy wins while position is preserved. The next
 		// compaction (turn-boundary flush) rewrites to canonical form.
 		//
-		// H29: a `partial` message is mid-stream — it is re-appended on every
-		// chunk and immediately superseded, so throttle those appends to at most
-		// one per PARTIAL_APPEND_THROTTLE_MS. The in-memory value is already
-		// canonical and the live webview gets every chunk via `messageUpdated`
-		// above; the throttled-out lines would only ever be read after a crash
-		// mid-stream (an incomplete, non-resumable response). A finalized message
-		// (`partial` false/undefined) always appends so the turn's canonical
-		// value is durable even before the next compaction.
-		//
-		// The stamp is taken at ENQUEUE time, before the append is awaited, so the
-		// throttle measures the spacing of our intent to write rather than the
-		// store's latency. Stamping it after the await compares against the last
-		// COMPLETED append, so a store whose write takes longer than the window —
-		// a shared backend that serializes writes per task, under load — admits
-		// every subsequent chunk, and each admitted write makes the next one land
-		// later still. That positive feedback disables the throttle exactly when it
-		// is needed, and is what stalled a streamed tool call for seconds at a time.
-		//
 		// The throttled-out tail needs no trailing flush: a message's FINAL state is
 		// persisted by the finalize path (`saveShoferMessages` plus the
 		// unconditional `partial: false` append above), so the only lines dropped
 		// are intermediate partials, read back solely after a crash mid-stream (an
 		// incomplete, non-resumable response).
-		const isPartial = message.partial === true
-		const now = Date.now()
-		const shouldAppend = !isPartial || now - this._lastPartialAppendTs >= Task.PARTIAL_APPEND_THROTTLE_MS
 		if (shouldAppend) {
-			if (isPartial) {
-				this._lastPartialAppendTs = now
-			}
 			try {
 				await (await this.getPersistence()).appendTaskMessage(this.taskId, snapshot)
 			} catch (error) {
 				taskLog.error("Failed to append updated Shofer message:", error)
-			}
-		}
-		// H11: a partial→final api_req_started transition flips text from empty
-		// to non-empty — this is a new token-bearing message. Check the prior
-		// state by locating the existing message with the same ts.
-		if (this._isTokenBearingMessage(message)) {
-			const existing = this.shoferMessages.find((m) => m.ts === message.ts && m !== message)
-			if (!existing || !this._isTokenBearingMessage(existing)) {
-				this._tokenBearingMessageCount++
 			}
 		}
 		this.emit(ShoferEventName.Message, { action: "updated", message: snapshot })
@@ -2900,7 +2958,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					}
 					this._debouncedSaveShoferMessages.cancel()
 					await this.saveShoferMessages()
-					this.updateShoferMessage(lastMessage)
+					// Awaited so the finalized ask is on the wire before ask()
+					// proceeds to resolve it (an auto-approval below) — a
+					// controller must never learn an ask's outcome before the ask.
+					await this.updateShoferMessage(lastMessage)
 
 					if (streamedDecision === "approve" || streamedDecision === "deny") {
 						return resolveAutoApproved(streamedDecision)
@@ -3693,7 +3754,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						}
 						this._debouncedSaveShoferMessages.cancel()
 						await this.saveShoferMessages()
-						this.updateShoferMessage(existing)
+						// Awaited so the finalized message is ON THE WIRE before
+						// say() resolves: the caller's next step can be the turn's
+						// end (attempt_completion → TaskCompleted), and a
+						// controller that stops reading at `taskCompleted` must
+						// have seen the final text by then.
+						await this.updateShoferMessage(existing)
 					}
 				} else {
 					// First chunk for this block: create the message tagged with
@@ -3768,8 +3834,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					this._debouncedSaveShoferMessages.cancel()
 					await this.saveShoferMessages()
 
-					// More performant than an entire `postInitState`.
-					this.updateShoferMessage(lastMessage)
+					// More performant than an entire `postInitState`. Awaited so
+					// the finalized message is on the wire before say() resolves
+					// (see the streamBlockId finalize branch above).
+					await this.updateShoferMessage(lastMessage)
 				} else {
 					// This is a new and complete message, so add it like normal.
 					// Fall through: genuinely new message.
