@@ -347,18 +347,22 @@ One request's span, from origin capture to the single idempotent emit:
 ```mermaid
 flowchart TD
     C["constructor — timelineOriginMs = performance.now()"]
-    RS["request start, per iteration<br/>clear _pendingToolSpans, _pendingTtfbMs, _pendingGenStartMs<br/>_pendingApiReqNeedsEmit = true<br/>_pendingRequestStartOffset"]
-    SC["stream loop — _markStreamProgress(isReasoning)<br/>first chunk sets ttfbMs<br/>first non-reasoning chunk sets genStartOffsetMs"]
+    RS["request start, per iteration<br/>clear _pendingToolSpans, _pendingTtfbMs, _pendingGenStartMs,<br/>_pendingReasoningIntervals, _pendingReasoningOpenedAtMs<br/>_pendingApiReqNeedsEmit = true<br/>_pendingRequestStartOffset"]
+    SC["stream loop — _markStreamProgress(isReasoning)<br/>first chunk sets ttfbMs<br/>first non-reasoning chunk sets genStartOffsetMs<br/>every reasoning transition opens/closes an interval"]
     TS["presentAssistantMessage — pushToolResult chokepoint<br/>append ToolSpan: toolName, offsets, isError,<br/>spawnedTaskId, waitsForTask"]
     W["await pWaitFor(userMessageContentReady)"]
     N1["emitApiReqFinished('completed')"]
-    AB["abortTask(reason)<br/>user cancel, error, or attempt_completion"]
+    AS["abortStream(cancelReason)<br/>the stream threw"]
+    EMPTY["empty response<br/>no text, no tool call"]
+    AB["abortTask(reason)<br/>the backstop, before teardown"]
     N2["flush: 'completed' when didExecuteAttemptCompletion,<br/>else 'cancelled'"]
     G{"_pendingApiReqNeedsEmit set"}
     NO["no-op — another path already emitted"]
-    EM["say('api_req_finished', payload)<br/>clear the flag, advance _currentRequestIndex"]
+    EM["say('api_req_finished', payload, allowWhenAborted)<br/>clear the flag, advance _currentRequestIndex"]
 
     C --> RS --> SC --> TS --> W --> N1 --> G
+    AS --> G
+    EMPTY --> G
     AB --> N2 --> G
     G -->|no| NO
     G -->|yes| EM
@@ -373,6 +377,8 @@ this._pendingToolSpans = []
 this._pendingRequestStartOffset = 0
 this._pendingTtfbMs = null
 this._pendingGenStartMs = null // first non-reasoning chunk → thinking/streaming split
+this._pendingReasoningIntervals = [] // every closed reasoning run (see §3)
+this._pendingReasoningOpenedAtMs = null // the run currently open, if any
 this._pendingApiReqNeedsEmit = false // double-emit guard (see §2)
 this._currentRequestIndex = 0
 ```
@@ -384,6 +390,8 @@ At request start (per iteration, before the streaming call):
   this._pendingToolSpans = []
   this._pendingTtfbMs = null
   this._pendingGenStartMs = null
+  this._pendingReasoningIntervals = []
+  this._pendingReasoningOpenedAtMs = null
   this._pendingApiReqNeedsEmit = true
   this._pendingRequestStartOffset = performance.now() - this.timelineOriginMs
 
@@ -401,9 +409,25 @@ and emits it via `this.say("api_req_finished", …)`. It is **idempotent** — i
 returns early unless `_pendingApiReqNeedsEmit` is set, then clears the flag. So
 whichever path fires first wins (normal post-tools emit, `abortStream`, or
 `abortTask` — see §5); the rest are no-ops, and `_currentRequestIndex` advances
-exactly once per request.
+exactly once per request. The claim is RELEASED again if the write fails, so a
+failed write leaves a later path able to retry instead of consuming the
+request's only chance.
 
-### 3. Stream loop — TTFB + generation-start capture (`_markStreamProgress`)
+**The say is written with `allowWhenAborted`, and that is what makes the
+terminal request's span exist at all.** `Task.say()` refuses to append to an
+aborted task — the guard that stops a terminated task producing more agent
+output. But `attempt_completion` declares the terminal state by setting
+`task.abort = true` as its final act (the Self-Declared Terminal State Rule),
+and the emit point above is deliberately DOWNSTREAM of tool execution, so the
+closing span of every turn met that guard and threw. The effect was silent and
+total: the last request of every conversation had no end, no duration, and no
+account of the built-in tools it ran — `api_req_finished` being the only place
+those are recorded. `abortTask`'s flush (§5), written for exactly this case, was
+defeated the same way. A span that merely RECORDS a request which finished
+before the abort is not agent output, so it opts out of the guard; nothing else
+does.
+
+### 3. Stream loop — TTFB, generation start and the reasoning intervals (`_markStreamProgress`)
 
 In the chunk-processing loop, every chunk calls `_markStreamProgress(isReasoning)`:
 
@@ -412,13 +436,30 @@ private _markStreamProgress(isReasoning: boolean) {
 	const offset = performance.now() - this.timelineOriginMs - this._pendingRequestStartOffset
 	if (this._pendingTtfbMs === null) this._pendingTtfbMs = offset // first chunk of any kind
 	if (!isReasoning && this._pendingGenStartMs === null) this._pendingGenStartMs = offset // first text/tool_call
+	if (isReasoning) {
+		if (this._pendingReasoningOpenedAtMs === null) this._pendingReasoningOpenedAtMs = offset
+	} else if (this._pendingReasoningOpenedAtMs !== null) {
+		this._pendingReasoningIntervals.push([this._pendingReasoningOpenedAtMs, offset])
+		this._pendingReasoningOpenedAtMs = null
+	}
 }
 // reasoning chunk → _markStreamProgress(true); text / tool_call / tool_call_partial → (false)
 ```
 
 `ttfbMs` is the time to the first content-bearing chunk; the window between it
-and `genStartOffsetMs` (first non-reasoning chunk) is the model's reasoning /
-"thinking" phase.
+and `genStartOffsetMs` (first non-reasoning chunk) is the model'"'"'s FIRST reasoning
+phase, and it is the only one the `api_req_finished` span expresses.
+
+A model that interleaves reasoning with output — think, answer, think again,
+answer again — has several such windows, and a single boundary collapses every
+later one into "output". The full set is recorded as `reasoningIntervalsMs` on
+the **`api_req_started`** payload and nowhere else: that record is rewritten in
+place at stream end and therefore survives every path, whereas the finished span
+is not guaranteed to exist. Duplicating them in both places would create two
+accounts of one stream that can drift. A run still open when the stream ends is
+closed at the request'"'"'s own end (`streamPhaseFields` in `api-req-timing.ts`), so
+no interval can extend past the bar a consumer draws; `thinkingMs` is the SUM of
+the intervals, and both fields are absent together when no reasoning was seen.
 
 ### 4. `presentAssistantMessage()` — tool span capture
 
@@ -436,15 +477,26 @@ own `pushToolResult`), so they're captured there too — recorded as a `ToolSpan
 named `mcp:<server>/<tool>`, which the Stats/Trace surface as the "MCP calls"
 category.
 
-### 5. `abortTask()` — flush the in-flight request
+### 5. Every other way a request can end
 
-When a request is interrupted (user cancel, error) **or** ends via the terminal
-`attempt_completion` turn — which calls `abortTask(reason="completed")` and
-disposes the task before the §2 emit point is reached — `abortTask` flushes the
-in-flight span before teardown: `status` is `"completed"` when
-`didExecuteAttemptCompletion`, else `"cancelled"`. Partial `toolSpans[]` (tools
-that ran before the interruption) are included. The §2 idempotency guard
-prevents a double-emit when the normal path already fired.
+The §2 emit is the normal path. Three more exist so that **every request which
+reaches a stream end gets exactly one span**, whichever way it ended:
+
+- **`abortStream(cancelReason, …)`** — the single funnel for a stream that
+  threw. A user cancel arrives as `"user_cancelled"`, a provider failure as
+  `"streaming_failed"`; the span's `status` is `"cancelled"` or `"error"`
+  accordingly, with whatever `toolSpans[]` had accumulated.
+- **An empty response** — the stream ended cleanly but returned neither text nor
+  a tool call. It emits `status: "error"` before the retry, because the retry
+  opens a NEW request and re-arms the needs-emit flag; without this the empty
+  response would be the one shape of failure that leaves no record at all.
+- **`abortTask()`** — the backstop, run before teardown: `status` is
+  `"completed"` when `didExecuteAttemptCompletion`, else `"cancelled"`. It is
+  best-effort (a refused write is logged, never allowed to leave the task
+  half-aborted) because tear-down must finish either way.
+
+The §2 idempotency guard is what makes all four safe together: whichever fires
+first writes, the rest no-op.
 
 ## Rendering Technology — Custom SVG
 

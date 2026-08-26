@@ -29,26 +29,42 @@
  * # The PHASES inside that duration
  *
  * A duration alone says a request took eleven seconds; it does not say whether
- * the model spent ten of them reasoning. `firstChunkMs` and `thinkingMs` split
- * the same span into the three phases a reader can act on — waiting for the
- * provider, reasoning, producing output — and they are exactly the two facts
- * the `api_req_finished` span already carries as `ttfbMs` and
- * `genStartOffsetMs`. They are NOT measured again here: {@link endedApiReqInfo}
- * takes the marks the streaming loop already recorded, so the paired and
- * unpaired accounts of one request can never disagree.
+ * the model spent ten of them reasoning. `firstChunkMs`, `thinkingMs` and
+ * `reasoningIntervalsMs` split the same span into the phases a reader can act
+ * on — waiting for the provider, reasoning, producing output. They are NOT
+ * measured again here: {@link endedApiReqInfo} takes the marks the streaming
+ * loop already recorded, so the paired and unpaired accounts of one request can
+ * never disagree.
  *
  * Their presence rules are as deliberate as `durationMs`'s:
  *
  * - `firstChunkMs` is present once ANY chunk has arrived, and absent when the
  *   stream produced nothing at all (an immediate provider failure) — there is
  *   no first byte to time in that case, and zero would claim there was one.
- * - `thinkingMs` is present ONLY when a reasoning phase was both observed and
- *   CLOSED by a non-reasoning chunk, and lasted at least one whole millisecond.
- *   **Absence means "no thinking phase"; zero is never written.** A model that
- *   emitted no reasoning, and a stream that died still reasoning, are both
- *   "there is no reasoning window to draw" — and a consumer that segments a bar
- *   on this field must be able to read that off the field's absence rather than
- *   off a zero it would have to special-case.
+ * - `reasoningIntervalsMs` is present when at least one reasoning interval was
+ *   observed, and absent when none was. An EMPTY ARRAY is never written: a
+ *   consumer must be able to read "no thinking phase" off the field's absence
+ *   rather than off a length it would have to special-case.
+ * - `thinkingMs` is the SUM of those intervals, and its presence rule is
+ *   therefore the same one: both fields are written together or neither is.
+ *
+ * # Why the INTERVALS, and not one boundary
+ *
+ * A model that reasons, answers, reasons again and answers again is entirely
+ * ordinary, and a single `first chunk → first non-reasoning chunk` boundary
+ * collapses all of it into the first thinking pause — every later one is drawn
+ * as output. That boundary is what `api_req_finished` carries as `ttfbMs` /
+ * `genStartOffsetMs`, and it KEEPS carrying exactly that: the intervals' one
+ * home is this payload, deliberately, because this is the record that survives
+ * every path. The finished span is not guaranteed to exist; the rewritten
+ * started message always is. Adding the intervals in two places would create
+ * two accounts of one stream that can drift, for a reader that already has to
+ * handle the started payload alone.
+ *
+ * An interval still OPEN when the stream ends is closed at the request's own
+ * end (the same instant `durationMs` states), because that time genuinely was
+ * spent reasoning — a stream that died mid-thought has a reasoning window, it
+ * simply has no output after it.
  *
  * # Why `firstChunkMs` is not called `ttfbMs`
  *
@@ -126,13 +142,19 @@ export function openedApiReqInfo(fields: {
 }
 
 /**
+ * A reasoning interval as the streaming loop holds it: offsets in fractional
+ * milliseconds from the request's open.
+ */
+export type ReasoningInterval = readonly [start: number, end: number]
+
+/**
  * The stream milestones the agent loop records while chunks arrive, in the form
  * it holds them: offsets in fractional milliseconds from the request's open, and
  * `null` for "not seen yet".
  *
- * This is deliberately the SAME pair `api_req_finished` publishes as `ttfbMs`
- * and `genStartOffsetMs` — the caller passes its own live marks, so nothing here
- * starts a second clock.
+ * `ttfbMs` / `genStartOffsetMs` are deliberately the SAME pair `api_req_finished`
+ * publishes — the caller passes its own live marks, so nothing here starts a
+ * second clock.
  */
 export interface StreamPhaseMarks {
 	/** Offset of the first chunk of ANY kind; `null` until one arrives. */
@@ -141,8 +163,22 @@ export interface StreamPhaseMarks {
 	 * Offset of the first NON-reasoning chunk (text or tool call) — where output
 	 * generation began. `null` until one arrives, which is also the state a
 	 * stream that ended mid-reasoning leaves behind.
+	 *
+	 * Retained because it is what the `api_req_finished` span publishes; the
+	 * phase split below is derived from the intervals, not from this boundary.
 	 */
 	genStartOffsetMs: number | null
+	/**
+	 * Reasoning intervals the stream has already CLOSED — each one a reasoning
+	 * run terminated by a non-reasoning chunk, in arrival order.
+	 */
+	reasoningIntervalsMs: ReadonlyArray<ReasoningInterval>
+	/**
+	 * Offset at which a still-OPEN reasoning run began, or `null` when the
+	 * stream is not currently reasoning. Closed at the payload's own end by
+	 * {@link streamPhaseFields}.
+	 */
+	reasoningOpenedAtMs: number | null
 }
 
 /**
@@ -151,22 +187,42 @@ export interface StreamPhaseMarks {
  * Exported so the presence rules stated in the module docstring can be asserted
  * directly: a field this returns is a measurement, and a field it OMITS is the
  * statement that there is nothing to draw.
+ *
+ * @param endedAtMs - The request's own end, in whole milliseconds from its open
+ *   — the value the same payload states as `durationMs`. A reasoning run still
+ *   open at that point is closed there, which is what keeps every interval
+ *   inside the bar the consumer draws.
  */
-export function streamPhaseFields(marks: StreamPhaseMarks): Pick<ShoferApiReqInfo, "firstChunkMs" | "thinkingMs"> {
-	const fields: Pick<ShoferApiReqInfo, "firstChunkMs" | "thinkingMs"> = {}
+export function streamPhaseFields(
+	marks: StreamPhaseMarks,
+	endedAtMs: number,
+): Pick<ShoferApiReqInfo, "firstChunkMs" | "thinkingMs" | "reasoningIntervalsMs"> {
+	const fields: Pick<ShoferApiReqInfo, "firstChunkMs" | "thinkingMs" | "reasoningIntervalsMs"> = {}
 	if (marks.ttfbMs === null) {
 		// Nothing ever arrived: there is no first byte, and no window between a
 		// first byte and anything else.
 		return fields
 	}
 	fields.firstChunkMs = Math.max(0, Math.round(marks.ttfbMs))
-	if (marks.genStartOffsetMs === null) {
-		return fields
+
+	const open: ReasoningInterval[] = marks.reasoningOpenedAtMs === null ? [] : [[marks.reasoningOpenedAtMs, endedAtMs]]
+	const intervals: Array<[number, number]> = []
+	let thinking = 0
+	for (const [start, end] of [...marks.reasoningIntervalsMs, ...open]) {
+		// Both ends are floored at zero: an offset before the request opened is a
+		// clock artefact, not a window to publish.
+		const from = Math.max(0, Math.round(start))
+		const to = Math.max(0, Math.round(end))
+		// Sub-millisecond (or, from a clock hiccup, inverted) is dropped rather
+		// than drawn as a zero-width band — see the module docstring.
+		if (to - from < 1) {
+			continue
+		}
+		intervals.push([from, to])
+		thinking += to - from
 	}
-	const thinking = Math.round(marks.genStartOffsetMs - marks.ttfbMs)
-	// Sub-millisecond (or, from a clock hiccup, negative) is reported as no
-	// thinking phase rather than as a zero-width one — see the module docstring.
-	if (thinking >= 1) {
+	if (intervals.length > 0) {
+		fields.reasoningIntervalsMs = intervals
 		fields.thinkingMs = thinking
 	}
 	return fields
@@ -188,5 +244,6 @@ export function endedApiReqInfo(
 	timer: ApiRequestTimer,
 	marks: StreamPhaseMarks,
 ): ShoferApiReqInfo {
-	return { ...info, durationMs: timer.elapsedMs(), ...streamPhaseFields(marks) }
+	const durationMs = timer.elapsedMs()
+	return { ...info, durationMs, ...streamPhaseFields(marks, durationMs) }
 }

@@ -58,11 +58,17 @@ export interface JsonExportCall {
 	 */
 	firstChunkMs?: number
 	/**
-	 * Whole milliseconds the model spent reasoning — first chunk → first
-	 * non-reasoning chunk. Absent means there was NO reasoning phase; it is
-	 * never zero.
+	 * Whole milliseconds the model spent reasoning, summed over every reasoning
+	 * interval below. Absent means there was NO reasoning phase; it is never
+	 * zero.
 	 */
 	thinkingMs?: number
+	/**
+	 * Every reasoning interval, as `[startMs, endMs]` pairs of whole
+	 * milliseconds from the request's open — the same basis as `firstChunkMs`
+	 * and `durationMs`. Absent means no reasoning was observed; never empty.
+	 */
+	reasoningIntervalsMs?: Array<[number, number]>
 	/** Structured error information if this call failed. */
 	error?: {
 		message: string
@@ -156,9 +162,13 @@ interface UiApiReqStartedPayload {
 	/** Present only once the payload has been rewritten at stream end, and only
 	 *  when the stream produced at least one chunk. */
 	firstChunkMs?: number
-	/** Present only when a reasoning phase was observed AND closed by output;
-	 *  absence means there was none, and it is never written as zero. */
+	/** Present only when at least one reasoning interval was observed;
+	 *  absence means there was none, and it is never written as zero. It is the
+	 *  SUM of `reasoningIntervalsMs` below. */
 	thinkingMs?: number
+	/** Present only when at least one reasoning interval was observed; the
+	 *  `[startMs, endMs]` pairs themselves, never an empty array. */
+	reasoningIntervalsMs?: Array<[number, number]>
 	error?: {
 		message: string
 		type?: string
@@ -351,6 +361,7 @@ export function buildJsonTrace(
 				durationMs: payload.durationMs,
 				firstChunkMs: payload.firstChunkMs,
 				thinkingMs: payload.thinkingMs,
+				reasoningIntervalsMs: payload.reasoningIntervalsMs,
 				error: payload.error,
 				wireRequest: payload.wireRequest,
 			})
@@ -393,6 +404,7 @@ export function buildJsonTrace(
 			durationMs: payload.durationMs,
 			firstChunkMs: payload.firstChunkMs,
 			thinkingMs: payload.thinkingMs,
+			reasoningIntervalsMs: payload.reasoningIntervalsMs,
 			error: payload.error,
 			wireRequest: payload.wireRequest,
 		})

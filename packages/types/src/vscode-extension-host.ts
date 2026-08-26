@@ -1166,21 +1166,45 @@ export interface ShoferApiReqInfo {
 	 */
 	firstChunkMs?: number
 	/**
-	 * Whole milliseconds the model spent REASONING: the window between the first
-	 * chunk and the first non-reasoning chunk (text or a tool call).
+	 * Whole milliseconds the model spent REASONING, summed over every reasoning
+	 * interval in the stream — the total width of {@link reasoningIntervalsMs}.
 	 *
-	 * PRESENT means a reasoning phase was observed AND closed by output, and
-	 * lasted at least a whole millisecond. **ABSENT means there is no reasoning
-	 * window** — the model emitted none, or the stream ended still reasoning so
-	 * the boundary was never reached. Zero is NEVER written: a consumer that
-	 * splits a request's bar into waiting / thinking / output phases reads the
-	 * absence as "this request has no thinking phase", and a zero placeholder
-	 * would make that unreadable.
+	 * PRESENT means at least one reasoning interval was observed and was at
+	 * least a whole millisecond wide. **ABSENT means there is no reasoning
+	 * window** — the model emitted none, or every interval rounded to nothing.
+	 * Zero is NEVER written: a consumer that splits a request's bar into
+	 * waiting / thinking / output phases reads the absence as "this request has
+	 * no thinking phase", and a zero placeholder would make that unreadable.
 	 *
-	 * Derived from the same two marks `api_req_finished` publishes as `ttfbMs`
-	 * and `genStartOffsetMs`; see `streamPhaseFields` in `@shofer/core`.
+	 * It is a SUM and not a span: a model that interleaves reasoning with output
+	 * has several intervals, and this field states how much of the request was
+	 * spent in them, not where they were. Where they were is
+	 * {@link reasoningIntervalsMs}. The two are written together and never
+	 * disagree — see `streamPhaseFields` in `@shofer/core`.
 	 */
 	thinkingMs?: number
+	/**
+	 * Every REASONING interval in the stream, as `[startMs, endMs]` pairs of
+	 * whole milliseconds elapsed from the request's open — the same basis as
+	 * {@link firstChunkMs} and {@link durationMs}, so a consumer places them
+	 * inside the request's own bar with no other information.
+	 *
+	 * Only CLOSED intervals appear. An interval the stream ended inside is
+	 * closed AT the payload's `durationMs`, because that time genuinely was
+	 * reasoning; it can therefore never extend past the request's own end.
+	 *
+	 * PRESENT means at least one interval was observed; **ABSENT means none
+	 * was**. An empty array is never written, for the same reason `thinkingMs`
+	 * never writes a zero.
+	 *
+	 * This is the ONLY account of interleaved reasoning anywhere in the
+	 * transcript. `api_req_finished` deliberately keeps its single-boundary
+	 * `ttfbMs` / `genStartOffsetMs` pair and gains nothing here: the started
+	 * payload is the record that survives every path (it is rewritten in place
+	 * at stream end, whether or not a finished span is ever written), so the
+	 * intervals live where they cannot be lost.
+	 */
+	reasoningIntervalsMs?: Array<[number, number]>
 }
 
 export type ShoferApiReqCancelReason = "streaming_failed" | "user_cancelled"

@@ -5,7 +5,7 @@ import { v7 as uuidv7 } from "uuid"
 import EventEmitter from "events"
 
 import { AskIgnoredError } from "./AskIgnoredError.js"
-import { startApiRequestTimer, openedApiReqInfo, endedApiReqInfo } from "./api-req-timing.js"
+import { startApiRequestTimer, openedApiReqInfo, endedApiReqInfo, type StreamPhaseMarks } from "./api-req-timing.js"
 
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
@@ -766,6 +766,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * `null` until the first non-reasoning chunk arrives.
 	 */
 	_pendingGenStartMs: number | null = null
+
+	/**
+	 * Reasoning intervals CLOSED so far in the current request — every
+	 * reasoning run the stream terminated with a non-reasoning chunk, as
+	 * `[start, end]` offsets from the request's open.
+	 *
+	 * `_pendingGenStartMs` above records only the FIRST such boundary, which is
+	 * all the `api_req_finished` span publishes; a model that interleaves
+	 * thinking with output has more, and this is where they are kept.
+	 */
+	_pendingReasoningIntervals: Array<[number, number]> = []
+
+	/**
+	 * Offset at which the currently-open reasoning run began, or `null` when
+	 * the stream is not reasoning. A run still open at stream end is closed
+	 * there by `streamPhaseFields`.
+	 */
+	_pendingReasoningOpenedAtMs: number | null = null
 
 	/**
 	 * True while an API request is in flight and its `api_req_finished` span has
@@ -3719,11 +3737,32 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			 * renders it.
 			 */
 			marker?: PluginMarkerPayload
+			/**
+			 * Write this message even though the task has ABORTED.
+			 *
+			 * The abort guard below exists to stop a terminated task appending
+			 * new AGENT output — content produced after the task stopped, which
+			 * nobody asked for and no consumer expects. A message that merely
+			 * RECORDS work which already finished is the opposite case, and
+			 * refusing it loses the record rather than preventing anything.
+			 *
+			 * Reserved for exactly that: today the `api_req_finished` span, whose
+			 * request completed BEFORE the abort. `attempt_completion` declares
+			 * the terminal state by setting `task.abort = true` as its last act
+			 * (the Self-Declared Terminal State Rule), so without this the
+			 * closing span of every turn threw here and the terminal request of
+			 * every conversation was recorded as "started, never finished" —
+			 * along with every built-in tool it ran, which that span alone
+			 * accounts for.
+			 *
+			 * Do not reach for this to keep a tool talking after a cancel.
+			 */
+			allowWhenAborted?: boolean
 		} = {},
 		contextCondense?: ContextCondense,
 		contextTruncation?: ContextTruncation,
 	): Promise<undefined> {
-		if (this.abort) {
+		if (this.abort && !options.allowWhenAborted) {
 			throw new Error(`[Shofer#say] task ${this.taskId}.${this.instanceId} aborted`)
 		}
 
@@ -4582,10 +4621,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// needs-emit guard, so this is a no-op if the request already emitted.
 		if (this._pendingApiReqNeedsEmit) {
 			const completed = this.didExecuteAttemptCompletion
+			// Best effort: this is a BACKSTOP for a request the normal emit
+			// points missed, and tear-down must finish either way. A store that
+			// refuses the write must not leave the task half-aborted.
 			await this.emitApiReqFinished(
 				completed ? "completed" : "cancelled",
 				completed ? undefined : "user_cancelled",
-			)
+			).catch((error) => {
+				taskLog.error("Failed to flush the in-flight api_req_finished span on abort:", error)
+			})
 		}
 
 		// If this task was blocked awaiting an answer to a routed
@@ -5283,6 +5327,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this._pendingToolSpans = []
 			this._pendingTtfbMs = null
 			this._pendingGenStartMs = null
+			this._pendingReasoningIntervals = []
+			this._pendingReasoningOpenedAtMs = null
 			this._pendingApiReqNeedsEmit = true
 			this._pendingRequestStartOffset = performance.now() - this.timelineOriginMs
 
@@ -5537,6 +5583,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// streaming loop below already maintains for the
 					// `api_req_finished` span: one measurement, two accounts of it,
 					// so a consumer reading either can never see them disagree.
+					// The reasoning INTERVALS ride here and only here — see
+					// `ShoferApiReqInfo.reasoningIntervalsMs`.
 					this.shoferMessages[lastApiReqIndex].text = JSON.stringify(
 						endedApiReqInfo(
 							{
@@ -5551,7 +5599,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								...(metaOverrides ?? {}),
 							} satisfies ShoferApiReqInfo,
 							apiReqTimer,
-							{ ttfbMs: this._pendingTtfbMs, genStartOffsetMs: this._pendingGenStartMs },
+							this._streamPhaseMarks,
 						),
 					)
 				}
@@ -6812,6 +6860,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// If there's no assistant_responses, that means we got no text
 					// or tool_use content blocks from API which we should assume is
 					// an error.
+
+					// This request DID reach a stream end — it simply returned
+					// nothing — so it gets its span like any other. Without it the
+					// retry that follows opens a new request and re-arms the
+					// needs-emit flag, and the empty one is the single shape of
+					// failure that leaves no record at all: the throwing path is
+					// covered by `abortStream` and the normal path by the emit
+					// above.
+					await this.emitApiReqFinished("error")
 
 					// Increment consecutive no-assistant-messages counter
 					this.consecutiveNoAssistantMessagesCount++
@@ -8909,9 +8966,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	/**
 	 * Record stream-timing milestones for the Trace/Stats phase breakdown.
-	 * The first chunk of any kind sets TTFB; the first non-reasoning chunk
-	 * (text or tool call) sets the generation start — the gap between them is
-	 * the model's reasoning/"thinking" phase.
+	 *
+	 * Three things are recorded from one call, and they answer different
+	 * questions:
+	 *
+	 *   - the first chunk of any kind sets TTFB;
+	 *   - the first non-reasoning chunk sets the generation start — the single
+	 *     boundary the `api_req_finished` span publishes as `genStartOffsetMs`;
+	 *   - EVERY reasoning↔output transition opens or closes a reasoning
+	 *     interval, which is what a model that interleaves thinking with output
+	 *     needs and what the single boundary above cannot express. A run left
+	 *     open when the stream ends is closed at the request's end by
+	 *     `streamPhaseFields`, so nothing has to be finalized here.
 	 */
 	private _markStreamProgress(isReasoning: boolean): void {
 		const offset = performance.now() - this.timelineOriginMs - this._pendingRequestStartOffset
@@ -8920,6 +8986,28 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 		if (!isReasoning && this._pendingGenStartMs === null) {
 			this._pendingGenStartMs = offset
+		}
+		if (isReasoning) {
+			if (this._pendingReasoningOpenedAtMs === null) {
+				this._pendingReasoningOpenedAtMs = offset
+			}
+		} else if (this._pendingReasoningOpenedAtMs !== null) {
+			this._pendingReasoningIntervals.push([this._pendingReasoningOpenedAtMs, offset])
+			this._pendingReasoningOpenedAtMs = null
+		}
+	}
+
+	/**
+	 * The live stream marks for the current request, in the shape
+	 * `endedApiReqInfo` takes. One accessor rather than four literals at each
+	 * rewrite site, so a new mark cannot reach one payload and miss another.
+	 */
+	private get _streamPhaseMarks(): StreamPhaseMarks {
+		return {
+			ttfbMs: this._pendingTtfbMs,
+			genStartOffsetMs: this._pendingGenStartMs,
+			reasoningIntervalsMs: this._pendingReasoningIntervals,
+			reasoningOpenedAtMs: this._pendingReasoningOpenedAtMs,
 		}
 	}
 
@@ -8930,6 +9018,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * completed API request span with its tool sub-spans. The caller has
 	 * already drained `this._pendingToolSpans` and computed
 	 * `this._pendingTtfbMs` before invoking this.
+	 *
+	 * EXACTLY ONE span per request, and the guard below is the whole of that
+	 * rule: three call sites race for it — the normal post-tools emit, the
+	 * `abortStream` path and `abortTask`'s flush — and whichever arrives first
+	 * writes, the rest no-op. The claim is taken BEFORE the write so a
+	 * re-entrant call during the await cannot slip through, and RELEASED again
+	 * if the write fails, so a failure leaves a later path able to try rather
+	 * than silently consuming the request's only chance.
 	 */
 	private async emitApiReqFinished(
 		status: ApiRequestFinishedPayload["status"],
@@ -8999,7 +9095,22 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			toolSpans: this._pendingToolSpans,
 		}
 
-		await this.say("api_req_finished", JSON.stringify(payload))
+		// `allowWhenAborted` is what makes this span exist AT ALL for the last
+		// request of a turn. `attempt_completion` sets `task.abort = true` as its
+		// final act, and the normal emit point is downstream of it (after the
+		// tools of this request have run, which is the only moment
+		// `_pendingToolSpans` is complete) — so an ordinary `say` throws and the
+		// terminal request of every conversation loses its end, its duration and
+		// its whole built-in tool account. `abortTask`'s dedicated flush was
+		// written for exactly this case and was defeated the same way.
+		try {
+			await this.say("api_req_finished", JSON.stringify(payload), undefined, undefined, undefined, {
+				allowWhenAborted: true,
+			})
+		} catch (error) {
+			this._pendingApiReqNeedsEmit = true
+			throw error
+		}
 
 		// Lifecycle `onApiRequestFinish` (design §6.9): the host's own per-request
 		// record, handed to observers rather than reassembled by each of them from
