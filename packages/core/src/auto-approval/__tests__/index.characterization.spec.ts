@@ -27,7 +27,6 @@ describe("checkAutoApproval — tool path characterization", () => {
 			"skills",
 			"setTaskTitle",
 			"giveFeedback",
-			"waitForTask",
 			"checkTaskStatus",
 			"listBackgroundTasks",
 			"checkMcpCallStatus",
@@ -61,7 +60,7 @@ describe("checkAutoApproval — tool path characterization", () => {
 	})
 
 	describe("subtask control tools (alwaysAllowSubtasks)", () => {
-		const gated = ["newTask", "finishTask", "cancelTasks", "answerSubtaskQuestion"]
+		const gated = ["newTask", "finishTask", "cancelTasks"]
 		it.each(gated)("asks for %s when off", async (tool) => {
 			expect(await checkAutoApproval({ state: enabled(), ...toolAsk(tool) })).toEqual({ decision: "ask" })
 		})

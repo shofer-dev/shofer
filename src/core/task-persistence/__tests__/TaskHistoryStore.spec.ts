@@ -186,7 +186,6 @@ describe("TaskHistoryStore", () => {
 				id: "delegate-task",
 				taskState: { lifecycle: "running" },
 				delegatedToId: "child-1",
-				awaitingChildId: "child-1",
 				childIds: ["child-1"],
 			})
 			await store.upsert(original)
@@ -202,7 +201,6 @@ describe("TaskHistoryStore", () => {
 			const result = store.get("delegate-task")!
 			expect(result.taskState).toEqual({ lifecycle: "running" })
 			expect(result.delegatedToId).toBe("child-1")
-			expect(result.awaitingChildId).toBe("child-1")
 			expect(result.childIds).toEqual(["child-1"])
 			expect(result.tokensIn).toBe(500)
 			expect(result.tokensOut).toBe(200)

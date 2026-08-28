@@ -91,7 +91,7 @@ describe("ListBackgroundTasksTool", () => {
 	})
 
 	it("children scope includes synchronous (non-background) children from history", async () => {
-		// A synchronous child (is_background: false) is never added to
+		// A task the host pushed directly, rather than a `new_task` child, is never added to
 		// backgroundChildren, so without the persisted-history fallback it
 		// would be invisible. Matching on parentTaskId must surface it.
 		const task = buildTask()

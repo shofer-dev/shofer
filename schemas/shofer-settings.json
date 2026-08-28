@@ -160,12 +160,6 @@
 							"type": "string"
 						}
 					},
-					"awaitingChildId": {
-						"type": "string"
-					},
-					"completedByChildId": {
-						"type": "string"
-					},
 					"completionResultSummary": {
 						"type": "string"
 					},
@@ -827,10 +821,8 @@
 					"set_task_title",
 					"give_feedback",
 					"check_task_status",
-					"wait_for_task",
 					"list_background_tasks",
 					"cancel_tasks",
-					"answer_subtask_question",
 					"sed",
 					"call_mcp_tool_async",
 					"check_mcp_call_status",

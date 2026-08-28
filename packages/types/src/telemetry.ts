@@ -269,7 +269,6 @@ export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 			...telemetryPropertiesSchema.shape,
 			taskId: z.string(),
 			mode: z.string(),
-			isBackground: z.boolean(),
 		}),
 	}),
 	z.object({

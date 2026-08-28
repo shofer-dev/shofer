@@ -273,7 +273,7 @@ describe("CheckTaskStatusTool", () => {
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("not found"))
 	})
 
-	// ─── Peer access — pending parent question ────────────────────────
+	// ─── Peer access — a question the child forwarded ────────────────────────
 
 	it("peer surfaces pending parent question from live instance", async () => {
 		const task = buildTask()
@@ -284,38 +284,15 @@ describe("CheckTaskStatusTool", () => {
 		provider.taskManager.getTaskState.mockReturnValue({ lifecycle: "running" })
 		provider.taskManager.getManagedTaskInstance.mockReturnValue({
 			getTaskMode: vi.fn().mockResolvedValue("debug"),
-			getPendingParentQuestion: vi.fn().mockReturnValue({
-				question: "Should I refactor this module?",
-				suggestions: [{ answer: "Yes, refactor" }, { answer: "No, leave it" }],
-			}),
+			forwardedQuestion: { envelopeId: "env-1", question: "Should I refactor this module?" },
 		})
 
 		const cbs = buildCallbacks()
 		await tool.execute({ task_id: "peer-1" }, task, cbs)
-		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Pending parent question"))
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Waiting on your answer"))
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Should I refactor this module?"))
-	})
-
-	// ─── Peer access — pending parent question with no suggestions ────
-
-	it("peer surfaces pending parent question with 'none' for empty suggestions", async () => {
-		const task = buildTask()
-		const provider = task.providerRef.deref()
-		provider.getTaskWithId.mockResolvedValue({
-			historyItem: { rootTaskId: "root-1", taskState: { lifecycle: "running" }, mode: "code" },
-		})
-		provider.taskManager.getTaskState.mockReturnValue({ lifecycle: "running" })
-		provider.taskManager.getManagedTaskInstance.mockReturnValue({
-			getTaskMode: vi.fn().mockResolvedValue("code"),
-			getPendingParentQuestion: vi.fn().mockReturnValue({
-				question: "Proceed?",
-				suggestions: [],
-			}),
-		})
-
-		const cbs = buildCallbacks()
-		await tool.execute({ task_id: "peer-1" }, task, cbs)
-		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Suggestions: none"))
+		// The readout names the request id, because `reply` is what answers it.
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining('message_id: "env-1"'))
 	})
 
 	// ─── Peer access — mode resolution ────────────────────────────────

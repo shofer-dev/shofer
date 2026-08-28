@@ -430,9 +430,14 @@ export class TelemetryService {
 		this.captureEvent(TelemetryEventName.TASK_PEER_DISCOVERY, { taskId })
 	}
 
-	/** A subtask (`new_task`) was spawned. `taskId` is the parent task. */
-	public captureSubtaskSpawned(taskId: string, mode: string, isBackground: boolean): void {
-		this.captureEvent(TelemetryEventName.SUBTASK_SPAWNED, { taskId, mode, isBackground })
+	/**
+	 * A subtask (`new_task`) was spawned. `taskId` is the parent task.
+	 *
+	 * There is no background/foreground label: every child is concurrent, so the
+	 * distinction the old `isBackground` property drew no longer exists.
+	 */
+	public captureSubtaskSpawned(taskId: string, mode: string): void {
+		this.captureEvent(TelemetryEventName.SUBTASK_SPAWNED, { taskId, mode })
 	}
 
 	/** A task was cancelled (e.g. via `cancel_tasks` or user abort). */

@@ -447,7 +447,6 @@ describe("ShoferProvider Task History Synchronization", () => {
 				task: "Delegated task",
 				taskState: { lifecycle: "running" },
 				delegatedToId: "child-1",
-				awaitingChildId: "child-1",
 				childIds: ["child-1"],
 			})
 
@@ -465,7 +464,6 @@ describe("ShoferProvider Task History Synchronization", () => {
 			expect(updatedItem).toBeDefined()
 			expect(updatedItem?.taskState).toEqual({ lifecycle: "idle" })
 			expect(updatedItem?.delegatedToId).toBe("child-1")
-			expect(updatedItem?.awaitingChildId).toBe("child-1")
 			expect(updatedItem?.childIds).toEqual(["child-1"])
 		})
 

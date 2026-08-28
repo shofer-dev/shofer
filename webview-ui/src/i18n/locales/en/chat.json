@@ -328,8 +328,7 @@
 		"todos": "Initial todos",
 		"softResultLength": "Result length",
 		"softTimeoutSec": "Timeout",
-		"peerTaskIds": "Peer task IDs",
-		"background": "Background task"
+		"peerTaskIds": "Peer task IDs"
 	},
 	"mailbox": {
 		"sentNotification": "Notified {{target}}",
@@ -351,8 +350,6 @@
 		"showLess": "Show less"
 	},
 	"backgroundTasks": {
-		"waitForTask": "Shofer is waiting for background task",
-		"waitForTaskWithTimeout": "Shofer is waiting for background task (timeout {{timeout}}s)",
 		"checkTaskStatus": "Shofer is checking the status of background task",
 		"listBackgroundTasks": "Shofer is listing background tasks",
 		"noTasks": "No background tasks",

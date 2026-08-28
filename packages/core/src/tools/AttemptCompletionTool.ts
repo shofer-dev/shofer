@@ -1,4 +1,7 @@
-import { type HistoryItem, type CompletionRating } from "@shofer/types"
+import { randomUUID } from "crypto"
+
+import { type HistoryItem, type CompletionRating, type Envelope } from "@shofer/types"
+import { MAILBOX_NOTIFICATION_TIMEOUT_SEC } from "@shofer/types"
 import { getHost } from "@shofer/types"
 
 import { Task } from "../task/Task.js"
@@ -29,20 +32,12 @@ export interface AttemptCompletionCallbacks extends ToolCallbacks {
  */
 interface DelegationProvider {
 	getTaskWithId(id: string): Promise<{ historyItem: HistoryItem }>
-	/**
-	 * Handles completion of a blocking foreground subtask (is_background=false).
-	 * Pops the child from the stack, reveals the parent, and fires the resolver
-	 * that unblocks the parent's NewTaskTool.execute() await.
-	 * @returns true if a blocking resolver was found and handled; false otherwise.
-	 */
-	resumeBlockingParent(params: {
-		parentTaskId: string
-		childTaskId: string
-		completionResult: string
-	}): Promise<boolean>
+	/** Deliver an envelope into a task's mailbox. Mirrors `ShoferProvider.deliverToTask`. */
+	deliverToTask(taskId: string, envelope: Envelope): Promise<Envelope>
 	updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]>
 	taskManager?: {
 		getManagedTaskInstance?(taskId: string): Task | undefined
+		getManagedTask?(taskId: string): { name?: string } | undefined
 		getTaskState?(taskId: string): { lifecycle: string; rating?: string } | undefined
 	}
 }
@@ -194,88 +189,78 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// was terminal. It now sends a `request` and gets a `reply`, so
 			// `attempt_completion` means only what its name says.
 
-			// Check for subtask using parentTaskId (metadata-driven delegation)
+			// A CHILD's result goes to its parent's mailbox.
+			//
+			// There is no blocking-parent branch any more, because nothing blocks: a
+			// parent is never suspended inside `new_task`, so there is no resolver to
+			// fire and no stack to unwind. The result is persisted on the child's own
+			// history exactly as before AND delivered as a `notification` the parent
+			// reads with `wait` — or finds in its digest on its next turn. `wake: true`
+			// because a parent that ended its turn while its children worked is the
+			// normal case, and the whole point of delegating is to be told the answer.
 			if (task.parentTaskId) {
-				// Check if this subtask has already completed and returned to parent
-				// to prevent duplicate tool_results when user revisits from history
 				const provider = task.providerRef.deref() as DelegationProvider | undefined
 				if (provider) {
+					taskLog.info(
+						`[AttemptCompletionTool.execute] Child completed, delivering result to parent taskId=${task.taskId}`,
+					)
+
+					pushToolResult("")
+
 					try {
-						// Blocking foreground path (is_background=false, new design):
-						// The parent is suspended in NewTaskTool.execute() awaiting a Promise.
-						// resumeBlockingParent() pops the child from the stack to reveal
-						// the parent, updates history, and fires the resolver — no rehydration.
-						const blockingHandled = await provider.resumeBlockingParent({
-							parentTaskId: task.parentTaskId,
-							childTaskId: task.taskId,
-							completionResult: cappedResult,
-						})
-						if (blockingHandled) {
-							taskLog.info(
-								`[AttemptCompletionTool.execute] Blocking foreground path handled taskId=${task.taskId}`,
-							)
-							pushToolResult("")
-							this.emitTaskCompleted(task, effectiveRating)
-							task.abort = true
-							return
-						}
-
-						const { historyItem } = await provider.getTaskWithId(task.taskId)
-
-						if (historyItem?.isBackground) {
-							// Background child completion path. The parent is the focused
-							// task and is running concurrently; we MUST NOT call
-							// removeShoferFromStack on the parent or fire the blocking
-							// parent resolver (which is only for foreground subtasks).
-							//
-							// Instead: persist completion status on the child's own
-							// history, update the parent's in-memory backgroundChildren
-							// handle, emit TaskCompleted, and abort the child cleanly.
-							taskLog.info(
-								`[AttemptCompletionTool.execute] Background child completed, skipping delegation taskId=${task.taskId}`,
-							)
-
-							pushToolResult("")
-
-							try {
-								const fileStats = await computeFileChangeStats(task)
-								// Persist file stats + completion summary only — taskState is
-								// owned exclusively by TaskManager, which writes it in response
-								// to the TaskCompleted event emitted below.
-								// Do NOT spread historyItem here — it carries a stale taskState
-								// snapshot (read before TaskCompleted fired), and spreading it
-								// races with TaskManager.persistState()'s write of the correct
-								// "completed" state. Only pass the fields we intend to update.
-								await provider.updateTaskHistory({
-									id: task.taskId,
-									completionResultSummary: cappedResult,
-									insertions: fileStats.insertions,
-									deletions: fileStats.deletions,
-								} as HistoryItem)
-							} catch (err) {
-								taskLog.error(
-									`[AttemptCompletionTool] Failed to persist background child completion for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
-								)
-							}
-
-							const parentInstance = provider.taskManager?.getManagedTaskInstance?.(task.parentTaskId)
-							const handle = parentInstance?.backgroundChildren.get(task.taskId)
-							if (handle) {
-								handle.status = "completed"
-							}
-
-							this.emitTaskCompleted(task, effectiveRating)
-							task.abort = true
-							return
-						}
+						const fileStats = await computeFileChangeStats(task)
+						// Persist file stats + completion summary only — taskState is
+						// owned exclusively by TaskManager, which writes it in response
+						// to the TaskCompleted event emitted below. Do NOT spread a
+						// historyItem here: it carries a stale taskState snapshot and
+						// racesTaskManager.persistState()'s write of "completed".
+						await provider.updateTaskHistory({
+							id: task.taskId,
+							completionResultSummary: cappedResult,
+							insertions: fileStats.insertions,
+							deletions: fileStats.deletions,
+						} as HistoryItem)
 					} catch (err) {
-						// If we can't get the history, log error and skip delegation
 						taskLog.error(
-							`[AttemptCompletionTool] Failed to get history for task ${task.taskId}: ${(err as Error)?.message ?? String(err)}. ` +
-								`Skipping delegation.`,
+							`[AttemptCompletionTool] Failed to persist child completion for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
 						)
-						// Fall through to normal completion flow
 					}
+
+					const parentInstance = provider.taskManager?.getManagedTaskInstance?.(task.parentTaskId)
+					const handle = parentInstance?.backgroundChildren.get(task.taskId)
+					if (handle) {
+						handle.status = "completed"
+					}
+
+					// Deliver the result. Best-effort by design: a parent that has been
+					// deleted, or whose box is full, must not stop this child from
+					// completing — the result is already durable on the child's own
+					// history and `check_task_status` still reads it there.
+					try {
+						const childTitle = provider.taskManager?.getManagedTask?.(task.taskId)?.name ?? task.taskId
+						const now = Date.now()
+						await provider.deliverToTask(task.parentTaskId, {
+							id: randomUUID(),
+							from: task.taskId,
+							to: task.parentTaskId,
+							kind: "notification",
+							subject: `result: ${childTitle}`.slice(0, 120),
+							body: cappedResult,
+							deadline: now + MAILBOX_NOTIFICATION_TIMEOUT_SEC * 1000,
+							wake: true,
+							sent_at: now,
+							plane: "local",
+						})
+					} catch (err) {
+						taskLog.error(
+							`[AttemptCompletionTool] Could not deliver the result of ${task.taskId} to parent ` +
+								`${task.parentTaskId}: ${(err as Error)?.message ?? String(err)}`,
+						)
+					}
+
+					this.emitTaskCompleted(task, effectiveRating)
+					task.abort = true
+					return
 				}
 			}
 

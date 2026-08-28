@@ -61,11 +61,9 @@ import { readProjectStructureTool } from "../tools/ReadProjectStructureTool.js"
 import { renameSymbolTool } from "../tools/RenameSymbolTool.js"
 import { viewImageTool } from "../tools/ViewImageTool.js"
 import { checkTaskStatusTool } from "../tools/CheckTaskStatusTool.js"
-import { waitForTaskTool } from "../tools/WaitForTaskTool.js"
 import { listBackgroundTasksTool } from "../tools/ListBackgroundTasksTool.js"
 import { describeToolsTool } from "../tools/DescribeToolsTool.js"
 import { cancelTasksTool } from "../tools/CancelTasksTool.js"
-import { answerSubtaskQuestionTool } from "../tools/AnswerSubtaskQuestionTool.js"
 import { sendMessageTool } from "../tools/SendMessageTool.js"
 import { replyTool } from "../tools/ReplyTool.js"
 import { callMcpToolAsyncTool } from "../tools/CallMcpToolAsyncTool.js"
@@ -548,11 +546,6 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} for '${block.params.command}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
 					case "check_task_status":
 						return `[${block.name} for '${block.params.task_id}']`
-					case "wait_for_task": {
-						const ids = block.params.task_ids
-						const idsStr = Array.isArray(ids) ? ids.join(", ") : ids
-						return `[${block.name} for '${idsStr ?? ""}']`
-					}
 					case "send_message":
 						return `[${block.name} → '${block.params.to ?? ""}' (${block.params.kind ?? "notification"})]`
 					case "reply":
@@ -562,8 +555,6 @@ export async function presentAssistantMessage(shofer: Task) {
 						const idsStr = Array.isArray(ids) ? ids.join(", ") : ids
 						return `[${block.name} for '${idsStr ?? ""}']`
 					}
-					case "answer_subtask_question":
-						return `[${block.name} for '${block.params.task_id}']`
 					case "list_background_tasks":
 						return `[${block.name}]`
 					case "describe_tools": {
@@ -747,18 +738,12 @@ export async function presentAssistantMessage(shofer: Task) {
 						// Non-JSON results are plain success output.
 					}
 					const finishedAt = performance.now()
-					// Does this span represent blocking on something else? `wait` parks on
-					// the mailbox; `wait_for_task` on a child; a foreground
-					// (non-background) new_task on the child it spawned. All three render
-					// as "waiting", not as tool execution. `send_message` never blocks.
-					const truthy = (v: string | undefined) => {
-						const s = String(v ?? "").toLowerCase()
-						return s === "true" || s === "1" || s === "yes"
-					}
-					const waitsForTask =
-						block.name === "wait" ||
-						block.name === "wait_for_task" ||
-						(block.name === "new_task" && !truthy(block.params.is_background))
+					// Does this span represent blocking on something else? Only `wait`
+					// does now — it parks the caller on its mailbox. `new_task` always
+					// spawns concurrently and `send_message` never blocks, so neither
+					// is waiting; rendering either as "waiting" would report the whole
+					// of a fan-out as time the parent spent idle.
+					const waitsForTask = block.name === "wait"
 					shofer._pendingToolSpans.push({
 						startedAtOffsetMs: (toolSpanStartedAt || finishedAt) - shofer.timelineOriginMs,
 						finishedAtOffsetMs: finishedAt - shofer.timelineOriginMs,
@@ -788,10 +773,8 @@ export async function presentAssistantMessage(shofer: Task) {
 					"run_slash_command",
 					"new_task",
 					"check_task_status",
-					"wait_for_task",
 					"list_background_tasks",
 					"cancel_tasks",
-					"answer_subtask_question",
 					"send_message",
 					"reply",
 					"wait",
@@ -1282,13 +1265,6 @@ export async function presentAssistantMessage(shofer: Task) {
 						pushToolResult,
 					})
 					break
-				case "wait_for_task":
-					await waitForTaskTool.handle(shofer, block as ToolUse<"wait_for_task">, {
-						askApproval,
-						handleError,
-						pushToolResult,
-					})
-					break
 				case "list_background_tasks":
 					await listBackgroundTasksTool.handle(shofer, block as ToolUse<"list_background_tasks">, {
 						askApproval,
@@ -1305,13 +1281,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "cancel_tasks":
 					await cancelTasksTool.handle(shofer, block as ToolUse<"cancel_tasks">, {
-						askApproval,
-						handleError,
-						pushToolResult,
-					})
-					break
-				case "answer_subtask_question":
-					await answerSubtaskQuestionTool.handle(shofer, block as ToolUse<"answer_subtask_question">, {
 						askApproval,
 						handleError,
 						pushToolResult,
@@ -1708,15 +1677,14 @@ export async function presentAssistantMessage(shofer: Task) {
  * Records `task_interaction` events for the Sequence view when an inter-task
  * control-plane tool executes:
  *
- *   new_task → spawn │ send_message → message │ reply → answer │ wait_for_task → await
- *   answer_subtask_question → answer │ cancel_tasks → cancel
- *   ask_followup_question → question (child → parent)
+ *   new_task → spawn │ send_message → message │ reply → answer
+ *   cancel_tasks → cancel │ ask_followup_question → question (child → parent)
  *
  * Emitted only when the tool actually produced a result (a tool span was
  * recorded for this call) — skipped / partial / rejected calls produce no
  * event, and the span's `isError` is reused so failed interactions render as
- * red dashed arrows. Tools targeting multiple tasks (wait_for_task,
- * cancel_tasks) emit one event per target so each gets its own arrow.
+ * red dashed arrows. A tool targeting multiple tasks (cancel_tasks) emits one
+ * event per target so each gets its own arrow.
  */
 async function maybeRecordTaskInteraction(shofer: Task, block: ToolUse, toolCallId: string): Promise<void> {
 	// Best-effort: never let viz instrumentation break tool execution.
@@ -1731,11 +1699,10 @@ async function maybeRecordTaskInteraction(shofer: Task, block: ToolUse, toolCall
 		return
 	}
 	const isError = span.isError
-	// Async = the caller did not block on the target. `waitsForTask` covers a
-	// foreground new_task / wait_for_task / `wait`; a child's
-	// ask_followup_question also blocks (it waits for the parent's answer).
-	const blocking =
-		span.waitsForTask === true || block.name === "wait_for_task" || block.name === "ask_followup_question"
+	// Async = the caller did not block on the target. `waitsForTask` covers `wait`
+	// parked on the mailbox; a child's ask_followup_question also blocks (it waits
+	// for an answer from either its parent or the human).
+	const blocking = span.waitsForTask === true || block.name === "ask_followup_question"
 	const isAsync = !blocking
 
 	const truncate = (value: string | undefined, max = 80): string => {
@@ -1756,28 +1723,11 @@ async function maybeRecordTaskInteraction(shofer: Task, block: ToolUse, toolCall
 
 	switch (block.name) {
 		case "new_task":
-			// Blocking foreground spawns record their spawn + return arrows from
-			// NewTaskTool (which survives the long child-completion await); only the
-			// non-blocking background spawn is recorded here.
-			if (isAsync) {
-				await emit(
-					"spawn",
-					shofer.childTaskId ?? undefined,
-					truncate(block.params.mode ?? block.params.message),
-				)
-			}
+			await emit("spawn", shofer.childTaskId ?? undefined, truncate(block.params.mode ?? block.params.message))
 			break
 		// `send_message` and `reply` record their own arrows inside their handlers, at
 		// the moment the envelope is accepted — a delivery that was REFUSED must draw
 		// no arrow, and only the handler knows which of the two happened.
-		case "answer_subtask_question":
-			await emit("answer", block.params.task_id, truncate(block.params.answer))
-			break
-		case "wait_for_task":
-			for (const id of toIds(block.params.task_ids)) {
-				await emit("await", id, "wait")
-			}
-			break
 		case "cancel_tasks":
 			for (const id of toIds(block.params.task_ids)) {
 				await emit("cancel", id, "cancel")

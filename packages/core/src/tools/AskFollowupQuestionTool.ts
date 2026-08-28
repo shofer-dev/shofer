@@ -1,6 +1,11 @@
 import type { ParamField } from "@shofer/types"
 
+import { randomUUID } from "crypto"
+
+import { MAILBOX_CHILD_QUESTION_TIMEOUT_SEC } from "@shofer/types"
+
 import { Task } from "../task/Task.js"
+import { taskLog } from "../logging/subsystems.js"
 import { formatResponse } from "../prompts/responses.js"
 import { type ToolUse } from "@shofer/types"
 import { confirmNoConversationDriver } from "../transport/conversation-driver.js"
@@ -86,19 +91,18 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 
 			task.consecutiveMistakeCount = 0
 
-			// Background child tasks route their question to BOTH the parent agent
-			// (which answers with free text via answer_subtask_question) AND the
-			// user (interactively, via the child's own followup ask UI). The
-			// question is rendered in the child's chat using `task.ask("followup")`
-			// — the same mechanism used for user-facing questions — so suggestion
-			// buttons appear when the user views the child task. Either channel
-			// can answer; whichever fires first resolves the ask.
-			const isBackgroundChild = !!(task.providerRef?.deref() && task.parentTaskId && task.isBackgroundTask)
+			// A CHILD's question is dual-channel: it goes to the parent's MAILBOX as
+			// a `request` AND is rendered in the child's own chat with
+			// `task.ask("followup")`, the same mechanism a user-facing question
+			// uses, so suggestion buttons appear when a human views the child.
+			// Either channel may answer and the first answer wins.
+			const isChildWithParent = !!(task.providerRef?.deref() && task.parentTaskId && task.isBackgroundTask)
 
-			// A SYNCHRONOUSLY spawned child (`new_task` without `is_background`) has
-			// the opposite problem to a background one: its parent is the entity that
-			// created it, but the parent cannot answer — it is suspended inside
-			// `new_task` waiting for this child to finish. So the next hop backwards
+			// A child whose parent is NOT concurrent has the opposite problem: its
+			// parent is the entity that created it, but cannot answer, because it is
+			// suspended waiting for this child to finish. `new_task` no longer
+			// produces such a task — every child is concurrent — but a host can still
+			// construct one directly, so the escalation stays. The next hop backwards
 			// is the human driving the ROOT conversation, and the question is
 			// published on the ROOT task's event stream (by
 			// `API.escalateFollowupToConversation`, carrying `sourceTaskId`) rather
@@ -135,10 +139,10 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			// message so it replays read-only after a reload, then hand the JSON to
 			// the model as the tool result.
 			//
-			// Background children never use form mode — the parent answers in free
-			// text via answer_subtask_question, and the form UI is designed for
-			// interactive human input. Fall through to the followup-ask path below.
-			if (hasForm && !isBackgroundChild) {
+			// A child never uses form mode — the parent answers in free text with
+			// `reply`, and the form UI is designed for interactive human input.
+			// Fall through to the followup-ask path below.
+			if (hasForm && !isChildWithParent) {
 				const form_json = { question, paramForm: form }
 				const { text, images } = await task.ask("followup", JSON.stringify(form_json), false)
 
@@ -160,35 +164,31 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			}
 
 			// Transform follow_up suggestions to the format expected by task.ask.
-			// follow_up may be null/empty when a background child used form mode —
-			// the parent receives the bare question and answers in free text.
+			// follow_up may be null/empty when a child used form mode — the parent
+			// receives the bare question and answers in free text.
 			const suggestions = (follow_up ?? []).map((s) => ({ answer: s.text, mode: s.mode }))
 			const follow_up_json = {
 				question,
 				suggest: suggestions,
 			}
 
-			// When this is a background child task, the question is rendered in
-			// the child's own chat via `task.ask("followup", …)` — the same
-			// mechanism used for user-facing questions. This means:
+			// A CHILD's question, on both channels at once.
 			//
-			//   1. The question + suggestion buttons appear in the child's chat UI
-			//      when the user views the child task, so the USER can answer
-			//      interactively (click a suggestion or type a response).
-			//   2. The parent agent can answer via `answer_subtask_question`, which
-			//      resolves the pending ask by calling `handleWebviewAskResponse`.
-			//   3. The `task.ask("followup")` emits `TaskInteractive` → the
-			//      TaskManager adds a `needs_input` notification so the user knows
-			//      a background child has a question.
+			//   1. It is delivered to the parent's mailbox as a `request`, so the
+			//      parent sees it in its digest and answers with `reply`.
+			//   2. It is raised as an ordinary `followup` ask in the child's own
+			//      chat, so a human who opens the child can answer it there.
 			//
-			// Whichever channel answers first resolves the ask; the other becomes
-			// a no-op (the ask is no longer pending).
+			// Whichever answers first wins: a parent's `reply` resolves the ask
+			// through `answerForwardedQuestion`, and a human's answer resolves the
+			// ask directly — after which the now-pointless request is withdrawn from
+			// the parent's box in the `finally` below. The child sits in
+			// `waiting_input` throughout: it is parked on an ANSWER, not on mail.
 			const provider = task.providerRef?.deref()
 			if (provider && task.parentTaskId && task.isBackgroundTask) {
 				// Finalize the streaming "tool" ChatRow before presenting the
 				// followup ask. This tool is in the "questions" group and
-				// auto-approved for background children (which inherit
-				// alwaysAllow* settings), so askApproval returns immediately
+				// auto-approved for children, so askApproval returns immediately
 				// while rendering a ChatRow entry.
 				const completeMessage = JSON.stringify({
 					tool: "askFollowupQuestion",
@@ -199,38 +199,76 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 					return
 				}
 
-				// Flip the parent's view of this child to "waiting_for_parent"
-				// so check_task_status / list_background_tasks reflect reality.
+				// Flip the parent's view of this child so check_task_status and
+				// list_background_tasks reflect reality.
 				const parentInstance = provider.taskManager.getManagedTaskInstance(task.parentTaskId)
 				const handleOnParent = parentInstance?.backgroundChildren.get(task.taskId)
 				const previousHandleStatus = handleOnParent?.status
 				if (handleOnParent) {
 					handleOnParent.status = "waiting_for_parent"
 				}
+
+				const now = Date.now()
+				const deadline = now + MAILBOX_CHILD_QUESTION_TIMEOUT_SEC * 1000
+				const envelopeId = randomUUID()
+				const suggestionLines =
+					suggestions.length > 0
+						? `\n\nSuggested answers:\n${suggestions.map((sg) => `- ${sg.answer}`).join("\n")}`
+						: ""
+
+				let expiryTimer: ReturnType<typeof setTimeout> | undefined
 				try {
-					// Store the question metadata so check_task_status / wait_for_task
-					// can surface the question text and suggestions to the parent agent.
-					task.setPendingParentQuestionInfo({ question, suggestions })
+					// Deliver FIRST, so the child never parks on a question its parent
+					// was never told about. A refused delivery (parent gone, box full)
+					// is not fatal: the human channel is still live, so the question is
+					// asked anyway and only the parent's copy is lost.
+					try {
+						await provider.deliverToTask(task.parentTaskId, {
+							id: envelopeId,
+							from: task.taskId,
+							to: task.parentTaskId,
+							kind: "request",
+							subject: `question: ${question.split("\n")[0] ?? question}`.slice(0, 120),
+							body: `${question}${suggestionLines}`,
+							deadline,
+							wake: true,
+							sent_at: now,
+							plane: "local",
+						})
+					} catch (deliverErr) {
+						taskLog.error(
+							`[AskFollowupQuestionTool] Could not deliver ${task.taskId}'s question to parent ` +
+								`${task.parentTaskId}: ${deliverErr instanceof Error ? deliverErr.message : String(deliverErr)}`,
+						)
+					}
 
-					// Wake any wait_for_task currently blocked on this child so the
-					// parent agent can discover the question immediately.
-					provider.taskManager.emit("managedTask:needs-parent-input", task.taskId, question)
+					// Record the correlation so a parent `reply` can find this ask, and
+					// so check_task_status / the notification suppression can see that
+					// the child is waiting on an answer.
+					task.setForwardedQuestion({ envelopeId, question })
 
-					// Block on the followup ask. This renders the question (with
-					// suggestion buttons) in the child's chat UI. The ask is
-					// resolved when EITHER the parent answers (via
-					// answer_subtask_question → handleWebviewAskResponse) OR the
-					// user answers interactively (clicking a suggestion / typing
-					// in the child's chat). The `followup` ask type is an
-					// interactiveAsk, so TaskManager emits a `needs_input`
-					// notification for background children — the user is alerted.
+					// Arm the child's own expiry. The mailbox never sweeps on a timer —
+					// expiry there is lazy, at read — but a child parked on an ask has
+					// nobody to read anything, so without this it would wait forever for
+					// a request that has already lapsed out of its parent's box. The
+					// synthesized answer restores the child's liveness rather than
+					// failing its turn: it is a decision the child can act on.
+					expiryTimer = setTimeout(() => {
+						task.answerForwardedQuestion(
+							envelopeId,
+							`Your question to the parent expired unanswered after ` +
+								`${MAILBOX_CHILD_QUESTION_TIMEOUT_SEC}s. Decide yourself, or ask again.`,
+						)
+					}, deadline - Date.now())
+
+					// Park. Resolved by whichever channel answers first.
 					const { text, images } = await task.ask("followup", JSON.stringify(follow_up_json), false)
 					const answer = text ?? ""
 					await task.say("user_feedback", answer, images)
 					pushToolResult(formatResponse.toolResult(`<user_message>\n${answer}\n</user_message>`, images))
 				} catch (askErr) {
-					// The ask was aborted (AskIgnoredError) — the task was stopped
-					// or superseded. Surface a clean tool error.
+					// The ask was aborted (AskIgnoredError) — the task was stopped or
+					// superseded. Surface a clean tool error.
 					pushToolResult(
 						formatResponse.toolError(
 							`ask_followup_question was cancelled before an answer was received: ${
@@ -239,13 +277,21 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 						),
 					)
 				} finally {
-					// The child is resuming — whether the parent answered, the user
-					// answered, the wait was aborted, or setup threw. Clear the
-					// pending question metadata and restore the parent's handle
-					// view so neither is stranded in "waiting_for_parent".
-					task.clearPendingParentQuestion()
+					if (expiryTimer) {
+						clearTimeout(expiryTimer)
+					}
+					task.clearForwardedQuestion()
 					if (handleOnParent && handleOnParent.status === "waiting_for_parent") {
 						handleOnParent.status = previousHandleStatus ?? "running"
+					}
+					// Withdraw the request from the parent's box. When the PARENT
+					// answered, `reply` already removed it and this is a no-op; when the
+					// HUMAN answered (or the ask was aborted), this is what stops the
+					// parent's digest showing a question nobody is waiting on any more.
+					try {
+						await parentInstance?.mailbox.resolveRequest(envelopeId)
+					} catch {
+						// Already resolved, expired, or the parent is not live here.
 					}
 				}
 				return

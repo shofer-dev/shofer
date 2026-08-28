@@ -103,15 +103,14 @@ Inter-task communication is extracted from tool invocations at execution time an
 
 See the [`TaskInteractionPayload`](#task-interaction-events) shape under Data Model. Each tool maps to a kind:
 
-| Tool                      | Kind       | Description                             |
-| ------------------------- | ---------- | --------------------------------------- |
-| `new_task`                | `spawn`    | Parent → child creation                 |
-| `send_message`            | `message`  | An envelope into another task's mailbox |
-| `reply`                   | `answer`   | An answer to a request in the mailbox   |
-| `wait_for_task`           | `await`    | Caller blocks on target                 |
-| `answer_subtask_question` | `answer`   | Parent answers child's question         |
-| `cancel_tasks`            | `cancel`   | Parent terminates child                 |
-| `ask_followup_question`   | `question` | Child asks its parent (child → parent)  |
+| Tool                    | Kind       | Description                                                  |
+| ----------------------- | ---------- | ------------------------------------------------------------ |
+| `new_task`              | `spawn`    | Parent → child creation                                      |
+| `send_message`          | `message`  | An envelope into another task's mailbox                      |
+| `reply`                 | `answer`   | An answer to a request in the mailbox — a parent's answer to |
+|                         |            | a child's forwarded question is one of these                 |
+| `cancel_tasks`          | `cancel`   | Parent terminates child                                      |
+| `ask_followup_question` | `question` | Child forwards a question to its parent (child → parent)     |
 
 ### Rendering
 
@@ -177,15 +176,15 @@ A donut chart ([`TaskStatsView.tsx`](../webview-ui/src/components/chat/TaskStats
 
 A request is split into phases, and tool spans into their own categories:
 
-| Category               | Source                                                                                | Colour |
-| ---------------------- | ------------------------------------------------------------------------------------- | ------ |
-| **Waiting for model**  | TTFB: request start → first chunk (`ttfbMs`)                                          | blue   |
-| **Thinking**           | reasoning: `ttfbMs` → `genStartOffsetMs` (first non-reasoning chunk)                  | purple |
-| **Streaming response** | generation: `genStartOffsetMs` → request end                                          | green  |
-| **Tool execution**     | non-blocking local `ToolSpan`s                                                        | orange |
-| **MCP calls**          | `ToolSpan`s named `mcp:<server>/<tool>` (the MCP dispatch path)                       | indigo |
-| **Waiting**            | `ToolSpan.waitsForTask` (`wait` on the mailbox, `wait_for_task`, blocking `new_task`) | cyan   |
-| **Overhead**           | remainder — see below                                                                 | gray   |
+| Category               | Source                                                               | Colour |
+| ---------------------- | -------------------------------------------------------------------- | ------ |
+| **Waiting for model**  | TTFB: request start → first chunk (`ttfbMs`)                         | blue   |
+| **Thinking**           | reasoning: `ttfbMs` → `genStartOffsetMs` (first non-reasoning chunk) | purple |
+| **Streaming response** | generation: `genStartOffsetMs` → request end                         | green  |
+| **Tool execution**     | non-blocking local `ToolSpan`s                                       | orange |
+| **MCP calls**          | `ToolSpan`s named `mcp:<server>/<tool>` (the MCP dispatch path)      | indigo |
+| **Waiting**            | `ToolSpan.waitsForTask` (`wait` on the mailbox)                      | cyan   |
+| **Overhead**           | remainder — see below                                                | gray   |
 
 Overlapping spans are resolved by painting them onto one offset axis with priority (tools > request phases) and reading back non-overlapping per-category totals.
 
@@ -302,9 +301,8 @@ interface ToolSpan {
 	/** When the tool is `new_task` and it spawned a subtask: the child
 	 *  task's taskId.  Used by the Sequence view for spawn arrows. */
 	spawnedTaskId?: string
-	/** True when this span represents the task *blocking on another task* rather
-	 *  than doing its own work: `wait` on its mailbox, `wait_for_task`, or a
-	 *  foreground (blocking) `new_task`. Rendered as the
+	/** True when this span represents the task *waiting on another task* rather
+	 *  than doing its own work — `wait` parked on its mailbox. Rendered as the
 	 *  "Waiting for task" category in the Stats/Trace views. */
 	waitsForTask?: boolean
 }
@@ -329,7 +327,7 @@ interface TaskInteractionPayload {
 }
 ```
 
-Extracted from tool invocations in `presentAssistantMessage` (`maybeRecordTaskInteraction`, after the tool dispatch): `new_task` → `spawn`, `wait_for_task` → `await`, `answer_subtask_question` → `answer`, `cancel_tasks` → `cancel`, `ask_followup_question` → `question` (child → parent, only when the task has a parent). The mailbox tools are the exception: `send_message` → `message` and `reply` → `answer` are emitted by their own handlers at the moment the envelope is ACCEPTED, because a refused delivery must draw no arrow and only the handler knows which happened. `rootOffsetMs` is filled in by `Task.emitTaskInteraction` from the root task's origin — all tasks in the host share one `performance.now()` clock, so origins are directly comparable.
+Extracted from tool invocations in `presentAssistantMessage` (`maybeRecordTaskInteraction`, after the tool dispatch): `new_task` → `spawn`, `cancel_tasks` → `cancel`, `ask_followup_question` → `question` (child → parent, only when the task has a parent). The mailbox tools are the exception: `send_message` → `message` and `reply` → `answer` are emitted by their own handlers at the moment the envelope is ACCEPTED, because a refused delivery must draw no arrow and only the handler knows which happened. `rootOffsetMs` is filled in by `Task.emitTaskInteraction` from the root task's origin — all tasks in the host share one `performance.now()` clock, so origins are directly comparable.
 
 ### Invariants
 
@@ -468,8 +466,8 @@ dispatched tool that produces a result is captured exactly once). `toolName =
 block.name`, timing from a `toolSpanStartedAt` stamped just before the dispatch
 switch, `isError` derived from the `{status:"error"}` result shape,
 `spawnedTaskId = shofer.childTaskId` for `new_task`, and `waitsForTask = true`
-for tools that are the agent WAITING (`wait` on the mailbox, `wait_for_task`, or
-a foreground `new_task`). `maybeRecordTaskInteraction()` runs after the
+for the one tool that is the agent WAITING — `wait`, parked on its mailbox.
+`maybeRecordTaskInteraction()` runs after the
 dispatch switch to emit the `task_interaction` events (§ Sequence).
 
 **MCP tools** run through a separate dispatch (`useMcpToolTool.handle` with its

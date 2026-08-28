@@ -6,7 +6,7 @@ Design of parallel task execution in Shofer, including the `new_task` tool (sync
 
 Shofer supports **parallel task execution**: multiple AI-powered tasks run concurrently within a single window. One task is **focused** (visible in the UI) while others continue processing in the background. This is analogous to Copilot's session model — each "task" is an independent conversation with its own history, mode, and tool loop.
 
-Parallelism is exposed to the LLM via the `new_task` tool, which can spawn child tasks in either **synchronous** (blocking) or **asynchronous/background** (non-blocking) mode. The parent task manages background children through three supporting tools: `check_task_status`, `wait_for_task`, and `list_background_tasks`.
+Parallelism is exposed to the LLM via the `new_task` tool, which always spawns a child that runs **concurrently** with its parent. The parent inspects its children with `check_task_status` and `list_background_tasks`, stops one with `cancel_tasks`, and receives their results — and their questions — through its **mailbox** ([`task_messaging.md`](task_messaging.md)).
 
 ## Core Concepts
 
@@ -72,7 +72,7 @@ The lifecycle of a task is represented by `TaskLifecycle`:
 | `idle`          | Gray   | No    | `TaskIdle`, task restored from history                                     |
 | `running`       | Green  | Yes   | `TaskStarted`, `TaskActive`                                                |
 | `waiting_input` | Yellow | Yes   | `TaskInteractive` (needs user approval)                                    |
-| `waiting`       | Blue   | Yes   | `wait_for_task` blocking on subtasks                                       |
+| `waiting`       | Blue   | Yes   | parked in `wait` on the mailbox                                            |
 | `paused`        | Orange | No    | User paused task (non-destructive stop)                                    |
 | `completed`     | Green  | No    | `TaskCompleted` (with rating)                                              |
 | `error`         | Red    | No    | `api_req_failed`, `mistake_limit_reached`, `auto_approval_max_req_reached` |
@@ -147,7 +147,7 @@ The `0 = unlimited` convention is consistent with [`archivedTaskRetentionDays`](
 
 A task is considered **active** if its lifecycle is `"running"` or `"waiting"` — the same predicate used by [`TaskManager.isActive()`](../src/services/task-manager/TaskManager.ts). Tasks in `"idle"`, `"paused"`, `"waiting_input"`, or any terminal state (`"completed"`, `"error"`) do **not** consume a concurrency slot.
 
-Rationale: `"waiting"` tasks (parked in `wait` on their mailbox, or blocked on `wait_for_task`) still hold an LLM context window and count against practical concurrency. `"waiting_input"` tasks (awaiting user approval) are idle — they consume no LLM resources.
+Rationale: `"waiting"` tasks (parked in `wait` on their mailbox) still hold an LLM context window and count against practical concurrency. `"waiting_input"` tasks (awaiting user approval) are idle — they consume no LLM resources.
 
 ### Enforcement in `new_task`
 
@@ -231,75 +231,66 @@ flowchart TD
 
 ## `new_task` Tool
 
-The [`new_task`](native_tools.md#new_task) tool creates a child task in a chosen mode. It supports two execution models controlled by the `is_background` parameter.
-
-### Synchronous mode (`is_background` omitted or `false`, default)
-
-The parent **blocks** until the child completes. The child result is returned as the tool's output, and the parent resumes where it left off.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant P as Parent task
-    participant C as Child task
-
-    P->>P: new_task(mode "code", message "Fix bug in foo.ts")
-    Note over P: the parent enters the "waiting" lifecycle
-    P->>C: child created, focused in the stack
-    C->>C: runs its own tool loop
-    C->>C: attempt_completion
-    C-->>P: resumeBlockingParent() restores the parent
-    Note over P: the child's result arrives as the tool_result
-    P->>P: continues where it left off
-```
-
-**Constraint:** Must be called **alone** in a turn — no other tools in the same message. The model instruction: "CRITICAL: This tool MUST be called alone. Do NOT call this tool alongside other tools in the same message turn."
-
-### Background mode (`is_background=true`)
-
-The child starts immediately and runs **concurrently**. The parent receives the child's `task_id` in the tool result and continues **without blocking**.
+The [`new_task`](native_tools.md#new_task) tool creates a child task in a chosen
+mode. The child **always runs concurrently**: the tool returns as soon as the
+child has started, with its `task_id`, and the parent continues its own loop
+without blocking. There is one execution model, and the parent is never
+suspended inside it.
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant P as Parent task
-    participant C1 as Background child 1
-    participant C2 as Background child 2
+    participant C1 as Child 1
+    participant C2 as Child 2
 
-    P->>C1: new_task(is_background=true, mode "code", message "Analyze file1.ts")
-    Note over C1: created, registered in TaskManager, started in the background
+    P->>C1: new_task — mode "code", message "Analyze file1.ts"
+    Note over C1: created, registered in TaskManager, started
     C1-->>P: tool result — task_id + status "starting"
-    Note over P: the parent stays "running" and continues its own loop at once
-    P->>C2: new_task(is_background=true, mode "code", message "Analyze file2.ts")
+    Note over P: the parent stays "running" and continues at once
+    P->>C2: new_task — mode "code", message "Analyze file2.ts"
     C2-->>P: tool result — task_id + status "starting"
-    P->>P: wait_for_task over both task_ids
+    P->>P: wait over the mailbox, optionally from the two child ids
     Note over P: the parent enters the "waiting" lifecycle —<br/>event-driven, it does not poll
-    C1-->>P: managedTask:completed
-    C2-->>P: managedTask:completed
-    P->>P: results from both children returned
+    C1-->>P: attempt_completion result, as a notification envelope
+    C2-->>P: attempt_completion result, as a notification envelope
+    P->>P: wait returns the whole box
 ```
 
-#### Key differences from synchronous mode
+**Why there is no blocking mode.** A suspended parent could not answer its own
+child's questions, could not cancel it, and could not coordinate anything else —
+so the one entity with the context to unblock a stuck child was the one entity
+guaranteed to be asleep. Concurrency plus a mailbox replaces it: a parent that
+wants the result calls `wait`, and gets it as an envelope
+([`task_messaging.md`](task_messaging.md)).
 
-| Aspect                                   | Sync                         | Async (Background)                 |
-| ---------------------------------------- | ---------------------------- | ---------------------------------- |
-| Parent status                            | `waiting`                    | Remains `running`                  |
-| Parent blocks?                           | Yes                          | No                                 |
-| Parent history saved?                    | Yes (delegation metadata)    | No (parent keeps running)          |
-| Child completion triggers parent resume? | Yes (`resumeBlockingParent`) | No (parent explicitly polls/waits) |
-| Can start multiple children?             | No                           | Yes (in parallel)                  |
-| Stack behavior                           | Child becomes focused        | Focused task unchanged             |
+### How a parent gets a child's result
+
+The child's `attempt_completion` persists the result on the child's own history
+(where `check_task_status` reads it) **and** delivers a `notification` envelope
+to the parent's mailbox — `from` the child, subject `result: <child title>`,
+body the result capped at `MAX_SUBTASK_RESULT_LENGTH`, `wake: true`.
+
+The parent therefore has three ways to collect it, and none of them polls:
+
+- `wait(from: ["<child id>"])` — park until that child (or anything else) writes.
+- `wait(timeout_sec: 0)` — read whatever has already arrived.
+- End the turn. `wake: true` restarts the parent when the result lands.
+
+`check_task_status` remains for inspecting a child mid-flight, and `cancel_tasks`
+for stopping one whose work is no longer wanted.
 
 #### Parameters
 
-| Param              | Type    | Required | Description                                                                                                                                |
-| ------------------ | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mode`             | string  | ✅       | Mode slug (e.g., `code`, `debug`, `architect`)                                                                                             |
-| `message`          | string  | ✅       | Initial instructions for the child task                                                                                                    |
-| `todos`            | string  | –        | Initial markdown checklist for the child                                                                                                   |
-| `is_background`    | boolean | –        | When `true`, run child concurrently and return `task_id` immediately                                                                       |
-| `softResultLength` | number  | –        | Soft suggestion for max characters of the subtask's completion result. Hard safety cap: 100000 characters (results beyond this truncated). |
-| `softTimeoutSec`   | number  | –        | Soft guidance (in seconds) for how long the parent expects to wait. Informational only — not enforced.                                     |
+| Param              | Type     | Required | Description                                                                                                                                |
+| ------------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mode`             | string   | ✅       | Mode slug (e.g., `code`, `debug`, `architect`)                                                                                             |
+| `message`          | string   | ✅       | Initial instructions for the child task                                                                                                    |
+| `todos`            | string   | –        | Initial markdown checklist for the child                                                                                                   |
+| `peer_task_ids`    | string[] | –        | Least-privilege peer grants for the child, beyond its parent. Validated against `rootTaskId`; the reverse edge is mirrored onto each peer  |
+| `title`            | string   | –        | Locked display title for the child (max 60 chars); the child cannot rename itself                                                          |
+| `softResultLength` | number   | –        | Soft suggestion for max characters of the subtask's completion result. Hard safety cap: 100000 characters (results beyond this truncated). |
+| `softTimeoutSec`   | number   | –        | Soft guidance (in seconds) for how long the child is expected to take. Informational only — not enforced.                                  |
 
 ### Delegation from background tasks
 
@@ -316,7 +307,7 @@ This preserves the invariant: background tasks should execute without stealing f
 
 ## Background Task Orchestration Tools
 
-Five tools manage the parent-child relationship for background tasks. `list_background_tasks` is **always available** (bypasses mode filtering); the remaining four are gated by the `subtasks` tool group. `check_task_status`, `wait_for_task`, and `list_background_tasks` are unconditionally auto-approved (read-only queries). `cancel_tasks` and `answer_subtask_question` are gated by the `alwaysAllowSubtasks` toggle. Task-to-task messaging is not among them: `send_message`, `reply` and `wait` are always available, never mode-gated and never toggle-gated ([`task_messaging.md`](task_messaging.md)).
+Three tools manage the parent-child relationship. `list_background_tasks` is **always available** (bypasses mode filtering); `new_task`, `check_task_status` and `cancel_tasks` are the `subtasks` tool group. `check_task_status` and `list_background_tasks` are unconditionally auto-approved (read-only queries); `cancel_tasks` is gated by the `alwaysAllowSubtasks` toggle, because it destroys in-flight work. Task-to-task messaging is not among them: `send_message`, `reply` and `wait` are always available, never mode-gated and never toggle-gated ([`task_messaging.md`](task_messaging.md)).
 
 ### `check_task_status`
 
@@ -343,34 +334,9 @@ Check the current status of a background child task. Returns the task's status a
 
 If the child has a pending parent question (see `ask_followup_question` routing below), the question text and suggestions are surfaced in the output.
 
-### `wait_for_task`
-
-Block until one or more background child tasks reach a terminal state, then return their results. **Event-driven** — does not poll.
-
-```typescript
-// Parameters
-{
-  task_ids: string[],             // One or more task IDs
-  wait?: "all" | "any",          // "all" (default): wait for all tasks; "any": return on first completion
-  timeout?: number               // Max seconds to wait (default: 120)
-}
-
-// Returns
-{
-  task_ids: string[],             // Completed task IDs
-  task_titles: string[],          // Corresponding titles
-  // Per-task status and result/error text
-}
-```
-
-**Implementation:** Creates a promise that resolves when each tracked child reaches `completed`, `error`, or `cancelled` status, OR when a child routes a question to the parent (`"waiting_for_parent"`). Listens for `managedTask:completed`, `managedTask:error`, and `managedTask:needs-parent-input` events. On timeout, returns current statuses for all tasks without error. The `wait` parameter controls the resolution strategy:
-
-- `"all"` (default): resolves when every listed task reaches a terminal state.
-- `"any"`: resolves as soon as at least one task completes successfully.
-
 ### `list_background_tasks`
 
-List all background child tasks started by the current task via `new_task` with `is_background=true`.
+List all child tasks started by the current task via `new_task`.
 
 ```typescript
 // Parameters: none
@@ -398,35 +364,66 @@ Stop one or more background child tasks. Already-completed, errored, or cancelle
 
 **Implementation:** Builds a classification plan first (so the auto-rendered chat row reflects per-task verdicts), then awaits `askApproval`, then performs `abortTask(false)` on each live instance. Cancelled handles end in status `"cancelled"` (distinct from `"error"`). A failure during abort downgrades that task's status to `"error"` and surfaces the message.
 
-### `answer_subtask_question`
+### `ask_followup_question` routing — a child's question is DUAL-CHANNEL
 
-Answer a question that a background child task asked via `ask_followup_question`. When a background child needs clarification, its question is rendered in the child's own chat UI (via `task.ask("followup")`) and can be answered by EITHER the parent agent (via this tool) OR the user (interactively, by viewing the child task and clicking a suggestion or typing a response). Use this tool to provide the parent's answer and unblock the child.
+A child that needs clarification asks on **two channels at once**, and the first
+answer wins:
 
-```typescript
-// Parameters
-{ task_id: string, answer: string }
-```
+1. The child raises its ordinary `task.ask("followup", …)` — the same mechanism a
+   user-facing question uses — so the question and its suggestion buttons appear
+   in the child's own chat, where a HUMAN can answer it.
+2. The child delivers a `request` envelope to its **parent's mailbox**: subject
+   `question: <first line>`, body the question plus its suggestions, the
+   child-question deadline (600 s), `wake: true`. The parent sees it in its
+   digest and answers with `reply`.
 
-**Implementation:** Resolves the child's pending `task.ask("followup")` by feeding the parent's answer through `Task.handleWebviewAskResponse("messageResponse", answer)` — the same path the webview uses for user responses. This unblocks the child's `AskFollowupQuestionTool.execute()`. If the user already answered interactively (via the child's own followup UI), the ask is no longer pending and this is a no-op. Flips the parent-side handle status from `"waiting_for_parent"` back to `"running"`.
+The child parks in `waiting_input` — it is waiting for an ANSWER, not for mail —
+and the parent's in-memory `TaskHandle` for it flips to `"waiting_for_parent"`, so
+`check_task_status` and `list_background_tasks` report reality.
 
-### `ask_followup_question` routing
+What resolves it:
 
-When a background child calls `ask_followup_question`, the question is rendered in the child's own chat UI and can be answered by EITHER the parent agent OR the user (dual-channel):
+- **The parent replies.** `ReplyTool` delivers the reply envelope and then calls
+  `Task.answerForwardedQuestion(envelopeId, body)` on the live child, which routes
+  the answer through `handleWebviewAskResponse("messageResponse", …)` — the same
+  path the webview uses. It no-ops unless that child is parked on exactly that
+  request, so a human who got there first still wins.
+- **A human answers in the child's chat.** The ask resolves directly, and the
+  child then withdraws the now-pointless request from the parent's box
+  (`Mailbox.resolveRequest`), so the parent's digest stops showing a question
+  nobody is waiting on.
+- **Nobody answers.** The child arms its own expiry for the envelope's deadline
+  and, when it fires, answers its own ask with
+  `Your question to the parent expired unanswered after 600s. Decide yourself, or ask again.`
+  This is the one place a timer touches an ask, and it is deliberate: the mailbox
+  never sweeps on a timer (expiry there is lazy, at read), but a child parked on
+  an ask has nobody to read anything, so without it the child would wait forever
+  for a request that has already lapsed out of its parent's box. It restores the
+  child's LIVENESS with a decision it can act on; it does not fabricate an answer
+  from anyone.
+- **The child is aborted.** `Task.abortTask` calls `clearForwardedQuestion()`; the
+  parked `task.ask` unwinds via `AskIgnoredError` and the tool surfaces a clean
+  tool error rather than hanging.
 
-1. The child calls `task.ask("followup", …)` — the same mechanism used for user-facing questions. This renders the question with suggestion buttons in the child's chat UI, so the USER can answer interactively (by viewing the child task and clicking a suggestion or typing a response).
-2. The child stores the question metadata via `Task.setPendingParentQuestionInfo()` so `check_task_status` / `wait_for_task` can surface the question text and suggestions to the parent agent.
-3. The parent-side `TaskHandle.status` for this child flips to `"waiting_for_parent"`.
-4. `TaskManager` emits a `managedTask:needs-parent-input` event so any parent `wait_for_task` currently blocked on this child wakes up immediately. The `followup` ask type (`interactiveAsk`) also emits `TaskInteractive`, but the TaskManager **suppresses** the `needs_input` notification for routed followup questions (it checks `task.getPendingParentQuestion()` — when set, the question is directed at the parent agent, not the user, so no desktop notification is shown). The user can still see and answer the question interactively if they switch to the child task.
-5. The parent discovers the question via `check_task_status` (which surfaces the question text + suggestions) or `wait_for_task` (which now returns with the question in its summary).
-6. The PARENT answers via `answer_subtask_question`, which resolves the child's pending `task.ask("followup")` via `handleWebviewAskResponse("messageResponse", answer)`. The child resumes as if the user had answered.
-7. Alternatively, the USER answers by viewing the child task and clicking a suggestion button or typing a response — this resolves the `task.ask("followup")` through the normal webview ask-response path.
-8. Whichever channel answers first resolves the ask; the other becomes a no-op (the ask is no longer pending).
-9. If the child is aborted while waiting, `Task.abortTask` calls `clearPendingParentQuestion()` to clear the metadata. The blocking `task.ask("followup")` unwinds via `AskIgnoredError` (the `pWaitFor` loop checks `this.abort`), so the child's tool handler surfaces a clean tool error instead of hanging.
-10. The `followup` auto-approval (`alwaysAllowFollowupQuestions`) is suppressed for routed questions — the question must NOT be auto-answered with the first suggestion, since it is directed at the parent/user, not at an auto-approval policy.
+`TaskManager` **suppresses** the desktop `needs_input` notification while
+`task.forwardedQuestion` is set: the question already has a live agent audience, so
+the human is not the one being waited on. They can still open the child and answer
+it. The `followup` auto-approval (`alwaysAllowFollowupQuestions`) is likewise
+suppressed for these questions — they must never be auto-answered with the first
+suggestion.
 
-### A SYNCHRONOUS child's question goes to the conversation, not the parent
+### A child with no concurrent parent escalates to the conversation
 
-A question travels backwards along the relationship that created the task, and at each hop the entity there either answers it or passes it on. For a background child that hop is the parent, which is running. For a **synchronous** child (`new_task` without `is_background`) the parent is suspended inside `new_task` waiting for this very child, so it cannot answer anything — the next hop is the human driving the ROOT conversation.
+A question travels backwards along the relationship that created the task, and at
+each hop the entity there either answers it or passes it on. For a child of a
+concurrent parent — every child `new_task` creates — that hop is the parent, and
+the section above is the whole story.
+
+The machinery below covers a child whose parent is NOT concurrent
+(`parentTaskId` set, `isBackgroundTask` false). `new_task` no longer produces
+such a task, so nothing in the current tool surface reaches this path; it is
+retained because a host can still construct one directly, and its removal is
+part of the closing sweep.
 
 On an interactive host that already works: the child is pushed onto the task stack, so its chat — question and suggestion buttons — is what the user is looking at. On a host driven over the [ShoferApi](shofer-api.md) it did not, because a controller subscribes to ONE task's event stream (the conversation's root), and nothing consumes a child task's events. The question reached no surface, the child parked forever, and the parent parked behind it.
 
@@ -461,7 +458,7 @@ sequenceDiagram
     participant R as Root task
     participant S as Sync child
 
-    R->>S: new_task (no is_background) — R suspends
+    R->>S: a child whose parent is not concurrent
     S->>S: task.ask("followup", …) — parks
     Note over S: published on the child's own stream,<br/>which nobody subscribes to
     S-->>C: message event on the ROOT stream<br/>(taskId=root, sourceTaskId=child)
@@ -482,7 +479,7 @@ When a parent task is aborted (user presses Stop, or the task encounters a fatal
 
 ### Child abort
 
-If a background child aborts (error, user intervention), the parent is **not** automatically notified. The parent discovers this through `check_task_status` or `wait_for_task`, which will return `status: "error"`.
+If a background child aborts (error, user intervention), the parent is **not** automatically notified. The parent discovers this through `check_task_status`, which returns `status: "error"`.
 
 ### Auto-abort on parent completion
 
@@ -494,18 +491,16 @@ If a background child aborts (error, user intervention), the parent is **not** a
 
 Background task orchestration tools are registered as always-approved in [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts):
 
-| Tool                      | Reason                                                                                                           |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `check_task_status`       | Read-only query; no side effects                                                                                 |
-| `wait_for_task`           | Blocking wait with timeout; no side effects on other tasks                                                       |
-| `list_background_tasks`   | Read-only enumeration                                                                                            |
-| `cancel_tasks`            | Parent owns its children; stopping is non-destructive to other tasks                                             |
-| `answer_subtask_question` | Parent answering its own child's question; no external side effects                                              |
-| `ask_followup_question`   | Child asking a question rendered in its own chat UI; answered by EITHER the parent agent or the user (see below) |
+| Tool                    | Reason                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `check_task_status`     | Read-only query; no side effects                                                                                 |
+| `list_background_tasks` | Read-only enumeration                                                                                            |
+| `cancel_tasks`          | Parent owns its children; stopping is non-destructive to other tasks                                             |
+| `ask_followup_question` | Child asking a question rendered in its own chat UI; answered by EITHER the parent agent or the user (see below) |
 
 The `tool` string in the JSON payload uses camelCase (`checkTaskStatus`, `waitForTask`, `listBackgroundTasks`) and must match the `ShoferSayTool.tool` union and the `ChatRow` switch case.
 
-> **`ask_followup_question` is auto-approved only when directed at another task.** A background child's question arrives on the `tool` ask path (for the ChatRow entry) and is unconditionally approved — the actual question is then rendered via `task.ask("followup")` in the child's chat UI, where BOTH the parent agent (via `answer_subtask_question`) and the user (interactively) can answer. The `followup` auto-approval (`alwaysAllowFollowupQuestions`) is suppressed for these routed questions so they are never auto-answered with the first suggestion. A question directed at the **user** from a foreground task instead flows through the `followup` ask category directly, gated by `alwaysAllowFollowupQuestions`. Same tool, different destination.
+> **`ask_followup_question` is auto-approved only when directed at another task.** A child's question arrives on the `tool` ask path (for the ChatRow entry) and is unconditionally approved — the actual question is then rendered via `task.ask("followup")` in the child's chat UI, where BOTH the parent agent (with `reply`, answering the request in its mailbox) and the user (interactively) can answer. The `followup` auto-approval (`alwaysAllowFollowupQuestions`) is suppressed for these routed questions so they are never auto-answered with the first suggestion. A question directed at the **user** from a foreground task instead flows through the `followup` ask category directly, gated by `alwaysAllowFollowupQuestions`. Same tool, different destination.
 
 ### ChatRow rendering
 
@@ -550,7 +545,7 @@ Children are aborted automatically (see Abort Propagation above).
 
 ### Child needs user input
 
-The child emits `TaskInteractive`, which `TaskManager` catches. For **tool-approval asks**, this translates into a `needs_input` notification so the user knows the child needs attention. For **routed `ask_followup_question` questions** (which use `task.ask("followup")`, an `interactiveAsk`), the notification is **suppressed** — the question is directed at the parent agent (via `answer_subtask_question`), not the user, so no desktop notification is shown. The user can still see and answer the question interactively if they switch to the child task. `check_task_status` returns `status: "waiting"` (for tool approvals) or `status: "waiting_for_parent"` (for routed questions). The parent must either switch focus to the child (to approve/reject or answer the question), answer via `answer_subtask_question`, or let it time out.
+The child emits `TaskInteractive`, which `TaskManager` catches. For **tool-approval asks**, this translates into a `needs_input` notification so the user knows the child needs attention. For a **forwarded `ask_followup_question`** (which uses `task.ask("followup")`, an `interactiveAsk`), the notification is **suppressed** — the question already has a live agent audience, the parent, so no desktop notification is shown. The user can still see and answer it by switching to the child task. `check_task_status` returns `status: "waiting"` (for tool approvals) or `status: "waiting_for_parent"` (for a forwarded question). The parent either answers it with `reply`, switches focus to the child, or lets it expire.
 
 ### Orphaned children
 
@@ -586,7 +581,7 @@ Task instances are **not** automatically rehydrated — tasks remain idle until 
 
 3. **Background children are always registered in `TaskManager`.** Even though tracking lives on `Task`, `TaskManager` registration ensures state indicators and notifications propagate to the UI.
 
-4. **No automatic parent resume for background children.** The parent explicitly polls via `check_task_status` or blocks via `wait_for_task`. This gives the LLM full control over when to collect results.
+4. **A child's result is DELIVERED, not polled for.** `attempt_completion` puts it in the parent's mailbox with `wake: true`, so a parent that ended its turn is restarted and one that is parked in `wait` returns at once. `check_task_status` remains for inspecting a child mid-flight, which is a different question.
 
 5. **Sync `new_task` must be called alone.** The model instruction enforces single-tool-per-turn for synchronous delegation to prevent the parent from issuing conflicting tool calls while the child runs.
 
@@ -606,17 +601,17 @@ Discovered during source-code verification. These are areas where the documentat
 
 2. **`cleanupBackgroundChildren()` on Task**: [`Task.cleanupBackgroundChildren()`](../packages/core/src/task/Task.ts) reaps dead children whose instances are no longer alive in `TaskManager`, consulting persisted history for final status. This method exists but has no corresponding documentation.
 
-3. **`TaskManager` events consumed by tools**: `wait_for_task` listens for `managedTask:completed`, `managedTask:error`, and `managedTask:needs-parent-input` events to implement its event-driven (non-polling) blocking. `check_task_status` consults `managedTasks` map for live state. Neither tool's event dependency is documented.
+3. **`TaskManager` events consumed by tools**: `check_task_status` consults the `managedTasks` map for live state. Its state dependency is not documented.
 
 4. **`PendingParentQuestionInfo` interface**: Defined in [`@shofer/types/src/task.ts`](../packages/types/src/task.ts:282) with fields `{ question, suggestions }`. The question routing flow (§"`ask_followup_question` routing") uses this interface but it isn't formally introduced.
 
-5. **Auto-approval granularity for background tools**: The `check_task_status`, `wait_for_task`, and `list_background_tasks` tools are unconditionally auto-approved (read-only) in [`auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts:207). `cancel_tasks` and `answer_subtask_question` are gated by `alwaysAllowSubtasks` ([`index.ts:200`](../packages/core/src/auto-approval/index.ts:200)). The doc could explain why these two tiers exist.
+5. **Auto-approval granularity for background tools**: `check_task_status` and `list_background_tasks` are unconditionally auto-approved (read-only) in [`auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts); `cancel_tasks` is gated by `alwaysAllowSubtasks` because it destroys in-flight work. The doc could explain why these two tiers exist.
 
 ### Observability Gaps
 
 1. **No `task_created_subtask` telemetry**: When `new_task` spawns a background child, no telemetry event captures the parent→child relationship for analytics. The only trace is the `childIds` field on the parent `HistoryItem`.
 
-2. **No timeout enforcement on `wait_for_task`**: The `timeout` parameter is described as a soft cap ("returns current statuses"), but there's no mechanism to cancel or warn when a child takes longer than expected. A timed-out `wait_for_task` becomes indistinguishable from a normal return.
+2. **`softTimeoutSec` is not enforced**: it is advisory guidance injected into the child's prompt, with no mechanism to warn or cancel when a child overruns it. `cancel_tasks` is the only lever, and the parent has to decide to pull it.
 
 3. **Orphaned children on crash**: Children whose parent crashes continue running independently. On next restore, they are marked as errored. A periodic "orphan sweep" or explicit orphan-recovery path could improve resilience.
 
@@ -624,7 +619,7 @@ Discovered during source-code verification. These are areas where the documentat
 
 1. **Background child status heartbeat**: `check_task_status` could surface the child's idle duration (`lastActiveAt`) to help the parent decide whether to cancel a stalled child.
 
-2. **Partial `wait_for_task`**: The `"any"` wait strategy returns on first completion, but the parent must repeat calls for remaining children. A `"progress"` mode that returns incrementally as children finish could reduce LLM round-trips.
+2. **Fan-in over many children**: `wait` returns the whole mailbox on the first delivery, so a parent awaiting ten children is woken by the first and must call `wait` again for the rest. A wake condition expressed as "when N of these have written" would cut those round-trips.
 
 3. **`cancel_tasks` with reason propagation**: When a parent cancels a child, the cancellation reason is not forwarded to the child's `TaskAbortedInfo.reason`. Adding a `cancelReason` parameter would let the child distinguish "parent completed" from "parent aborted" in telemetry/debugging.
 

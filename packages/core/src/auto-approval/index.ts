@@ -181,11 +181,10 @@ export async function checkAutoApproval({
 		// Subtasks-group tools that the parent task uses to control its background children.
 		// All gated by the single `alwaysAllowSubtasks` toggle:
 		//   - newTask / finishTask: spawn / complete a subtask
-		//   - cancelTasks:          stop one or more background children (destructive — in-flight work is lost)
-		//   - answerSubtaskQuestion: reply to a question a background child routed up to the parent
-		// (waitForTask / checkTaskStatus / listBackgroundTasks are purely informational and
+		//   - cancelTasks:          stop one or more concurrent children (destructive — in-flight work is lost)
+		// (checkTaskStatus / listBackgroundTasks are purely informational and
 		// unconditionally approved further down — same UX as updateTodoList / skills.)
-		if (["newTask", "finishTask", "cancelTasks", "answerSubtaskQuestion"].includes(tool?.tool)) {
+		if (["newTask", "finishTask", "cancelTasks"].includes(tool?.tool)) {
 			return state.alwaysAllowSubtasks === true ? { decision: "approve" } : { decision: "ask" }
 		}
 
@@ -194,7 +193,7 @@ export async function checkAutoApproval({
 		// child routes it UP to its parent (see AskFollowupQuestionTool: the
 		// `task.parentTaskId && task.isBackgroundTask` branch uses
 		// askApproval("tool", {tool: "askFollowupQuestion", ...})). No human is
-		// interrupted — the parent answers via `answer_subtask_question` — so
+		// interrupted — the parent answers the request in its mailbox with `reply` — so
 		// gating it behind a user prompt is meaningless and would silently hang
 		// the child. A question directed at the USER instead goes through the
 		// `ask === "followup"` path above, which remains gated by
@@ -217,7 +216,7 @@ export async function checkAutoApproval({
 		// Background-task status tools are purely informational queries against in-memory
 		// state owned by the parent task. They mutate nothing, so they are always auto-approved
 		// — matching the UX of `updateTodoList` / `skill`.
-		if (["waitForTask", "checkTaskStatus", "listBackgroundTasks"].includes(tool?.tool)) {
+		if (["checkTaskStatus", "listBackgroundTasks"].includes(tool?.tool)) {
 			return { decision: "approve" }
 		}
 

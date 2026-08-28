@@ -3,8 +3,8 @@
  *
  * After a process restart, the in-memory `backgroundChildren` Map is empty
  * (it is never serialized). rehydrateBackgroundChildren rebuilds it from the
- * persisted task history so that check_task_status / wait_for_task /
- * cancel_tasks / answer_subtask_question — all of which gate on
+ * persisted task history so that check_task_status / cancel_tasks — both of
+ * which gate on
  * `task.backgroundChildren.get(task_id)` — can still recognize the parent's
  * own children.
  *

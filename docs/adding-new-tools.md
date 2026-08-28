@@ -168,8 +168,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
     mcp:         { tools: ["use_mcp_tool", "access_mcp_resource",
                           "call_mcp_tool_async", "check_mcp_call_status", "wait_for_mcp_call"] },
     mode:        { tools: ["switch_mode"] },
-    subtasks:    { tools: ["new_task", "check_task_status", "wait_for_task",
-                          "cancel_tasks", "answer_subtask_question"] },
+    subtasks:    { tools: ["new_task", "check_task_status", "cancel_tasks"] },
     questions:   { tools: ["ask_followup_question"] },
     uncategorized: { tools: [] },
 }
@@ -339,7 +338,7 @@ flowchart TD
 **Decision matrix for a new tool:**
 
 - **`read` / `write` / `execute` / `browser` group, `ask:"tool"`** — no auto-approval code changes needed beyond Step 3. Make sure the camelCase → snake_case entry exists in `SAY_TOOL_TO_NATIVE_NAME` in [`tools.ts`](../packages/core/src/auto-approval/tools.ts) so `getToolGroupForSayTool` can resolve the group.
-- **`subtasks` group, `ask:"tool"`** — add the camelCase name to the `["newTask", "finishTask", "cancelTasks", "answerSubtaskQuestion"]` allowlist (gated by `alwaysAllowSubtasks`) **or** to the unconditional `["waitForTask", "checkTaskStatus", "listBackgroundTasks"]` list if it is a purely informational query that mutates nothing.
+- **`subtasks` group, `ask:"tool"`** — add the camelCase name to the `["newTask", "finishTask", "cancelTasks"]` allowlist (gated by `alwaysAllowSubtasks`) **or** to the unconditional `["checkTaskStatus", "listBackgroundTasks"]` list if it is a purely informational query that mutates nothing.
 - **`mode` group, `ask:"tool"`** — add to the `switchMode` branch gated by `alwaysAllowModeSwitch`.
 - **MCP status/management tool with `ask:"tool"`** — add to the unconditional `["checkMcpCallStatus", "waitForMcpCall"]` list if purely informational.
 - **MCP invocation with `ask:"use_mcp_server"`** — the payload's `type` field MUST be `"use_mcp_tool"` or `"access_mcp_resource"`; any other value falls through to the default `ask` branch and the `alwaysAllowMcp` toggle will not apply. Pattern for async invocations: post `type: "use_mcp_tool"` plus an `async: true` flag (see [`CallMcpToolAsyncTool.ts`](../packages/core/src/tools/CallMcpToolAsyncTool.ts)).
@@ -347,7 +346,7 @@ flowchart TD
 - **New toggle needed** — add a new `alwaysAllow*` setting following the pattern in [`auto_approval.md`](auto_approval.md), then add a new branch in `checkAutoApproval`.
 
 The `alwaysAllow*` toggles in Settings → Auto-Approve map by intent (not 1:1 to TOOL_GROUPS):
-`read`→Read, `write`→Write, `execute`→Execute, `browser`→Browser, `mcp`→MCP (gates both the `use_mcp_server` ask path and any MCP `ask:"tool"` calls), `subtasks`→Subtasks (covers `new_task` / `attempt_completion` / `cancel_tasks` / `answer_subtask_question`), `modeSwitch`→Mode, `followupQuestions`→Question, `uncategorized`→Uncategorized.
+`read`→Read, `write`→Write, `execute`→Execute, `browser`→Browser, `mcp`→MCP (gates both the `use_mcp_server` ask path and any MCP `ask:"tool"` calls), `subtasks`→Subtasks (covers `new_task` / `attempt_completion` / `cancel_tasks`), `modeSwitch`→Mode, `followupQuestions`→Question, `uncategorized`→Uncategorized.
 
 ## Step 11: i18n
 
@@ -570,7 +569,7 @@ This section tracks known gaps, undocumented steps, and design warts in the nati
 
 - **Step 7 omission is the most damaging silent bug.** A native tool with schema, handler, router, `NativeToolArgs`, and auto-approval all wired correctly — but missing from the parser switch cases — produces zero visible errors. The parser returns a `ToolUse` with `nativeArgs: undefined`, the dispatcher rejects it with `"Invalid tool call for '<name>': missing nativeArgs"`, and the LLM sees a generic `"Provider Error"` with no clue that the parser is the root cause. There is no compile error, no lint warning, no runtime log from the tool's `execute()` method. This exact bug was found in the original **peer-messaging send tool** (both switch cases completely absent), in **`new_task`'s `peer_task_ids`** (parameter present in schema + `NativeToolArgs` + handler, but missing from both parser switch cases), and in **`list_background_tasks`'s `scope`** (`parseToolCall()` switch case hardcoded to `{}`, ignoring `args.scope` while `createPartialToolUse()` correctly read `partialArgs.scope`). The symptom: the tool call appears in chat briefly, then vanishes with a cost-ledger entry and no tool-side log lines. For parameters, the subtler variant is a partial omission — only the `parseToolCall()` path is missing the param while `createPartialToolUse()` handles it correctly (streaming shows the right value, but the complete-args path drops it). This was the `scope` bug.
 
-- **Multi-tool coordinated changes**: When a new tool changes parameters on _existing_ tools (e.g., adding `scope` to `list_background_tasks`, relaxing gates in `check_task_status` / `wait_for_task`, adding `peer_task_ids` to `new_task`), the checklist applies to **each affected tool individually** — every tool whose schema or `NativeToolArgs` changes needs its own pass through Steps 1, 4, 6, 7. The peer-messaging implementation touched 4 existing tools plus the new tool, and each one needed: schema update (`native-tools/*.ts`), `NativeToolArgs` update (`shared/tools.ts`), and sometimes `NativeToolCallParser` case changes.
+- **Multi-tool coordinated changes**: When a new tool changes parameters on _existing_ tools (e.g., adding `scope` to `list_background_tasks`, relaxing gates in `check_task_status`, adding `peer_task_ids` to `new_task`), the checklist applies to **each affected tool individually** — every tool whose schema or `NativeToolArgs` changes needs its own pass through Steps 1, 4, 6, 7. The peer-messaging implementation touched 4 existing tools plus the new tool, and each one needed: schema update (`native-tools/*.ts`), `NativeToolArgs` update (`shared/tools.ts`), and sometimes `NativeToolCallParser` case changes.
 
 - **Schema `required` fields**: Tools with optional parameters described to the model as "soft" / "advisory" hints (e.g., `kind`, `subject`, `timeout_sec`, `wake` on `send_message`, `softResultLength` / `softTimeoutSec` / `peer_task_ids` on `new_task`) MUST be absent from schema `required` (per the [Advisory Parameter Defaults Rule](https://github.com/arkware-ai/shofer/blob/main/extensions/shofer/.shofer/rules-code/adding-new-tools.md)) AND have host-side defaults applied silently in `execute()`. The two halves MUST stay coherent: the schema cannot tell the model a field is optional while the handler treats it as mandatory. Its predecessor shipped with every advisory param in `required`, so a model that omitted one expecting the documented default was rejected by the schema validator instead.
 

@@ -86,10 +86,8 @@ import updateTodoList from "./update_todo_list.js"
 import setTaskTitle from "./set_task_title.js"
 import giveFeedback from "./give_feedback.js"
 import checkTaskStatus from "./check_task_status.js"
-import waitForTask from "./wait_for_task.js"
 import listBackgroundTasks from "./list_background_tasks.js"
 import cancelTasks from "./cancel_tasks.js"
-import answerSubtaskQuestion from "./answer_subtask_question.js"
 import callMcpToolAsync from "./call_mcp_tool_async.js"
 import checkMcpCallStatus from "./check_mcp_call_status.js"
 import waitForMcpCall from "./wait_for_mcp_call.js"
@@ -178,10 +176,8 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		setTaskTitle,
 		giveFeedback,
 		checkTaskStatus,
-		waitForTask,
 		listBackgroundTasks,
 		cancelTasks,
-		answerSubtaskQuestion,
 		callMcpToolAsync,
 		checkMcpCallStatus,
 		waitForMcpCall,

@@ -203,3 +203,142 @@ describe("SendMessageTool", () => {
 		await expect(box.deliver(delivered[0]!.envelope)).resolves.toMatchObject({ kind: "request" })
 	})
 })
+
+/**
+ * The remote branch: an id no local lookup resolves is offered to the registered
+ * mailbox transports (step 5), and the mesh plugin claims agent ids.
+ *
+ * The property that matters most is the ORDER — local first, always — because a
+ * transport that could capture a local id would silently route a message to
+ * another pod for a task running right here.
+ */
+describe("SendMessageTool — remote routing over a mailbox transport", () => {
+	let tool: SendMessageTool
+	let sent: Envelope[]
+	let transport: { canRoute: ReturnType<typeof vi.fn>; send: ReturnType<typeof vi.fn> }
+	let deliverToTask: ReturnType<typeof vi.fn>
+	let findMailboxTransport: ReturnType<typeof vi.fn>
+
+	beforeEach(() => {
+		tool = new SendMessageTool()
+		sent = []
+		deliverToTask = vi.fn(async (_id: string, envelope: Envelope) => envelope)
+		transport = {
+			canRoute: vi.fn(() => true),
+			send: vi.fn(async (envelope: Envelope) => {
+				sent.push(envelope)
+			}),
+		}
+		findMailboxTransport = vi.fn(() => transport)
+	})
+
+	const buildProvider = (overrides: Record<string, any> = {}) => ({
+		taskManager: {
+			getManagedTaskInstance: vi.fn().mockReturnValue(undefined),
+			getManagedTask: vi.fn().mockReturnValue(undefined),
+			setState: vi.fn(),
+		},
+		// No history for anything: every id is a candidate for the transport.
+		getTaskWithId: vi.fn(async () => {
+			throw new Error("no such task")
+		}),
+		deliverToTask,
+		findMailboxTransport,
+		...overrides,
+	})
+
+	const buildTask = (overrides: Record<string, any> = {}) => {
+		const provider = overrides.provider ?? buildProvider()
+		return {
+			taskId: "caller-1",
+			rootTaskId: "root-1",
+			knownPeers: new Set(["peer-1"]),
+			providerRef: { deref: () => provider },
+			emitTaskInteraction: vi.fn(async () => {}),
+			...overrides,
+		} as any
+	}
+
+	const buildCallbacks = () => {
+		const results: string[] = []
+		return {
+			results,
+			callbacks: {
+				askApproval: vi.fn(async () => true),
+				handleError: vi.fn(async () => {}),
+				pushToolResult: vi.fn((r: string) => results.push(r)),
+			} as any,
+		}
+	}
+
+	it("hands an unresolvable id to the transport and stamps the envelope a2a", async () => {
+		const { callbacks, results } = buildCallbacks()
+		await tool.execute({ to: "mesh-agent-9", body: "ping", kind: "request" }, buildTask(), callbacks)
+
+		expect(findMailboxTransport).toHaveBeenCalledWith("mesh-agent-9")
+		expect(sent).toHaveLength(1)
+		expect(sent[0]).toMatchObject({ from: "caller-1", to: "mesh-agent-9", kind: "request", plane: "a2a" })
+		// Nothing went into a local box.
+		expect(deliverToTask).not.toHaveBeenCalled()
+		expect(results[0]).toContain("over the agent mesh")
+	})
+
+	it("LOCAL FIRST: a resolvable id never reaches a transport, even one claiming everything", async () => {
+		const provider = buildProvider({
+			getTaskWithId: vi.fn(async (id: string) => ({ historyItem: { id, rootTaskId: "root-1" } })),
+		})
+		const { callbacks } = buildCallbacks()
+		await tool.execute({ to: "peer-1", body: "ping" }, buildTask({ provider }), callbacks)
+
+		expect(deliverToTask).toHaveBeenCalledTimes(1)
+		expect(transport.send).not.toHaveBeenCalled()
+		expect(findMailboxTransport).not.toHaveBeenCalled()
+	})
+
+	it("skips the in-process ACL for a remote send — the broker is the gate", async () => {
+		const { callbacks, results } = buildCallbacks()
+		// A sub-task (rootTaskId set) whose knownPeers does NOT contain the target,
+		// and which shares no root with it: both in-process refusals, neither of
+		// which can apply to a peer in another pod.
+		await tool.execute({ to: "mesh-agent-9", body: "ping" }, buildTask(), callbacks)
+
+		expect(sent).toHaveLength(1)
+		expect(results[0]).not.toContain("allowed peer set")
+		expect(results[0]).not.toContain("does not share your root task")
+	})
+
+	it("reports the transport's refusal to the agent rather than swallowing it", async () => {
+		transport.send = vi.fn(async () => {
+			throw new Error("the target agent is not attached to this broker")
+		})
+		const { callbacks, results } = buildCallbacks()
+		await tool.execute({ to: "mesh-agent-9", body: "ping" }, buildTask(), callbacks)
+
+		expect(results[0]).toContain("Could not deliver to agent mesh-agent-9")
+		expect(results[0]).toContain("not attached")
+	})
+
+	it("still refuses an id no transport claims", async () => {
+		findMailboxTransport = vi.fn(() => undefined)
+		const { callbacks, results } = buildCallbacks()
+		await tool.execute({ to: "nowhere", body: "ping" }, buildTask(), callbacks)
+
+		expect(sent).toEqual([])
+		expect(results[0]).toContain("no mesh transport claims it")
+	})
+
+	it("still refuses a send to itself before any lookup happens", async () => {
+		const { callbacks, results } = buildCallbacks()
+		await tool.execute({ to: "caller-1", body: "ping" }, buildTask(), callbacks)
+
+		expect(findMailboxTransport).not.toHaveBeenCalled()
+		expect(results[0]).toContain("Cannot send a message to yourself")
+	})
+
+	it("does not send when the approval is declined", async () => {
+		const { callbacks } = buildCallbacks()
+		callbacks.askApproval = vi.fn(async () => false)
+		await tool.execute({ to: "mesh-agent-9", body: "ping" }, buildTask(), callbacks)
+		expect(transport.send).not.toHaveBeenCalled()
+	})
+})

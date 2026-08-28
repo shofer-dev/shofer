@@ -2,13 +2,17 @@
 
 **Status:** the mailbox is the **target** design for every message that reaches a
 task, on all four planes. **Built:** the mailbox core and the three agent-facing
-tools — an envelope, a per-task persisted box, the `environment_details` digest,
-the wake path, `send_message` / `reply` / `wait`, their auto-approval, chat rows
-and telemetry — and the peer-messaging path they replace is deleted. **Owed:**
-the parent/child rewiring (step 3) and the plugin, bus, A2A and Temporal planes
-(steps 4–5). The migration runs as the ordered steps in [Roadmap](#roadmap) at the
-end of this document, which is the per-step register: steps 0–2 are done, steps
-3–6 are owed. A symbol marked "(Step N)" does not exist yet.
+tools (an envelope, a per-task persisted box, the `environment_details` digest,
+the wake path, `send_message` / `reply` / `wait`, auto-approval, chat rows and
+telemetry); parent/child on the mailbox (`new_task` is concurrent-only, a child's
+result and a child's question are envelopes); and the plugin API's one delivery
+door. The peer-messaging path, the blocking `new_task`, `wait_for_task`,
+`answer_subtask_question` and `ctx.agent.notify` are all deleted, as are the
+mesh's own messaging verbs — it now registers the mailbox transport instead.
+**Owed:** live verification of steps 3–5 on staging, then the closing sweep
+(step 6). The migration runs as the ordered steps in [Roadmap](#roadmap) at the end
+of this document, which is the per-step register and the authority on where each
+one stands.
 
 Every task owns a **mailbox**. A message is an **envelope**. Three tools —
 `send_message`, `reply`, `wait` — are the whole agent-facing surface, and the
@@ -165,7 +169,7 @@ but the caller's own loop.
 
 | Param         | Type                            | Required | Notes                                                                                                                     |
 | ------------- | ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `to`          | string                          | ✅       | task id — local ([`TaskManager`](../src/services/task-manager/TaskManager.ts)) or remote (the mesh transport, **Step 5**) |
+| `to`          | string                          | ✅       | task id — local ([`TaskManager`](../src/services/task-manager/TaskManager.ts)) or remote (a registered mailbox transport) |
 | `body`        | string                          | ✅       |                                                                                                                           |
 | `kind`        | `"notification"` \| `"request"` | –        | default `notification`. A `reply` is never sent with this tool                                                            |
 | `subject`     | string                          | –        | derived from `body` when absent                                                                                           |
@@ -182,7 +186,7 @@ flowchart TD
     V3{"caller is the root task"}
     V4{"to is in the caller's knownPeers"}
     LOC{"local task id"}
-    TR["hand to the mailbox transport —<br/>the mesh relay, Step 5"]
+    TR["hand to the mailbox transport —<br/>the mesh relay"]
     CAP{"recipient's box is full"}
     D["Task.deliver — persist, emit delivered, wake"]
     OK["return id, to, deadline"]
@@ -531,7 +535,7 @@ they are not mailbox traffic.
 
 ### Plane 2 — A2A
 
-The mailbox one hop wider (**Steps 4 and 5**). Inbound, an `a2a_sync_request`
+The mailbox one hop wider. Inbound, an `a2a_sync_request`
 frame becomes a `request` envelope whose `id` is the frame's `message_id` — so
 the relay's idempotency key and the mailbox's are the same key, and a retry is
 acknowledged rather than re-delivered — and the `a2a_sync_ack` is sent when
@@ -541,18 +545,41 @@ claim id.
 
 Outbound, the mesh plugin registers a **mailbox transport** with the host —
 `{ canRoute(to), send(envelope) }` — and `send_message` with a `to` that no local
-lookup resolves is handed to it. The recipient's `reply` travels back the same
-way and lands in the sender's mailbox through `deliver`. That is what lets the
-five `agents_*` messaging verbs disappear into the core three:
+lookup resolves is handed to it. **Local first, always**: a transport is offered
+only ids this host does not hold, so it can never quietly route a message
+off-node for a task running right here. The recipient's `reply` travels back the
+same way, and its `in_reply_to` — which is the relay's own `message_id` — is how
+the plugin finds the exchange to answer on, so no second correlation map exists
+to drift.
 
-| Was                               | Is                                                    |
-| --------------------------------- | ----------------------------------------------------- |
-| `agents_send(wait: true)`         | `send_message(kind: "request")` + `wait(in_reply_to)` |
-| `agents_send(wait: false)`        | `send_message(kind: "notification")`                  |
-| `agents_request`                  | `send_message(kind: "request")`                       |
-| `agents_get_response`             | `wait(in_reply_to)`                                   |
-| `agents_respond` / `agents_reply` | `reply`                                               |
-| `agents_discover`                 | unchanged — the directory is not messaging            |
+Two properties of the outbound mapping are worth stating here, because they are
+the mailbox's contract rather than the mesh's:
+
+- **A remote `request` does not block the agent.** The gateway's exchange is a
+  blocking HTTP call, and the plugin holds it — never the sender. `send_message`
+  returns immediately, and the answer arrives as a `reply` envelope with
+  `in_reply_to` set. **So does a failure**: an exchange that is refused, times
+  out or finds nobody attached still produces a `reply` envelope carrying the
+  reason, because a task parked in `wait(in_reply_to)` for an answer that will
+  never come is the one liveness bug this plane could introduce.
+- **The in-process ACL does not apply.** A remote peer shares no `rootTaskId`
+  and appears in nobody's `knownPeers`, so applying either would refuse every
+  remote send there is. What gates a remote send is the message-broker's A2A
+  facet — badge, registration, policy pairing, target liveness — which, unlike
+  this process, is a trusted gate.
+
+That is what let the five `agents_*` messaging verbs disappear into the core
+three:
+
+<!-- retired-ok-section: the migration record for the retired mesh verbs -->
+
+| Was                                                         | Is                                                                                                                                   |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `agents_send(wait: true)`                                   | `send_message(kind: "request")` + `wait(in_reply_to)`                                                                                |
+| `agents_send(wait: false)`                                  | `send_message(kind: "notification")`                                                                                                 |
+| `agents_request` / `agents_get_response` / `agents_respond` | **nothing** — the durable claim path is deliberately not mapped onto the mailbox; its routes stay served for non-Shofer participants |
+| `agents_reply`                                              | `reply`                                                                                                                              |
+| `agents_discover`                                           | unchanged — the directory is not messaging                                                                                           |
 
 `wake` across the trust boundary is the receiving host's decision, not the
 sender's: the default is that a remote delivery never wakes a finished task, and
@@ -643,9 +670,9 @@ docs updated in the same change as the code they describe.
 | **0** | this document, plus the integrator's four-plane communication map rewritten around one delivery door; `notifications.md` deleted and every link to it re-pointed                                                                                                                                                                                                                                                           | everything — the vocabulary is fixed | **done**                           |
 | **1** | the mailbox core: `packages/types/src/mailbox.ts`, `packages/core/src/mailbox/Mailbox.ts` and its tests, `Task` owning a mailbox with the wake logic, the `environment_details` digest, `POST /api/v1/task/:id/mailbox`. Nothing is deleted and nothing sends yet                                                                                                                                                          | step 2                               | **done**                           |
 | **2** | the three tools end to end per [`adding-new-tools.md`](adding-new-tools.md), auto-approval, chat rows, locales, telemetry — and the deletion of the peer-messaging legacy: `SendMessageToTaskTool`, the `wait_for_message` alias, `SleepTool`, `Task.peerNotificationQueue` and its system-prompt drain, `ShoferProvider`'s pending-sync resolvers, the peer branch of `AttemptCompletionTool`, the old telemetry captures | step 3                               | **done**                           |
-| **3** | parent/child on the mailbox: `new_task` loses its foreground mode, `attempt_completion` delivers the result to the parent's box, a child's question becomes a request. Deletes `AnswerSubtaskQuestionTool`, `WaitForTaskTool`, the blocking-child resolvers, the pending-parent-question state and its event                                                                                                               | step 4                               | owed                               |
+| **3** | parent/child on the mailbox: `new_task` loses its foreground mode, `attempt_completion` delivers the result to the parent's box, a child's question becomes a request. Deletes `AnswerSubtaskQuestionTool`, `WaitForTaskTool`, the blocking-child resolvers, the pending-parent-question state and its event                                                                                                               | step 4                               | **built — live verification owed** |
 | **4** | the plugin API's one door: `ctx.agent.deliver` replaces `ctx.agent.notify` and its four modes, and `ctx.agent.registerMailboxTransport` lands beside it (registered and stored; its consumer is step 5). shofer-mesh's subscriptions carry `wake`/`ttl_sec`/`spawn`, bounded by the host's parallel-task limit; A2A inbound frames and temporal-worker messages deliver into the box and ack after persistence             | step 5                               | **built — live verification owed** |
-| **5** | the mesh registers the mailbox transport, `send_message`/`reply` route over the relay for non-local ids, and the five `agents_*` messaging verbs are deleted; `agents_discover` stays                                                                                                                                                                                                                                      | step 6                               | owed                               |
+| **5** | the mesh registers the mailbox transport, `send_message`/`reply` route over the relay for non-local ids, and the five `agents_*` messaging verbs are deleted; `agents_discover` stays. The gateway is UNCHANGED — the envelope's `id` is its `message_id`, its sync verb needs no capability, and a one-way verb it does not have is emulated by an exchange whose ack is the outcome                                      | step 6                               | **built — live verification owed** |
 | **6** | sweep and close: the retired vocabulary recorded in the docs-hygiene check, downstream repos' own references updated on their cadence, the CHANGELOG entry, integration-test coverage added after live verification, and this section reading "complete"                                                                                                                                                                   | —                                    | owed                               |
 
 ## Related documents

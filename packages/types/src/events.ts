@@ -30,7 +30,6 @@ export enum ShoferEventName {
 	TaskUnpaused = "taskUnpaused",
 	TaskSpawned = "taskSpawned",
 	TaskDelegated = "taskDelegated",
-	TaskDelegationCompleted = "taskDelegationCompleted",
 	TaskDelegationResumed = "taskDelegationResumed",
 
 	// Task Execution
@@ -99,11 +98,6 @@ export const shoferEventsSchema = z.object({
 	[ShoferEventName.TaskDelegated]: z.tuple([
 		z.string(), // parentTaskId
 		z.string(), // childTaskId
-	]),
-	[ShoferEventName.TaskDelegationCompleted]: z.tuple([
-		z.string(), // parentTaskId
-		z.string(), // childTaskId
-		z.string(), // completionResultSummary
 	]),
 	[ShoferEventName.TaskDelegationResumed]: z.tuple([
 		z.string(), // parentTaskId
@@ -239,11 +233,6 @@ export const taskEventSchema = z.discriminatedUnion("eventName", [
 	z.object({
 		eventName: z.literal(ShoferEventName.TaskDelegated),
 		payload: shoferEventsSchema.shape[ShoferEventName.TaskDelegated],
-		taskId: z.number().optional(),
-	}),
-	z.object({
-		eventName: z.literal(ShoferEventName.TaskDelegationCompleted),
-		payload: shoferEventsSchema.shape[ShoferEventName.TaskDelegationCompleted],
 		taskId: z.number().optional(),
 	}),
 	z.object({

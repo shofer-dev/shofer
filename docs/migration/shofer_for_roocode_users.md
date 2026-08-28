@@ -70,52 +70,56 @@ Building on the parallel architecture, background tasks let the LLM fan out work
 
 Previously, `new_task` only spawned synchronous children — the parent waited until the child finished. There was no way to spawn multiple children in parallel.
 
+In Shofer a child ALWAYS runs concurrently: there is no foreground mode, no focus steal, and no parameter to choose between them.
+
 ### What Was Built
 
-| Feature                                                                             | Description                                                                                                                          |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **`is_background` parameter**                                                       | `new_task` accepts `is_background: true`. The child runs concurrently; the parent continues immediately.                             |
-| [`check_task_status`](../../packages/core/src/tools/CheckTaskStatusTool.ts)         | Query the current status of any background task by its task ID.                                                                      |
-| [`wait_for_task`](../../packages/core/src/tools/WaitForTaskTool.ts)                 | Block until one or more background tasks reach a terminal state. Supports `all`/`any` wait strategies and multiple task IDs.         |
-| [`list_background_tasks`](../../packages/core/src/tools/ListBackgroundTasksTool.ts) | List all background child tasks with their current status.                                                                           |
-| **Abort propagation**                                                               | Canceling a parent task propagates abort to all background children.                                                                 |
-| **Parent mode inheritance**                                                         | Background children inherit the parent's mode unless explicitly overridden.                                                          |
-| **UI rows**                                                                         | Async tool calls (`wait_for_task`, `check_task_status`, `list_background_tasks`) render as descriptive chat rows with status badges. |
+| Feature                                                                             | Description                                                                                                                   |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Concurrent `new_task`**                                                           | Every child runs concurrently. `new_task` returns `Child task started: <id>` immediately and the parent is never suspended.   |
+| [`check_task_status`](../../packages/core/src/tools/CheckTaskStatusTool.ts)         | Query the current status of any child or peer task by its task ID.                                                            |
+| [`wait`](../../packages/core/src/tools/WaitTool.ts)                                 | Park on the mailbox until a child's result arrives. `wait(from=["<id>", …])` is the wake condition; the whole box comes back. |
+| [`list_background_tasks`](../../packages/core/src/tools/ListBackgroundTasksTool.ts) | List all child tasks with their current status.                                                                               |
+| **Abort propagation**                                                               | Canceling a parent task propagates abort to all its children.                                                                 |
+| **Parent mode inheritance**                                                         | Children inherit the parent's mode unless explicitly overridden.                                                              |
+| **UI rows**                                                                         | Async tool calls (`wait`, `check_task_status`, `list_background_tasks`) render as descriptive chat rows with status badges.   |
 
 ### Example Orchestration Pattern
 
 ```
-Parent task delegates to 3 background children:
-  ├── Child A: "Research the API documentation"  [background]
-  ├── Child B: "Write unit tests"                [background]
-  └── Child C: "Refactor the database layer"     [background]
+Parent task delegates to 3 concurrent children:
+  ├── Child A: "Research the API documentation"
+  ├── Child B: "Write unit tests"
+  └── Child C: "Refactor the database layer"
 
-Parent calls wait_for_task([A, B, C], wait="all") — resumes when all complete.
+Each child's attempt_completion result lands in the parent's mailbox as a
+notification. The parent calls wait(from=[A, B, C]) — it wakes on the first
+result and reads the box; it calls wait again for the ones still outstanding.
 ```
 
-<!-- 📸 TODO: screenshot of chat showing `wait_for_task` row with status badges for multiple background children -->
+<!-- 📸 TODO: screenshot of chat showing a `wait` row returning result notifications from multiple children -->
 
 ---
 
 ## 3. Background Subtask Control
 
-Background child tasks can now be managed mid-flight — the parent can answer the child's questions directly, cancel children, and inspect their live activity.
+Child tasks can be managed mid-flight — the parent can answer the child's questions directly, cancel children, and inspect their live activity. Because the parent is never suspended by spawning, it is always available to do so.
 
-Previously, `ask_followup_question` from a background child was escalated to the user, and there was no way to cancel specific children without aborting the entire parent task.
+Previously there was no way to cancel specific children without aborting the entire parent task, and a child's `ask_followup_question` could only reach the user.
 
 ### What Was Built
 
-| Feature                                                                                 | Description                                                                                                                                                                                  |
-| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Subtask question routing to parent**                                                  | `ask_followup_question` from background children is routed to the **parent task** instead of the user. The parent surfaces pending questions through `check_task_status`.                    |
-| [`answer_subtask_question`](../../packages/core/src/tools/AnswerSubtaskQuestionTool.ts) | Answer a pending question from a background child. The parent evaluates and provides a response, unblocking the child.                                                                       |
-| [`cancel_tasks`](../../packages/core/src/tools/CancelTasksTool.ts)                      | Stop one or more background children by task ID. Already-completed children are unaffected.                                                                                                  |
-| **`include_activity` parameter**                                                        | `check_task_status` now accepts `include_activity: true` to return the child's most recent tool calls and messages — showing what it's currently working on.                                 |
-| **Abort on parent completion**                                                          | Background children are automatically aborted when the parent task completes, preventing orphaned runaway tasks.                                                                             |
-| **Dedicated `alwaysAllowSubtasks` toggle**                                              | `cancel_tasks` and `answer_subtask_question` share the `alwaysAllowSubtasks` auto-approval toggle alongside `new_task` and `attempt_completion`.                                             |
-| **Waiting lifecycle**                                                                   | Tasks parked in `wait` on their mailbox, or blocked inside `wait_for_task`, transition to a distinct `waiting` state — visible in the TaskSelector, separate from both `idle` and `running`. |
+| Feature                                                            | Description                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Dual-channel child questions**                                   | A child's `ask_followup_question` is raised in the child's own chat **and** delivered to the parent's mailbox as a `request`. The first answer wins and the other channel is withdrawn; unanswered after 600s, the child is told to decide for itself. |
+| [`reply`](../../packages/core/src/tools/ReplyTool.ts)              | The parent answers that request. `check_task_status` on a parked child prints the exact `reply(...)` call that answers it.                                                                                                                             |
+| [`cancel_tasks`](../../packages/core/src/tools/CancelTasksTool.ts) | Stop one or more children by task ID. Already-completed children are unaffected.                                                                                                                                                                       |
+| **`include_activity` parameter**                                   | `check_task_status` accepts `include_activity: true` to return the child's most recent tool calls and messages — showing what it's currently working on.                                                                                               |
+| **Abort on parent completion**                                     | Children are automatically aborted when the parent task completes, preventing orphaned runaway tasks.                                                                                                                                                  |
+| **Dedicated `alwaysAllowSubtasks` toggle**                         | `cancel_tasks` shares the `alwaysAllowSubtasks` auto-approval toggle alongside `new_task` and `attempt_completion`. `check_task_status`, `list_background_tasks` and the mailbox tools carry no toggle at all.                                         |
+| **Waiting lifecycle**                                              | A task parked in `wait` on its mailbox transitions to a distinct `waiting` state — visible in the TaskSelector, separate from both `idle` and `running`. A child parked on a forwarded question sits in `waiting_input` instead.                       |
 
-<!-- 📸 TODO: screenshot of `check_task_status` row showing pending question from a background child -->
+<!-- 📸 TODO: screenshot of `check_task_status` row showing a child's forwarded question and the reply(...) call that answers it -->
 
 ---
 
@@ -131,10 +135,10 @@ Previously, all MCP tool calls were synchronous and blocking. The agent had to w
 | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **[`call_mcp_tool_async`](../../packages/core/src/tools/CallMcpToolAsyncTool.ts)**     | Fire-and-forget MCP tool invocation. Returns immediately with a `call_id`.                                                                                |
 | **[`check_mcp_call_status`](../../packages/core/src/tools/CheckMcpCallStatusTool.ts)** | Non-blocking status check for a previously-started async call. Returns `running`, `completed`, `error`, or `cancelled`.                                   |
-| **[`wait_for_mcp_call`](../../packages/core/src/tools/WaitForMcpCallTool.ts)**         | Block until one or more async calls complete. Supports `all`/`any` wait strategies like `wait_for_task`.                                                  |
+| **[`wait_for_mcp_call`](../../packages/core/src/tools/WaitForMcpCallTool.ts)**         | Block until one or more async calls complete. Supports `all`/`any` wait strategies.                                                                       |
 | **Async badge in ChatRow**                                                             | Async MCP calls display a distinctive **async badge** in the chat UI, making it clear which calls are in-flight vs completed.                             |
 | **Delete-on-read trimming**                                                            | Completed async call results are automatically trimmed from the API history after being read by the LLM, preventing context bloat from large MCP results. |
-| **Waiting lifecycle for MCP wait**                                                     | When the task calls `wait_for_mcp_call`, it transitions to the `waiting` state — visible in the TaskSelector alongside `wait_for_task`.                   |
+| **Waiting lifecycle for MCP wait**                                                     | When the task calls `wait_for_mcp_call`, it transitions to the `waiting` state — visible in the TaskSelector alongside a mailbox `wait`.                  |
 | **Telemetry for async MCP**                                                            | Async MCP usage is tracked separately from synchronous MCP calls, with dedicated telemetry events for call initiation, completion, and errors.            |
 
 <!-- 📸 TODO: screenshot of ChatRow showing async MCP badge and completion state -->

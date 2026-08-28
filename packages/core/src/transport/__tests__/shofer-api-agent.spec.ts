@@ -233,7 +233,6 @@ describe("FORWARDED_EVENTS", () => {
 			ShoferEventName.TaskUnpaused,
 			ShoferEventName.TaskSpawned,
 			ShoferEventName.TaskDelegated,
-			ShoferEventName.TaskDelegationCompleted,
 			ShoferEventName.TaskDelegationResumed,
 			ShoferEventName.TaskToolFailed,
 		]) {

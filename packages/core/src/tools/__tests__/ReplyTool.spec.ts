@@ -175,3 +175,137 @@ describe("ReplyTool", () => {
 		expect(mailbox.byKind("request")).toHaveLength(1)
 	})
 })
+
+/**
+ * The remote branch: an answer goes back the way the question came.
+ *
+ * A request that arrived over the mesh has an asker in another pod with no
+ * local box here, so a local delivery would fail — and, worse, could succeed
+ * against an unrelated local task that happens to share the id. The request's
+ * own `plane` is what decides, which is why `send_message` sets it at the send.
+ */
+describe("ReplyTool — answering a request that arrived over the mesh", () => {
+	let tool: ReplyTool
+	let storageRoot: string
+	let mailbox: Mailbox
+	let deliverToTask: ReturnType<typeof vi.fn>
+	let transport: { canRoute: ReturnType<typeof vi.fn>; send: ReturnType<typeof vi.fn> }
+	let findMailboxTransport: ReturnType<typeof vi.fn>
+	let sent: Envelope[]
+
+	beforeEach(async () => {
+		tool = new ReplyTool()
+		storageRoot = path.join(os.tmpdir(), `shofer-reply-remote-${randomUUID()}`)
+		await fs.mkdir(storageRoot, { recursive: true })
+		mailbox = new Mailbox("replier-1", storageRoot)
+		deliverToTask = vi.fn(async (_id: string, envelope: Envelope) => envelope)
+		sent = []
+		transport = {
+			canRoute: vi.fn(() => true),
+			send: vi.fn(async (envelope: Envelope) => {
+				sent.push(envelope)
+			}),
+		}
+		findMailboxTransport = vi.fn(() => transport)
+	})
+
+	afterEach(async () => {
+		await fs.rm(storageRoot, { recursive: true, force: true })
+	})
+
+	const seed = async (plane: Envelope["plane"]) => {
+		const env = {
+			id: "a2a-message-1",
+			from: "remote-asker",
+			to: "replier-1",
+			kind: "request",
+			subject: "summarize",
+			body: "summarize the incident",
+			deadline: Date.now() + 120_000,
+			wake: false,
+			sent_at: Date.now(),
+			plane,
+		} as Envelope
+		await mailbox.deliver(env)
+		return env
+	}
+
+	const buildTask = () =>
+		({
+			taskId: "replier-1",
+			rootTaskId: "root-1",
+			mailbox,
+			mailboxReady: Promise.resolve(),
+			providerRef: { deref: () => ({ deliverToTask, findMailboxTransport }) },
+			emitTaskInteraction: vi.fn(async () => {}),
+		}) as any
+
+	const buildCallbacks = () => {
+		const results: string[] = []
+		return {
+			results,
+			callbacks: {
+				askApproval: vi.fn(async () => true),
+				handleError: vi.fn(async () => {}),
+				pushToolResult: vi.fn((r: string) => results.push(r)),
+			} as any,
+		}
+	}
+
+	it("routes the answer over the transport and correlates it to the inbound message_id", async () => {
+		await seed("a2a")
+		const { callbacks, results } = buildCallbacks()
+		await tool.execute({ replies: [{ message_id: "a2a-message-1", body: "three hosts" }] }, buildTask(), callbacks)
+
+		expect(findMailboxTransport).toHaveBeenCalledWith("remote-asker")
+		expect(deliverToTask).not.toHaveBeenCalled()
+		expect(sent).toHaveLength(1)
+		expect(sent[0]).toMatchObject({
+			from: "replier-1",
+			to: "remote-asker",
+			kind: "reply",
+			in_reply_to: "a2a-message-1",
+			body: "three hosts",
+			plane: "a2a",
+		})
+		expect(results[0]).toContain("answered remote-asker")
+	})
+
+	it("clears the request only after the remote delivery succeeded", async () => {
+		await seed("a2a")
+		const { callbacks } = buildCallbacks()
+		await tool.execute({ replies: [{ message_id: "a2a-message-1", body: "answer" }] }, buildTask(), callbacks)
+		expect(mailbox.byKind("request", Date.now())).toHaveLength(0)
+	})
+
+	it("keeps the request answerable when the mesh refuses the reply", async () => {
+		await seed("a2a")
+		transport.send = vi.fn(async () => {
+			throw new Error("no open A2A exchange for message_id a2a-message-1 on this node")
+		})
+		const { callbacks, results } = buildCallbacks()
+		await tool.execute({ replies: [{ message_id: "a2a-message-1", body: "answer" }] }, buildTask(), callbacks)
+
+		expect(results[0]).toContain("no open A2A exchange")
+		expect(results[0]).toContain("still in your mailbox")
+		expect(mailbox.byKind("request", Date.now())).toHaveLength(1)
+	})
+
+	it("a LOCAL request is never offered to a transport", async () => {
+		await seed("local")
+		const { callbacks } = buildCallbacks()
+		await tool.execute({ replies: [{ message_id: "a2a-message-1", body: "answer" }] }, buildTask(), callbacks)
+
+		expect(findMailboxTransport).not.toHaveBeenCalled()
+		expect(transport.send).not.toHaveBeenCalled()
+		expect(deliverToTask).toHaveBeenCalledTimes(1)
+		expect(deliverToTask.mock.calls[0]![1].plane).toBe("local")
+	})
+
+	it("a BUS notification-turned-request is not a reply target either", async () => {
+		await seed("bus")
+		const { callbacks } = buildCallbacks()
+		await tool.execute({ replies: [{ message_id: "a2a-message-1", body: "answer" }] }, buildTask(), callbacks)
+		expect(findMailboxTransport).not.toHaveBeenCalled()
+	})
+})

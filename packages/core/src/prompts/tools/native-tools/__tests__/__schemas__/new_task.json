@@ -1,14 +1,10 @@
 {
 	"name": "new_task",
 	"strict": true,
-	"description": "Create a new task instance in the chosen mode using your provided message and initial todo list (if required).\n\nSynchronous mode (default, is_background omitted or false):\nCRITICAL: This tool MUST be called alone. Do NOT call this tool alongside other tools in the same message turn. The parent task will block until the child completes.\n\nAsync/background mode (is_background=true):\nThe child task starts immediately and runs concurrently. The parent receives the child's task_id and continues without blocking. Use check_task_status or wait_for_task to retrieve results later. Multiple background tasks can be started in parallel.",
+	"description": "Create a new task instance in the chosen mode using your provided message and initial todo list (if required).\n\nThe child ALWAYS runs concurrently. This tool returns as soon as the child has started, with its task_id; you are never blocked and you may spawn several children in the same turn.\n\nHow you get the result: when the child finishes, its result is delivered to YOUR MAILBOX as a notification. Call wait(from=[\"<child task_id>\"]) when you need it before you can continue, or simply end your turn — the delivery wakes you. check_task_status inspects a child at any time, and cancel_tasks stops one you no longer need.\n\nBecause you keep running, you are also the child's audience: if it asks a question, it arrives in your mailbox as a request and you answer it with reply.",
 	"parameters": {
 		"type": "object",
 		"properties": {
-			"is_background": {
-				"description": "When true, start the child task in the background and return immediately without blocking the parent. Defaults to false (synchronous delegation).",
-				"type": "boolean"
-			},
 			"message": {
 				"description": "Initial user instructions or context for the new task",
 				"type": "string"
@@ -29,7 +25,7 @@
 				"type": "number"
 			},
 			"softTimeoutSec": {
-				"description": "Soft guidance (in seconds) for how long the parent expects to wait for this subtask. Not a hard deadline; the parent may wait longer and the child may take longer. Defaults to 300 (5 minutes). Use this to pace your work accordingly.",
+				"description": "Soft guidance (in seconds) for how long the parent expects this subtask to take. Not a hard deadline; the child may take longer. Defaults to 300 (5 minutes). Use this to pace your work accordingly.",
 				"type": "number"
 			},
 			"title": {
@@ -41,16 +37,7 @@
 				"type": "string"
 			}
 		},
-		"required": [
-			"is_background",
-			"message",
-			"mode",
-			"peer_task_ids",
-			"softResultLength",
-			"softTimeoutSec",
-			"title",
-			"todos"
-		],
+		"required": ["message", "mode", "peer_task_ids", "softResultLength", "softTimeoutSec", "title", "todos"],
 		"additionalProperties": false
 	}
 }

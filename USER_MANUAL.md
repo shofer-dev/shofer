@@ -200,22 +200,22 @@ The **Execute** toggle requires a list of allowed command prefixes to have any e
 
 Shofer can run multiple tasks at the same time. Start a new task from the title bar — your current task moves to the background.
 
-### Background Sub-tasks
+### Sub-tasks
 
-The model can spawn background children via `new_task` with `is_background: true`. The parent continues working and polls results:
+The model spawns children with `new_task`. A child **always** runs concurrently: the parent gets the child's ID straight away and keeps working. Results and questions both arrive in the parent's mailbox.
 
-| Tool                      | Purpose                                    |
-| ------------------------- | ------------------------------------------ |
-| `check_task_status`       | Query a child's state without blocking     |
-| `wait_for_task`           | Block until one or more children finish    |
-| `send_message`            | Put an envelope in another task's mailbox  |
-| `reply`                   | Answer a request in this task's mailbox    |
-| `wait`                    | Read this task's mailbox, parking for mail |
-| `list_background_tasks`   | List all running children                  |
-| `cancel_tasks`            | Stop children early                        |
-| `answer_subtask_question` | Answer a question a background child asked |
+| Tool                    | Purpose                                            |
+| ----------------------- | -------------------------------------------------- |
+| `check_task_status`     | Query a child's state                              |
+| `send_message`          | Put an envelope in another task's mailbox          |
+| `reply`                 | Answer a request in this task's mailbox            |
+| `wait`                  | Read this task's mailbox, parking until mail lands |
+| `list_background_tasks` | List all running children                          |
+| `cancel_tasks`          | Stop children early                                |
 
-When a background child needs clarification, its question is routed to the **parent task** (not to you). Canceling a parent automatically cancels all its children.
+A finished child's result is delivered to the parent as mail, so a parent that needs it before it can continue calls `wait` naming that child.
+
+When a child needs clarification, you see the question **in the child's own chat** and its parent receives the same question as mail. Either of you may answer — whoever answers first wins, and the question disappears from the other side. If nobody answers within 10 minutes, the child is told to decide for itself. Canceling a parent automatically cancels all its children.
 
 ### Limits
 

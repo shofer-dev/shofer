@@ -16,13 +16,6 @@ import { Package } from "../../shared/package.js"
 
 // Provider method mocks — shared across describe blocks
 const mockCreateTask = vi.fn().mockResolvedValue({ taskId: "child-1" })
-/**
- * Fires the resolver immediately so `await childCompletionPromise` in
- * NewTaskTool.execute() unblocks synchronously in tests.
- */
-const mockRegisterBlockingChildResolver = vi.fn((_childTaskId: string, resolver: (result: string) => void) => {
-	resolver("Task completed successfully")
-})
 const mockGetTaskWithId = vi.fn().mockResolvedValue({
 	historyItem: { id: "mock-parent-task-id", status: "active", childIds: [] },
 })
@@ -50,14 +43,12 @@ const mockShofer = {
 	taskId: "mock-parent-task-id",
 	getTaskMode: vi.fn().mockResolvedValue(undefined),
 	backgroundChildren: new Map<string, any>(),
-	// Task-viz records the parent→child spawn (and child→parent return) arrows;
-	// the blocking path awaits this before registering the completion resolver.
+	// Task-viz records the parent→child spawn arrow.
 	emitTaskInteraction: vi.fn().mockResolvedValue(undefined),
 	providerRef: {
 		deref: vi.fn(() => ({
 			getState: vi.fn().mockResolvedValue({ customModes: BUILTIN_MODES, mode: "code" }),
 			createTask: mockCreateTask,
-			registerBlockingChildResolver: mockRegisterBlockingChildResolver,
 			getTaskWithId: mockGetTaskWithId,
 			updateTaskHistory: mockUpdateTaskHistory,
 			taskManager: {
@@ -73,7 +64,6 @@ const mockShofer = {
 
 /**
  * Wraps a block with nativeArgs for the BaseTool.handle() native-args path.
- * `is_background` is forwarded so the tool's boolean normalisation runs correctly.
  *
  * Provides reasonable values for `softResultLength` and `softTimeoutSec` (if not
  * already set) so existing tests (which predate those parameters) continue to exercise
@@ -93,7 +83,6 @@ const withNativeArgs = (block: ToolUse<"new_task">): ToolUse<"new_task"> => {
 			mode: paramsWithDefaults.mode,
 			message: paramsWithDefaults.message,
 			todos: paramsWithDefaults.todos,
-			is_background: paramsWithDefaults.is_background,
 			softResultLength: paramsWithDefaults.softResultLength,
 			softTimeoutSec: paramsWithDefaults.softTimeoutSec,
 		} as unknown as NativeToolArgs["new_task"],
@@ -117,12 +106,6 @@ describe("newTaskTool", () => {
 		mockShofer.didToolFailInCurrentTurn = false
 		mockShofer.isPaused = false
 		mockShofer.backgroundChildren.clear()
-		// Re-wire the resolver mock: fires immediately to unblock the foreground await.
-		mockRegisterBlockingChildResolver.mockImplementation(
-			(_childTaskId: string, resolver: (result: string) => void) => {
-				resolver("Task completed successfully")
-			},
-		)
 		mockCreateTask.mockResolvedValue({ taskId: "child-1" })
 		mockGetTaskWithId.mockResolvedValue({
 			historyItem: { id: "mock-parent-task-id", status: "active", childIds: [] },
@@ -138,7 +121,6 @@ describe("newTaskTool", () => {
 				mode: "code",
 				message: "Review this: \\\\@file1.txt and also \\\\\\\\@file2.txt",
 				todos: "[ ] First task\n[ ] Second task",
-				is_background: "false",
 			},
 			partial: false,
 		}
@@ -164,7 +146,7 @@ describe("newTaskTool", () => {
 			undefined,
 		)
 
-		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
+		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Child task started: child-1"))
 	})
 
 	it("should not un-escape single escaped \\@", async () => {
@@ -175,7 +157,6 @@ describe("newTaskTool", () => {
 				mode: "code",
 				message: "This is already unescaped: \\@file1.txt",
 				todos: "[ ] Test todo",
-				is_background: "false",
 			},
 			partial: false,
 		}
@@ -204,7 +185,6 @@ describe("newTaskTool", () => {
 				mode: "code",
 				message: "A normal mention @file1.txt",
 				todos: "[ ] Test todo",
-				is_background: "false",
 			},
 			partial: false,
 		}
@@ -233,7 +213,6 @@ describe("newTaskTool", () => {
 				mode: "code",
 				message: "Mix: @file0.txt, \\@file1.txt, \\\\@file2.txt, \\\\\\\\@file3.txt",
 				todos: "[ ] Test todo",
-				is_background: "false",
 			},
 			partial: false,
 		}
@@ -261,7 +240,6 @@ describe("newTaskTool", () => {
 			params: {
 				mode: "code",
 				message: "Test message",
-				is_background: "false",
 				// todos missing - should work for backward compatibility
 			},
 			partial: false,
@@ -286,7 +264,7 @@ describe("newTaskTool", () => {
 			undefined,
 		)
 
-		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
+		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Child task started: child-1"))
 	})
 
 	it("should work with todos parameter when provided", async () => {
@@ -297,7 +275,6 @@ describe("newTaskTool", () => {
 				mode: "code",
 				message: "Test message with todos",
 				todos: "[ ] First task\n[ ] Second task",
-				is_background: "false",
 			},
 			partial: false,
 		}
@@ -320,7 +297,7 @@ describe("newTaskTool", () => {
 			undefined,
 		)
 
-		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
+		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Child task started: child-1"))
 	})
 
 	it("should error when mode parameter is missing", async () => {
@@ -377,7 +354,6 @@ describe("newTaskTool", () => {
 				mode: "code",
 				message: "Test message",
 				todos: "[ ] Pending task\n[x] Completed task\n[-] In progress task",
-				is_background: "false",
 			},
 			partial: false,
 		}
@@ -410,7 +386,6 @@ describe("newTaskTool", () => {
 				params: {
 					mode: "code",
 					message: "Test message",
-					is_background: "false",
 					// todos missing - should work when setting is disabled
 				},
 				partial: false,
@@ -435,7 +410,7 @@ describe("newTaskTool", () => {
 				undefined,
 			)
 
-			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
+			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Child task started: child-1"))
 		})
 
 		it("should REQUIRE todos when VSCode setting is enabled", async () => {
@@ -447,7 +422,6 @@ describe("newTaskTool", () => {
 				params: {
 					mode: "code",
 					message: "Test message",
-					is_background: "false",
 					// todos missing - should error when setting is enabled
 				},
 				partial: false,
@@ -476,7 +450,6 @@ describe("newTaskTool", () => {
 					mode: "code",
 					message: "Test message",
 					todos: "[ ] First task\n[ ] Second task",
-					is_background: "false",
 				},
 				partial: false,
 			}
@@ -505,7 +478,7 @@ describe("newTaskTool", () => {
 				undefined,
 			)
 
-			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
+			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Child task started: child-1"))
 		})
 
 		it("should work with empty todos string when VSCode setting is enabled", async () => {
@@ -518,7 +491,6 @@ describe("newTaskTool", () => {
 					mode: "code",
 					message: "Test message",
 					todos: "", // Empty string should be accepted
-					is_background: "false",
 				},
 				partial: false,
 			}
@@ -541,7 +513,7 @@ describe("newTaskTool", () => {
 				undefined,
 			)
 
-			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
+			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Child task started: child-1"))
 		})
 
 		it("should check VSCode setting with Package.name configuration key", async () => {
@@ -553,7 +525,6 @@ describe("newTaskTool", () => {
 				params: {
 					mode: "code",
 					message: "Test message",
-					is_background: "false",
 				},
 				partial: false,
 			}
@@ -583,7 +554,6 @@ describe("newTaskTool", () => {
 				params: {
 					mode: "code",
 					message: "Test message",
-					is_background: "false",
 				},
 				partial: false,
 			}
@@ -625,14 +595,12 @@ describe("softResultLength and softTimeoutSec defaults", () => {
 			params: {
 				mode: "code",
 				message: "Do work without soft hints",
-				is_background: "false",
 			},
 			partial: false,
 			// nativeArgs deliberately lacks softResultLength and softTimeoutSec
 			nativeArgs: {
 				mode: "code",
 				message: "Do work without soft hints",
-				is_background: "false",
 			} as any,
 		}
 
@@ -667,13 +635,11 @@ describe("softResultLength and softTimeoutSec defaults", () => {
 			params: {
 				mode: "code",
 				message: "Work",
-				is_background: "false",
 			},
 			partial: false,
 			nativeArgs: {
 				mode: "code",
 				message: "Work",
-				is_background: "false",
 				softResultLength: -5,
 				softTimeoutSec: 120,
 			} as any,
@@ -706,13 +672,11 @@ describe("softResultLength and softTimeoutSec defaults", () => {
 			params: {
 				mode: "code",
 				message: "Huge result",
-				is_background: "false",
 			},
 			partial: false,
 			nativeArgs: {
 				mode: "code",
 				message: "Huge result",
-				is_background: "false",
 				softResultLength: 200000,
 				softTimeoutSec: 60,
 			} as any,
@@ -738,12 +702,8 @@ describe("softResultLength and softTimeoutSec defaults", () => {
 })
 
 describe("newTaskTool delegation flow", () => {
-	it("creates child via provider.createTask and suspends parent via resolver", async () => {
-		// Fresh provider with the same immediate-resolver pattern.
+	it("creates the child concurrently and returns without waiting for it", async () => {
 		const localCreateTask = vi.fn().mockResolvedValue({ taskId: "child-1" })
-		const localRegisterBlockingChildResolver = vi.fn((_childTaskId: string, resolver: (result: string) => void) => {
-			resolver("Work done")
-		})
 		const localGetTaskWithId = vi.fn().mockResolvedValue({
 			historyItem: { id: "mock-parent-task-id", status: "active", childIds: [] },
 		})
@@ -767,7 +727,6 @@ describe("newTaskTool delegation flow", () => {
 				deref: vi.fn(() => ({
 					getState: vi.fn().mockResolvedValue({ customModes: BUILTIN_MODES, mode: "code" }),
 					createTask: localCreateTask,
-					registerBlockingChildResolver: localRegisterBlockingChildResolver,
 					getTaskWithId: localGetTaskWithId,
 					updateTaskHistory: localUpdateTaskHistory,
 					taskManager: { registerBackgroundTask: vi.fn(), countActiveTasks: vi.fn(() => 0) },
@@ -784,7 +743,6 @@ describe("newTaskTool delegation flow", () => {
 			params: {
 				mode: "code",
 				message: "Do something",
-				is_background: "false",
 			},
 			partial: false,
 		}
@@ -797,7 +755,7 @@ describe("newTaskTool delegation flow", () => {
 			pushToolResult: mockPushToolResult,
 		})
 
-		// createTask called with the unescaped message, no parent image, parent task, and foreground options
+		// createTask called with the unescaped message, no parent image, and the parent task
 		expect(localCreateTask).toHaveBeenCalledWith(
 			"Do something",
 			undefined,
@@ -806,18 +764,18 @@ describe("newTaskTool delegation flow", () => {
 				initialTodos: expect.any(Array),
 				initialMode: "code",
 				initialState: { lifecycle: "running" },
-				openInStack: true,
+				// Concurrent: the child never takes the parent's stack position.
+				openInStack: false,
+				isBackground: true,
 			}),
 			undefined,
 			undefined,
 		)
 
-		// Resolver registered for the child
-		expect(localRegisterBlockingChildResolver).toHaveBeenCalledWith("child-1", expect.any(Function))
-
-		// Parent's result contains child's completion output
-		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
-		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Work done"))
+		// The tool returns as soon as the child is started — it never waits for a
+		// result. The result reaches the parent later, as a mailbox notification
+		// delivered by the child's attempt_completion.
+		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Child task started: child-1"))
 
 		// No pause/unpause events emitted
 		const pauseEvents = (localEmit as any).mock.calls.filter(

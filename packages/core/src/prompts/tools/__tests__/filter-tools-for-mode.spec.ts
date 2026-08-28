@@ -112,16 +112,14 @@ it("includes subtasks tools by default (no model exclusions)", () => {
 		makeTool("send_message"),
 		makeTool("new_task"),
 		makeTool("check_task_status"),
-		makeTool("wait_for_task"),
 		makeTool("list_background_tasks"),
 		makeTool("cancel_tasks"),
-		makeTool("answer_subtask_question"),
 	]
 
 	const result = filterNativeToolsForMode(nativeTools, "code", BUILTIN_MODES, undefined, undefined)
 
 	const resultNames = result.map((t) => (t as any).function.name)
-	expect(resultNames).toHaveLength(7)
+	expect(resultNames).toHaveLength(5)
 	expect(resultNames).toContain("send_message")
 	expect(resultNames).toContain("new_task")
 })

@@ -18,7 +18,7 @@
  *
  * Entering the park puts the task in the `waiting` lifecycle and leaving it
  * restores `running` — the same mechanism, and the same `finally`, that
- * `wait_for_task` uses. See `docs/task_messaging.md` § "The three tools".
+ * `wait_for_mcp_call` uses. See `docs/task_messaging.md` § "The three tools".
  */
 
 import { TelemetryService } from "@shofer/telemetry"

@@ -2,7 +2,6 @@
 // + their option/callback types). Full surface via `export *`, EXCEPT NewTaskTool,
 // which is named-exported to avoid re-surfacing MAX_SUBTASK_RESULT_LENGTH (already
 // exported from ./task/subtask-limits.js — a duplicate `export *` would make it ambiguous).
-export * from "./AnswerSubtaskQuestionTool.js"
 export * from "./ApplyDiffTool.js"
 export * from "./ApplyPatchTool.js"
 export * from "./AskFollowupQuestionTool.js"
@@ -50,7 +49,6 @@ export * from "./UpdateTodoListTool.js"
 export * from "./UseMcpToolTool.js"
 export * from "./ViewImageTool.js"
 export * from "./WaitForMcpCallTool.js"
-export * from "./WaitForTaskTool.js"
 export * from "./WaitTool.js"
 export * from "./WriteToFileTool.js"
 export * from "./accessMcpResourceTool.js"

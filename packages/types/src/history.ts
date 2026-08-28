@@ -105,8 +105,6 @@ export const historyItemSchema = z.object({
 	costLimit: costLimitSchema.optional(), // Per-root-task budget cap
 	delegatedToId: z.string().optional(), // Last child this parent delegated to
 	childIds: z.array(z.string()).optional(), // All children spawned by this task
-	awaitingChildId: z.string().optional(), // Child currently awaited (set when delegated)
-	completedByChildId: z.string().optional(), // Child that completed and resumed this parent
 	completionResultSummary: z.string().optional(), // Summary from completed child
 	// Parallel task fields
 	name: z.string().optional(), // User-defined task name

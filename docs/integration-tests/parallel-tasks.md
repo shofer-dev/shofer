@@ -1,9 +1,9 @@
 # Parallel Tasks & Sub-Task Execution — Integration Test Scenarios
 
-Feature under test: Parallel task execution via `new_task` (sync/background
-delegation), background task orchestration tools (`check_task_status`,
-`wait_for_task`, `list_background_tasks`, `cancel_tasks`,
-`answer_subtask_question`), parent-child lifecycle management, and
+Feature under test: Concurrent task execution via `new_task`, the task
+orchestration tools (`check_task_status`, `list_background_tasks`,
+`cancel_tasks`), the mailbox tools a parent uses to collect a child's result and
+answer its questions (`wait`, `reply`), parent-child lifecycle management, and
 `TaskManager` resource limits.
 
 ## Prerequisites
@@ -19,32 +19,36 @@ delegation), background task orchestration tools (`check_task_status`,
 
 ## Scenarios
 
-### 1. Synchronous delegation: parent blocks, child result returned
+### 1. A child's result reaches the parent as mail
 
-**Goal:** Verify the full sync `new_task` flow end-to-end.
+**Goal:** Verify the full `new_task` → `attempt_completion` → mailbox flow
+end-to-end.
 
 1. Start a task in Orchestrator mode.
-2. Send: "Use new_task to spawn a child in Code mode that says hello world."
-3. Confirm the TaskSelector shows a new child task (focused, green dot).
-4. Confirm the parent task is shown below with a blue `waiting` indicator.
-5. Wait for the child to complete.
-6. Confirm the parent is restored as the focused task.
-7. Confirm the parent's chat shows the child's `attempt_completion` result as
-   a `tool_result`.
+2. Send: "Use new_task to spawn a child in Code mode that says hello world,
+   then wait for its result."
+3. Confirm `new_task` returns `Child task started: <id>` immediately, and that
+   focus stays on the parent.
+4. Confirm the TaskSelector shows the new child task below the parent.
+5. Confirm the parent shows a blue `waiting` indicator while parked in `wait`.
+6. Wait for the child to complete.
+7. Confirm the parent's `wait` returns a `notification` from the child whose
+   subject is `result: <child title>` and whose body is the child's
+   `attempt_completion` result.
 
 **Expected:** Parent transitions `running` → `waiting` → `running`. Child
 transitions `running` → `completed`. The child result is visible in the
-parent's conversation.
+parent's conversation as a `peer_message` say row.
 
-### 2. Background delegation: parent continues immediately
+### 2. The parent is never blocked by spawning
 
-**Goal:** Verify parent does not block when spawning background children.
+**Goal:** Verify `new_task` returns immediately and never steals focus.
 
 1. Start a task in Orchestrator mode.
-2. Send: "Spawn a background child in Code mode to count to 5 with sleep(2)
+2. Send: "Spawn a child in Code mode to count to 5 with sleep(2)
    between each count. Then tell me 'done spawning'."
 3. Confirm the TaskSelector shows the child task below the parent with an
-   indented display.
+   indented display, and that the parent stays focused.
 4. Confirm the parent immediately says "done spawning" (does not wait for
    the child).
 5. Wait ~12 seconds for the child to finish.
@@ -62,11 +66,13 @@ and eventually reaches `completed`.
    then say done."
 3. Confirm both child tasks appear in the TaskSelector.
 4. Confirm the parent responds immediately.
-5. Use `wait_for_task` with `wait: "all"` to wait for both.
+5. Call `wait` with `from` naming both child IDs, twice, until both results
+   have been read.
 6. Confirm both children complete.
 
-**Expected:** Both children run concurrently (total time ≈ 5s, not 10s).
-Parent can collect results via `wait_for_task`.
+**Expected:** Both children run concurrently (total time ≈ 5s, not 10s). Each
+child's `attempt_completion` result reaches the parent's mailbox as a
+`notification`, and the parent collects them with `wait`.
 
 ### 4. `check_task_status` returns live state
 
@@ -94,20 +100,21 @@ Parent can collect results via `wait_for_task`.
 **Expected:** Activity output includes readable descriptions of the child's
 last operations.
 
-### 6. `wait_for_task` with `"any"` strategy
+### 6. `wait` returns on the first result to land
 
-**Goal:** Verify early return when at least one child completes.
+**Goal:** Verify a parked parent wakes on the first child that finishes.
 
 1. Spawn two background children: one fast ("say done immediately"), one
    slow ("sleep(10) then say done").
-2. Call `wait_for_task` on both with `wait: "any"`.
-3. Confirm the call returns as soon as the fast child completes.
+2. Call `wait` with `from` naming both child IDs.
+3. Confirm the call returns as soon as the fast child completes, carrying that
+   child's `result:` notification.
 4. Confirm the slow child is still running.
-5. Call `wait_for_task` on the slow child alone.
+5. Call `wait` with `from` naming the slow child alone.
 6. Confirm it eventually completes.
 
-**Expected:** `"any"` returns on first completion. Remaining children are
-unaffected.
+**Expected:** `wait` returns on the first delivery matching its wake condition,
+carrying the whole box. Remaining children are unaffected.
 
 ### 7. `cancel_tasks` stops a running background child
 
@@ -143,22 +150,51 @@ unaffected.
 
 **Expected:** All background children are listed.
 
-### 10. Background child `ask_followup_question` routes to parent
+### 10. A child's `ask_followup_question` reaches both channels
 
-**Goal:** Verify the routing mechanism for child questions.
+**Goal:** Verify the dual-channel routing for child questions.
 
-1. Spawn a background child in Code mode with: "Use ask_followup_question to
-   ask which color is best: red or blue."
-2. Call `check_task_status` on the child.
-3. Confirm the response shows `status: "waiting"` and the question text
-   with suggestions.
-4. Call `answer_subtask_question` with `answer: "blue"`.
-5. The child resumes and completes.
-6. Call `check_task_status` — confirm `status: "completed"`.
+1. Spawn a child in Code mode with: "Use ask_followup_question to ask which
+   color is best: red or blue."
+2. Confirm the question is raised in the **child's own chat** with its
+   suggestions.
+3. Confirm the parent's mailbox digest lists a `request` whose subject starts
+   `question:`.
+4. Call `check_task_status` on the child. Confirm it reports
+   `Waiting on your answer: "<question>"` together with the `reply(...)` call
+   that answers it.
+5. Answer from the parent with `reply({ replies: [{ message_id: "<id>", body:
+"blue" }] })`.
+6. Confirm the child resumes, and that the ask in the child's own chat is
+   withdrawn.
+7. Call `check_task_status` — confirm `status: "completed"`.
 
-**Expected:** Child blocks on question; parent sees it via
-`check_task_status`; parent answers via `answer_subtask_question`; child
-resumes.
+**Expected:** The question is delivered to the parent's mailbox AND raised in the
+child's chat; the child sits in `waiting_input` throughout; the first answer wins
+and the other channel is withdrawn.
+
+### 10b. A human answers the child's question first
+
+**Goal:** Verify the human channel wins when it answers first.
+
+1. Repeat scenario 10 through step 3.
+2. Click a suggestion in the **child's own chat**.
+3. Confirm the child resumes immediately.
+4. Confirm the `request` is gone from the parent's mailbox digest, and that a
+   later `reply` naming that message id is refused as unknown.
+
+**Expected:** First answer wins in either direction.
+
+### 10c. An unanswered child question expires
+
+**Goal:** Verify the expiry text the child receives.
+
+1. Repeat scenario 10 through step 3, and answer from neither channel.
+2. Wait out the 600-second child-question deadline.
+
+**Expected:** The child's ask is answered with the synthesized text
+`Your question to the parent expired unanswered after 600s. Decide yourself, or
+ask again.`, and the child resumes.
 
 ### 11. Parent completion aborts children
 
@@ -186,18 +222,18 @@ resumes.
 
 **Expected:** Stopping the parent also aborts background children.
 
-### 13. `wait_for_task` timeout does not error
+### 13. `wait` timeout does not error
 
 **Goal:** Verify the timeout parameter works as a soft deadline.
 
 1. Spawn a background child doing a 30-second operation.
-2. Call `wait_for_task` with `timeout: 5`.
-3. Confirm the call returns after ~5 seconds with the child still in
-   `running` status.
-4. Confirm no error is thrown — the timeout is informational only.
+2. Call `wait` with `timeout_sec: 5` and `from` naming the child.
+3. Confirm the call returns after ~5 seconds with an empty box, and that
+   `check_task_status` still reports the child as `running`.
+4. Confirm no error is thrown — an empty box at the timeout is a normal answer.
 
-**Expected:** Timeout returns current statuses gracefully. The child
-continues running.
+**Expected:** The timeout returns an empty list gracefully. The child continues
+running.
 
 ### 14. Task state restore after VS Code restart
 

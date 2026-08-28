@@ -7,6 +7,7 @@ import type {
 	TaskLike,
 	TaskProviderEvents,
 	ManagedTask,
+	PluginMailboxTransport,
 	TaskManagerEvents,
 	CreateTaskOptions,
 	ShoferSettings,
@@ -93,8 +94,6 @@ export interface TaskProviderLike<TTask = TaskLike> {
 	/** Cancel the current (foreground) task. */
 	cancelTask(): Promise<void>
 
-	/** Register a resolver that a blocking foreground child fires on completion. */
-	registerBlockingChildResolver(childTaskId: string, resolver: (result: string) => void): void
 	/**
 	 * Deliver an envelope into a task's mailbox — the one door every plane's
 	 * inbound delivery reaches. Hands to a live instance, else rehydrates a
@@ -103,6 +102,20 @@ export interface TaskProviderLike<TTask = TaskLike> {
 	 * `ShoferProvider.deliverToTask`.
 	 */
 	deliverToTask(taskId: string, envelope: Envelope): Promise<Envelope>
+	/**
+	 * The first plugin-registered mailbox transport that claims `to`, or
+	 * `undefined` when the address belongs to no route off this node.
+	 *
+	 * The counterpart of {@link deliverToTask}, and consulted only AFTER it has
+	 * nothing to offer: an id with no live instance and no resumable history is
+	 * not necessarily unreachable — it may be a peer on the A2A mesh, which the
+	 * `shofer-mesh` plugin registers a transport for. Keeping the order that way
+	 * round is what makes a local id always resolve locally, so a transport can
+	 * never quietly capture a task this host holds.
+	 *
+	 * Mirrors `ShoferProvider.findMailboxTransport`.
+	 */
+	findMailboxTransport(to: string): PluginMailboxTransport | undefined
 	/** Returns the provider's MCP hub, or `undefined` when MCP is unavailable. */
 	getMcpHub(): McpHub | undefined
 	/** Ensures the global MCP servers directory exists and returns its path. */

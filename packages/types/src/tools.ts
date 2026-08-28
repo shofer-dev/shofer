@@ -74,10 +74,9 @@ export const toolParamNames = [
 	"start_line",
 	"end_line",
 	"todos",
-	"is_background", // new_task async mode parameter
 	"task_id", // check_task_status parameter
-	"task_ids", // wait_for_task parameter (accepts multiple IDs)
-	"wait", // wait_for_task strategy: "all" | "any"
+	"task_ids", // cancel_tasks parameter (accepts multiple IDs)
+	"wait", // wait_for_mcp_call strategy: "all" | "any"
 	"prompt",
 	"image",
 	// read_file parameters (native protocol)
@@ -148,8 +147,6 @@ export const toolParamNames = [
 	"includeHidden",
 	// get_errors parameter
 	"filePaths",
-	// answer_subtask_question parameter
-	"answer",
 	// git_search time range parameters
 	"since",
 	"until",
@@ -204,25 +201,19 @@ export type NativeToolArgs = {
 	edit_file: { file_path: string; old_string: string; new_string: string; expected_replacements?: number }
 	apply_patch: { patch: string }
 	list_files: { path: string; recursive?: boolean }
-	// `is_background` is declared boolean in the JSON schema but some models serialize it
-	// as a string ("True"/"False") or number (1/0). The actual type is widened here to
-	// reflect that reality; NewTaskTool normalizes the value via parseToolBoolean().
 	new_task: {
 		mode: string
 		message: string
 		todos?: string
-		is_background?: boolean | string | number | null
 		softResultLength?: number
 		softTimeoutSec?: number
 		peer_task_ids?: string[] | null
 		title?: string
 	}
 	check_task_status: { task_id: string; include_activity?: boolean | null }
-	wait_for_task: { task_ids: string[]; wait?: "all" | "any"; timeout?: number }
 	list_background_tasks: { scope?: "children" | "peers" | null }
 	describe_tools: { names: string[] }
 	cancel_tasks: { task_ids: string[] }
-	answer_subtask_question: { task_id: string; answer: string }
 	ask_followup_question: {
 		question: string
 		follow_up?: Array<{ text: string; mode?: string }> | null

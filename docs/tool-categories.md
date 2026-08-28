@@ -23,7 +23,7 @@ Shofer uses a single unified ToolGroup system as the **single source of truth** 
 | 4   | `browser`       | Browser automation and web page control              | `browser_navigate`, `browser_click`, `browser_screenshot`, `browser_read_page`                    |
 | 5   | `mcp`           | MCP protocol tools                                   | `use_mcp_tool`, `access_mcp_resource`                                                             |
 | 6   | `mode`          | Mode switching                                       | `switch_mode`                                                                                     |
-| 7   | `subtasks`      | Background / delegated task management               | `check_task_status`, `wait_for_task`, `cancel_tasks`, `answer_subtask_question`                   |
+| 7   | `subtasks`      | Delegated task management                            | `new_task`, `check_task_status`, `cancel_tasks`                                                   |
 | 8   | `questions`     | User-facing questions and follow-ups                 | `ask_followup_question`                                                                           |
 | 9   | `uncategorized` | Fallback for tools without explicit classification   | (empty by default; MCP tools that declare no group land here)                                     |
 
@@ -69,7 +69,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
     browser:     { tools: [] },  // external LM tools from browser-tools
     mcp:         { tools: ["use_mcp_tool", "access_mcp_resource", "call_mcp_tool_async", "check_mcp_call_status", "wait_for_mcp_call"] },
     mode:        { tools: ["switch_mode"] },
-    subtasks:    { tools: ["new_task", "check_task_status", "wait_for_task", "cancel_tasks", "answer_subtask_question"] },
+    subtasks:    { tools: ["new_task", "check_task_status", "cancel_tasks"] },
     questions:   { tools: ["ask_followup_question"] },
     uncategorized: { tools: [] },
 }
@@ -287,7 +287,7 @@ This section tracks known deficiencies in this document and in the tool-group sy
 ### Tool-group system design observations
 
 - **`alwaysAvailable` is not a group-level property**: The old doc erroneously showed `alwaysAvailable: true` as a field on the `mode` group entry in `TOOL_GROUPS`. In reality, `ToolGroupConfig` has only `tools` and `customTools`; always-availability is a separate constant `ALWAYS_AVAILABLE_TOOLS` that is checked independently of groups.
-- **`new_task` lives in `subtasks`, not `mode`**: Although `new_task` is about task lifecycle, it belongs to the `subtasks` group (alongside `check_task_status`, `wait_for_task`, etc.), not the `mode` group (which contains only `switch_mode`). The `subtasks` group is the correct home because `new_task` is a control-plane subtask tool that shares the `alwaysAllowSubtasks` auto-approval toggle.
+- **`new_task` lives in `subtasks`, not `mode`**: Although `new_task` is about task lifecycle, it belongs to the `subtasks` group (alongside `check_task_status` and `cancel_tasks`), not the `mode` group (which contains only `switch_mode`). The `subtasks` group is the correct home because `new_task` is a control-plane subtask tool that shares the `alwaysAllowSubtasks` auto-approval toggle.
 - **`give_feedback` is always-available but not in any group**: [`give_feedback`](../packages/types/src/tool.ts) is in `ALWAYS_AVAILABLE_TOOLS` but does not appear in any `TOOL_GROUPS` entry. This is intentional — always-available tools are injected into every mode's tool set regardless of group membership.
 - **browser group has zero native tools**: The `browser` group contains `tools: []` — all browser tools come from the `arkware-browser-tools` MCP server, classified by the `browser_` prefix. The group exists solely as a mode-filtering/auto-approval category for these external tools.
 

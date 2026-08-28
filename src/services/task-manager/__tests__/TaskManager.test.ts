@@ -110,7 +110,7 @@ describe("TaskManager.onAborted terminal-state guard", () => {
 		fake.taskId = taskId
 		fake.isBackgroundTask = false
 		fake.parentTaskId = undefined
-		fake.getPendingParentQuestion = () => undefined
+		fake.forwardedQuestion = undefined
 		return fake
 	}
 

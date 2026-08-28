@@ -36,7 +36,7 @@ stateDiagram-v2
     idle --> running: TaskStarted, TaskActive
     running --> waiting_input: TaskInteractive
     waiting_input --> running: TaskActive
-    running --> waiting: setState waiting by wait, wait_for_task or wait_for_mcp_call
+    running --> waiting: setState waiting by wait or wait_for_mcp_call
     waiting --> running: TaskActive
     running --> idle: TaskIdle
     running --> completed: TaskCompleted, carries rating
@@ -146,11 +146,9 @@ to both the in-memory `ManagedTask` and the persisted `HistoryItem.taskState`:
 - Persists the new state through `provider.updateTaskHistory(...)`.
 - Skips the write if the persisted state already matches.
 
-No other code path ever writes `taskState`. Code that previously called
-`updateTaskHistory({ ..., taskExecutionState: "completed_poorly" })` directly
-(e.g. `resumeBlockingParent`) now goes through `setState`. This makes the
-in-memory and persisted views provably consistent and gives us a single
-choke point for invariants and telemetry.
+No other code path ever writes `taskState` — every writer goes through
+`setState`. This makes the in-memory and persisted views provably consistent and
+gives us a single choke point for invariants and telemetry.
 
 ## Restore Ordering
 
@@ -276,10 +274,10 @@ click as one.
 Two lifecycles mean "not advancing its own loop", and the difference is **who is
 expected to act next**:
 
-| Lifecycle       | The task is parked on…                                                                                   | It leaves when…                               | Notification badge |
-| --------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | :----------------: |
-| `waiting`       | its **mailbox** (`wait`), a subtask (`wait_for_task`), or an async MCP call (`wait_for_mcp_call`)        | anything is delivered, or the timeout expires |         no         |
-| `waiting_input` | an **ask** — a human's approval or answer, or a parent answering a question a background child routed up | the ask is answered                           |        yes         |
+| Lifecycle       | The task is parked on…                                                                             | It leaves when…                               | Notification badge |
+| --------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------- | :----------------: |
+| `waiting`       | its **mailbox** (`wait`), or an async MCP call (`wait_for_mcp_call`)                               | anything is delivered, or the timeout expires |         no         |
+| `waiting_input` | an **ask** — a human's approval or answer, or a parent answering a question the child forwarded up | the ask is answered                           |        yes         |
 
 The badge follows from the distinction rather than decorating it: `waiting_input`
 is the only one of the two where a PERSON is being waited on, so it is the only

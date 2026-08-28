@@ -252,14 +252,6 @@ export class ShoferProvider
 	private pendingOperations: Map<string, PendingEditOperation> = new Map()
 	private static readonly PENDING_OPERATION_TIMEOUT_MS = 30000 // 30 seconds
 
-	/**
-	 * Resolvers for blocking foreground subtasks (is_background=false).
-	 * Maps child task ID → resolve function that resumes the parent's suspended tool loop.
-	 * Set in NewTaskTool before the child starts; fired in resumeBlockingParent() when the
-	 * child calls attempt_completion.
-	 */
-	private blockingChildResolvers: Map<string, (result: string) => void> = new Map()
-
 	public isViewLaunched = false
 	public settingsImportedAt?: number
 	public readonly latestAnnouncementId = "apr-2026-v3.52.0-poe-xai-minimax" // v3.52.0 Poe provider, xAI improvements, and MiniMax fixes
@@ -858,34 +850,6 @@ export class ShoferProvider
 			// Make sure no reference kept, once promises end it will be
 			// garbage collected.
 			task = undefined
-
-			// Delegation-aware parent metadata repair:
-			// If the popped task was a delegated child, repair the parent's metadata
-			// so it transitions from "delegated" back to "active" and becomes resumable
-			// from the task history list.
-			if (parentTaskId && childTaskId) {
-				try {
-					const { historyItem: parentHistory } = await this.getTaskWithId(parentTaskId)
-
-					if (parentHistory.delegatedToId !== undefined && parentHistory.awaitingChildId === childTaskId) {
-						await this.updateTaskHistory({
-							...parentHistory,
-							taskState: { lifecycle: "idle" },
-							awaitingChildId: undefined,
-						})
-						this.debug(
-							`[ShoferProvider#removeShoferFromStack] Repaired parent ${parentTaskId} metadata: delegated → active (child ${childTaskId} removed)`,
-						)
-					}
-				} catch (err) {
-					// Non-fatal: log but do not block the pop operation.
-					this.log(
-						`[ShoferProvider#removeShoferFromStack] Failed to repair parent metadata for ${parentTaskId} (non-fatal): ${
-							err instanceof Error ? err.message : String(err)
-						}`,
-					)
-				}
-			}
 		}
 	}
 
@@ -960,12 +924,12 @@ export class ShoferProvider
 	/**
 	 * The live task instances on the stack, root-first.
 	 *
-	 * A synchronously spawned child lives HERE and nowhere else: `new_task`
-	 * without `is_background` pushes it onto the stack rather than calling
-	 * `taskManager.registerBackgroundTask`, so `getManagedTaskInstance(childId)`
-	 * does not know it. Anything that has to find an arbitrary live task by id —
-	 * routing an ask answer back to whichever task of a conversation raised it —
-	 * must consult this as well as the managed set.
+	 * A task a host pushed here directly — rather than registering it with
+	 * `taskManager.registerBackgroundTask`, as `new_task` does for every child —
+	 * lives HERE and nowhere else, so `getManagedTaskInstance(id)` does not know
+	 * it. Anything that has to find an arbitrary live task by id — routing an ask
+	 * answer back to whichever task of a conversation raised it — must consult
+	 * this as well as the managed set.
 	 */
 	public getTaskStackInstances(): Task[] {
 		return [...this.shoferStack]
@@ -6214,92 +6178,6 @@ export class ShoferProvider
 
 	public get cwd() {
 		return this.currentWorkspacePath || getWorkspacePath()
-	}
-
-	/**
-	 * Resume a parent task that was suspended waiting for a blocking foreground subtask.
-	 *
-	 * The parent task instance is still alive in the shoferStack (below the child), so we
-	 * only need to:
-	 *   1. Update history for both tasks.
-	 *   2. Pop the child from the stack to reveal the parent.
-	 *   3. Refresh the webview so the user sees the parent's chat.
-	 *   4. Fire the resolver that unblocks NewTaskTool's awaiting Promise.
-	 *
-	 * @returns true if a blocking resolver was found and fired; false otherwise.
-	 */
-	public async resumeBlockingParent(params: {
-		parentTaskId: string
-		childTaskId: string
-		completionResult: string
-	}): Promise<boolean> {
-		const { parentTaskId, childTaskId, completionResult } = params
-
-		const resolver = this.blockingChildResolvers.get(childTaskId)
-		if (!resolver) {
-			return false
-		}
-		this.blockingChildResolvers.delete(childTaskId)
-
-		this.debug(`[resumeBlockingParent] childTaskId=${childTaskId} completed, resuming parentTaskId=${parentTaskId}`)
-
-		// 1) Update child history to "completed".
-		try {
-			const { historyItem: childHistory } = await this.getTaskWithId(childTaskId)
-			await this.updateTaskHistory({
-				...childHistory,
-				taskState: { lifecycle: "completed", rating: "poor" },
-				completionResultSummary: completionResult,
-			})
-		} catch (err) {
-			this.debug(`[resumeBlockingParent] Failed to update child history (non-fatal): ${err}`)
-		}
-
-		// 2) Update parent history: clear delegation fields, mark active.
-		try {
-			const { historyItem: parentHistory } = await this.getTaskWithId(parentTaskId)
-			const childIds = Array.from(new Set([...(parentHistory.childIds ?? []), childTaskId]))
-			await this.updateTaskHistory({
-				...parentHistory,
-				awaitingChildId: undefined,
-				completedByChildId: childTaskId,
-				completionResultSummary: completionResult,
-				childIds,
-			})
-		} catch (err) {
-			this.debug(`[resumeBlockingParent] Failed to update parent history (non-fatal): ${err}`)
-		}
-
-		// 3) Pop child from the stack (the parent is revealed below it).
-		const current = this.getCurrentTask()
-		if (current?.taskId === childTaskId) {
-			this.popFromStackWithoutAborting()
-		}
-
-		// 4) Refresh the webview so the user sees the parent's chat again.
-		await this.postInitState()
-
-		// 5) Emit provider-level event.
-		try {
-			this.emit(ShoferEventName.TaskDelegationCompleted, parentTaskId, childTaskId, completionResult)
-		} catch {
-			// non-fatal
-		}
-
-		// 6) Fire the resolver to unblock the parent's NewTaskTool.execute() await.
-		resolver(completionResult)
-
-		this.debug(`[resumeBlockingParent] DONE parentTaskId=${parentTaskId}, childTaskId=${childTaskId}`)
-		return true
-	}
-
-	/**
-	 * Register a blocking resolver for a foreground subtask child.
-	 * Called by NewTaskTool before starting the child so the resolver is ready
-	 * before attempt_completion could fire.
-	 */
-	public registerBlockingChildResolver(childTaskId: string, resolver: (result: string) => void): void {
-		this.blockingChildResolvers.set(childTaskId, resolver)
 	}
 
 	/**

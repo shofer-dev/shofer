@@ -77,10 +77,8 @@ export const toolNames = [
 	"give_feedback",
 	// Async background task tools
 	"check_task_status",
-	"wait_for_task",
 	"list_background_tasks",
 	"cancel_tasks",
-	"answer_subtask_question",
 	"sed",
 	// Git History Search
 	// Async MCP tool calling
@@ -155,10 +153,8 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	set_task_title: "set task title",
 	give_feedback: "send feedback to shofer",
 	check_task_status: "check background task status",
-	wait_for_task: "wait for background task",
 	list_background_tasks: "list background tasks",
 	cancel_tasks: "cancel background tasks",
-	answer_subtask_question: "answer subtask question",
 	sed: "regex find-and-replace on files",
 	call_mcp_tool_async: "call mcp tools asynchronously",
 	check_mcp_call_status: "check async mcp call status",
@@ -223,7 +219,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		tools: ["switch_mode"],
 	},
 	subtasks: {
-		tools: ["new_task", "check_task_status", "wait_for_task", "cancel_tasks", "answer_subtask_question"],
+		tools: ["new_task", "check_task_status", "cancel_tasks"],
 	},
 	questions: {
 		tools: ["ask_followup_question"],

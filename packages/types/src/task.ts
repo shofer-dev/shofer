@@ -101,7 +101,6 @@ export type TaskProviderEvents = {
 	[ShoferEventName.TaskUnpaused]: [taskId: string]
 	[ShoferEventName.TaskSpawned]: [taskId: string]
 	[ShoferEventName.TaskDelegated]: [parentTaskId: string, childTaskId: string]
-	[ShoferEventName.TaskDelegationCompleted]: [parentTaskId: string, childTaskId: string, summary: string]
 	[ShoferEventName.TaskDelegationResumed]: [parentTaskId: string, childTaskId: string]
 
 	[ShoferEventName.TaskUserMessage]: [taskId: string]
@@ -295,17 +294,6 @@ export interface TaskHandle {
 	parentTaskId: string
 }
 
-/**
- * Read-only view of a question that a background child task routed up to
- * its parent via `ask_followup_question`. Consumers (CheckTaskStatusTool,
- * WaitForTaskTool, AnswerSubtaskQuestionTool) read this; only the child's
- * Task instance produces it.
- */
-export interface PendingParentQuestionInfo {
-	question: string
-	suggestions: Array<{ answer: string; mode?: string }>
-}
-
 export const taskMetadataSchema = z.object({
 	task: z.string().optional(),
 	images: z.array(z.string()).optional(),
@@ -319,12 +307,11 @@ export interface TaskLike {
 	readonly parentTaskId?: string
 	readonly childTaskId?: string
 	/**
-	 * Whether this task was spawned as a BACKGROUND child (`new_task` with
-	 * `is_background`) rather than a synchronous one. It sits beside the parent
-	 * and root ids because it completes them: the ids say a task has a parent,
-	 * this says whether that parent is still running (background) or suspended
-	 * inside `new_task` waiting for this task (synchronous) — which is what
-	 * decides where an ask raised here can travel.
+	 * Whether this task's parent is running CONCURRENTLY with it. True for every
+	 * child `new_task` creates. It sits beside the parent and root ids because it
+	 * completes them: the ids say a task has a parent, this says whether that
+	 * parent is available to answer — which is what decides where an ask raised
+	 * here can travel.
 	 */
 	readonly isBackgroundTask: boolean
 	readonly metadata: TaskMetadata

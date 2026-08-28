@@ -47,7 +47,6 @@ import {
 	type TraceContext,
 	type TaskInteractionPayload,
 	type TaskHandle,
-	type PendingParentQuestionInfo,
 	type CostLimit,
 	type McpToolCallResponse,
 	ShoferEventName,
@@ -242,22 +241,26 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	knownPeers?: Set<string>
 
 	/**
-	 * When this task is a background child whose `ask_followup_question`
-	 * is awaiting an answer from either the parent agent (via
-	 * `answer_subtask_question`) or the user (interactively, via the
-	 * child's own `followup` ask UI), stores the question metadata so
-	 * `check_task_status` / `wait_for_task` can surface the question text.
+	 * Set while this child is parked on a question it FORWARDED to its parent.
 	 *
-	 * The blocking itself is handled by `task.ask("followup", …)` — the
-	 * same mechanism used for user-facing questions — so the question
-	 * renders with suggestion buttons in the child's chat UI and can be
-	 * resolved by EITHER channel calling `handleWebviewAskResponse`.
+	 * A child's `ask_followup_question` is dual-channel: the question is raised
+	 * as an ordinary `followup` ask in the child's own chat AND delivered to the
+	 * parent's mailbox as a `request` envelope. This field is the correlation
+	 * between the two — `envelopeId` names the request in the parent's box,
+	 * `question` is the text — and it exists because three things need it and
+	 * none of them can derive it:
 	 *
-	 * Accessed only through the typed
-	 * `getPendingParentQuestion / setPendingParentQuestionInfo / clearPendingParentQuestion`
-	 * accessors below — never via cast.
+	 * - the parent's `reply` must unpark THIS ask ({@link answerForwardedQuestion});
+	 * - `check_task_status` reports that the child is waiting on an answer;
+	 * - `TaskManager` suppresses the desktop `needs_input` notification, because
+	 *   the question has a live agent audience and is not (only) the human's to
+	 *   answer.
+	 *
+	 * The blocking itself is `task.ask("followup", …)`, exactly as for a
+	 * user-facing question, so either channel resolves it through
+	 * `handleWebviewAskResponse` and the first answer wins.
 	 */
-	private _pendingParentQuestion?: PendingParentQuestionInfo
+	private _forwardedQuestion?: { envelopeId: string; question: string }
 
 	/**
 	 * In-flight async MCP tool calls (mirrors `backgroundChildren` for MCP calls).
@@ -348,8 +351,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * `backgroundChildren` is a runtime-only `Map` populated by `NewTaskTool` when
 	 * spawning background subtasks. It is never serialized. After a VS Code /
 	 * code-server restart, a resumed parent task starts with an empty map, so
-	 * `check_task_status`, `wait_for_task`, `cancel_tasks`, and
-	 * `answer_subtask_question` — all of which gate on
+	 * `check_task_status` and `cancel_tasks` — both of which gate on
 	 * `task.backgroundChildren.get(task_id)` — reject the parent's own children
 	 * with "Task not found in background children or peers" even though
 	 * `list_background_tasks` (which has a persisted-history fallback) still
@@ -4220,8 +4222,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			// Rebuild the in-memory backgroundChildren map from persisted history.
 			// After a process restart the map is empty (it is never serialized),
-			// which would cause check_task_status / wait_for_task / cancel_tasks /
-			// answer_subtask_question to reject the parent's own children with
+			// which would cause check_task_status / cancel_tasks to reject the
+			// parent's own children with
 			// "Task not found". Idempotent and safe when the map is already populated.
 			await this.rehydrateBackgroundChildren()
 
@@ -4559,38 +4561,39 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return this.isBackground
 	}
 
-	/**
-	 * Typed read-only view of a question this background child has pending.
-	 *
-	 * The question is awaiting an answer from EITHER the parent agent (via
-	 * `answer_subtask_question`) OR the user (interactively, via the child's
-	 * own `followup` ask UI rendered by `task.ask("followup", …)`). The
-	 * metadata stored here lets `check_task_status` / `wait_for_task`
-	 * surface the question text and suggestions to the parent agent.
-	 */
-	public getPendingParentQuestion(): PendingParentQuestionInfo | undefined {
-		return this._pendingParentQuestion
+	/** The question this child forwarded to its parent, while it is still parked on it. */
+	public get forwardedQuestion(): { envelopeId: string; question: string } | undefined {
+		return this._forwardedQuestion
+	}
+
+	/** Record the question this child just forwarded to its parent. */
+	public setForwardedQuestion(info: { envelopeId: string; question: string }): void {
+		this._forwardedQuestion = info
+	}
+
+	/** Forget the forwarded question — answered by either channel, expired, or aborted. */
+	public clearForwardedQuestion(): void {
+		this._forwardedQuestion = undefined
 	}
 
 	/**
-	 * Register the metadata for a pending question this background child has
-	 * asked via `ask_followup_question`. The blocking itself is handled by
-	 * `task.ask("followup", …)` in `AskFollowupQuestionTool.execute` — this
-	 * method only stores the question info so orchestration tools
-	 * (`check_task_status`, `wait_for_task`) can surface it.
+	 * Answer the question this child forwarded, if `envelopeId` is the request it
+	 * is actually parked on.
 	 *
-	 * Only one pending question can be outstanding at a time per task.
+	 * This is how a parent's `reply` reaches a child that is parked on an ASK
+	 * rather than on its mailbox: the answer goes through the same
+	 * `handleWebviewAskResponse` path the webview uses, which no-ops when the ask
+	 * has already been answered — so a human who answered in the child's chat
+	 * first simply wins.
+	 *
+	 * @returns true when this child was parked on that request.
 	 */
-	public setPendingParentQuestionInfo(info: PendingParentQuestionInfo): void {
-		this._pendingParentQuestion = info
-	}
-
-	/**
-	 * Clear the pending parent question metadata. Called when the question
-	 * has been answered (by either channel) or when the task is aborted.
-	 */
-	public clearPendingParentQuestion(): void {
-		this._pendingParentQuestion = undefined
+	public answerForwardedQuestion(envelopeId: string, answer: string): boolean {
+		if (this._forwardedQuestion?.envelopeId !== envelopeId) {
+			return false
+		}
+		this.handleWebviewAskResponse("messageResponse", answer)
+		return true
 	}
 
 	/**
@@ -4605,7 +4608,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * auto-approval policy.
 	 */
 	private isRoutedFollowupPending(): boolean {
-		return this.isBackground && !!this.parentTaskId && this._pendingParentQuestion !== undefined
+		return this.isBackground && !!this.parentTaskId && this._forwardedQuestion !== undefined
 	}
 
 	public async abortTask(isAbandoned = false) {
@@ -4629,13 +4632,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			})
 		}
 
-		// If this task was blocked awaiting an answer to a routed
-		// ask_followup_question (either from the parent agent or the user),
-		// clear the pending-question metadata now. The blocking itself is
-		// handled by `task.ask("followup", …)`, whose `pWaitFor` already
-		// checks `this.abort` and unwinds via `AskIgnoredError` — so no
-		// promise rejection is needed here.
-		this.clearPendingParentQuestion()
+		// If this task was parked on a question it forwarded to its parent, forget
+		// it now. The blocking itself is `task.ask("followup", …)`, whose
+		// `pWaitFor` already checks `this.abort` and unwinds via
+		// `AskIgnoredError` — so no promise rejection is needed here.
+		this.clearForwardedQuestion()
 
 		// Abort all background children before aborting self (Decision: abort propagation).
 		await this.abortBackgroundChildren()
@@ -6633,87 +6634,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						}
 					}
 
-					// Enforce new_task isolation: if new_task is called alongside other tools,
-					// truncate any tools that come after it and inject error tool_results.
-					// This prevents orphaned tools when delegation disposes the parent task.
-					const newTaskBlocks = assistantContent.filter(
-						(block): block is Anthropic.ToolUseBlockParam =>
-							block.type === "tool_use" && block.name === "new_task",
-					)
-
-					if (newTaskBlocks.length > 1) {
-						// Multiple new_task calls in one message.
-						// Allow only when ALL are is_background=true (legitimate fan-out).
-						const allBackground = newTaskBlocks.every(
-							(block) => (block.input as Record<string, unknown>)?.is_background === true,
-						)
-
-						if (!allBackground) {
-							// Reject ALL new_task calls — the first one would otherwise create an
-							// unintended sync child before the LLM retries with is_background.
-							for (const block of newTaskBlocks) {
-								if (block.id) {
-									this.pushToolResultToUserContent({
-										type: "tool_result",
-										tool_use_id: block.id,
-										content:
-											"This new_task call was not executed. When calling new_task multiple times in one message, every call must have is_background: true. To launch parallel subtasks, set is_background: true on each new_task call and send them all in one message.",
-										is_error: true,
-									})
-								}
-							}
-
-							// Remove all new_task blocks from the assistant content so they
-							// don't get saved to API history, triggering delegation.
-							const filteredContent = assistantContent.filter(
-								(block) => !(block.type === "tool_use" && block.name === "new_task"),
-							)
-							assistantContent.length = 0
-							assistantContent.push(...filteredContent)
-
-							// Also remove from the execution array so they don't get processed
-							// by presentAssistantMessage().
-							for (let i = this.assistantMessageContent.length - 1; i >= 0; i--) {
-								const block = this.assistantMessageContent[i]!
-								if (block.type === "tool_use" && block.name === "new_task") {
-									this.assistantMessageContent.splice(i, 1)
-								}
-							}
-						}
-						// All background — allow all to execute as legitimate fan-out.
-					} else if (newTaskBlocks.length === 1) {
-						const newTaskIndex = assistantContent.indexOf(newTaskBlocks[0]!)
-
-						if (newTaskIndex < assistantContent.length - 1) {
-							// new_task found but not last - truncate subsequent tools
-							const truncatedTools = assistantContent.slice(newTaskIndex + 1)
-							assistantContent.length = newTaskIndex + 1 // Truncate API history array
-
-							// ALSO truncate the execution array (assistantMessageContent) to prevent
-							// tools after new_task from being executed by presentAssistantMessage().
-							// Find new_task index in assistantMessageContent (may differ from assistantContent
-							// due to text blocks being structured differently).
-							const executionNewTaskIndex = this.assistantMessageContent.findIndex(
-								(block) => block.type === "tool_use" && block.name === "new_task",
-							)
-							if (executionNewTaskIndex !== -1) {
-								this.assistantMessageContent.length = executionNewTaskIndex + 1
-							}
-
-							// Pre-inject error tool_results for truncated tools
-							for (const tool of truncatedTools) {
-								if (tool.type === "tool_use" && (tool as Anthropic.ToolUseBlockParam).id) {
-									this.pushToolResultToUserContent({
-										type: "tool_result",
-										tool_use_id: (tool as Anthropic.ToolUseBlockParam).id,
-										content:
-											"This tool was not executed because new_task was called in the same message turn. The new_task tool must be the last tool in a message.",
-										is_error: true,
-									})
-								}
-							}
-						}
-					}
+					// `new_task` needs no isolation. It used to have to be the last tool in
+					// a turn — and, when repeated, every call had to be a background one —
+					// because a SYNCHRONOUS child disposed the parent, orphaning any tool
+					// that came after it. Every child is concurrent now: the parent keeps
+					// running, nothing is disposed, and fan-out in one turn is the normal
+					// way to spawn several children (docs/parallelism.md).
 
 					// Save assistant message BEFORE executing tools
 					// This is critical for new_task: when it triggers delegation, flushPendingToolResultsToHistory()
@@ -7259,7 +7185,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// Role awareness — always injected.
 			if (this.isBackground) {
 				constraints.push(
-					"- You are a background sub-task spawned by a parent task. Your results will be collected by the parent via check_task_status or wait_for_task. Work independently and do not wait for user input — the user is not watching you.",
+					"- You are a sub-task spawned by a parent task, which is running concurrently with you. Your result is delivered to the parent when you call attempt_completion. If you need a decision only the parent can make, ask_followup_question reaches it. Otherwise work independently — the user is not watching you.",
 				)
 				constraints.push(
 					"- The parent may cancel you at any time via the cancel_tasks tool. Checkpoint partial results in your attempt_completion so the parent can recover useful work even if you are stopped early.",

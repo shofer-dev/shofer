@@ -65,6 +65,13 @@ export const MAILBOX_NOTIFICATION_TIMEOUT_SEC = 600
  */
 export const MAILBOX_REPLY_TIMEOUT_SEC = 120
 
+/**
+ * Lifetime of a question a child forwards to its parent, in seconds. Longer
+ * than an ordinary request because the answer may need a human: the parent's
+ * own turn has to come round, and a person may have to look at it.
+ */
+export const MAILBOX_CHILD_QUESTION_TIMEOUT_SEC = 600
+
 /** Default `wait` timeout, in seconds. Mandatory and not disableable. */
 export const MAILBOX_WAIT_TIMEOUT_SEC = 120
 

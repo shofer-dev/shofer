@@ -929,11 +929,9 @@ export interface ShoferSayTool {
 		| "createNewWorkspace"
 		| "findFiles"
 		| "viewImage"
-		| "waitForTask"
 		| "checkTaskStatus"
 		| "listBackgroundTasks"
 		| "cancelTasks"
-		| "answerSubtaskQuestion"
 		| "sendMessage"
 		| "reply"
 		| "wait"
@@ -1027,11 +1025,9 @@ export interface ShoferSayTool {
 	description?: string
 	// Properties for skill tool
 	skill?: string
-	// Properties for background-task status tools (waitForTask / checkTaskStatus / listBackgroundTasks).
+	// Properties for background-task status tools (checkTaskStatus / listBackgroundTasks).
 	// `task_id` / `task_ids` identify the target background child task(s).
 	// `task_title` / `task_titles` are the human-readable labels shown in the UI instead of raw UUIDs.
-	// `wait` is the wait_for_task strategy ("all" | "any").
-	// `timeout` is the wait_for_task cap in seconds.
 	// `tasks` carries the snapshot rendered by list_background_tasks.
 	task_id?: string
 	task_ids?: string[]
@@ -1039,8 +1035,6 @@ export interface ShoferSayTool {
 	task_titles?: string[]
 	/** For `sendMessage`: the envelope body. */
 	message?: string
-	wait?: "all" | "any"
-	timeout?: number
 	// Mailbox rows (`sendMessage` / `reply` / `wait` — docs/task_messaging.md).
 	/** For `sendMessage`: the envelope kind the sender chose. */
 	kind?: "notification" | "request"
@@ -1071,15 +1065,12 @@ export interface ShoferSayTool {
 	}>
 	// Properties for new_task tool. `peer_task_ids` carries the list of sibling
 	// task IDs explicitly granted peer access at spawn time.
-	// `is_background` flags background (async) subtasks.
 	// `todos` carries the initial todo list for the subtask.
 	todos?: string
 	peer_task_ids?: string[]
-	is_background?: boolean
 	softResultLength?: number
 	softTimeoutSec?: number
 	contextFiles?: string[]
-	// answer_subtask_question: the answer text rendered back into the chat row.
 	answer?: string
 }
 

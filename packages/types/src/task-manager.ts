@@ -60,7 +60,6 @@ export interface TaskManagerEvents {
 	 * for this so it can wake up and surface the question to the LLM instead
 	 * of blocking on a non-existent terminal transition.
 	 */
-	"managedTask:needs-parent-input": [targetTaskId: string, question: string]
 	"managedTask:completed": [targetTaskId: string]
 	"managedTask:error": [targetTaskId: string, error: string]
 	"managedTask:tool-error": [targetTaskId: string, error: string]

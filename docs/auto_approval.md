@@ -108,7 +108,7 @@ These are the boolean toggles exposed in the UI. Each controls a specific class 
 | `alwaysAllowBrowser`           | Tools in the `browser` ToolGroup                                               | –                                                                               |
 | `alwaysAllowMcp`               | Master gate for MCP tool calls and resource access                             | Per-group toggle for the tool's group (see [`alwaysAllowMcp`](#alwaysallowmcp)) |
 | `alwaysAllowModeSwitch`        | `switch_mode` tool                                                             | –                                                                               |
-| `alwaysAllowSubtasks`          | `new_task`, `finishTask`, `cancel_tasks`, `answer_subtask_question`            | –                                                                               |
+| `alwaysAllowSubtasks`          | `new_task`, `finishTask`, `cancel_tasks`                                       | –                                                                               |
 | `alwaysAllowExecute`           | Shell command execution (gate — requires `allowedCommands` to have any effect) | `allowedCommands`, `deniedCommands`                                             |
 | `alwaysAllowFollowupQuestions` | Follow-up question suggestions                                                 | `followupAutoApproveTimeoutMs`                                                  |
 
@@ -138,18 +138,17 @@ either harmless meta-operations or purely informational queries against in-memor
 
 ### Inter-Task Questions
 
-A **question directed at another task** is always auto-approved. `ask_followup_question`
-only reaches the `tool` ask path here when a background child routes its question **up to
-its parent** (see [`AskFollowupQuestionTool`](../packages/core/src/tools/AskFollowupQuestionTool.ts) —
-the `task.parentTaskId && task.isBackgroundTask` branch calls
-`askApproval("tool", { tool: "askFollowupQuestion", … })`). No human is interrupted: the
-parent fields the question and answers via `answer_subtask_question`. Gating it behind a user
-prompt would be meaningless and would silently hang the child (no resolver exists for an
-auto-context).
+A **question forwarded to another task** is always auto-approved. `ask_followup_question`
+reaches the `tool` ask path here when a child forwards its question **to its parent**
+(see [`AskFollowupQuestionTool`](../packages/core/src/tools/AskFollowupQuestionTool.ts)),
+which delivers it as a `request` into the parent's mailbox while the same question is
+raised in the child's own chat. No human is interrupted by the forwarding leg — the parent
+answers with `reply` — so gating it behind a user prompt would be meaningless and would
+silently hang the child (no resolver exists for an auto-context).
 
-| Tool                                | Rationale                                                         |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| `ask_followup_question` (to parent) | Routed up the task tree; answered by another agent, not the user. |
+| Tool                                | Rationale                                                            |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| `ask_followup_question` (to parent) | Forwarded up the task tree; answered by another agent, not the user. |
 
 > **Distinction:** A question directed at the **user** instead flows through the
 > `followup` **ask** category (`task.ask("followup", …)`), which is gated by
@@ -164,14 +163,13 @@ auto-context).
 These query **in-memory state** owned by the parent task. They never touch the filesystem
 or network and mutate nothing:
 
-| Tool                    | Description                                                                   |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| `check_task_status`     | Check status/result of a background child task.                               |
-| `wait_for_task`         | Block until one or more background tasks complete (event-driven, no polling). |
-| `list_background_tasks` | List all background child tasks started by this task.                         |
+| Tool                    | Description                                |
+| ----------------------- | ------------------------------------------ |
+| `check_task_status`     | Check status/result of a child task.       |
+| `list_background_tasks` | List all child tasks started by this task. |
 
 > **Important distinction:** The _status_ tools are unconditionally approved, but
-> **`new_task`**, `cancel_tasks`, `finishTask`, and `answer_subtask_question` are
+> **`new_task`**, `cancel_tasks` and `finishTask` are
 > all gated behind `alwaysAllowSubtasks`. If that toggle is off, the model must ask
 > permission before spawning, cancelling, or completing a subtask. This prevents
 > uncontrolled task-tree growth while still letting the model inspect tasks it has
@@ -217,17 +215,16 @@ unconditionally approved:
 
 ### `alwaysAllowSubtasks`
 
-Controls **task creation, completion, cancellation, and subtask question answering**.
-The background-task status tools (`check_task_status`, `wait_for_task`,
-`list_background_tasks`) are **not** gated by this toggle (see
+Controls **task creation, completion and cancellation**.
+The background-task status tools (`check_task_status`, `list_background_tasks`)
+are **not** gated by this toggle (see
 [Unconditionally Auto-Approved](#unconditionally-auto-approved-tools)).
 
-| Tool                      | Toggle ON                 | Toggle OFF            |
-| ------------------------- | ------------------------- | --------------------- |
-| `new_task`                | `{ decision: "approve" }` | `{ decision: "ask" }` |
-| `finishTask`              | `{ decision: "approve" }` | `{ decision: "ask" }` |
-| `cancel_tasks`            | `{ decision: "approve" }` | `{ decision: "ask" }` |
-| `answer_subtask_question` | `{ decision: "approve" }` | `{ decision: "ask" }` |
+| Tool           | Toggle ON                 | Toggle OFF            |
+| -------------- | ------------------------- | --------------------- |
+| `new_task`     | `{ decision: "approve" }` | `{ decision: "ask" }` |
+| `finishTask`   | `{ decision: "approve" }` | `{ decision: "ask" }` |
+| `cancel_tasks` | `{ decision: "approve" }` | `{ decision: "ask" }` |
 
 ### `alwaysAllowModeSwitch`
 
@@ -504,8 +501,8 @@ _Discovered during the 2026-05-20 verification review against source at [`index.
    were unconditionally approved in code but absent from the doc. Added as Meta-Operations and
    Async MCP Call Status Tools respectively.
 
-2. **Missing `cancel_tasks` / `answer_subtask_question` from `alwaysAllowSubtasks`** — the doc claimed
-   the toggle controlled only `new_task` and `finishTask`. The actual gate covers all four
+2. **Missing `cancel_tasks` from `alwaysAllowSubtasks`** — the doc claimed
+   the toggle controlled only `new_task` and `finishTask`. The actual gate covers all three
    control-plane subtask tools. Expanded the toggles table, subtasks table, and callout.
 
 3. **Missing `alwaysAllowUncategorized` toggle** — defined as an `AutoApprovalState`

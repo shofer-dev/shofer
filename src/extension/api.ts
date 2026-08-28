@@ -836,7 +836,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 	 * The gap this closes: a controller subscribes to ONE task — the conversation's
 	 * root (`GET /api/v1/task/:id/event`) — so nothing consumes a child task's
 	 * events. A background child is fine, because its question is routed to its
-	 * PARENT, which is running and can answer via `answer_subtask_question`. A
+	 * PARENT, which is running and answers the request in its mailbox with `reply`. A
 	 * SYNCHRONOUS child has no such hop: its parent is suspended inside `new_task`
 	 * waiting for it. Left alone the question reaches no durable surface, the child
 	 * parks forever, and the parent parks behind it — the whole conversation stops
@@ -952,10 +952,6 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 
 			task.on(ShoferEventName.TaskDelegated as any, (childTaskId: string) => {
 				;(this.emit as any)(ShoferEventName.TaskDelegated, task.taskId, childTaskId)
-			})
-
-			task.on(ShoferEventName.TaskDelegationCompleted as any, (childTaskId: string, summary: string) => {
-				;(this.emit as any)(ShoferEventName.TaskDelegationCompleted, task.taskId, childTaskId, summary)
 			})
 
 			task.on(ShoferEventName.TaskDelegationResumed as any, (childTaskId: string) => {

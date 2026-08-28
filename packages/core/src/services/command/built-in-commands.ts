@@ -544,7 +544,7 @@ to Shofer rules.
 	   **Note:** Copilot Cloud Agents (Agent Sessions — autonomous agents running in
 	   isolated GitHub Actions environments for up to 59 minutes) are a Copilot
 	   cloud runtime feature. Shofer provides equivalent background-task orchestration
-	   via its Orchestrator mode and the \`new_task\` tool with \`is_background=true\`.
+	   via its Orchestrator mode and the \`new_task\` tool.
 	   Cloud Agent session definitions are NOT represented as .agent.md files and
 	   cannot be migrated.
 	 </agent_definitions>

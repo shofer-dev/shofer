@@ -328,7 +328,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 	/**
 	 * "Active" = the task is doing work: running its own loop, or blocked waiting
-	 * on another task (wait_for_task / blocking new_task) or on its mailbox (`wait`).
+	 * on its mailbox (`wait`) or on an async MCP call (`wait_for_mcp_call`).
 	 * Idle, waiting_input (waiting on the user), paused, and terminal states are
 	 * NOT active. `activeTimeMs` accumulates active wall-clock time and excludes
 	 * only idle-equivalent time — matching the Stats "runtime" pie.
@@ -615,13 +615,12 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			if (taskId !== targetTaskId) return
 			this.setState(targetTaskId, TaskManager.makeState("waiting_input"))
 
-			// Suppress the needs_input notification for a background child's routed
-			// ask_followup_question — the question is directed at the parent agent
-			// (via answer_subtask_question), not at the user. The parent discovers
-			// it via check_task_status / wait_for_task. The user can still see and
-			// answer the question interactively if they switch to the child task,
-			// but they should not get a desktop notification for it.
-			if (task.isBackgroundTask && task.parentTaskId && task.getPendingParentQuestion()) {
+			// Suppress the needs_input notification for a question a child FORWARDED
+			// to its parent: it already has a live agent audience (the request is in
+			// the parent's mailbox, and the parent answers it with `reply`), so the
+			// human is not the one being waited on. They can still open the child and
+			// answer it there — first answer wins — but they are not interrupted.
+			if (task.isBackgroundTask && task.parentTaskId && task.forwardedQuestion) {
 				return
 			}
 

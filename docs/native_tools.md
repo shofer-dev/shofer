@@ -435,47 +435,46 @@ Severity filtering is best-effort: it parses the first `[level]` token VS Code's
 
 ## Task Management
 
-| Tool                      | Origin | Group | Always Available | Status | Description                                                          |
-| ------------------------- | :----: | ----- | :--------------: | :----: | -------------------------------------------------------------------- |
-| `ask_followup_question`   | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question (suggested answers and/or typed form)        |
-| `attempt_completion`      | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                               |
-| `switch_mode`             | 🔵 RC  | mode  |        ✅        |   ✅   | Switch own or child task to a different mode                         |
-| `new_task`                | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                                |
-| `check_task_status`       | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task                       |
-| `wait_for_task`           | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any)          |
-| `cancel_tasks`            | 🟣 AW  | –     |        ✅        |   ✅   | Cancel one or more running background child tasks                    |
-| `answer_subtask_question` | 🟣 AW  | –     |        ✅        |   ✅   | Answer a question asked by a background child task                   |
-| `list_background_tasks`   | 🟣 AW  | –     |        ✅        |   ✅   | List background tasks (children or peers)                            |
-| `send_message`            | 🟣 AW  | –     |        ✅        |   ✅   | Put an envelope in another task's mailbox                            |
-| `reply`                   | 🟣 AW  | –     |        ✅        |   ✅   | Answer requests sitting in this task's mailbox                       |
-| `wait`                    | 🟣 AW  | –     |        ✅        |   ✅   | Read this task's mailbox, parking until mail arrives                 |
-| `update_todo_list`        | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                                 |
-| `skills`                  | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                             |
-| `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                                   |
-| `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                           |
-| `describe_tools`          | 🟣 AW  | –     |   ✅ (tiered)    |   ✅   | Return the full parameter schema of tools the mode declared as stubs |
+| Tool                    | Origin | Group    | Always Available | Status | Description                                                          |
+| ----------------------- | :----: | -------- | :--------------: | :----: | -------------------------------------------------------------------- |
+| `ask_followup_question` | 🔵 RC  | –        |        ✅        |   ✅   | Ask the user a question (suggested answers and/or typed form)        |
+| `attempt_completion`    | 🔵 RC  | –        |        ✅        |   ✅   | Signal task completion                                               |
+| `switch_mode`           | 🔵 RC  | mode     |        ✅        |   ✅   | Switch own or child task to a different mode                         |
+| `new_task`              | 🔵 RC  | subtasks |        –         |   ✅   | Spawn a concurrent child task                                        |
+| `check_task_status`     | 🟣 AW  | subtasks |        –         |   ✅   | Check status/result of a child task                                  |
+| `cancel_tasks`          | 🟣 AW  | subtasks |        –         |   ✅   | Cancel one or more running child tasks                               |
+| `list_background_tasks` | 🟣 AW  | –        |        ✅        |   ✅   | List background tasks (children or peers)                            |
+| `send_message`          | 🟣 AW  | –        |        ✅        |   ✅   | Put an envelope in another task's mailbox                            |
+| `reply`                 | 🟣 AW  | –        |        ✅        |   ✅   | Answer requests sitting in this task's mailbox                       |
+| `wait`                  | 🟣 AW  | –        |        ✅        |   ✅   | Read this task's mailbox, parking until mail arrives                 |
+| `update_todo_list`      | 🔵 RC  | –        |        ✅        |   ✅   | Update the TODO list                                                 |
+| `skills`                | 🔵 RC  | –        |        ✅        |   ✅   | Load and execute a skill                                             |
+| `set_task_title`        | 🟣 AW  | –        |        ✅        |   ✅   | Set descriptive title for the task                                   |
+| `give_feedback`         | 🟣 AW  | –        |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                           |
+| `describe_tools`        | 🟣 AW  | –        |   ✅ (tiered)    |   ✅   | Return the full parameter schema of tools the mode declared as stubs |
 
-The subtask tools form one control plane around a background child. The parent
-holds every lever; the child never talks to the user directly:
+The subtask tools form one control plane around a child. The parent holds every
+lever, and because it is never blocked it is always able to pull one. Results
+and questions both arrive as mail ([`task_messaging.md`](task_messaging.md)):
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant U as user
     participant P as parent task
-    participant C as background child
+    participant C as child task
 
-    P->>C: new_task with is_background=true
-    C-->>P: task_id returned immediately, parent does not block
+    P->>C: new_task — the child always runs concurrently
+    C-->>P: task_id returned immediately, parent keeps running
     P->>P: list_background_tasks — children, or peers under the same root
-    C->>P: ask_followup_question routed UP to the parent
-    Note over U,C: a background child's question never reaches the user
-    P->>C: answer_subtask_question unblocks the child
+    C->>P: ask_followup_question — a request in the parent's mailbox
+    Note over U,C: the same question is also raised in the child's own chat
+    P->>C: reply answers the request — the first answer wins
     P->>C: send_message — an envelope into the child's mailbox
     C->>C: wait reads the box, reply answers a request
-    P->>P: check_task_status — mode, status, pending question, result
-    C-->>P: attempt_completion result on terminal state
-    P->>P: wait_for_task blocks until all, or any, complete
+    P->>P: check_task_status — mode, status, forwarded question, result
+    C-->>P: attempt_completion — the result as a notification
+    P->>P: wait(from=["<child id>"]) parks until the result lands
     P->>C: cancel_tasks stops work that is no longer needed
 ```
 
@@ -535,11 +534,14 @@ result. The handler also calls `task.markFollowupFormAnswered(values)` to embed
 `answeredValues` onto the question message so the form re-renders **read-only**
 after a reload.
 
-**Background child tasks:** forms require an interactive user, so a background
-child's question is routed to its **parent** (which answers in free text via
-`answer_subtask_question`) — the form widgets are not shown. Form-mode calls from
-a background child fall through to the same parent-routing path with the bare
-question text.
+**Child tasks:** a child's question is **dual-channel** — it is raised in the
+child's own chat as usual **and** delivered to the parent's mailbox as a
+`request` (subject `question: <first line>`, body the question plus its
+suggestions). A human may answer in the child's chat, the parent may answer with
+[`reply`](task_messaging.md); the **first answer wins** and the other channel is
+withdrawn. Because the parent answers in free text, form-mode calls from a child
+forward the bare question text — the form widgets reach the child's own chat
+only. See [`task_messaging.md` § Rewired tools](task_messaging.md#rewired-tools).
 
 Example (suggested answers with a mode switch):
 
@@ -621,31 +623,38 @@ Request to switch to a different mode. When the optional `task_id` parameter is 
 
 ### `new_task`
 
-Create a new task instance in the chosen mode. Supports two execution models:
+Create a new task instance in the chosen mode. The child **always** runs
+concurrently: the tool returns `Child task started: <task_id>` as soon as the
+child has started, the parent is never suspended, and several children may be
+spawned in the same turn.
 
-- **Synchronous (default):** The parent blocks until the child completes. Must be called alone — no other tools in the same turn.
-- **Background (`is_background=true`):** The child starts immediately and runs concurrently. The parent receives the child's `task_id` and continues without blocking. Use `check_task_status` or `wait_for_task` to retrieve results later.
+The parent gets the result as **mail**. When the child calls
+`attempt_completion`, its result is delivered to the parent's mailbox as a
+`notification` (subject `result: <child title>`), so the parent either calls
+`wait(from=["<task_id>"])` when it needs the result before it can continue, or
+simply ends its turn and is woken by the delivery. Because the parent keeps
+running, it is also the child's audience for questions
+([`task_messaging.md`](task_messaging.md)).
 
 | Param              | Type             | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ------------------ | ---------------- | :------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mode`             | string           |    ✅    | Mode slug (e.g., `code`, `debug`)                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `message`          | string           |    ✅    | Initial instructions for the child task                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `todos`            | string \| null   |    –     | Initial markdown checklist for the child                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `is_background`    | boolean \| null  |    –     | When `true`, run child concurrently and return `task_id` immediately (default: `false`)                                                                                                                                                                                                                                                                                                                                                                                      |
 | `softResultLength` | number \| null   |    –     | Soft suggestion for max characters of the subtask's completion result (default: 2000). Hard safety cap: 100000 characters.                                                                                                                                                                                                                                                                                                                                                   |
 | `softTimeoutSec`   | number \| null   |    –     | Soft guidance in seconds for how long the parent expects to wait (default: 300). Informational only — not enforced.                                                                                                                                                                                                                                                                                                                                                          |
 | `peer_task_ids`    | string[] \| null |    –     | Least-privilege peer scope: the spawned child's baseline `knownPeers` is parent-only. If provided, these task IDs are added (must share `rootTaskId`). **Grants are symmetric** — each listed peer also gets the new child added to _its_ `knownPeers`, so the channel is two-way. If omitted/null, the child can only communicate with its parent and its own children — sibling access is denied. Validated against `rootTaskId` at spawn time — unknown IDs are rejected. |
 | `title`            | string \| null   |    –     | Optional display title for the child task (max 60 chars; trimmed and truncated; whitespace-only is treated as absent). When set, it becomes the child's `name` from the first save **and locks it** — the [`set_task_title`](#set_task_title) tool is then **omitted from the child's tool list entirely** (and refused if somehow called). The lock (`HistoryItem.nameLocked`) survives restarts. Omit to let the child name itself.                                        |
 
-The spawned child's `Task` instance always has `knownPeers: Set<string>` set. Its baseline contains the parent's `taskId` plus any task the child later spawns (dynamic-add). Peer tools (`check_task_status`, `wait_for_task`, `send_message`, `list_background_tasks` with `scope="peers"`) enforce this set unconditionally — `undefined` means **no peer access whatsoever**.
+The spawned child's `Task` instance always has `knownPeers: Set<string>` set. Its baseline contains the parent's `taskId` plus any task the child later spawns (dynamic-add). Peer tools (`check_task_status`, `send_message`, `wait`, `list_background_tasks` with `scope="peers"`) enforce this set unconditionally — `undefined` means **no peer access whatsoever**.
 
-**Symmetric peering:** when a child is spawned with `peer_task_ids=[B]`, `NewTaskTool` mirrors the edge — it adds the child to `B`'s `knownPeers` (live instance) and persists it onto `B`'s `HistoryItem.peerIds` (rehydrated on restart), so `B` can message/discover the child in return. This opens a two-way channel from a single grant, which matters because a spawn-time grant can only name an already-existing task (so it is unavoidably one-directional as written). It mirrors the **explicit** edge only — it is **not transitive**, so a parent holding two siblings does not connect them; to make two siblings talk, spawn the later one with `peer_task_ids=[earlierSibling]`. Symmetry changes reachability, not blocking semantics — the sync-deadlock fail-fast and timeouts are unaffected. See [`task_messaging.md` § Symmetric peering](task_messaging.md#symmetric-peering-bidirectional-grants).
+**Symmetric peering:** when a child is spawned with `peer_task_ids=[B]`, `NewTaskTool` mirrors the edge — it adds the child to `B`'s `knownPeers` (live instance) and persists it onto `B`'s `HistoryItem.peerIds` (rehydrated on restart), so `B` can message/discover the child in return. This opens a two-way channel from a single grant, which matters because a spawn-time grant can only name an already-existing task (so it is unavoidably one-directional as written). It mirrors the **explicit** edge only — it is **not transitive**, so a parent holding two siblings does not connect them; to make two siblings talk, spawn the later one with `peer_task_ids=[earlierSibling]`. Symmetry changes reachability only — every message is asynchronous, so there is nothing to deadlock. See [`task_messaging.md` § Symmetric peering](task_messaging.md#symmetric-peering-bidirectional-grants).
 
 The PEER RESOURCES block injected into a child's prompt matches the enforced `knownPeers` set exactly.
 
 ### `check_task_status`
 
-Check the current status of a background child task started with `new_task` using `is_background=true`. Returns the task's current mode, status, and — if it has completed/errored/cancelled — its result or error message. If the child is blocked waiting for clarification from the parent (it called `ask_followup_question`), the pending question is surfaced here so the parent can answer it via `answer_subtask_question`. Set `include_activity` to `true` to also see what the child is currently doing.
+Check the current status of a child task started with `new_task`, or of a peer sharing the caller's root task. Returns the task's current mode, status, and — if it has completed/errored/cancelled — its result or error message. A child parked on a question forwarded to this parent reports `Waiting on your answer: "<question>"` together with the `reply({ replies: [{ message_id: "<id>", body: "…" }] })` call that answers it. Set `include_activity` to `true` to also see what the child is currently doing.
 
 > **Post-restart resilience:** The in-memory `backgroundChildren` map is rebuilt from persisted history when the parent task is resumed (`Task.rehydrateBackgroundChildren()`), so `check_task_status` continues to recognize its own children after a VS Code / code-server restart. Even before rehydration runs, the tool falls back to the persisted `TaskHistoryStore` to recognize background children — a child whose live `Task` instance was torn down by the restart is reported with its last persisted lifecycle (e.g. `idle` → `running`), not as an error.
 
@@ -653,18 +662,6 @@ Check the current status of a background child task started with `new_task` usin
 | ------------------ | --------------- | :------: | ------------------------------------------------------------------------------ |
 | `task_id`          | string          |    ✅    | The task ID returned when the background task started                          |
 | `include_activity` | boolean \| null |    ✅    | When `true`, include the child's most recent tool calls and messages in output |
-
-### `wait_for_task`
-
-Block until one or more background child tasks (started with `is_background=true`) reach a terminal state, then return their results. Event-driven — does not poll. Supports `wait=all` (default) to wait for every listed task, or `wait=any` to return as soon as the first one completes.
-
-| Param      | Type               | Required | Description                                                                  |
-| ---------- | ------------------ | :------: | ---------------------------------------------------------------------------- |
-| `task_ids` | string[]           |    ✅    | One or more task IDs returned when the background tasks were started         |
-| `wait`     | `"all"` \| `"any"` |    –     | `"all"` (default) — wait for all tasks; `"any"` — return on first completion |
-| `timeout`  | number             |    –     | Max seconds to wait (default: 120). Returns current statuses if exceeded.    |
-
-Returns: the completed task IDs plus per-task status and result/error text.
 
 ### `cancel_tasks`
 
@@ -674,25 +671,16 @@ Stop one or more background child tasks. Already-completed or errored tasks are 
 | ---------- | -------- | :------: | ------------------------------------------------------- |
 | `task_ids` | string[] |    ✅    | One or more task IDs of background child tasks to stop. |
 
-### `answer_subtask_question`
-
-Answer a question that a background child task asked via `ask_followup_question`. When a background child needs clarification, its question is routed to the parent (not to the user). The parent uses this tool to provide the answer and unblock the child.
-
-| Param     | Type   | Required | Description                                                                         |
-| --------- | ------ | :------: | ----------------------------------------------------------------------------------- |
-| `task_id` | string |    ✅    | The task ID of the background child that asked the question.                        |
-| `answer`  | string |    ✅    | The parent's answer. Be specific and actionable so the child can continue its work. |
-
 ### `list_background_tasks`
 
-List background tasks. With `scope="children"` (default), lists all background child tasks started by this task via `new_task` with `is_background=true`. With `scope="peers"`, lists all tasks sharing the same root task (siblings, aunts/uncles, grandchildren) — not just direct children.
+List background tasks. With `scope="children"` (default), lists all child tasks started by this task via `new_task`. With `scope="peers"`, lists all tasks sharing the same root task (siblings, aunts/uncles, grandchildren) — not just direct children.
 
 The tool merges data from two sources to provide a complete picture:
 
 - **In-memory (`TaskManager.getManagedTasks()`):** Live tasks plus terminal tasks still in the registry. Provides the authoritative lifecycle for active tasks.
 - **Persisted (`TaskHistoryStore`):** All tasks ever persisted, including stopped/cancelled tasks that have been removed from the in-memory registry. This ensures that explicitly stopped tasks and non-hydrated peers appear in the listing with their last known status.
 
-Deduplication: when a task exists in both sources, the in-memory entry wins (its lifecycle is more current). Both sources respect the same filters (`rootTaskId`, `knownPeers` for peers scope; `parentTaskId` and `isBackground` for children scope).
+Deduplication: when a task exists in both sources, the in-memory entry wins (its lifecycle is more current). Both sources respect the same filters (`rootTaskId`, `knownPeers` for peers scope; `parentTaskId` for children scope).
 
 Returns each task's ID, title, current status (a `TaskLifecycle` value: `idle`, `running`, `waiting_input`, `waiting`, `paused`, `completed`, `error`), and creation timestamp.
 
@@ -971,8 +959,8 @@ gated: `computeToolAccess` removes it from a mode that declares no
 Note
 `switch_mode` is **not** always-available — it lives in the `mode` group (only
 `code` carries it), and the `subtasks` tools (`new_task`, `check_task_status`,
-`wait_for_task`, `cancel_tasks`, `answer_subtask_question`) require the `subtasks`
-group (absent from `code-search` and `web-search`).
+`cancel_tasks`) require the `subtasks` group (absent from `code-search` and
+`web-search`).
 
 ---
 

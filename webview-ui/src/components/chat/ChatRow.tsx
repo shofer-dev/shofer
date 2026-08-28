@@ -1004,11 +1004,6 @@ export const ChatRowContent = ({
 									{t("chat:subtasks.peerTaskIds")}: {tool.peer_task_ids.join(", ")}
 								</div>
 							)}
-							{tool.is_background && (
-								<div className="text-xs text-vscode-descriptionForeground mt-1">
-									{t("chat:subtasks.background")}
-								</div>
-							)}
 							<div>
 								{childTaskId && !isFollowedBySubtaskResult && (
 									<button
@@ -1036,40 +1031,6 @@ export const ChatRowContent = ({
 						</div>
 					</>
 				)
-			case "waitForTask": {
-				const timeoutSeconds = typeof tool.timeout === "number" ? tool.timeout : undefined
-				// Support both new multi-task (task_ids/task_titles) and legacy single-task fields.
-				// task_titles is parallel to task_ids and may contain undefined entries when no
-				// title is known (per the shared title-fallback policy); fall back to the
-				// matching task_id for those slots.
-				const idsArr: string[] = tool.task_ids?.length ? tool.task_ids : tool.task_id ? [tool.task_id] : []
-				const titlesArr: Array<string | undefined> = tool.task_titles?.length
-					? tool.task_titles
-					: tool.task_title
-						? [tool.task_title]
-						: []
-				const displayTitles: string[] = idsArr.length
-					? idsArr.map((id, i) => titlesArr[i] ?? id)
-					: titlesArr.filter((t): t is string => !!t)
-				return (
-					<>
-						<div style={headerStyle}>
-							{toolIcon("watch")}
-							<span style={{ fontWeight: "bold" }}>
-								{timeoutSeconds !== undefined
-									? t("chat:backgroundTasks.waitForTaskWithTimeout", { timeout: timeoutSeconds })
-									: t("chat:backgroundTasks.waitForTask")}
-							</span>
-							{tool.wait && tool.wait !== "all" && (
-								<span className="ml-1 text-xs text-vscode-descriptionForeground">({tool.wait})</span>
-							)}
-						</div>
-						{displayTitles.length > 0 && (
-							<div className="pl-6 text-vscode-descriptionForeground">{displayTitles.join(", ")}</div>
-						)}
-					</>
-				)
-			}
 			case "checkTaskStatus":
 				return (
 					<>
@@ -1136,21 +1097,6 @@ export const ChatRowContent = ({
 									))}
 								</ul>
 							)}
-						</div>
-					</>
-				)
-			}
-			case "answerSubtaskQuestion": {
-				return (
-					<>
-						<div style={headerStyle}>
-							{toolIcon("comment-discussion")}
-							<span style={{ fontWeight: "bold" }}>
-								{t("chat:backgroundTasks.answerSubtaskQuestion")}
-							</span>
-						</div>
-						<div className="pl-6 text-vscode-descriptionForeground">
-							{tool.task_title ?? tool.task_id}: {tool.answer}
 						</div>
 					</>
 				)
@@ -1289,8 +1235,6 @@ export const ChatRowContent = ({
 						/>
 					)
 				case "subtask_result":
-					// Get the child task ID that produced this result
-					const completedChildTaskId = currentTaskItem?.completedByChildId
 					return (
 						<div className="border-l border-muted-foreground/80 ml-2 pl-4 pt-2 pb-1 -mt-5">
 							<div style={headerStyle}>
@@ -1298,16 +1242,6 @@ export const ChatRowContent = ({
 								<Check className="size-3" />
 							</div>
 							<MarkdownBlock markdown={message.text} />
-							{completedChildTaskId && (
-								<button
-									className="cursor-pointer flex gap-1 items-center mt-2 text-vscode-descriptionForeground hover:text-vscode-descriptionForeground hover:underline font-normal"
-									onClick={() =>
-										vscode.postMessage({ type: "showTaskWithId", text: completedChildTaskId })
-									}>
-									{t("chat:subtasks.goToSubtask")}
-									<ArrowRight className="size-3" />
-								</button>
-							)}
 						</div>
 					)
 				case "peer_message": {

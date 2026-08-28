@@ -8,7 +8,7 @@ describe("checkAutoApproval", () => {
 	describe("inter-task questions (ask_followup_question routed to parent)", () => {
 		// A background child routes its question UP to the parent via
 		// askApproval("tool", { tool: "askFollowupQuestion", ... }). No human is
-		// interrupted (the parent answers via answer_subtask_question), so this is
+		// interrupted (the parent answers the request in its mailbox with `reply`), so this is
 		// unconditionally approved regardless of any toggle.
 		it("approves askFollowupQuestion even with no followup toggle", async () => {
 			const result = await checkAutoApproval({

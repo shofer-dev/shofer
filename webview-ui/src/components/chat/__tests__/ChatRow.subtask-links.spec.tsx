@@ -187,30 +187,10 @@ describe("ChatRow - subtask links", () => {
 	})
 
 	describe("subtask_result say message", () => {
-		it("should display 'Go to subtask' link when currentTaskItem has completedByChildId", () => {
-			const message = {
-				ts: Date.now(),
-				type: "say" as const,
-				say: "subtask_result" as const,
-				text: "The subtask has been completed successfully.",
-			}
-
-			renderChatRow(message, {
-				completedByChildId: "completed-child-456",
-			})
-
-			const goToSubtaskButton = screen.getByText("Go to subtask")
-			expect(goToSubtaskButton).toBeInTheDocument()
-
-			fireEvent.click(goToSubtaskButton)
-
-			expect(mockPostMessage).toHaveBeenCalledWith({
-				type: "showTaskWithId",
-				text: "completed-child-456",
-			})
-		})
-
-		it("should not display 'Go to subtask' link when no completedByChildId exists", () => {
+		// A completed child's result reaches its parent as a MAILBOX notification
+		// (docs/task_messaging.md), not by resuming a suspended parent — so there is
+		// no "the child that resumed me" to link to, and the row carries no link.
+		it("renders the result with no 'Go to subtask' link", () => {
 			const message = {
 				ts: Date.now(),
 				type: "say" as const,
@@ -220,8 +200,8 @@ describe("ChatRow - subtask links", () => {
 
 			renderChatRow(message, undefined)
 
-			const goToSubtaskButton = screen.queryByText("Go to subtask")
-			expect(goToSubtaskButton).toBeNull()
+			expect(screen.getByText("The subtask has been completed successfully.")).toBeInTheDocument()
+			expect(screen.queryByText("Go to subtask")).toBeNull()
 		})
 	})
 })

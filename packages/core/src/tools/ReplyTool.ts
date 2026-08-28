@@ -11,6 +11,12 @@
  * asker with nothing answered. This way a refused delivery fails the item and
  * the request stays answerable.
  *
+ * **A reply goes back the way the question came.** A request that arrived over
+ * the A2A mesh is answered through the mailbox transport that carries that
+ * plane, not through the local box — the asker is in another pod and has no
+ * local box here. The request's own `plane` is what records which, which is why
+ * `send_message` sets it at the send rather than leaving it implicit.
+ *
  * Replying is not terminal (that is the whole point of the verb existing:
  * `attempt_completion` used to be the only way to answer, and it ended the
  * replier). See `docs/task_messaging.md` § "The three tools".
@@ -107,11 +113,21 @@ export class ReplyTool extends BaseTool<"reply"> {
 					// even if they ended their turn in the meantime (decision 5).
 					wake: true,
 					sent_at: now,
-					plane: "local",
+					// The answer travels the plane the question arrived on.
+					plane: request.plane === "a2a" ? "a2a" : "local",
 				}
 
+				// Remote-routing block: a request that came over the mesh is answered
+				// over the mesh. Only an `a2a` request is offered to a transport — a
+				// local id must always be delivered locally, and `bus`/`temporal` are
+				// inbound-only planes that are never a reply target.
+				const transport = request.plane === "a2a" ? provider.findMailboxTransport?.(request.from) : undefined
 				try {
-					await provider.deliverToTask(request.from, envelope)
+					if (transport) {
+						await transport.send(envelope)
+					} else {
+						await provider.deliverToTask(request.from, envelope)
+					}
 				} catch (error) {
 					lines.push(
 						`- ${messageId}: failed — could not deliver to ${request.from}: ` +
@@ -133,6 +149,21 @@ export class ReplyTool extends BaseTool<"reply"> {
 					continue
 				}
 
+				// ── Child-question unpark (step 3) ──────────────────────────────
+				// A child that asked via `ask_followup_question` is parked on an ASK,
+				// not on its mailbox, so the reply envelope alone would not reach it
+				// until something else woke it. Answer the parked ask through the same
+				// `handleWebviewAskResponse` path the webview uses. `answerForwardedQuestion`
+				// no-ops unless that child is parked on exactly this request, so a human
+				// who answered in the child's chat first still wins, and a remote sender
+				// (no local instance) simply has nothing to unpark.
+				try {
+					const child = provider.taskManager?.getManagedTaskInstance?.(request.from)
+					child?.answerForwardedQuestion(request.id, item.body)
+				} catch {
+					// Best-effort: the reply envelope has already been delivered.
+				}
+
 				await task.emitTaskInteraction({
 					fromTaskId: task.taskId,
 					toTaskId: request.from,
@@ -144,7 +175,7 @@ export class ReplyTool extends BaseTool<"reply"> {
 				try {
 					TelemetryService.instance.captureMailboxSent(task.taskId, {
 						kind: "reply",
-						plane: "local",
+						plane: envelope.plane,
 						wake: true,
 					})
 				} catch {

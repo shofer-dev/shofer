@@ -88,7 +88,6 @@ export const FORWARDED_EVENTS = [
 	ShoferEventName.TaskUnpaused,
 	ShoferEventName.TaskSpawned,
 	ShoferEventName.TaskDelegated,
-	ShoferEventName.TaskDelegationCompleted,
 	ShoferEventName.TaskDelegationResumed,
 
 	// A tool failed, named. The transcript carries the failure text; this carries

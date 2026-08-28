@@ -7,6 +7,12 @@
  * recipient's lifecycle is never consulted, because a mailbox is exactly the
  * thing that makes a recipient's state irrelevant to a sender.
  *
+ * A `to` this host cannot resolve is not automatically unreachable: after the
+ * local lookup fails the id is offered to the plugin-registered **mailbox
+ * transports**, and the `shofer-mesh` plugin claims agent ids on the A2A mesh.
+ * That is what lets one send verb address a peer in another pod without the
+ * tool knowing a mesh exists.
+ *
  * The full contract, including the validation order this file implements, is
  * `docs/task_messaging.md` § "The three tools".
  */
@@ -20,6 +26,8 @@ import {
 	MAILBOX_REQUEST_TIMEOUT_SEC,
 	deriveSubject,
 	type Envelope,
+	type MailboxPlane,
+	type PluginMailboxTransport,
 	type ToolUse,
 } from "@shofer/types"
 
@@ -83,13 +91,14 @@ export class SendMessageTool extends BaseTool<"send_message"> {
 				return
 			}
 
-			// 2. `to` resolves — a live instance, or resumable history. A remote id
-			//    is routed by a registered mailbox transport, which does not exist
-			//    yet (step 5): until it does, an id this host cannot resolve is
-			//    reported as unreachable rather than silently accepted.
+			// 2. `to` resolves — a live instance, resumable history, or a registered
+			//    mailbox transport that claims the id. LOCAL FIRST, always: a
+			//    transport is asked only about ids this host does not hold, so it
+			//    can never quietly capture a task running here.
 			const effectiveRootId = task.rootTaskId ?? task.taskId
 			const liveTarget = provider.taskManager.getManagedTaskInstance(to)
 			let targetRootId: string | undefined
+			let transport: PluginMailboxTransport | undefined
 			if (liveTarget) {
 				targetRootId = liveTarget.rootTaskId ?? liveTarget.taskId
 			} else {
@@ -97,28 +106,40 @@ export class SendMessageTool extends BaseTool<"send_message"> {
 					const { historyItem } = await provider.getTaskWithId(to)
 					targetRootId = historyItem.rootTaskId ?? historyItem.id
 				} catch {
-					pushToolResult(
-						formatResponse.toolError(
-							`Task ${to} is not reachable from this host. Check the id with ` +
-								`list_background_tasks(scope="peers").`,
-						),
-					)
-					return
+					transport = provider.findMailboxTransport?.(to)
+					if (!transport) {
+						pushToolResult(
+							formatResponse.toolError(
+								`Task ${to} is not reachable from this host and no mesh transport claims it. ` +
+									`Check the id with list_background_tasks(scope="peers"), or agents_discover ` +
+									`for a peer on the mesh.`,
+							),
+						)
+						return
+					}
 				}
 			}
 
-			// 3. Same tree. A root id is the boundary of a conversation; crossing it
-			//    is a remote send, which the mesh transport will own.
-			if (targetRootId !== effectiveRootId) {
-				pushToolResult(formatResponse.toolError(`Task ${to} does not share your root task.`))
-				return
-			}
+			// 3 & 4 are the IN-PROCESS gate, and they apply only to an in-process
+			// send. A remote peer shares no root task by construction and appears in
+			// nobody's `knownPeers`, so applying either to a transport-routed
+			// envelope would refuse every remote send there is. What gates a remote
+			// send instead is the message-broker's A2A facet — badge, registration,
+			// policy pairing, target liveness — which is a trusted gate, unlike this
+			// process (`docs/messaging/a2a_messaging.md` §4.3).
+			if (!transport) {
+				// 3. Same tree. A root id is the boundary of a conversation.
+				if (targetRootId !== effectiveRootId) {
+					pushToolResult(formatResponse.toolError(`Task ${to} does not share your root task.`))
+					return
+				}
 
-			// 4. The in-process ACL. The root is omnipotent inside its own tree; a
-			//    sub-task may address only its granted peers.
-			if (task.rootTaskId && (!task.knownPeers || !task.knownPeers.has(to))) {
-				pushToolResult(formatResponse.toolError(`Task ${to} is not in your allowed peer set.`))
-				return
+				// 4. The in-process ACL. The root is omnipotent inside its own tree; a
+				//    sub-task may address only its granted peers.
+				if (task.rootTaskId && (!task.knownPeers || !task.knownPeers.has(to))) {
+					pushToolResult(formatResponse.toolError(`Task ${to} is not in your allowed peer set.`))
+					return
+				}
 			}
 
 			// NO BUSY GATE. The recipient's lifecycle decides only how the delivery
@@ -126,6 +147,10 @@ export class SendMessageTool extends BaseTool<"send_message"> {
 
 			const subject = params.subject ? params.subject.slice(0, 120) : deriveSubject(body)
 			const now = Date.now()
+			// The plane is informational, but it is the ONLY record of which route an
+			// envelope took — and `reply` reads it back to decide where the answer
+			// goes, so it has to be right at the send.
+			const plane: MailboxPlane = transport ? "a2a" : "local"
 			const envelope: Envelope = {
 				id: randomUUID(),
 				from: task.taskId,
@@ -136,7 +161,7 @@ export class SendMessageTool extends BaseTool<"send_message"> {
 				deadline: now + Math.max(1, Math.round(timeoutSec)) * 1000,
 				wake,
 				sent_at: now,
-				plane: "local",
+				plane,
 			}
 
 			const completeMessage = JSON.stringify({
@@ -154,16 +179,22 @@ export class SendMessageTool extends BaseTool<"send_message"> {
 				return
 			}
 
-			// 5. The box itself. `deliverToTask` hands to a live instance or
-			//    rehydrates a dormant one, and throws for a full box, an errored
-			//    task, or one with no history — every one of which is reported to
-			//    the sender rather than swallowed.
+			// 5. The box itself — or the wire. `deliverToTask` hands to a live
+			//    instance or rehydrates a dormant one; a transport hands the envelope
+			//    to the far side. Both throw for a refusal (a full box, an errored
+			//    task, a denied or undeliverable exchange), and every one of those is
+			//    reported to the sender rather than swallowed.
 			try {
-				await provider.deliverToTask(to, envelope)
+				if (transport) {
+					await transport.send(envelope)
+				} else {
+					await provider.deliverToTask(to, envelope)
+				}
 			} catch (error) {
 				pushToolResult(
 					formatResponse.toolError(
-						`Could not deliver to task ${to}: ${error instanceof Error ? error.message : String(error)}`,
+						`Could not deliver to ${transport ? "agent" : "task"} ${to}: ` +
+							`${error instanceof Error ? error.message : String(error)}`,
 					),
 				)
 				return
@@ -178,15 +209,15 @@ export class SendMessageTool extends BaseTool<"send_message"> {
 			})
 
 			try {
-				TelemetryService.instance.captureMailboxSent(task.taskId, { kind, plane: "local", wake })
+				TelemetryService.instance.captureMailboxSent(task.taskId, { kind, plane, wake })
 			} catch {
 				// non-fatal
 			}
 
 			const title = getManagedTaskTitle(task, to)
 			pushToolResult(
-				`Sent ${kind} ${envelope.id} to ${to}${title ? ` ("${title}")` : ""} ("${subject}"); ` +
-					`expires in ${timeoutSec}s.` +
+				`Sent ${kind} ${envelope.id} to ${to}${title ? ` ("${title}")` : ""} ("${subject}")` +
+					`${transport ? " over the agent mesh" : ""}; expires in ${timeoutSec}s.` +
 					(kind === "request"
 						? ` Call wait(in_reply_to="${envelope.id}") if you need the answer before you can continue.`
 						: ""),

@@ -46,11 +46,9 @@ export const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	finishTask: "attempt_completion",
 
 	// subtasks group
-	waitForTask: "wait_for_task",
 	checkTaskStatus: "check_task_status",
 	listBackgroundTasks: "list_background_tasks",
 	cancelTasks: "cancel_tasks",
-	answerSubtaskQuestion: "answer_subtask_question",
 
 	// mode-independent always-available (not in TOOL_GROUPS.subtasks — falls through to "uncategorized" for auto-approval)
 	sendMessage: "send_message",

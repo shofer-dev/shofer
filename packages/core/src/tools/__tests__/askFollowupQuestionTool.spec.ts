@@ -462,27 +462,36 @@ describe("askFollowupQuestionTool", () => {
 		})
 	})
 
-	describe("background child question routing", () => {
-		let emitSpy: ReturnType<typeof vi.fn>
+	/**
+	 * A CHILD's question is DUAL-CHANNEL: it is delivered to the parent's mailbox
+	 * as a `request` AND raised as an ordinary `followup` ask in the child's own
+	 * chat. Either side may answer and the first answer wins; the loser's channel
+	 * is withdrawn (the request is resolved out of the parent's box).
+	 */
+	describe("child question routing", () => {
 		let providerRef: { deref: () => any }
 		let handleOnParent: { status: string }
-		let setPendingParentQuestionInfoSpy: ReturnType<typeof vi.fn>
-		let clearPendingParentQuestionSpy: ReturnType<typeof vi.fn>
+		let deliverToTask: ReturnType<typeof vi.fn>
+		let resolveRequest: ReturnType<typeof vi.fn>
+		let setForwardedQuestionSpy: ReturnType<typeof vi.fn>
+		let clearForwardedQuestionSpy: ReturnType<typeof vi.fn>
 
 		beforeEach(() => {
-			emitSpy = vi.fn()
 			handleOnParent = { status: "running" }
-			setPendingParentQuestionInfoSpy = vi.fn()
-			clearPendingParentQuestionSpy = vi.fn()
+			deliverToTask = vi.fn().mockResolvedValue(undefined)
+			resolveRequest = vi.fn().mockResolvedValue(undefined)
+			setForwardedQuestionSpy = vi.fn()
+			clearForwardedQuestionSpy = vi.fn()
 
 			const parentInstance = {
 				backgroundChildren: new Map([["child-task-1", handleOnParent]]),
+				mailbox: { resolveRequest },
 			}
 
 			const provider = {
+				deliverToTask,
 				taskManager: {
 					getManagedTaskInstance: vi.fn().mockReturnValue(parentInstance),
-					emit: emitSpy,
 				},
 			}
 
@@ -490,10 +499,8 @@ describe("askFollowupQuestionTool", () => {
 		})
 
 		/**
-		 * Builds a mock background child task. The `ask` mock controls how the
-		 * routed followup ask resolves — by default it resolves with a text
-		 * answer (simulating either the parent answering via
-		 * answer_subtask_question or the user clicking a suggestion).
+		 * Builds a mock child task. The `ask` mock controls how the followup ask
+		 * resolves — by default with a text answer, standing for either channel.
 		 */
 		function buildBackgroundChildTask(askImpl?: ReturnType<typeof vi.fn>): typeof mockShofer {
 			return {
@@ -502,8 +509,8 @@ describe("askFollowupQuestionTool", () => {
 				parentTaskId: "parent-task-1",
 				isBackgroundTask: true,
 				providerRef,
-				setPendingParentQuestionInfo: setPendingParentQuestionInfoSpy,
-				clearPendingParentQuestion: clearPendingParentQuestionSpy,
+				setForwardedQuestion: setForwardedQuestionSpy,
+				clearForwardedQuestion: clearForwardedQuestionSpy,
 				ask: askImpl ?? vi.fn().mockResolvedValue({ text: "parent's answer" }),
 			}
 		}
@@ -537,7 +544,7 @@ describe("askFollowupQuestionTool", () => {
 			expect(toolResult).toContain("parent's answer")
 		})
 
-		it("stores question metadata and emits needs-parent-input so wait_for_task wakes", async () => {
+		it("delivers the question to the parent's mailbox as a request, and asks it locally too", async () => {
 			const task = buildBackgroundChildTask()
 
 			const block: ToolUse = {
@@ -557,15 +564,80 @@ describe("askFollowupQuestionTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			// Question metadata is stored for check_task_status / wait_for_task.
-			expect(setPendingParentQuestionInfoSpy).toHaveBeenCalledWith({
-				question: "Need help?",
-				suggestions: [{ answer: "Yes" }],
+			// Channel 1: a `request` envelope in the parent's box.
+			expect(deliverToTask).toHaveBeenCalledTimes(1)
+			const [toTaskId, envelope] = deliverToTask.mock.calls[0]!
+			expect(toTaskId).toBe("parent-task-1")
+			expect(envelope).toMatchObject({
+				from: "child-task-1",
+				to: "parent-task-1",
+				kind: "request",
+				subject: "question: Need help?",
+				wake: true,
+				plane: "local",
 			})
-			// The needs-parent-input event wakes any blocked wait_for_task.
-			expect(emitSpy).toHaveBeenCalledWith("managedTask:needs-parent-input", "child-task-1", "Need help?")
-			// Metadata is cleared in the finally after the ask resolves.
-			expect(clearPendingParentQuestionSpy).toHaveBeenCalled()
+			// The suggestions ride in the body, so the parent can echo one back.
+			expect(envelope.body).toContain("Need help?")
+			expect(envelope.body).toContain("- Yes")
+
+			// Channel 2: the ask in the child's own chat.
+			expect(task.ask).toHaveBeenCalledWith("followup", expect.stringContaining('"question":"Need help?"'), false)
+
+			// The correlation is recorded so a parent `reply` can unpark this ask…
+			expect(setForwardedQuestionSpy).toHaveBeenCalledWith({
+				envelopeId: envelope.id,
+				question: "Need help?",
+			})
+			// …and forgotten once it resolves.
+			expect(clearForwardedQuestionSpy).toHaveBeenCalled()
+		})
+
+		it("withdraws the request from the parent's box once the ask is answered", async () => {
+			const task = buildBackgroundChildTask()
+
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Need help?" },
+				nativeArgs: { question: "Need help?", follow_up: [{ text: "Yes" }] },
+				partial: false,
+			}
+
+			await askFollowupQuestionTool.handle(task as any, block as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn().mockResolvedValue(true),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			// Whoever answered, the parent's digest must stop showing a question
+			// nobody is waiting on. (When the PARENT answered, `reply` already
+			// removed it and this is a no-op.)
+			const envelopeId = deliverToTask.mock.calls[0]![1].id
+			expect(resolveRequest).toHaveBeenCalledWith(envelopeId)
+		})
+
+		it("still asks locally when the parent's mailbox refuses the delivery", async () => {
+			deliverToTask.mockRejectedValueOnce(new Error("Mailbox of task parent-task-1 is full"))
+			const task = buildBackgroundChildTask()
+
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Need help?" },
+				nativeArgs: { question: "Need help?", follow_up: [{ text: "Yes" }] },
+				partial: false,
+			}
+
+			await askFollowupQuestionTool.handle(task as any, block as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn().mockResolvedValue(true),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			// The human channel is independent and still live, so the question is
+			// asked rather than failed — only the parent's copy is lost.
+			expect(task.ask).toHaveBeenCalled()
+			expect(toolResult).toContain("parent's answer")
 		})
 
 		it("flips parent handle to waiting_for_parent and restores on resolve", async () => {
@@ -618,16 +690,15 @@ describe("askFollowupQuestionTool", () => {
 			// The abort error is surfaced as a clean tool error.
 			expect(toolResult).toContain("cancelled before an answer was received")
 			// The finally still clears the metadata and restores the handle.
-			expect(clearPendingParentQuestionSpy).toHaveBeenCalled()
+			expect(clearForwardedQuestionSpy).toHaveBeenCalled()
 			expect(handleOnParent.status).toBe("running")
 		})
 
 		it("restores handle (in finally) when setup throws synchronously — no stranding", async () => {
-			// Regression: a synchronous throw during setup (here the
-			// needs-parent-input emit, e.g. a wait_for_task listener throwing)
-			// must not strand the parent handle in "waiting_for_parent".
+			// Regression: a synchronous throw during setup must not strand the
+			// parent's handle on this child in "waiting_for_parent".
 			const task = buildBackgroundChildTask()
-			emitSpy.mockImplementation(() => {
+			setForwardedQuestionSpy.mockImplementation(() => {
 				throw new Error("listener boom")
 			})
 
@@ -676,8 +747,8 @@ describe("askFollowupQuestionTool", () => {
 			// The followup ask was never called.
 			expect(task.ask).not.toHaveBeenCalled()
 			// No metadata stored, no event emitted.
-			expect(setPendingParentQuestionInfoSpy).not.toHaveBeenCalled()
-			expect(emitSpy).not.toHaveBeenCalled()
+			expect(setForwardedQuestionSpy).not.toHaveBeenCalled()
+			expect(deliverToTask).not.toHaveBeenCalled()
 		})
 
 		it("foreground task does NOT route to parent — uses normal task.ask('followup')", async () => {

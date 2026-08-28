@@ -33,13 +33,11 @@ describe("NewTaskTool — peer_task_ids", () => {
 				getManagedTaskInstance: vi.fn().mockReturnValue(null),
 				getManagedTasks: vi.fn().mockReturnValue([]),
 				registerBackgroundTask: vi.fn(),
-				registerBlockingChildResolver: vi.fn(),
 				setState: vi.fn(),
 				countActiveTasks: vi.fn().mockReturnValue(0),
 				on: vi.fn(),
 				off: vi.fn(),
 			},
-			registerBlockingChildResolver: vi.fn(),
 			contextProxy: {
 				globalStorageUri: { fsPath: "/tmp/test-storage" },
 				getValue: vi.fn().mockReturnValue(undefined), // undefined → default 10 → 0 active always passes
@@ -62,7 +60,7 @@ describe("NewTaskTool — peer_task_ids", () => {
 			didToolFailInCurrentTurn: false,
 			sayAndCreateMissingParamError: vi.fn().mockResolvedValue("error message"),
 			getTaskMode: vi.fn().mockResolvedValue("code"),
-			// Task-viz spawn/return arrows — awaited in the blocking path before the
+			// Task-viz spawn arrow — awaited by the tool before the
 			// completion resolver is registered.
 			emitTaskInteraction: vi.fn().mockResolvedValue(undefined),
 			providerRef: { deref: () => providerObj },
@@ -88,7 +86,7 @@ describe("NewTaskTool — peer_task_ids", () => {
 		const provider = task.providerRef.deref()
 		const cbs = buildCallbacks()
 
-		await tool.execute({ mode: "code", message: "analyze", is_background: true }, task, cbs)
+		await tool.execute({ mode: "code", message: "analyze" }, task, cbs)
 
 		// Verify createTask was called with initialKnownPeers = [parent]
 		// createTask signature: (message, undefined, parentTask, options, undefined, undefined)
@@ -117,7 +115,6 @@ describe("NewTaskTool — peer_task_ids", () => {
 			{
 				mode: "code",
 				message: "analyze",
-				is_background: true,
 				peer_task_ids: ["cross-root-peer"],
 			},
 			task,
@@ -143,7 +140,6 @@ describe("NewTaskTool — peer_task_ids", () => {
 			{
 				mode: "code",
 				message: "analyze",
-				is_background: true,
 				peer_task_ids: ["same-root-peer"],
 			},
 			task,
@@ -184,7 +180,6 @@ describe("NewTaskTool — peer_task_ids", () => {
 			{
 				mode: "code",
 				message: "analyze",
-				is_background: true,
 				peer_task_ids: ["granted-peer"],
 			},
 			task,
@@ -210,7 +205,6 @@ describe("NewTaskTool — peer_task_ids", () => {
 			{
 				mode: "code",
 				message: "analyze",
-				is_background: true,
 				peer_task_ids: ["existing-peer-1"],
 			},
 			task,
@@ -250,7 +244,6 @@ describe("NewTaskTool — peer_task_ids", () => {
 			{
 				mode: "code",
 				message: "analyze",
-				is_background: true,
 				peer_task_ids: ["non-live-peer"],
 			},
 			task,
@@ -261,35 +254,6 @@ describe("NewTaskTool — peer_task_ids", () => {
 		// — they have no instance to check rootTaskId against, so must be validated
 		// via history fallback or not rejected)
 		expect(provider.createTask).toHaveBeenCalled()
-	})
-
-	// ─── Foreground (blocking) subtask — peer_task_ids is irrelevant ──
-
-	it("foreground subtask does not use peer_task_ids or knownPeers", async () => {
-		const task = buildTask()
-		const provider = task.providerRef.deref()
-		provider.createTask.mockResolvedValue({ taskId: "child-fg" })
-		provider.registerBlockingChildResolver.mockImplementation((_childId: string, resolve: (r: string) => void) => {
-			// Resolve immediately to simulate child completing
-			resolve("foreground result")
-		})
-		// The blocking resolver promise path in new_task awaits on
-		// childCompletionPromise. Let's set up the mock to resolve it:
-		let capturedResolve: ((r: string) => void) | undefined
-		provider.registerBlockingChildResolver.mockImplementation((_childId: string, resolve: (r: string) => void) => {
-			capturedResolve = resolve
-		})
-		const cbs = buildCallbacks()
-
-		// Start execute — it will block on the resolver promise
-		const executePromise = tool.execute({ mode: "code", message: "fix bug", is_background: false }, task, cbs)
-
-		// Resolve the blocker after a tick
-		await new Promise((r) => setTimeout(r, 10))
-		capturedResolve!("foreground result")
-		await executePromise
-
-		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("foreground result"))
 	})
 
 	// ─── Cost limit guard ────────────────────────────────────────────
@@ -315,7 +279,7 @@ describe("NewTaskTool — peer_task_ids", () => {
 		})
 		const cbs = buildCallbacks()
 
-		await tool.execute({ mode: "code", message: "expensive task", is_background: true }, task, cbs)
+		await tool.execute({ mode: "code", message: "expensive task" }, task, cbs)
 
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Cost limit reached"))
 		expect(provider.createTask).not.toHaveBeenCalled()
@@ -328,11 +292,7 @@ describe("NewTaskTool — peer_task_ids", () => {
 		const provider = task.providerRef.deref()
 		const cbs = buildCallbacks()
 
-		await tool.execute(
-			{ mode: "code", message: "analyze", is_background: true, title: "  Audit the auth flow  " },
-			task,
-			cbs,
-		)
+		await tool.execute({ mode: "code", message: "analyze", title: "  Audit the auth flow  " }, task, cbs)
 
 		const options = provider.createTask.mock.calls[0][3]
 		expect(options.initialTitle).toBe("Audit the auth flow")
@@ -344,7 +304,7 @@ describe("NewTaskTool — peer_task_ids", () => {
 		const cbs = buildCallbacks()
 		const longTitle = "x".repeat(100)
 
-		await tool.execute({ mode: "code", message: "analyze", is_background: true, title: longTitle }, task, cbs)
+		await tool.execute({ mode: "code", message: "analyze", title: longTitle }, task, cbs)
 
 		const options = provider.createTask.mock.calls[0][3]
 		expect(options.initialTitle).toBe("x".repeat(60))
@@ -355,33 +315,10 @@ describe("NewTaskTool — peer_task_ids", () => {
 		const provider = task.providerRef.deref()
 		const cbs = buildCallbacks()
 
-		await tool.execute({ mode: "code", message: "analyze", is_background: true, title: "   " }, task, cbs)
+		await tool.execute({ mode: "code", message: "analyze", title: "   " }, task, cbs)
 
 		const options = provider.createTask.mock.calls[0][3]
 		expect(options.initialTitle).toBeUndefined()
-	})
-
-	it("threads the title through the foreground (blocking) path too", async () => {
-		const task = buildTask()
-		const provider = task.providerRef.deref()
-		provider.createTask.mockResolvedValue({ taskId: "child-fg" })
-		let capturedResolve: ((r: string) => void) | undefined
-		provider.registerBlockingChildResolver.mockImplementation((_childId: string, resolve: (r: string) => void) => {
-			capturedResolve = resolve
-		})
-		const cbs = buildCallbacks()
-
-		const executePromise = tool.execute(
-			{ mode: "code", message: "fix bug", is_background: false, title: "Fix the bug" },
-			task,
-			cbs,
-		)
-		await new Promise((r) => setTimeout(r, 10))
-		capturedResolve!("done")
-		await executePromise
-
-		const options = provider.createTask.mock.calls[0][3]
-		expect(options.initialTitle).toBe("Fix the bug")
 	})
 
 	// ─── Parallel task limit guard ───────────────────────────────────
@@ -393,7 +330,7 @@ describe("NewTaskTool — peer_task_ids", () => {
 		provider.taskManager.countActiveTasks = vi.fn().mockReturnValue(3)
 		const cbs = buildCallbacks()
 
-		await tool.execute({ mode: "code", message: "do work", is_background: true }, task, cbs)
+		await tool.execute({ mode: "code", message: "do work" }, task, cbs)
 
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Task limit reached"))
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("3/3"))
@@ -407,7 +344,7 @@ describe("NewTaskTool — peer_task_ids", () => {
 		provider.taskManager.countActiveTasks = vi.fn().mockReturnValue(3)
 		const cbs = buildCallbacks()
 
-		await tool.execute({ mode: "code", message: "do work", is_background: true }, task, cbs)
+		await tool.execute({ mode: "code", message: "do work" }, task, cbs)
 
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Child task started"))
 		expect(provider.createTask).toHaveBeenCalled()
@@ -420,7 +357,7 @@ describe("NewTaskTool — peer_task_ids", () => {
 		provider.taskManager.countActiveTasks = vi.fn().mockReturnValue(999)
 		const cbs = buildCallbacks()
 
-		await tool.execute({ mode: "code", message: "do work", is_background: true }, task, cbs)
+		await tool.execute({ mode: "code", message: "do work" }, task, cbs)
 
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Child task started"))
 		expect(provider.createTask).toHaveBeenCalled()
@@ -433,7 +370,7 @@ describe("NewTaskTool — peer_task_ids", () => {
 		provider.taskManager.countActiveTasks = vi.fn().mockReturnValue(10)
 		const cbs = buildCallbacks()
 
-		await tool.execute({ mode: "code", message: "do work", is_background: true }, task, cbs)
+		await tool.execute({ mode: "code", message: "do work" }, task, cbs)
 
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Task limit reached"))
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("10/10"))
@@ -447,7 +384,7 @@ describe("NewTaskTool — peer_task_ids", () => {
 		provider.taskManager.countActiveTasks = vi.fn().mockReturnValue(2)
 		const cbs = buildCallbacks()
 
-		await tool.execute({ mode: "code", message: "do work", is_background: true }, task, cbs)
+		await tool.execute({ mode: "code", message: "do work" }, task, cbs)
 
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("2/2"))
 		expect(provider.createTask).not.toHaveBeenCalled()

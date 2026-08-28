@@ -1083,21 +1083,10 @@ export class NativeToolCallParser {
 						mode: partialArgs.mode,
 						message: partialArgs.message,
 						todos: partialArgs.todos,
-						is_background: this.coerceOptionalBoolean(partialArgs.is_background),
 						softResultLength: this.coerceOptionalNumber(partialArgs.softResultLength),
 						softTimeoutSec: this.coerceOptionalNumber(partialArgs.softTimeoutSec),
 						peer_task_ids: Array.isArray(partialArgs.peer_task_ids) ? partialArgs.peer_task_ids : undefined,
 						title: partialArgs.title,
-					}
-				}
-				break
-
-			case "wait_for_task":
-				if (partialArgs.task_ids !== undefined) {
-					nativeArgs = {
-						task_ids: Array.isArray(partialArgs.task_ids) ? partialArgs.task_ids : [partialArgs.task_ids],
-						wait: partialArgs.wait === "any" ? "any" : "all",
-						timeout: this.coerceOptionalNumber(partialArgs.timeout),
 					}
 				}
 				break
@@ -1115,15 +1104,6 @@ export class NativeToolCallParser {
 				if (partialArgs.task_ids !== undefined) {
 					nativeArgs = {
 						task_ids: Array.isArray(partialArgs.task_ids) ? partialArgs.task_ids : [partialArgs.task_ids],
-					}
-				}
-				break
-
-			case "answer_subtask_question":
-				if (partialArgs.task_id !== undefined || partialArgs.answer !== undefined) {
-					nativeArgs = {
-						task_id: partialArgs.task_id,
-						answer: partialArgs.answer,
 					}
 				}
 				break
@@ -1832,21 +1812,10 @@ export class NativeToolCallParser {
 							mode: args.mode,
 							message: args.message,
 							todos: args.todos,
-							is_background: this.coerceOptionalBoolean(args.is_background),
 							softResultLength: this.coerceOptionalNumber(args.softResultLength),
 							softTimeoutSec: this.coerceOptionalNumber(args.softTimeoutSec),
 							peer_task_ids: Array.isArray(args.peer_task_ids) ? args.peer_task_ids : undefined,
 							title: args.title,
-						} as NativeArgsFor<TName>
-					}
-					break
-
-				case "wait_for_task":
-					if (args.task_ids !== undefined) {
-						nativeArgs = {
-							task_ids: Array.isArray(args.task_ids) ? args.task_ids : [args.task_ids],
-							wait: args.wait === "any" ? "any" : "all",
-							timeout: this.coerceOptionalNumber(args.timeout),
 						} as NativeArgsFor<TName>
 					}
 					break
@@ -1864,15 +1833,6 @@ export class NativeToolCallParser {
 					if (args.task_ids !== undefined) {
 						nativeArgs = {
 							task_ids: Array.isArray(args.task_ids) ? args.task_ids : [args.task_ids],
-						} as NativeArgsFor<TName>
-					}
-					break
-
-				case "answer_subtask_question":
-					if (args.task_id !== undefined && args.answer !== undefined) {
-						nativeArgs = {
-							task_id: args.task_id,
-							answer: args.answer,
 						} as NativeArgsFor<TName>
 					}
 					break

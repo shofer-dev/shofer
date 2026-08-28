@@ -280,16 +280,17 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 			}
 		}
 
-		// Surface a pending parent question if the child is waiting for input
-		// from the parent (ask_followup_question routed to parent).
+		// Surface a question this child forwarded to you. It is ALREADY in your
+		// mailbox as a `request` — this is a convenience readout, not the channel;
+		// `reply` is what answers it, and the request carries the suggestions.
 		let pendingQuestionText: string | undefined
 		try {
 			const liveInstance = provider.taskManager.getManagedTaskInstance(task_id)
-			const pq = liveInstance?.getPendingParentQuestion()
-			if (pq) {
-				const suggestionList =
-					pq.suggestions.length > 0 ? pq.suggestions.map((s) => `"${s.answer}"`).join(", ") : "none"
-				pendingQuestionText = `\nPending parent question: "${pq.question}"\nSuggestions: ${suggestionList}\nAnswer via answer_subtask_question(task_id="${task_id}", answer=...).`
+			const forwarded = liveInstance?.forwardedQuestion
+			if (forwarded) {
+				pendingQuestionText =
+					`\nWaiting on your answer: "${forwarded.question}"\n` +
+					`Answer it with reply({ replies: [{ message_id: "${forwarded.envelopeId}", body: "…" }] }).`
 			}
 		} catch {
 			// Non-fatal.
