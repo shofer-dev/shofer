@@ -1076,9 +1076,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Initial execution state for the task's history item (set at creation time to avoid race conditions)
 	private readonly initialState?: TaskState
 
-	// When true, this task is a background child of another task. Persisted onto
-	// the task's HistoryItem.isBackground from the first save and used by
-	// AttemptCompletionTool to skip the synchronous delegation flow.
+	// When true, this task is a child of another task. Persisted onto the task's
+	// HistoryItem.isBackground from the first save, which is what a scan of the
+	// history store filters on to find a parent's children.
 	private readonly isBackground: boolean
 
 	// MessageManager for high-level message operations (lazy initialized)
@@ -4556,7 +4556,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
-	/** True when this task was spawned as a background child of another task. */
+	/**
+	 * True when this task was spawned as a child of another task.
+	 *
+	 * It is redundant with `parentTaskId` for any task this code can construct —
+	 * `new_task` is the only thing that sets a parent, and every child it makes is
+	 * concurrent. It survives because it is the flag the PERSISTED row carries
+	 * (`HistoryItem.isBackground`), which is what `rehydrateBackgroundChildren`,
+	 * `check_task_status` and `cancel_tasks` filter a history scan on when there
+	 * is no live instance to ask.
+	 */
 	public get isBackgroundTask(): boolean {
 		return this.isBackground
 	}
@@ -4597,18 +4606,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	/**
-	 * True when this task is a background child that currently has a routed
-	 * `ask_followup_question` pending (i.e. a question awaiting an answer
-	 * from either the parent agent or the user via the child's own followup
-	 * ask UI).
+	 * True when this task has a question outstanding that it FORWARDED to its
+	 * parent — awaiting an answer from either the parent agent or a human in this
+	 * task's own chat.
 	 *
-	 * Used by `task.ask()` to suppress the `followup` auto-approval timeout
-	 * for routed questions — the question must NOT be auto-answered with the
-	 * first suggestion, since it is directed at the parent/user, not at an
-	 * auto-approval policy.
+	 * Used by `task.ask()` to suppress the `followup` auto-approval timeout for
+	 * such a question: it must NOT be auto-answered with the first suggestion,
+	 * because it is directed at the parent (or a human), not at an auto-approval
+	 * policy.
 	 */
 	private isRoutedFollowupPending(): boolean {
-		return this.isBackground && !!this.parentTaskId && this._forwardedQuestion !== undefined
+		return !!this.parentTaskId && this._forwardedQuestion !== undefined
 	}
 
 	public async abortTask(isAbandoned = false) {

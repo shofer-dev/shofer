@@ -8,22 +8,8 @@ import { Task } from "../task/Task.js"
 import { taskLog } from "../logging/subsystems.js"
 import { formatResponse } from "../prompts/responses.js"
 import { type ToolUse } from "@shofer/types"
-import { confirmNoConversationDriver } from "../transport/conversation-driver.js"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
-
-/**
- * What the model is told when its question has no audience at all — a
- * synchronously spawned child on a remotely driven host whose conversation has
- * no subscriber. It must read as a refusal to ASK, never as an answer: the
- * platform's ask rule ("an ask with no reachable audience must fail fast rather
- * than block silently") is precisely about not fabricating one.
- */
-const NO_AUDIENCE_MESSAGE =
-	"No user is reachable to answer this question: this task was started by another task, " +
-	"which is itself blocked waiting for you, and nobody is watching the conversation. " +
-	"Do not ask again — decide with the information you have, state the assumption you made " +
-	"in your result, or complete with attempt_completion explaining what you needed."
 
 interface Suggestion {
 	text: string
@@ -96,41 +82,7 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			// `task.ask("followup")`, the same mechanism a user-facing question
 			// uses, so suggestion buttons appear when a human views the child.
 			// Either channel may answer and the first answer wins.
-			const isChildWithParent = !!(task.providerRef?.deref() && task.parentTaskId && task.isBackgroundTask)
-
-			// A child whose parent is NOT concurrent has the opposite problem: its
-			// parent is the entity that created it, but cannot answer, because it is
-			// suspended waiting for this child to finish. `new_task` no longer
-			// produces such a task — every child is concurrent — but a host can still
-			// construct one directly, so the escalation stays. The next hop backwards
-			// is the human driving the ROOT conversation, and the question is
-			// published on the ROOT task's event stream (by
-			// `API.escalateFollowupToConversation`, carrying `sourceTaskId`) rather
-			// than only on this child's, which no controller subscribes to. Both
-			// answer shapes ride it — a suggestion list and a `paramForm`. The
-			// blocking primitive below is unchanged: the child still parks on its own
-			// `task.ask("followup")`, and the answer comes back through
-			// `respondToAsk`'s conversation-wide askId lookup.
-			//
-			// Before parking, refuse outright when the question provably cannot reach
-			// anyone: a remotely driven host with no subscriber on the root stream.
-			// `undefined` means the host is not remotely driven (the VS Code webview,
-			// a terminal `shofer` run), where the local ask surface IS the audience
-			// and nothing changes.
-			//
-			// "Provably" is the whole weight of this branch, so the question is put
-			// through `confirmNoConversationDriver` rather than sampled once: a
-			// controller detaching and re-attaching is normal operation, and a single
-			// sample turns a reconnect that lasts milliseconds into a permanent
-			// refusal of a question a human WAS waiting for. It costs a bounded
-			// in-line wait on the path that is about to give up, and nothing at all
-			// on the path that asks.
-			const rootTaskId = task.parentTaskId && !task.isBackgroundTask ? task.rootTaskId : undefined
-			if (rootTaskId && (await confirmNoConversationDriver(rootTaskId))) {
-				task.recordToolError("ask_followup_question")
-				pushToolResult(formatResponse.toolError(NO_AUDIENCE_MESSAGE))
-				return
-			}
+			const isChildWithParent = !!(task.providerRef?.deref() && task.parentTaskId)
 
 			// Form mode: render a typed input form (dropdown/radio/checkbox/slider/
 			// number/text/boolean). The webview submits all answers at once as a
@@ -185,7 +137,7 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			// the parent's box in the `finally` below. The child sits in
 			// `waiting_input` throughout: it is parked on an ANSWER, not on mail.
 			const provider = task.providerRef?.deref()
-			if (provider && task.parentTaskId && task.isBackgroundTask) {
+			if (provider && task.parentTaskId) {
 				// Finalize the streaming "tool" ChatRow before presenting the
 				// followup ask. This tool is in the "questions" group and
 				// auto-approved for children, so askApproval returns immediately

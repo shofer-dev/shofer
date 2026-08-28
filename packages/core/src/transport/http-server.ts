@@ -94,167 +94,6 @@ async function readJson(req: http.IncomingMessage): Promise<Record<string, unkno
 	return JSON.parse(raw) as Record<string, unknown>
 }
 
-/**
- * How long after its last subscriber detached a task is still considered
- * REACHABLE (`mightReach`), even though nothing is subscribed right now.
- *
- * 30 seconds, and both bounds of that choice are load-bearing:
- *
- * - **Long enough that a reconnect is not mistaken for an absence.** A
- *   controller detaching and re-attaching is NORMAL, not evidence of a missing
- *   audience: an SSE connection drops and the client re-subscribes, a proxy
- *   recycles an idle stream, a controller rolls out and its replacement
- *   re-attaches. Every one of those is a gap of milliseconds to a few seconds.
- *   An instantaneous census reads each as "nobody is watching", and a fail-fast
- *   built on it converts a transient gap into a permanent wrong refusal — which
- *   is exactly how a live sync child was refused mid-turn while its controller
- *   was demonstrably driving the conversation.
- * - **Short enough that a genuinely dead controller still fails fast.** The
- *   fail-fast exists so a question nobody can ever answer does not park the
- *   child (and its suspended parent) forever. Half a minute of grace costs one
- *   stalled turn in that case; the alternative costs the run.
- *
- * It is a grace on the OBSERVATION, never a timer that answers anything: no ask
- * is resolved, denied or fabricated when it lapses. All that changes is whether
- * the host is willing to state "this question provably reaches nobody".
- *
- * It also bounds the detach ledger's retention — see {@link createStreamSubscribers}.
- */
-export const SUBSCRIBER_REATTACH_GRACE_MS = 30_000
-
-/**
- * Live census of the open event-stream subscriptions, so the host can answer
- * "would an ask published on task X's stream reach anybody?".
- *
- * The question has to be asked per TASK, not per host: a controller subscribes
- * to one conversation (`GET /api/v1/task/:id/event`), so "some SSE connection is
- * open" says nothing about the conversation an ask belongs to. A worker-wide
- * subscriber (`GET /api/v1/event`) counts for every task, because it receives
- * every task's events unfiltered.
- *
- * Two questions, deliberately separate. {@link StreamSubscribers.has} is the
- * instantaneous fact — is a stream open on this task at this instant — and
- * {@link StreamSubscribers.mightReach} is the one a decision may be taken on,
- * which additionally honours {@link SUBSCRIBER_REATTACH_GRACE_MS} for a task
- * whose subscriber detached moments ago. Keeping `has` exact matters: it is what
- * a future consumer asking a genuinely instantaneous question (a metric, a
- * readiness gauge) needs, and folding the grace into it would make the census
- * itself report something it cannot observe.
- */
-export interface StreamSubscribers {
-	/**
-	 * Record a new subscription and return its release function. `taskId`
-	 * `undefined` means the worker-wide firehose.
-	 */
-	add(taskId: string | undefined): () => void
-	/** Whether an event published for `taskId` would reach at least one subscriber RIGHT NOW. */
-	has(taskId: string): boolean
-	/**
-	 * Whether an event published for `taskId` would reach a subscriber, treating
-	 * a subscriber that detached within {@link SUBSCRIBER_REATTACH_GRACE_MS} as
-	 * still present — i.e. "is there plausibly an audience", the question a
-	 * refuse-to-ask decision is entitled to ask.
-	 *
-	 * `false` therefore means: nothing is subscribed now, AND either nothing ever
-	 * was for this task, or the last thing that was gave up long enough ago that
-	 * no reconnect explains it.
-	 */
-	mightReach(taskId: string): boolean
-	/**
-	 * How many tasks are currently remembered as recently-detached. A diagnostic
-	 * over the detach ledger — it makes the ledger's memory bound assertable and
-	 * observable — and never an input to a decision.
-	 */
-	detachLedgerSize(): number
-}
-
-/** Construction options for {@link createStreamSubscribers}. */
-export interface StreamSubscribersOptions {
-	/**
-	 * Monotonic millisecond clock, defaulting to `performance.now()`. Monotonic
-	 * on purpose: the grace window measures an ELAPSED interval of seconds, and a
-	 * wall clock can step (NTP correction, a suspended host resuming) mid-window,
-	 * which would either extend the grace indefinitely or collapse it to zero.
-	 * Injectable so the window is testable without global timer mocking.
-	 */
-	now?: () => number
-}
-
-/**
- * An independent {@link StreamSubscribers} census (one per server).
- *
- * Memory: the detach ledger is bounded by construction rather than capped after
- * the fact. An entry is written only when a task's LAST subscriber detaches, and
- * every write first sweeps every entry older than
- * {@link SUBSCRIBER_REATTACH_GRACE_MS} — which is precisely the set that can no
- * longer change any answer. So after any write the ledger holds only entries
- * inside the window, and between writes nothing is added: its size is bounded by
- * the number of distinct tasks that lost their last subscriber in the last 30
- * seconds, plus one. Re-attaching drops the task's entry outright. (An LRU cap
- * would have been the other option; it is strictly worse here because "old
- * enough to be useless" is the exact eviction criterion the window already
- * gives, and a cap can evict a live-window entry under load — silently
- * restoring the instantaneous behaviour this exists to fix.)
- */
-export function createStreamSubscribers(opts: StreamSubscribersOptions = {}): StreamSubscribers {
-	const now = opts.now ?? (() => performance.now())
-	const perTask = new Map<string, number>()
-	/** taskId → monotonic ms at which its last subscriber detached. */
-	const detachedAt = new Map<string, number>()
-	let firehose = 0
-
-	const sweep = (at: number): void => {
-		for (const [taskId, when] of detachedAt) {
-			if (at - when >= SUBSCRIBER_REATTACH_GRACE_MS) detachedAt.delete(taskId)
-		}
-	}
-
-	return {
-		add(taskId) {
-			if (taskId === undefined) {
-				firehose++
-				return () => {
-					firehose--
-				}
-			}
-			sweep(now())
-			// A live subscriber makes this task's detach time meaningless, and
-			// keeping it would let a stale entry outlive the sweep that only runs
-			// on write.
-			detachedAt.delete(taskId)
-			perTask.set(taskId, (perTask.get(taskId) ?? 0) + 1)
-			let released = false
-			return () => {
-				if (released) return
-				released = true
-				const next = (perTask.get(taskId) ?? 1) - 1
-				if (next <= 0) {
-					perTask.delete(taskId)
-					const at = now()
-					sweep(at)
-					detachedAt.set(taskId, at)
-				} else {
-					perTask.set(taskId, next)
-				}
-			}
-		},
-		has(taskId) {
-			return firehose > 0 || (perTask.get(taskId) ?? 0) > 0
-		},
-		mightReach(taskId) {
-			if (firehose > 0 || (perTask.get(taskId) ?? 0) > 0) return true
-			const when = detachedAt.get(taskId)
-			// Never attached — nothing to be tolerant of. This is the case the
-			// fail-fast was written for.
-			if (when === undefined) return false
-			return now() - when < SUBSCRIBER_REATTACH_GRACE_MS
-		},
-		detachLedgerSize() {
-			return detachedAt.size
-		},
-	}
-}
-
 /** Options for the HTTP/SSE server (auth + version handshake). */
 export interface HttpServerOptions {
 	/**
@@ -269,13 +108,6 @@ export interface HttpServerOptions {
 	 * build before driving it.
 	 */
 	version?: string
-	/**
-	 * Census to record this server's open event streams in. Supply one when the
-	 * caller needs to ask whether a task has a live driver (see
-	 * `setConversationDriverProbe`); omitted, the server keeps a private census
-	 * nobody reads.
-	 */
-	subscribers?: StreamSubscribers
 }
 
 /**
@@ -308,7 +140,6 @@ export function createRequestHandler(
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
 	const base = `/api/${API_VERSION}`
 	const { token, version } = opts
-	const subscribers = opts.subscribers ?? createStreamSubscribers()
 
 	return (req, res) => {
 		void handle(req, res).catch((error) => {
@@ -344,11 +175,7 @@ export function createRequestHandler(
 			const unsubscribe = api.subscribe((event) => {
 				res.write(`data: ${JSON.stringify(event)}\n\n`)
 			})
-			const release = subscribers.add(undefined)
-			req.on("close", () => {
-				release()
-				unsubscribe()
-			})
+			req.on("close", unsubscribe)
 			return
 		}
 
@@ -366,11 +193,7 @@ export function createRequestHandler(
 					res.write(`data: ${JSON.stringify(event)}\n\n`)
 				}
 			})
-			const release = subscribers.add(taskId)
-			req.on("close", () => {
-				release()
-				unsubscribe()
-			})
+			req.on("close", unsubscribe)
 			return
 		}
 

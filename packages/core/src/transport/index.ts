@@ -5,13 +5,11 @@ import type { ShoferExtensionApi } from "@shofer/types"
 
 import { Package } from "../shared/package.js"
 import { ShoferApiAgent } from "./shofer-api-agent.js"
-import { createHttpServer, createStreamSubscribers } from "./http-server.js"
-import { setConversationDriverProbe } from "./conversation-driver.js"
+import { createHttpServer } from "./http-server.js"
 import { runAcpAgent } from "./run-acp-agent.js"
 
 export * from "./http-server.js"
 export * from "./http-client.js"
-export * from "./conversation-driver.js"
 export { ShoferApiAgent, FORWARDED_EVENTS, findOutstandingAsk } from "./shofer-api-agent.js"
 export * from "./acp-mapping.js"
 export * from "./acp-connection.js"
@@ -25,28 +23,19 @@ export { runAcpAgent } from "./run-acp-agent.js"
  * `allowClientConfig` lets the controller's per-task API Configuration drive each
  * task (set when the node was started without CLI provider/model/key/url overrides).
  *
- * Serving is also what makes this host REMOTELY DRIVEN, and the agent loop has to
- * know: `shofer serve` always starts its ask dispatcher with
- * `brokerInteractiveAsks`, so an interactive ask here is answered by a subscribed
- * controller or by nobody at all. The server's subscriber census is published
- * through {@link setConversationDriverProbe} for exactly that question — see
- * `conversation-driver.ts`. It publishes `mightReach`, not `has`: a controller
- * that dropped and is reconnecting is still the audience, and answering from the
- * instantaneous count would report a millisecond gap as "nobody is watching".
+ * Serving is also what makes this host REMOTELY DRIVEN: `shofer serve` always
+ * starts its ask dispatcher with `brokerInteractiveAsks`, so an interactive ask
+ * here is answered by a subscribed controller or by nobody at all.
  */
 export function serveHttpOverShoferApi(
 	api: ShoferExtensionApi,
 	opts: { port: number; host?: string; token?: string; version?: string; allowClientConfig?: boolean },
 ): Server {
 	const agent = new ShoferApiAgent(api, { allowClientConfig: opts.allowClientConfig })
-	const subscribers = createStreamSubscribers()
 	const server = createHttpServer(agent, {
 		token: opts.token,
 		version: opts.version ?? Package.version,
-		subscribers,
 	})
-	setConversationDriverProbe((taskId) => subscribers.mightReach(taskId))
-	server.on("close", () => setConversationDriverProbe(undefined))
 	server.listen(opts.port, opts.host)
 	return server
 }

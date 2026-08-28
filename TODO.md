@@ -1,88 +1,13 @@
-- **A sync child's dangerous-tool APPROVAL still has no audience on a remotely
-  driven host.** `ask_followup_question` from a synchronously spawned child is
-  now republished on the root conversation's event stream
-  (`API.escalateFollowupToConversation`, `docs/parallelism.md`), but the same
-  invisibility applies to the child's `tool` / `command` / `use_mcp_server`
-  approval asks: they are published only on the child's own stream, which no
-  controller subscribes to, so a child that reaches for a gated tool parks and
-  takes its suspended parent with it. The mechanism generalises exactly — widen
-  the predicate from `ask === "followup"` to the interactive-ask set — but the
-  AUDIENCE differs (an approval goes to whoever holds that authority on the
-  project, not to whoever set the work in motion), so a controller's approval
-  surface has to be part of the same change rather than inheriting the question
-  path by accident. Not urgent while deployed worker bundles auto-approve their
-  declared groups; it is the first thing to break when one does not.
-
-- **"Is a driver attached?" is answered per SERVER, not per controller.**
-  `isConversationDriverAttached` reads the HTTP transport's live subscriber
-  census (`createStreamSubscribers`), so it says an SSE connection is open on the
-  conversation — not that a human is on the other end of it. A controller that
-  holds the stream open while nobody is watching (a browser tab closed with the
-  server-side consumer still running, which is the DESIGNED behaviour) reads as
-  an audience, so the fail-fast in `AskFollowupQuestionTool` catches only the
-  unambiguous case: nothing subscribed for long enough that no reconnect explains
-  it (`SUBSCRIBER_REATTACH_GRACE_MS` in the census plus the one re-check in
-  `confirmNoConversationDriver` — `docs/parallelism.md`). Bounding the resulting
-  wait is the controller's job (it owns the durable question row and its
-  deadline), and this host deliberately has no timer that resolves an ask; the
-  two tolerance windows only bound how confidently it may assert that a question
-  reaches nobody, and neither supplies an answer, an approval or a refusal.
-
-- The marketplace removal left the `plugin` channel's `installFromFile` /
-  `installFromUrl` / `uninstall` actions (and their host handlers) with no webview
-  caller — install/uninstall are CLI verbs (`shofer plugin install|remove`) and
-  `.shofer/plugins.json` declarations only. If a UI install surface is wanted
-  again, re-home those affordances into Settings → Plugins (`PluginsSettings`),
-  which already owns enable/disable, config, and AI consent.
-
-- Parallel Live Memory
-
-- "Global Settings (JSON-only, no settings UI)" expose these settings on the Settings UI. Move these out of settings.json:
-  | Setting | Purpose | Default |
-  | -------------------------------- | ---------------------------------------- | ----------------- |
-  | `shofer.defaultCostLimit` | Per-task USD budget cap | `null` (disabled) |
-  | `shofer.disabledTools` | Globally disable specific tools | `[]` |
-  | `shofer.useAgentRules` | Load `AGENTS.md` rule files from project | `true` |
-  | `shofer.commandExecutionTimeout` | Max seconds for command execution | `0` (no timeout) |
-  | `shofer.commandTimeoutAllowlist` | Commands exempt from timeout | `[]` |
-
-- DEV Simplify the Settings overlay (use VScode's own settings.json)
-
-- DEV memories (copilot_memory, copilot_resolveMemoryFileUri) (filter by age)
-
-- preemptive summarization (in the background)
-
-- test the migration commands
-
-- TypeScript 7 checker uses the **`@typescript/native-preview`** (`tsgo`) dev
-  build, not stable `typescript@7`. Stable TS 7 can't be a devDep here: its
-  package's real name is `typescript`, so under pnpm it hijacks the `typescript`
-  peer of every TS 6-only consumer (typescript-eslint, tsup's `.d.ts` generator,
-  zod-to-ts) and breaks them (TS 7 ships no classic compiler API). There is no
-  distinctly-named stable wrapper to escape that collision: `@typescript/native`
-  does not exist on npm (confirmed against the public registry — not a Nexus
-  mirroring gap), and `@typescript/native-preview` has no non-`-dev` release yet.
-  So `tsgo` (a pre-GA build of the same TS 7 engine) is the best available TS 7
-  compiler with a non-colliding package name. Revisit when either a stable
-  distinctly-named native package ships, or typescript-eslint + tsup gain TS 7 /
-  API support — at which point the whole toolchain can collapse onto a single
-  `typescript@7` and `check-types` can go back to `tsc`.
-
-- Replace bare `console.log` in extension-host code (AGENTS.md Output Channel Logging Rule — use the shared output channel, not `console.log`): `src/integrations/diagnostics/index.ts` (3 calls), `src/api/providers/vscode-lm.ts` (1 call).
-
-- Give `ask` messages a **typed per-category payload** instead of overloading
-  `ShoferMessage.text`. Today an `ask`'s data is category-specific and untyped:
-  `command` → raw shell string in `text`; `followup` → question/suggestions;
-  `tool` → JSON-ish; `command_output` → empty. Every non-webview ShoferApi consumer
-  (user-console, ACP clients) re-parses this per category with ad-hoc heuristics
-  that drift. Keep the `ask` discriminant but replace the free-text payload with a
-  typed field per category in `@shofer/types` (a discriminated union —
-  `commandAsk:{command}`, `toolAsk:{tool,args}`, `followupAsk:{question,suggestions}`,
-  …) so consumers get one stable, testable contract. NOT a flat opaque envelope
-  (that just relocates the per-category logic). Blast radius: the message contract +
-  the webview `ChatRow` per-category rendering + the ACP mapping + tests — do it when
-  a second non-webview consumer needs interactive approvals (L2 runs auto-approve, so
-  it doesn't today).
+- **A child's dangerous-tool APPROVAL has no audience on a remotely driven host.**
+  A child's `tool` / `command` / `use_mcp_server` approval asks are published only
+  on the child's own stream, which a controller subscribed to the conversation's
+  root does not consume, so a child that reaches for a gated tool parks. Unlike a
+  QUESTION — which reaches its parent's mailbox as a `request` and is answered
+  with `reply` — an approval has a different audience (whoever holds that
+  authority on the project, not the parent), so it cannot inherit the question
+  path: a controller's approval surface has to be part of the same change. Not
+  urgent while deployed worker bundles auto-approve their declared groups; it is
+  the first thing to break when one does not.
 
 - **Three per-task shaping options have no caller.** `agentRole`,
   `agentToolGroups` and `agentContext` on `CreateTaskOptions` (and their

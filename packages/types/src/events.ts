@@ -109,21 +109,6 @@ export const shoferEventsSchema = z.object({
 			taskId: z.string(),
 			action: z.union([z.literal("created"), z.literal("updated")]),
 			message: shoferMessageSchema,
-			/**
-			 * Set only on an ESCALATED copy of another task's message — the id of
-			 * the task that actually produced it, while `taskId` names the stream
-			 * the copy was published on.
-			 *
-			 * A synchronously spawned child's `ask_followup_question` is the case
-			 * that needs it: the child's own stream has no driver (the controller
-			 * subscribes to the conversation's ROOT task), and its parent cannot
-			 * answer because it is blocked inside `new_task`, so the question is
-			 * republished on the root's stream. A consumer that renders every task
-			 * of a host (the worker-wide `/api/v1/event` firehose) sees both the
-			 * original and the copy, and this field is how it tells them apart;
-			 * a consumer of one task's stream sees only the copy.
-			 */
-			sourceTaskId: z.string().optional(),
 		}),
 	]),
 	[ShoferEventName.TaskModeSwitched]: z.tuple([z.string(), z.string()]),

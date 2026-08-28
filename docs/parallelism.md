@@ -412,65 +412,6 @@ it. The `followup` auto-approval (`alwaysAllowFollowupQuestions`) is likewise
 suppressed for these questions — they must never be auto-answered with the first
 suggestion.
 
-### A child with no concurrent parent escalates to the conversation
-
-A question travels backwards along the relationship that created the task, and at
-each hop the entity there either answers it or passes it on. For a child of a
-concurrent parent — every child `new_task` creates — that hop is the parent, and
-the section above is the whole story.
-
-The machinery below covers a child whose parent is NOT concurrent
-(`parentTaskId` set, `isBackgroundTask` false). `new_task` no longer produces
-such a task, so nothing in the current tool surface reaches this path; it is
-retained because a host can still construct one directly, and its removal is
-part of the closing sweep.
-
-On an interactive host that already works: the child is pushed onto the task stack, so its chat — question and suggestion buttons — is what the user is looking at. On a host driven over the [ShoferApi](shofer-api.md) it did not, because a controller subscribes to ONE task's event stream (the conversation's root), and nothing consumes a child task's events. The question reached no surface, the child parked forever, and the parent parked behind it.
-
-The question is therefore **republished on the root task's stream**:
-
-1. The child raises its ordinary `task.ask("followup", …)` — the blocking primitive is unchanged, and every local channel (the child's chat, the CLI ask dispatcher) still answers it exactly as before.
-2. `API.escalateFollowupToConversation` publishes a second `message` event carrying the same `ShoferMessage` under `taskId = rootTaskId`, with `sourceTaskId` naming the child. It is the identical wire shape a root task's own question produces, so a controller renders and answers it with no new event type; a consumer of the worker-wide `/api/v1/event` firehose sees both copies and tells them apart by `sourceTaskId`.
-3. Only the finalized, undecided ask is republished (never a partial, an auto-approved or an already-answered one), and only once per `askId`.
-4. The controller answers against the CONVERSATION — the root id, the only one its durable question row holds — echoing the child's `askId`. `API.respondToAsk` follows that id to whichever live task of the conversation is parked on it (`Task.isAwaitingAsk`), so the answer lands on the child. Nothing else is redirected: with no `askId`, or with the addressed task parked on it, the addressed task answers.
-5. When the question provably has **no** audience — a remotely driven host with no subscriber on the root's stream and none plausibly reconnecting to it, settled by `confirmNoConversationDriver` over `isConversationDriverAttached` (next section) — the tool refuses to ask at all and returns a tool error telling the model to decide with what it has. Parking would take the parent down with it, invisibly. On a host that is not remotely driven the probe is unregistered and answers `undefined`, which is never read as "nobody": the local ask surface is the audience.
-
-#### "Provably" is a claim about an interval, not an instant
-
-A controller detaching and re-attaching is ordinary operation, not evidence of a missing audience: an SSE connection drops and the client re-subscribes, a proxy recycles an idle stream, a controller rolls out and its replacement re-attaches. A subscriber count sampled at one instant reads every one of those as "nobody is watching" — and a fail-fast built on a single sample converts a gap of milliseconds into a permanent wrong refusal, which is exactly what happened to a sync child mid-turn while its controller was demonstrably driving the conversation.
-
-`false` therefore requires two independent things to hold, at two different scales, and the cases they cover do not overlap:
-
-| Window                                | Where                                                          | Covers                                                                                                                                                                                                                                                                                      |
-| ------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUBSCRIBER_REATTACH_GRACE_MS` (30 s) | the census, `packages/core/src/transport/http-server.ts`       | a controller that **was** attached and is coming back. `StreamSubscribers.mightReach` counts a task whose last subscriber detached less than the window ago as still reachable; `has` stays the exact instantaneous fact, and `serveHttpOverShoferApi` registers `mightReach` as the probe. |
-| `DRIVER_ATTACH_RECHECK_MS` (2 s)      | the seam, `packages/core/src/transport/conversation-driver.ts` | a controller that has **never** attached to this conversation yet because it is still opening the stream for a turn that just started. `confirmNoConversationDriver` re-asks the probe once, this long after a `false`, and only a second `false` licenses the refusal.                     |
-
-Neither is a timer that RESOLVES an ask — the platform rule that no timer may supply an answer, an approval or a refusal is untouched, and nothing here decides anything. All they bound is how confidently the host may assert that a question reaches nobody. The 30 s figure is chosen to be far longer than any reconnect cycle and far shorter than a run: half a minute of grace costs one stalled turn against a genuinely dead controller, where a single sample costs a wrongly-refused question against a live one. The 2 s figure is paid in line by an agent about to give up, so it buys the one case a grace window structurally cannot and nothing more.
-
-The detach ledger behind the grace is bounded by construction rather than capped: an entry is written only when a task's last subscriber detaches, every write first sweeps entries older than the window, and re-attaching drops the task's entry — so it holds only the tasks that lost their last subscriber inside the last 30 seconds.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as User
-    participant C as Controller
-    participant R as Root task
-    participant S as Sync child
-
-    R->>S: a child whose parent is not concurrent
-    S->>S: task.ask("followup", …) — parks
-    Note over S: published on the child's own stream,<br/>which nobody subscribes to
-    S-->>C: message event on the ROOT stream<br/>(taskId=root, sourceTaskId=child)
-    C->>U: render the question
-    U->>C: answer
-    C->>R: POST /task/{root}/ask { askId, text }
-    R-->>S: resolveAskTarget follows askId to the child
-    S->>R: attempt_completion — R resumes
-```
-
----
-
 ## Abort Propagation
 
 ### Parent abort → children abort

@@ -53,12 +53,6 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 	private readonly log: (...args: unknown[]) => void
 	private logfile?: string
 
-	/** Cap on {@link escalatedAskIds} — see `escalateFollowupToConversation`. */
-	private static readonly MAX_TRACKED_ESCALATED_ASKS = 256
-
-	/** Ask ids already republished on a conversation's stream (dedupe, bounded). */
-	private readonly escalatedAskIds = new Set<string>()
-
 	constructor(
 		outputChannel: vscode.OutputChannel,
 		provider: ShoferProvider,
@@ -602,11 +596,9 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 		}
 
 		// A CONVERSATION is addressed by its root task, but an ask can be raised by
-		// any task in that conversation's tree — a synchronously spawned child's
-		// question is published on the root's stream (see
-		// `escalateFollowupToConversation`), so the controller answers it against
-		// the root id it knows — the only one its question row holds. Follow the askId
-		// to whichever live task is actually parked on it.
+		// any task in that conversation's tree, and a controller answers against the
+		// root id it knows — the only one its question row holds. Follow the askId to
+		// whichever live task is actually parked on it.
 		const task = this.resolveAskTarget(addressed, response.askId)
 
 		// A followup suggestion may carry a mode: switch this task to it before
@@ -829,65 +821,6 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 		}
 	}
 
-	/**
-	 * Republish a synchronously spawned child's `ask_followup_question` on the
-	 * ROOT task's event stream, so the conversation's driver sees it.
-	 *
-	 * The gap this closes: a controller subscribes to ONE task — the conversation's
-	 * root (`GET /api/v1/task/:id/event`) — so nothing consumes a child task's
-	 * events. A background child is fine, because its question is routed to its
-	 * PARENT, which is running and answers the request in its mailbox with `reply`. A
-	 * SYNCHRONOUS child has no such hop: its parent is suspended inside `new_task`
-	 * waiting for it. Left alone the question reaches no durable surface, the child
-	 * parks forever, and the parent parks behind it — the whole conversation stops
-	 * with nothing shown and nothing logged.
-	 *
-	 * So the next hop backwards is the human who set the work in motion, and this
-	 * is the wire that reaches them: the identical `message` event a root task's
-	 * own question produces, published under the root's id, with `sourceTaskId`
-	 * naming the child. A controller therefore needs no new event type to render
-	 * it, and its answer — posted against the conversation, carrying the child's
-	 * `askId` — is routed back to the child by {@link resolveAskTarget}.
-	 *
-	 * Only the finalized, undecided ask is republished. Partials are mid-stream
-	 * noise, and an auto-approved or already-answered ask has no decision left to
-	 * ask for; `escalatedAskIds` additionally makes it once-per-ask, so a later
-	 * update of the same message can never open a second question row on the
-	 * controller.
-	 */
-	private escalateFollowupToConversation(
-		task: TaskLike,
-		event: { action: "created" | "updated"; message: ShoferMessage },
-	): void {
-		const message = event.message
-		const rootTaskId = task.rootTaskId
-
-		if (!rootTaskId || rootTaskId === task.taskId) return
-		if (!task.parentTaskId || task.isBackgroundTask) return
-		if (message.type !== "ask" || message.ask !== "followup") return
-		if (message.partial === true || message.autoApproved === true || message.isAnswered === true) return
-		if (!message.askId || this.escalatedAskIds.has(message.askId)) return
-
-		this.escalatedAskIds.add(message.askId)
-		// Bounded: an id is only useful until its ask is answered, and a host runs
-		// for as long as its pod does. Drop the oldest (insertion-ordered Set) once
-		// past the cap rather than growing without limit.
-		if (this.escalatedAskIds.size > API.MAX_TRACKED_ESCALATED_ASKS) {
-			const oldest = this.escalatedAskIds.values().next()
-			if (!oldest.done) this.escalatedAskIds.delete(oldest.value)
-		}
-
-		this.log(
-			`[API#escalateFollowup] question from sync child ${task.taskId} published on conversation ${rootTaskId} (askId ${message.askId})`,
-		)
-		this.emit(ShoferEventName.Message, {
-			taskId: rootTaskId,
-			sourceTaskId: task.taskId,
-			action: event.action,
-			message,
-		})
-	}
-
 	private registerListeners(provider: ShoferProvider) {
 		provider.on(ShoferEventName.TaskCreated, (task) => {
 			// Task Lifecycle
@@ -962,7 +895,6 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 
 			task.on(ShoferEventName.Message, async (message) => {
 				this.emit(ShoferEventName.Message, { taskId: task.taskId, ...message })
-				this.escalateFollowupToConversation(task, message)
 
 				if (message.message.partial !== true) {
 					await this.fileLog(`[${new Date().toISOString()}] ${JSON.stringify(message.message, null, 2)}\n`)

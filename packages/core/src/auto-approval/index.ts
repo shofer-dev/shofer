@@ -202,9 +202,9 @@ export async function checkAutoApproval({
 		}
 
 		// askFollowupQuestion routed to another task is unconditionally approved.
-		// A question only reaches the `ask === "tool"` path here when a background
-		// child routes it UP to its parent (see AskFollowupQuestionTool: the
-		// `task.parentTaskId && task.isBackgroundTask` branch uses
+		// A question only reaches the `ask === "tool"` path here when a CHILD
+		// forwards it up to its parent (see AskFollowupQuestionTool: the
+		// `task.parentTaskId` branch uses
 		// askApproval("tool", {tool: "askFollowupQuestion", ...})). No human is
 		// interrupted — the parent answers the request in its mailbox with `reply` — so
 		// gating it behind a user prompt is meaningless and would silently hang

@@ -307,11 +307,10 @@ export interface TaskLike {
 	readonly parentTaskId?: string
 	readonly childTaskId?: string
 	/**
-	 * Whether this task's parent is running CONCURRENTLY with it. True for every
-	 * child `new_task` creates. It sits beside the parent and root ids because it
-	 * completes them: the ids say a task has a parent, this says whether that
-	 * parent is available to answer — which is what decides where an ask raised
-	 * here can travel.
+	 * Whether this task is a CHILD of another task. True for every child
+	 * `new_task` creates, and redundant with `parentTaskId` on a live instance —
+	 * it is kept because it is the flag the persisted `HistoryItem` carries, which
+	 * is how a history scan finds a parent's children with no live instance to ask.
 	 */
 	readonly isBackgroundTask: boolean
 	readonly metadata: TaskMetadata

@@ -620,7 +620,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			// the parent's mailbox, and the parent answers it with `reply`), so the
 			// human is not the one being waited on. They can still open the child and
 			// answer it there — first answer wins — but they are not interrupted.
-			if (task.isBackgroundTask && task.parentTaskId && task.forwardedQuestion) {
+			if (task.parentTaskId && task.forwardedQuestion) {
 				return
 			}
 
