@@ -19,6 +19,7 @@ import {
 	type CreateTaskOptions,
 	type TraceContext,
 	type HistoryItem,
+	type Envelope,
 	type ShoferMessage,
 	type TaskLike,
 	type TokenUsage,
@@ -557,6 +558,22 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferExtensionAp
 		})
 		task.messageQueueService.addMessage(message, images)
 		task.startFromHistory()
+	}
+
+	/**
+	 * Deliver an envelope into a task's mailbox (the AgentApi's `POST
+	 * /api/v1/task/:id/mailbox` door).
+	 *
+	 * A thin pass-through to {@link ShoferProvider.deliverToTask}, which owns the
+	 * live-instance-vs-rehydrate decision and the wake policy. Unlike
+	 * {@link sendMessage}, a failure here THROWS rather than logging and
+	 * returning: a mailbox delivery carries a receipt, and every caller of this
+	 * door (an A2A ack, a Temporal `agentTaskMessageDelivered` signal) reports
+	 * "in the box" on the strength of it. Swallowing the failure would make each
+	 * of those acks a lie.
+	 */
+	public async deliverToMailbox(taskId: string, envelope: Envelope): Promise<void> {
+		await this.sidebarProvider.deliverToTask(taskId, envelope)
 	}
 
 	/**

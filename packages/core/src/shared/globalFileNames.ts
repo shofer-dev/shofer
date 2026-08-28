@@ -7,4 +7,7 @@ export const GlobalFileNames = {
 	taskMetadata: "task_metadata.json",
 	historyItem: "history_item.json",
 	historyIndex: "_index.json",
+	// One JSON file per task, beside its history — deliberately NOT a field on
+	// `HistoryItem`, whose `taskState` has a single writer that the mailbox is not.
+	mailbox: "mailbox.json",
 }

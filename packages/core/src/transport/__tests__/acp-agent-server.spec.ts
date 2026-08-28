@@ -13,6 +13,7 @@ function makeApi() {
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
 		getTaskSnapshot: vi.fn(async (taskId: string) => ({ taskId, messages: [] })),
+		deliverToMailbox: vi.fn(async () => {}),
 		pluginRequest: vi.fn(async () => null),
 		subscribe: (listener) => {
 			emit = listener

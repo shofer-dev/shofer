@@ -4,6 +4,7 @@ import type {
 	ShoferApi,
 	AskResponse,
 	CreateTaskInput,
+	Envelope,
 	OutstandingAsk,
 	ServerEvent,
 	ShoferMessage,
@@ -153,6 +154,13 @@ export class ShoferApiAgent implements ShoferApi {
 
 	respondToAsk(taskId: string, response: AskResponse): Promise<void> {
 		return this.api.respondToAsk(taskId, response)
+	}
+
+	deliverToMailbox(taskId: string, envelope: Envelope): Promise<void> {
+		// Straight through, and deliberately NOT preceded by a resume: delivery
+		// owns rehydration (queue-first, so the wake turn answers the resume ask
+		// itself), exactly as `sendMessage` does.
+		return this.api.deliverToMailbox(taskId, envelope)
 	}
 
 	getTaskSnapshot(taskId: string): Promise<TaskSnapshot | undefined> {

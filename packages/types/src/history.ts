@@ -15,7 +15,7 @@ export const taskLifecycleSchema = z.enum([
 	"idle", // No active execution; waiting or cleared
 	"running", // Actively processing (API call in progress)
 	"waiting_input", // Paused, needs user approval/input
-	"waiting", // Blocked on a non-user external event (e.g. wait_for_task on a subtask)
+	"waiting", // Parked in `wait` for mail — blocked on a non-user external event
 	"paused", // Manually paused by the user (non-destructive abort)
 	"completed", // Finished via attempt_completion (rating in TaskState.rating)
 	"error", // Stopped due to an error

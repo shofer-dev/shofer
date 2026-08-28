@@ -231,6 +231,25 @@ export async function getEnvironmentDetails(shofer: Task, includeFileDetails: bo
 	details += `<name>${modeDetails.name}</name>\n`
 	details += `<model>${modelId}</model>\n`
 
+	// Mailbox digest.
+	//
+	// This belongs HERE and never in the system prompt: the system prompt is the
+	// provider's prompt-cache prefix, and a digest carrying countdowns would
+	// invalidate that prefix on every single request. `environment_details`
+	// already changes per turn (it carries the clock), so the digest is free.
+	//
+	// An empty box renders NOTHING — not an empty section — so a task that never
+	// receives mail pays nothing for the feature. Rendering the digest consumes
+	// no envelope; only `wait` does.
+	await shofer.mailboxReady
+	const mailboxDigest = shofer.mailbox.digest(
+		Date.now(),
+		(from) => clineProvider?.taskManager?.getManagedTask(from)?.name,
+	)
+	if (mailboxDigest) {
+		details += `\n\n${mailboxDigest}`
+	}
+
 	if (includeFileDetails) {
 		details += `\n\n# Current Workspace Directory (${shofer.cwd.toPosix()}) Files\n`
 		const isDesktop = arePathsEqual(shofer.cwd, path.join(os.homedir(), "Desktop"))

@@ -17,6 +17,7 @@ import { taskStateSchema } from "./history.js"
 import { shoferAskSchema, shoferMessageSchema, tokenUsageSchema } from "./message.js"
 import type { ProviderSettings } from "./provider-settings.js"
 import type { TraceContext } from "./trace-context.js"
+import type { Envelope } from "./mailbox.js"
 
 /** A streamed agent event. `type` is the event name; other fields are event-specific. */
 export interface ServerEvent {
@@ -208,6 +209,25 @@ export interface ShoferApi {
 	 * approvals round-trip exactly like a local task's.
 	 */
 	respondToAsk(taskId: string, response: AskResponse): Promise<void>
+
+	/**
+	 * Deliver an {@link Envelope} into a task's MAILBOX.
+	 *
+	 * The mailbox door, distinct from {@link sendMessage}'s turn door and not a
+	 * substitute for it: `sendMessage` makes text the conversation's next USER
+	 * TURN (the human/controller channel), while this puts MAIL in the box for
+	 * the agent to read with `wait` and answer with `reply`. Conflating them
+	 * would make every bus event, peer message and owner notification look like
+	 * a person speaking.
+	 *
+	 * The host fills `to` (from the addressed task) and `sent_at`, delivers to a
+	 * live instance or rehydrates a dormant one, and honours the envelope's
+	 * `wake` flag. It resolves once the envelope is DURABLE, so a caller may ack
+	 * on return; it REJECTS for a task with no history, an `error`-lifecycle
+	 * task, and a full or misaddressed mailbox — a refused delivery is told to
+	 * the sender, never dropped.
+	 */
+	deliverToMailbox(taskId: string, envelope: Envelope): Promise<void>
 
 	/**
 	 * The task's state so far — messages, the ask it is blocked on, lifecycle and

@@ -1,6 +1,6 @@
 import http from "node:http"
 
-import { traceContextFromHeaders, traceContextSchema } from "@shofer/types"
+import { deriveSubject, envelopeSchema, traceContextFromHeaders, traceContextSchema } from "@shofer/types"
 
 import type { ShoferApi, ProviderSettings, ServerEvent, TraceContext } from "@shofer/types"
 
@@ -291,6 +291,7 @@ export interface HttpServerOptions {
  *                                      (also honours W3C `traceparent`/`tracestate` headers)
  *   POST /api/v1/task/:id/cancel
  *   POST /api/v1/task/:id/ask        → { askResponse, text?, images?, askId?, mode? } (interactive approval)
+ *   POST /api/v1/task/:id/mailbox    → an Envelope minus `to`/`sent_at` (the server fills both)
  *   POST /api/v1/task/:id/plugin-request → { plugin, method, params } → 200 { result }
  */
 export function createHttpServer(api: ShoferApi, opts: HttpServerOptions = {}): http.Server {
@@ -407,7 +408,7 @@ export function createRequestHandler(
 			return send(res, 201, result)
 		}
 
-		const taskMatch = path.match(new RegExp(`^${base}/task/([^/]+)/(message|cancel|ask)$`))
+		const taskMatch = path.match(new RegExp(`^${base}/task/([^/]+)/(message|cancel|ask|mailbox)$`))
 		if (method === "POST" && taskMatch) {
 			const taskId = taskMatch[1]!
 			const action = taskMatch[2]!
@@ -424,6 +425,37 @@ export function createRequestHandler(
 					requestTraceContext(req, body),
 				)
 				return send(res, 202, { taskId, accepted: true })
+			}
+			if (action === "mailbox") {
+				// The MAIL door, beside `/message`'s TURN door. The body is an
+				// envelope minus the two fields the host owns: `to` comes from the
+				// addressed task (a client cannot deliver to a third party by
+				// disagreeing with its own URL) and `sent_at` from this host's clock.
+				// An absent `subject` is derived from the body, so a caller that has
+				// only prose still produces a scannable digest row.
+				const body = await readJson(req)
+				if (typeof body.body !== "string") return send(res, 400, { error: "body is required" })
+				const candidate = {
+					...body,
+					to: decodeURIComponent(taskId),
+					sent_at: Date.now(),
+					subject: typeof body.subject === "string" ? body.subject : deriveSubject(body.body),
+				}
+				const parsed = envelopeSchema.safeParse(candidate)
+				if (!parsed.success) {
+					return send(res, 400, {
+						error: `invalid envelope: ${parsed.error.issues[0]?.message ?? "unknown"}`,
+					})
+				}
+				// A refused delivery (no such task, errored task, full box) is an
+				// ERROR to the caller, never a silent drop — that is the whole point
+				// of a receipt that means "in the box".
+				try {
+					await api.deliverToMailbox(decodeURIComponent(taskId), parsed.data)
+				} catch (error) {
+					return send(res, 409, { error: error instanceof Error ? error.message : String(error) })
+				}
+				return send(res, 202, { taskId, delivered: parsed.data.id })
 			}
 			if (action === "ask") {
 				const body = await readJson(req)

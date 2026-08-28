@@ -29,6 +29,8 @@ import {
 	type TerminalActionId,
 	type TerminalActionPromptType,
 	type HistoryItem,
+	type Envelope,
+	MAILBOX_WAKE_TURN_TEXT,
 	type TraceContext,
 	type TaskInteractionPayload,
 	// CloudUserInfo removed
@@ -55,6 +57,7 @@ import { Package } from "@shofer/core"
 import { findLast } from "@shofer/core"
 import { supportPrompt } from "@shofer/types"
 import { GlobalFileNames } from "@shofer/core"
+import { Mailbox } from "@shofer/core"
 import { Mode, defaultModeSlug, getModeBySlug } from "@shofer/core"
 import { governanceDisabledPlugins, governanceEnabledPlugins, governancePluginDirs } from "@shofer/core"
 import { experimentDefault, EXPERIMENT_IDS, experiments } from "@shofer/types"
@@ -2530,6 +2533,90 @@ export class ShoferProvider
 					`keeping the task's current configuration: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
+	}
+
+	/**
+	 * Deliver an envelope into a task's mailbox, whether or not that task is
+	 * currently running on this host.
+	 *
+	 * This is the one door every plane's inbound delivery reaches: an in-process
+	 * peer, a bus subscription match, an A2A relay frame, a Temporal owner
+	 * message. A live instance is handed the envelope directly; a DORMANT one is
+	 * a deliberate five-step sequence, and the order is the point:
+	 *
+	 * 1. **Persist the envelope into the dormant task's own mailbox file first.**
+	 *    The message is durable before anything is started, so a rehydration that
+	 *    fails half-way loses nothing and the caller's ack means what it says.
+	 * 2. Rehydrate DORMANT (`startTask: false`). A fire-and-forget start races the
+	 *    queue: the resume ask wins, gets published, and a headless node spends
+	 *    its `--retry` budget declining it before the drain can answer.
+	 * 3. Re-apply the MODE's provider profile. Headless hosts deliberately skip
+	 *    restoring provider settings from history, so a resumed task otherwise
+	 *    drops silently onto the node's default model.
+	 * 4. Queue the synthesized wake turn, so `resumeTaskFromHistory` takes it AS
+	 *    the resumption and raises no ask at all — then start.
+	 * 5. `registerBackgroundTask`, because `createTaskWithHistoryItem` pushes onto
+	 *    the stack only: without this the task is not reachable by
+	 *    `getManagedTaskInstance` and the NEXT delivery re-rehydrates it.
+	 *
+	 * A delivery with `wake: false` stops after step 1 on purpose: the sender said
+	 * this does not warrant resuming anyone, and the envelope is waiting in the
+	 * file for whenever the task next runs.
+	 *
+	 * @throws when the task has no history at all, or its lifecycle is `error` —
+	 * both mean there is nobody to deliver to, and the sender is told rather than
+	 * having the message silently dropped.
+	 */
+	public async deliverToTask(taskId: string, envelope: Envelope): Promise<Envelope> {
+		// A task is only "warm" while its LOOP is live. Being on the stack is not
+		// that test — `attempt_completion` sets `abort` and leaves the instance in
+		// place — but a finished instance is still the right delivery target: its
+		// mailbox is in memory and `Task.deliver` itself decides whether to wake it.
+		const current = this.getCurrentTask()
+		const live =
+			this.taskManager.getManagedTaskInstance(taskId) ?? (current?.taskId === taskId ? current : undefined)
+		if (live && !live.abandoned) {
+			return live.deliver(envelope)
+		}
+
+		let historyItem: HistoryItem
+		try {
+			;({ historyItem } = await this.getTaskWithId(taskId))
+		} catch (error) {
+			throw new Error(
+				`Task ${taskId} is not reachable: no live instance and no history ` +
+					`(${error instanceof Error ? error.message : String(error)}).`,
+			)
+		}
+
+		if (historyItem.taskState?.lifecycle === "error") {
+			throw new Error(`Task ${taskId} has errored and cannot receive messages.`)
+		}
+
+		// Step 1 — durable before anything else.
+		const mailbox = await Mailbox.load(taskId, this.contextProxy.globalStorageUri.fsPath)
+		const delivered = await mailbox.deliver(envelope)
+		mailbox.dispose()
+
+		if (!envelope.wake) {
+			return delivered
+		}
+
+		// Steps 2–5. `keepCurrentTask` for the same reason `sendMessage` uses it:
+		// waking one conversation must not abandon another.
+		const task = await this.createTaskWithHistoryItem(historyItem, {
+			keepCurrentTask: true,
+			startTask: false,
+		})
+		await this.applyModeApiConfig(task, historyItem.mode)
+		// The instance loaded its own mailbox in its constructor; awaiting that
+		// load here guarantees the envelope written above is in memory before the
+		// loop's first `environment_details` render.
+		await task.mailboxReady
+		task.messageQueueService.addMessage(MAILBOX_WAKE_TURN_TEXT)
+		this.taskManager.registerBackgroundTask(task)
+		task.startFromHistory()
+		return delivered
 	}
 
 	/**

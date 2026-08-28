@@ -87,6 +87,7 @@ describe("createRequestHandler (§11)", () => {
 			getTaskSnapshot: vi.fn(async (taskId: string) =>
 				taskId === "missing" ? undefined : { taskId, messages: [] },
 			),
+			deliverToMailbox: vi.fn(async () => {}),
 			pluginRequest: vi.fn(async () => ({ changes: [] })),
 			subscribe: vi.fn((l: (e: ServerEvent) => void) => {
 				events.push(l)
@@ -217,6 +218,65 @@ describe("createRequestHandler (§11)", () => {
 		await run(mockReq("POST", "/api/v1/task/t1/cancel"), c as unknown as ServerResponse)
 		expect(c.statusCode).toBe(202)
 		expect(api.cancelTask).toHaveBeenCalledWith("t1")
+	})
+
+	/**
+	 * The MAIL door. Two things it must get right and one it must refuse: the
+	 * host owns `to` and `sent_at` (a client cannot address a third party by
+	 * disagreeing with its own URL), an absent subject is derived from the body,
+	 * and a refused delivery is a status code rather than a silent drop.
+	 */
+	describe("POST /api/v1/task/:id/mailbox", () => {
+		const body = {
+			id: "env-1",
+			from: "task-sender",
+			kind: "notification",
+			body: "  the vm   is ready  ",
+			deadline: 4_000_000_000_000,
+			wake: true,
+			plane: "bus",
+		}
+
+		it("fills `to` and `sent_at`, and derives an absent subject", async () => {
+			const res = mockRes()
+			await run(mockReq("POST", "/api/v1/task/t1/mailbox", body), res as unknown as ServerResponse)
+
+			expect(res.statusCode).toBe(202)
+			expect(JSON.parse(res.body)).toEqual({ taskId: "t1", delivered: "env-1" })
+			const [taskId, envelope] = vi.mocked(api.deliverToMailbox).mock.calls[0]!
+			expect(taskId).toBe("t1")
+			expect(envelope.to).toBe("t1")
+			expect(typeof envelope.sent_at).toBe("number")
+			expect(envelope.subject).toBe("the vm is ready")
+		})
+
+		it("overrides a `to` the client tried to set", async () => {
+			const res = mockRes()
+			await run(
+				mockReq("POST", "/api/v1/task/t1/mailbox", { ...body, to: "someone-else" }),
+				res as unknown as ServerResponse,
+			)
+			expect(vi.mocked(api.deliverToMailbox).mock.calls[0]![1].to).toBe("t1")
+		})
+
+		it("400s a body that is not an envelope", async () => {
+			const res = mockRes()
+			await run(
+				mockReq("POST", "/api/v1/task/t1/mailbox", { ...body, kind: "reply" }),
+				res as unknown as ServerResponse,
+			)
+			expect(res.statusCode).toBe(400)
+			expect(api.deliverToMailbox).not.toHaveBeenCalled()
+		})
+
+		it("409s a refused delivery rather than reporting a receipt", async () => {
+			vi.mocked(api.deliverToMailbox).mockRejectedValueOnce(new Error("Task t1 is not reachable"))
+			const res = mockRes()
+			await run(mockReq("POST", "/api/v1/task/t1/mailbox", body), res as unknown as ServerResponse)
+
+			expect(res.statusCode).toBe(409)
+			expect(JSON.parse(res.body).error).toContain("not reachable")
+		})
 	})
 
 	it("POST /api/v1/task/:id/message carries the trace context, body or headers", async () => {

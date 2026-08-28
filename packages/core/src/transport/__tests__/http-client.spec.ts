@@ -234,6 +234,7 @@ describe("ShoferHttpClient (typed SDK)", () => {
 							}
 						: undefined,
 				),
+				deliverToMailbox: vi.fn(async () => {}),
 				pluginRequest: vi.fn(async () => null),
 				subscribe: vi.fn(() => () => {}),
 			}) satisfies ShoferApi

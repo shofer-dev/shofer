@@ -1,6 +1,14 @@
 import { taskSnapshotSchema, traceContextToHeaders } from "@shofer/types"
 
-import type { ShoferApi, AskResponse, CreateTaskInput, ServerEvent, TaskSnapshot, TraceContext } from "@shofer/types"
+import type {
+	ShoferApi,
+	AskResponse,
+	CreateTaskInput,
+	Envelope,
+	ServerEvent,
+	TaskSnapshot,
+	TraceContext,
+} from "@shofer/types"
 
 /**
  * Typed HTTP/SSE client SDK for the shofer server (v3 architecture §11).
@@ -72,6 +80,15 @@ export class ShoferHttpClient implements ShoferApi {
 
 	async respondToAsk(taskId: string, response: AskResponse): Promise<void> {
 		await this.post(`/task/${encodeURIComponent(taskId)}/ask`, response)
+	}
+
+	/**
+	 * Post an envelope into a remote task's mailbox. `to` and `sent_at` ride along
+	 * already filled — the server re-derives both from the addressed task and its
+	 * own clock, so a client whose clock or addressing is wrong cannot poison a box.
+	 */
+	async deliverToMailbox(taskId: string, envelope: Envelope): Promise<void> {
+		await this.post(`/task/${encodeURIComponent(taskId)}/mailbox`, envelope)
 	}
 
 	/**

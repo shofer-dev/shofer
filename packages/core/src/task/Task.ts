@@ -20,6 +20,8 @@ import { formatToolInvocation } from "../tools/helpers/toolResultFormatting.js"
 import {
 	type TaskLike,
 	type TaskMetadata,
+	type Envelope,
+	MAILBOX_WAKE_TURN_TEXT,
 	type TaskEvents,
 	type ProviderSettings,
 	type TokenUsage,
@@ -150,6 +152,7 @@ import { ApiRetryBudgetExceededError, resolveMaxConsecutiveApiFailures } from ".
 import { processUserContentMentions } from "../mentions/processUserContentMentions.js"
 import { getMessagesSinceLastSummary, summarizeConversation, getEffectiveApiHistory } from "../condense/index.js"
 import { MessageQueueService } from "../message-queue/MessageQueueService.js"
+import { Mailbox } from "../mailbox/Mailbox.js"
 import { AutoApprovalHandler } from "../auto-approval/AutoApprovalHandler.js"
 import { checkAutoApproval, type CheckAutoApprovalResult } from "../auto-approval/index.js"
 import { MessageManager } from "../message-manager/index.js"
@@ -920,6 +923,25 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	public readonly messageQueueService: MessageQueueService
 	private messageQueueStateChangedHandler: (() => void) | undefined
 
+	/**
+	 * This task's mailbox — the single destination for messages from peers, the
+	 * bus, the A2A mesh and Temporal owners. Owned exactly like
+	 * {@link messageQueueService}, and deliberately separate from it: a human
+	 * message is a TURN, an envelope is MAIL.
+	 */
+	public readonly mailbox: Mailbox
+
+	/**
+	 * Settles when the mailbox has been hydrated from disk.
+	 *
+	 * The constructor is synchronous, so the load is kicked off there and awaited
+	 * by anything that must see persisted mail (the environment-details digest,
+	 * a provider delivering into a task it just rehydrated). A delivery does not
+	 * need to await it: `deliver` re-reads nothing and the load only ADDS what
+	 * was already durable.
+	 */
+	public readonly mailboxReady: Promise<void>
+
 	// Streaming
 	isWaitingForFirstChunk = false
 	isStreaming = false
@@ -1286,6 +1308,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.assistantMessageParser = undefined
 
 		this.messageQueueService = new MessageQueueService()
+
+		// Hydrate the mailbox from its own file (never from the history row —
+		// `taskState` has a single writer and the fire-and-forget history writes
+		// race). Failure inside `load()` fails closed to an empty box, so this
+		// promise never rejects and a task always starts.
+		this.mailbox = new Mailbox(this.taskId, this.globalStoragePath)
+		this.mailboxReady = this.mailbox.load()
 
 		this.messageQueueStateChangedHandler = () => {
 			this.emit(ShoferEventName.TaskUserMessage, this.taskId)
@@ -5078,6 +5107,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			taskLog.error("Error disposing message queue:", error)
 		}
 
+		// Drop the mailbox's listeners and in-memory contents. Its FILE survives:
+		// mail delivered to a task outlives any one instance of it.
+		try {
+			this.mailbox.dispose()
+		} catch (error) {
+			taskLog.error("Error disposing mailbox:", error)
+		}
+
 		// Remove all event listeners to prevent memory leaks.
 		try {
 			this.removeAllListeners()
@@ -8551,6 +8588,65 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this._messageManager = new MessageManager(this)
 		}
 		return this._messageManager
+	}
+
+	/**
+	 * Deliver an envelope into this task's mailbox, and wake the agent if the
+	 * sender asked for it and the loop has stopped.
+	 *
+	 * The three cases, in the order they are decided:
+	 *
+	 * 1. **`wake` is false** — the envelope is in the box and that is the whole
+	 *    job. The agent finds it in its `environment_details` digest on its next
+	 *    turn, whenever that is.
+	 * 2. **The loop is RUNNING** (`!abort && !abandoned`) — nothing more to do
+	 *    either. A running agent reads the digest next request, and one parked in
+	 *    `wait` is returned by the `delivered` event `Mailbox` just emitted.
+	 *    Interrupting a live turn is exactly the mid-turn preemption this design
+	 *    removed.
+	 * 3. **The loop is STOPPED and `wake` is set** — resume it by enqueueing ONE
+	 *    synthesized plain-text user turn and kicking the tested Send-Now path
+	 *    (`cancelAndProcessQueuedMessages`). Nothing here reimplements any part of
+	 *    that path: it is what awaits the running-state persist before restarting.
+	 *
+	 * The wake turn is COALESCED. Two deliveries arriving back-to-back into a
+	 * stopped task must not queue two identical turns — the second would be
+	 * consumed as an entire wasted turn saying the same thing. The already-queued
+	 * turn covers whatever arrived after it, because it does not name a message:
+	 * the agent reads the whole box.
+	 *
+	 * Resolves once the envelope is DURABLE (the mailbox persists before
+	 * returning), so a caller that acks on return is acking a fact. The wake
+	 * itself is deliberately not awaited — restarting an agent loop is not
+	 * something a delivery should block on.
+	 *
+	 * @throws {MailboxError} when the envelope is invalid, misaddressed, or the box is full.
+	 */
+	public async deliver(envelope: Envelope): Promise<Envelope> {
+		const delivered = await this.mailbox.deliver(envelope)
+
+		if (!envelope.wake) {
+			return delivered
+		}
+
+		// Check the loop's liveness BEFORE touching the queue. `attempt_completion`
+		// checks `messageQueueService.isEmpty()` before finalizing (the
+		// Terminal-State Queue-Drain Rule), so a turn enqueued into a loop that is
+		// still winding down would be consumed as ordinary feedback rather than
+		// waking anything.
+		if (!this.abort && !this.abandoned) {
+			return delivered
+		}
+
+		const alreadyQueued = this.messageQueueService.messages.some((m) => m.text === MAILBOX_WAKE_TURN_TEXT)
+		if (!alreadyQueued) {
+			this.messageQueueService.addMessage(MAILBOX_WAKE_TURN_TEXT)
+			void this.cancelAndProcessQueuedMessages().catch((error) =>
+				taskLog.error(`[Task#${this.taskId}] mailbox wake failed:`, error),
+			)
+		}
+
+		return delivered
 	}
 
 	/**

@@ -6,7 +6,14 @@ import type { Mock } from "vitest"
 
 import { setHost, createInMemoryHost } from "@shofer/types"
 
+import * as os from "os"
+import * as path from "path"
+import { randomUUID } from "crypto"
+
+import type { Envelope } from "@shofer/types"
+
 import { getEnvironmentDetails } from "../getEnvironmentDetails.js"
+import { Mailbox } from "../../mailbox/Mailbox.js"
 import { getFullModeDetails } from "../../modes/getFullModeDetails.js"
 import { listFiles } from "../../services/glob/list-files.js"
 import { TerminalRegistry } from "../../terminal/TerminalRegistry.js"
@@ -93,6 +100,23 @@ describe("getEnvironmentDetails", () => {
 	let mockShofer: Partial<Task>
 	let mockProvider: any
 	let mockState: any
+	let mailbox: Mailbox
+
+	/** An envelope addressed at the task under test. */
+	const envelope = (overrides: Partial<Envelope> = {}): Envelope =>
+		({
+			id: overrides.id ?? randomUUID(),
+			from: "task-sender",
+			to: mockTaskId,
+			kind: "notification",
+			subject: "a subject",
+			body: "a body",
+			deadline: Date.now() + 600_000,
+			wake: false,
+			sent_at: Date.now(),
+			plane: "local",
+			...overrides,
+		}) as Envelope
 
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -113,7 +137,10 @@ describe("getEnvironmentDetails", () => {
 
 		mockProvider = {
 			getState: vi.fn().mockResolvedValue(mockState),
+			taskManager: { getManagedTask: vi.fn().mockReturnValue(undefined) },
 		}
+
+		mailbox = new Mailbox(mockTaskId, path.join(os.tmpdir(), `shofer-envdetails-${randomUUID()}`))
 
 		mockShofer = {
 			cwd: mockCwd,
@@ -137,6 +164,8 @@ describe("getEnvironmentDetails", () => {
 				dispose: vi.fn(),
 			} as any,
 			shoferMessages: [],
+			mailbox,
+			mailboxReady: Promise.resolve(),
 			api: {
 				getModel: vi.fn().mockReturnValue({ id: "test-model", info: { contextWindow: 100000 } }),
 				createMessage: vi.fn(),
@@ -166,6 +195,69 @@ describe("getEnvironmentDetails", () => {
 		;(getGitStatus as Mock).mockResolvedValue("## main")
 		vi.mocked(pWaitFor).mockResolvedValue(undefined)
 		vi.mocked(delay).mockResolvedValue(undefined)
+	})
+
+	describe("the Mailbox section", () => {
+		it("is omitted entirely when the box is empty", async () => {
+			const result = await getEnvironmentDetails(mockShofer as Task)
+			expect(result).not.toContain("# Mailbox")
+		})
+
+		it("renders the digest's header and one row per pending envelope", async () => {
+			// The offsets carry ~900ms of slack so the rendered remaining time is
+			// stable whatever the two persists cost; the exact row format is pinned
+			// deterministically (with an injected clock) in Mailbox.spec.ts.
+			const now = Date.now()
+			await mailbox.deliver(
+				envelope({
+					id: "7c1e0000-aaaa",
+					from: "task-9f2a",
+					kind: "request",
+					subject: "Which tables does UserService use?",
+					deadline: now + 47_900,
+				}),
+			)
+			await mailbox.deliver(
+				envelope({
+					id: "b0d40000-bbbb",
+					from: "tag:resource:vm-12",
+					subject: "vm-12 entered Ready",
+					plane: "bus",
+					deadline: now + 480_900,
+				}),
+			)
+
+			const result = await getEnvironmentDetails(mockShofer as Task)
+
+			expect(result).toContain(
+				"# Mailbox (2 pending — call wait(timeout_sec=0) to read; reply(...) answers a request)",
+			)
+			expect(result).toContain(
+				'- 7c1e0000… · from task-9f2a · request · "Which tables does UserService use?" · 47s left',
+			)
+			expect(result).toContain(
+				'- b0d40000… · from tag:resource:vm-12 · notification · "vm-12 entered Ready" · 8m left',
+			)
+		})
+
+		it("names the sender when the host knows its title", async () => {
+			mockProvider.taskManager.getManagedTask.mockImplementation((id: string) =>
+				id === "task-9f2a" ? { name: "Analyze auth" } : undefined,
+			)
+			await mailbox.deliver(envelope({ from: "task-9f2a", subject: "done" }))
+
+			const result = await getEnvironmentDetails(mockShofer as Task)
+			expect(result).toContain('from task-9f2a ("Analyze auth")')
+		})
+
+		it("does not consume anything it renders", async () => {
+			await mailbox.deliver(envelope({ id: "n-1" }))
+
+			await getEnvironmentDetails(mockShofer as Task)
+			await getEnvironmentDetails(mockShofer as Task)
+
+			expect(mailbox.size()).toBe(1)
+		})
 	})
 
 	it("should return basic environment details", async () => {
