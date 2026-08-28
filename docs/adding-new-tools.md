@@ -256,7 +256,7 @@ export const myTool = new MyTool()
 
 `handlePartial()` emits streaming `task.ask("tool", ..., partial=true)` — updates the ChatRow in real time.
 
-**Every tool MUST call `this.askToolApproval()` in `execute()`** to render a ChatRow entry in the UI — even tools that do no I/O (like `sleep`). Without this call the tool produces no visible indication, which appears to the user as a **silent hang**. Use the `BaseTool` helper rather than calling `askApproval("tool", …)` directly — it goes through the standard ask→checkAutoApproval pipeline. Prefer it to the raw callback.
+**Every tool MUST call `this.askToolApproval()` in `execute()`** to render a ChatRow entry in the UI — even tools that do no I/O. Without this call the tool produces no visible indication, which appears to the user as a **silent hang**. Use the `BaseTool` helper rather than calling `askApproval("tool", …)` directly — it goes through the standard ask→checkAutoApproval pipeline. Prefer it to the raw callback.
 
 ## Step 5: Message Router
 
@@ -506,46 +506,32 @@ parameters. `TOOL_ALIASES` (in [`tool.ts`](../packages/types/src/tool.ts)) only
 covers **pure renames** — same params, different name. When the alias needs to
 **inject different params**, it must be a real tool whose handler delegates.
 
-The `wait_for_message` tool is the reference example: it is an alias for `attempt_completion`
-that lets the agent yield as a self-declared terminal state without formulating a
-full result. The agent may pass optional `rating` / `reason`; the handler maps
-`reason → result`, defaults `rating → "well"`, and calls
-`attemptCompletionTool.execute(...)` so **all** terminal/delegation/peer-sync
-logic stays in one place. See [`WaitTool.ts`](../packages/core/src/tools/WaitTool.ts).
-
-Checklist deltas for a delegating alias:
+**No delegating alias currently ships.** The last one, `wait_for_message`, was an
+alias for `attempt_completion` that let an agent yield while waiting for another
+task to write to it; the mailbox replaced it with `wait`, which parks and RETURNS
+rather than completing the task ([`task_messaging.md`](task_messaging.md)). The
+checklist deltas below are kept because the pattern is sound and the next alias
+will need them — not because something in the tree uses them today.
 
 - **Still a full native tool**: Steps 1–7 apply (schema, `toolNames`,
-  `NativeToolArgs`, parser cases, router case). The alias is in
-  `ALWAYS_AVAILABLE_TOOLS` if its target is (`attempt_completion` is), so it needs
-  no `TOOL_GROUPS` entry.
-- **Parser must emit `nativeArgs` for the alias's no-blocking-param case.** Do
-  **not** add a missing-field check or guard the assignment (`if (args.x)`) for
-  params the handler defaults — emit `nativeArgs` unconditionally, or the
-  dispatcher rejects the call as "missing nativeArgs". (`wait_for_message`'s parser cases set
-  `{ rating, reason }` with no guard. Note `wait_for_message`'s `rating` is schema-_required_
-  but, like `attempt_completion`'s rating, gets no parser-level missing check
-  because the handler applies a defensive default — the schema enforces it at the
-  model boundary, the handler tolerates non-strict providers.)
+  `NativeToolArgs`, parser cases, router case). An alias whose target is in
+  `ALWAYS_AVAILABLE_TOOLS` needs no `TOOL_GROUPS` entry.
+- **Parser must emit `nativeArgs` even when every param is optional.** Do **not**
+  guard the assignment (`if (args.x)`) for params the handler defaults — emit
+  `nativeArgs` unconditionally, or the dispatcher rejects the call as "missing
+  nativeArgs".
 - **Handler delegates via `.execute()`, not `.handle()`.** Call the target's
-  `execute(mappedParams, task, callbacks)` directly so you control the params.
-  The router constructs whatever callback bag the target needs (for `wait_for_message`, the
-  same `AttemptCompletionCallbacks` the `attempt_completion` case builds).
-- **Resolve defaults in the alias, not the target.** Defaults can differ:
-  `attempt_completion` defaults a missing rating to `"poor"`, but `wait_for_message` wants
-  `"well"`, so `WaitTool.execute` resolves `"well"` _before_ delegating. Keep the
-  schema non-strict whenever any param is optional (e.g. `wait_for_message`'s `reason`), since
-  strict mode would force the model to emit every property — even when other
-  params (e.g. `wait_for_message`'s `rating`) are required, per the Advisory Parameter
-  Defaults Rule.
-- **Auto-approval / `ShoferSayTool` / `ChatRow` (Steps 8–11) may be unneeded.**
-  `attempt_completion` never calls `askApproval` — it is terminal and just
-  `say`s `completion_result` — so `wait_for_message` inherits that rendering and needs none
-  of the auto-approval wiring. An alias whose target _does_ post an `ask("tool")`
-  would still need Step 10.
-- **Shared terminal/side-effect guards belong in the router.** `wait_for_message` mirrors the
-  `didExecuteAttemptCompletion` duplicate-completion guard in its router case
-  because it is the same terminal state.
+  `execute(mappedParams, task, callbacks)` directly so you control the params; the
+  router constructs whatever callback bag the target needs.
+- **Resolve defaults in the alias, not the target.** Defaults can legitimately
+  differ between the alias and what it delegates to; resolve them before
+  delegating. Keep the schema non-strict whenever any param is optional, since
+  strict mode would force the model to emit every property.
+- **Auto-approval / `ShoferSayTool` / `ChatRow` (Steps 8–11) may be unneeded** if
+  the target renders its own row. An alias whose target _does_ post an
+  `ask("tool")` still needs Step 10.
+- **Shared terminal/side-effect guards belong in the router**, so the alias and
+  its target cannot disagree about them.
 
 ## Mode Filtering
 
@@ -572,25 +558,25 @@ This section tracks known gaps, undocumented steps, and design warts in the nati
 
 - **`getMutatedPaths()` is param-derived, so multi-file tools are only partially covered**: `fileRegex` enforcement runs in `isToolAllowedForMode` **before** the tool executes, using only the call params. For tools whose full mutated set is computed at execution time, `getMutatedPaths()` can only return what the params reveal. `rename_symbol` is the live example: it applies a VS Code `WorkspaceEdit` across **every** file referencing the symbol, but the params expose only the declaration `path`, so `fileRegex` validates that one file and a restricted mode could still mutate referencing files outside its regex. The full fix is execution-time enforcement inside the tool (e.g. `RenameSymbolTool.execute()` re-checking each affected path against the mode `fileRegex` after the `WorkspaceEdit` resolves); see the `TODO` in `getMutatedPaths()`. Any future tool with an LSP/codemod-style fan-out has the same limitation.
 
-- **`askToolApproval()` is mandatory — no silent tools**: Every `execute()` method MUST call `this.askToolApproval(callbacks, { tool: "…", content: "…" })` to render a ChatRow entry. Even tools that appear to "do nothing visible" (like `sleep`) must do this — without it the tool invocation produces no indication in the chat UI, which looks like a **silent hang** to the user. The `BaseTool` helper is preferred over the raw `callbacks.askApproval("tool", …)` because it goes through the standard ask→checkAutoApproval pipeline. The `sleep` tool was shipped without this call (see commit `91a070a40`) and required a follow-up fix. A future lint rule should enforce that every `BaseTool` subclass calls `askToolApproval` in its `execute()`.
+- **`askToolApproval()` is mandatory — no silent tools**: Every `execute()` method MUST call `this.askToolApproval(callbacks, { tool: "…", content: "…" })` to render a ChatRow entry. Even a tool that appears to "do nothing visible" must do this — without it the tool invocation produces no indication in the chat UI, which looks like a **silent hang** to the user. The `BaseTool` helper is preferred over the raw `callbacks.askApproval("tool", …)` because it goes through the standard ask→checkAutoApproval pipeline. The retired `sleep` tool was shipped without this call (see commit `91a070a40`) and required a follow-up fix. A future lint rule should enforce that every `BaseTool` subclass calls `askToolApproval` in its `execute()`.
 
 - **`TOOL_DISPLAY_NAMES`** (in [`tool.ts`](../packages/types/src/tool.ts)): Mentioned in a sentence under Step 3 but not listed as its own checklist row. Every tool needs a human-readable display name here — it drives the tools-UI panel and auto-approval setting labels. Without it the tool is unnamed in the SettingsView.
 
 - **`SAY_TOOL_TO_NATIVE_NAME`** (in [`tools.ts`](../packages/core/src/auto-approval/tools.ts)): The camelCase → snake_case mapping used by `getToolGroupForSayTool()`. A tool in the `read` / `write` / `execute` / `browser` group that uses `ask:"tool"` MUST have an entry here. Step 10 mentions this in prose but it's easy to miss. Without it, auto-approval falls through to `"ask"` even with the toggle on.
 
-- **`toolParamNames`** (in [`packages/types/src/tools.ts`](../packages/types/src/tools.ts)): If a tool introduces a new parameter name not already in the `toolParamNames` const array, it must be added there. This array is used as a validation whitelist in `NativeToolCallParser.parseToolCall()` — any parameter not in the list triggers an `"Unknown parameter 'X' for tool 'Y'"` warning and is **silently dropped** (via `continue`), so the tool never receives it. Every tool parameter defined in `NativeToolArgs` (Step 6) that isn't already in `toolParamNames` MUST be added here, or the parameter won't reach the handler. Discovered during `send_message_to_task` implementation: `timeout_sec` was omitted from `toolParamNames` and would have been silently dropped by the parser had it not been caught at type-check time. Discovered again during `peer_task_ids` audit: `peer_task_ids` was declared in `NewTaskParams` interface and consumed by the handler, but missing from `toolParamNames` — the parser would have silently dropped any LLM-supplied `peer_task_ids`. Discovered a third time during `list_background_tasks` `scope` parameter audit: `scope` was missing from `toolParamNames` and the `parseToolCall()` switch case was hardcoded to `{}`, causing `scope="peers"` calls to silently fall back to `children`.
+- **`toolParamNames`** (in [`packages/types/src/tools.ts`](../packages/types/src/tools.ts)): If a tool introduces a new parameter name not already in the `toolParamNames` const array, it must be added there. This array is used as a validation whitelist in `NativeToolCallParser.parseToolCall()` — any parameter not in the list triggers an `"Unknown parameter 'X' for tool 'Y'"` warning and is **silently dropped** (via `continue`), so the tool never receives it. Every tool parameter defined in `NativeToolArgs` (Step 6) that isn't already in `toolParamNames` MUST be added here, or the parameter won't reach the handler. Discovered during the peer-messaging implementation: `timeout_sec` was omitted from `toolParamNames` and would have been silently dropped by the parser had it not been caught at type-check time. Discovered again during `peer_task_ids` audit: `peer_task_ids` was declared in `NewTaskParams` interface and consumed by the handler, but missing from `toolParamNames` — the parser would have silently dropped any LLM-supplied `peer_task_ids`. Discovered a third time during `list_background_tasks` `scope` parameter audit: `scope` was missing from `toolParamNames` and the `parseToolCall()` switch case was hardcoded to `{}`, causing `scope="peers"` calls to silently fall back to `children`.
 
 - **Adding a new parameter to an existing tool follows the same checklist as a new tool.** When adding a parameter like `peer_task_ids` to `new_task`, every step that touches tool arguments must be revisited: schema (`native-tools/new_task.ts` -> Step 1), `toolParamNames` (parser whitelist), `NativeToolArgs` (Step 6), and **both parser switch cases** (Step 7). Declaring the parameter in the TypeScript interface and handler is not enough — if the LLM-facing schema omits it, the LLM never knows it exists. If `toolParamNames` omits it, the parser silently drops it. If the parser switch cases omit it, `nativeArgs` won't carry it to the handler. All four locations must be updated in lock-step.
 
-- **Step 7 omission is the most damaging silent bug.** A native tool with schema, handler, router, `NativeToolArgs`, and auto-approval all wired correctly — but missing from the parser switch cases — produces zero visible errors. The parser returns a `ToolUse` with `nativeArgs: undefined`, the dispatcher rejects it with `"Invalid tool call for '<name>': missing nativeArgs"`, and the LLM sees a generic `"Provider Error"` with no clue that the parser is the root cause. There is no compile error, no lint warning, no runtime log from the tool's `execute()` method. This exact bug was found in **`send_message_to_task`** (both switch cases completely absent), in **`new_task`'s `peer_task_ids`** (parameter present in schema + `NativeToolArgs` + handler, but missing from both parser switch cases), and in **`list_background_tasks`'s `scope`** (`parseToolCall()` switch case hardcoded to `{}`, ignoring `args.scope` while `createPartialToolUse()` correctly read `partialArgs.scope`). The symptom: the tool call appears in chat briefly, then vanishes with a cost-ledger entry and no tool-side log lines. For parameters, the subtler variant is a partial omission — only the `parseToolCall()` path is missing the param while `createPartialToolUse()` handles it correctly (streaming shows the right value, but the complete-args path drops it). This was the `scope` bug.
+- **Step 7 omission is the most damaging silent bug.** A native tool with schema, handler, router, `NativeToolArgs`, and auto-approval all wired correctly — but missing from the parser switch cases — produces zero visible errors. The parser returns a `ToolUse` with `nativeArgs: undefined`, the dispatcher rejects it with `"Invalid tool call for '<name>': missing nativeArgs"`, and the LLM sees a generic `"Provider Error"` with no clue that the parser is the root cause. There is no compile error, no lint warning, no runtime log from the tool's `execute()` method. This exact bug was found in the original **peer-messaging send tool** (both switch cases completely absent), in **`new_task`'s `peer_task_ids`** (parameter present in schema + `NativeToolArgs` + handler, but missing from both parser switch cases), and in **`list_background_tasks`'s `scope`** (`parseToolCall()` switch case hardcoded to `{}`, ignoring `args.scope` while `createPartialToolUse()` correctly read `partialArgs.scope`). The symptom: the tool call appears in chat briefly, then vanishes with a cost-ledger entry and no tool-side log lines. For parameters, the subtler variant is a partial omission — only the `parseToolCall()` path is missing the param while `createPartialToolUse()` handles it correctly (streaming shows the right value, but the complete-args path drops it). This was the `scope` bug.
 
-- **Multi-tool coordinated changes**: When a new tool changes parameters on _existing_ tools (e.g., adding `scope` to `list_background_tasks`, relaxing gates in `check_task_status` / `wait_for_task`, adding `peer_task_ids` to `new_task`), the checklist applies to **each affected tool individually** — every tool whose schema or `NativeToolArgs` changes needs its own pass through Steps 1, 4, 6, 7. The `send_message_to_task` implementation touched 4 existing tools plus the new tool, and each one needed: schema update (`native-tools/*.ts`), `NativeToolArgs` update (`shared/tools.ts`), and sometimes `NativeToolCallParser` case changes.
+- **Multi-tool coordinated changes**: When a new tool changes parameters on _existing_ tools (e.g., adding `scope` to `list_background_tasks`, relaxing gates in `check_task_status` / `wait_for_task`, adding `peer_task_ids` to `new_task`), the checklist applies to **each affected tool individually** — every tool whose schema or `NativeToolArgs` changes needs its own pass through Steps 1, 4, 6, 7. The peer-messaging implementation touched 4 existing tools plus the new tool, and each one needed: schema update (`native-tools/*.ts`), `NativeToolArgs` update (`shared/tools.ts`), and sometimes `NativeToolCallParser` case changes.
 
-- **Schema `required` fields**: Tools with optional parameters described to the model as "soft" / "advisory" hints (e.g., `wait`, `timeout_sec` on `send_message_to_task`, `softResultLength` / `softTimeoutSec` / `peer_task_ids` on `new_task`) MUST be absent from schema `required` (per the [Advisory Parameter Defaults Rule](https://github.com/arkware-ai/shofer/blob/main/extensions/shofer/.shofer/rules-code/adding-new-tools.md)) AND have host-side defaults applied silently in `execute()`. The two halves MUST stay coherent: the schema cannot tell the model a field is optional while the handler treats it as mandatory. Initially, `send_message_to_task` had `required: ["task_id", "message", "wait", "timeout_sec"]` — this was wrong because `wait` and `timeout_sec` are advisory, and the LLM would omit them expecting defaults, only to be rejected by the schema validator. Fixed to `required: ["task_id", "message"]`.
+- **Schema `required` fields**: Tools with optional parameters described to the model as "soft" / "advisory" hints (e.g., `kind`, `subject`, `timeout_sec`, `wake` on `send_message`, `softResultLength` / `softTimeoutSec` / `peer_task_ids` on `new_task`) MUST be absent from schema `required` (per the [Advisory Parameter Defaults Rule](https://github.com/arkware-ai/shofer/blob/main/extensions/shofer/.shofer/rules-code/adding-new-tools.md)) AND have host-side defaults applied silently in `execute()`. The two halves MUST stay coherent: the schema cannot tell the model a field is optional while the handler treats it as mandatory. Its predecessor shipped with every advisory param in `required`, so a model that omitted one expecting the documented default was rejected by the schema validator instead.
 
-    **Important strict-mode constraint**: When a tool has advisory parameters that are in `properties` but absent from `required`, `strict: true` MUST NOT be set on the schema. OpenAI Structured Outputs with `strict: true` requires ALL properties to appear in `required` — there is no way to mark a field as genuinely optional. Use `strict: false` (the default, as in `grep_search.ts`) OR list every property in `required` with nullable types (as in `generate_image.ts`). Both `new_task.ts` and `send_message_to_task.ts` were shipped with `strict: true` while omitting advisory params from `required` — a violation of this constraint that was fixed by removing `strict: true`.
+    **Important strict-mode constraint**: When a tool has advisory parameters that are in `properties` but absent from `required`, `strict: true` MUST NOT be set on the schema. OpenAI Structured Outputs with `strict: true` requires ALL properties to appear in `required` — there is no way to mark a field as genuinely optional. Use `strict: false` (the default, as in `grep_search.ts`) OR list every property in `required` with nullable types (as in `generate_image.ts`). Both `new_task.ts` and the peer-messaging send tool were shipped with `strict: true` while omitting advisory params from `required` — a violation of this constraint that was fixed by removing `strict: true`. `send_message.ts` and `wait.ts` carry `strict: false` for the same reason.
 
-- **`ShoferSayTool.tool` + `ChatRow` (Steps 8-9) are optional for functional correctness**: A tool that renders its chat-row entry via the raw `callbacks.askApproval("tool", JSON.stringify({ tool: "myTool", … }))` path produces a generic but functional chat row even without a dedicated `ShoferSayTool` variant and `ChatRow` case. Steps 8-9 only apply when the tool wants a _rich, custom_ chat row. The `send_message_to_task` tool uses the generic path and is fully functional without a custom `ChatRow` — the tool invocation is visible in the chat UI as a basic `"tool"` row. A doc note warning that bare `askApproval("tool", …)` calls without a corresponding `ChatRow` renderer can appear as a silent hang should be added. (This is a corollary of the `askToolApproval()` gap above — tools that skip `askToolApproval` entirely have no chat entry at all; tools that use the raw `askApproval("tool", JSON.stringify(…))` path at least get a generic row.)
+- **`ShoferSayTool.tool` + `ChatRow` (Steps 8-9) are optional for functional correctness**: A tool that renders its chat-row entry via the raw `callbacks.askApproval("tool", JSON.stringify({ tool: "myTool", … }))` path produces a generic but functional chat row even without a dedicated `ShoferSayTool` variant and `ChatRow` case. Steps 8-9 only apply when the tool wants a _rich, custom_ chat row. A tool can be fully functional on the generic path without a custom `ChatRow` — its invocation is still visible in the chat UI as a basic `"tool"` row. A doc note warning that bare `askApproval("tool", …)` calls without a corresponding `ChatRow` renderer can appear as a silent hang should be added. (This is a corollary of the `askToolApproval()` gap above — tools that skip `askToolApproval` entirely have no chat entry at all; tools that use the raw `askApproval("tool", JSON.stringify(…))` path at least get a generic row.)
 
 ### Tool group pitfalls
 

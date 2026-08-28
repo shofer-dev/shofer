@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-    <!-- /TOC -->
+      <!-- /TOC -->
 
 ---
 
@@ -139,8 +139,10 @@ The service provides typed convenience methods for every event type. Each method
 | [`captureCustomModeCreated`](../packages/telemetry/src/TelemetryService.ts)        | `CUSTOM_MODE_CREATED`        | `modeSlug`, `modeName`                                                            |
 | [`captureTitleButtonClicked`](../packages/telemetry/src/TelemetryService.ts)       | `TITLE_BUTTON_CLICKED`       | `button`                                                                          |
 | [`captureTelemetrySettingsChanged`](../packages/telemetry/src/TelemetryService.ts) | `TELEMETRY_SETTINGS_CHANGED` | `previousSetting`, `newSetting`                                                   |
-| [`capturePeerMessageSent`](../packages/telemetry/src/TelemetryService.ts)          | `TASK_PEER_MESSAGE_SENT`     | `taskId`, peer-message metadata                                                   |
-| [`capturePeerMessageReceived`](../packages/telemetry/src/TelemetryService.ts)      | `TASK_PEER_MESSAGE_RECEIVED` | `taskId`, peer-message metadata                                                   |
+| [`captureMailboxSent`](../packages/telemetry/src/TelemetryService.ts)              | `MAILBOX_SENT`               | `taskId`, `kind`, `plane`, `wake`                                                 |
+| [`captureMailboxDelivered`](../packages/telemetry/src/TelemetryService.ts)         | `MAILBOX_DELIVERED`          | `taskId`, `kind`, `plane`, `woke`                                                 |
+| [`captureMailboxRead`](../packages/telemetry/src/TelemetryService.ts)              | `MAILBOX_READ`               | `taskId`, `count`                                                                 |
+| [`captureMailboxExpired`](../packages/telemetry/src/TelemetryService.ts)           | `MAILBOX_EXPIRED`            | `taskId`, `kind`                                                                  |
 | [`capturePeerDiscovery`](../packages/telemetry/src/TelemetryService.ts)            | `TASK_PEER_DISCOVERY`        | `taskId`, discovery metadata                                                      |
 | [`captureSubtaskSpawned`](../packages/telemetry/src/TelemetryService.ts)           | `SUBTASK_SPAWNED`            | `taskId` (parent), `mode`, `isBackground`                                         |
 | [`captureTaskCancelled`](../packages/telemetry/src/TelemetryService.ts)            | `TASK_CANCELLED`             | `taskId`                                                                          |
@@ -277,7 +279,6 @@ enum TelemetryEventName {
 	// UI
 	TITLE_BUTTON_CLICKED = "Title Button Clicked",
 
-
 	// Sharing
 	SHARE_BUTTON_CLICKED = "Share Button Clicked",
 	SHARE_ORGANIZATION_CLICKED = "Share Organization Clicked",
@@ -304,9 +305,11 @@ enum TelemetryEventName {
 	MCP_ASYNC_CALL_CANCELLED = "MCP Async Call Cancelled",
 	MCP_ASYNC_CALL_TIMED_OUT = "MCP Async Call Timed Out",
 
-	// Peer messaging (task-to-task)
-	TASK_PEER_MESSAGE_SENT = "Task Peer Message Sent",
-	TASK_PEER_MESSAGE_RECEIVED = "Task Peer Message Received",
+	// The mailbox (task-to-task)
+	MAILBOX_SENT = "Mailbox Sent",
+	MAILBOX_DELIVERED = "Mailbox Delivered",
+	MAILBOX_READ = "Mailbox Read",
+	MAILBOX_EXPIRED = "Mailbox Expired",
 	TASK_PEER_DISCOVERY = "Task Peer Discovery",
 
 	// Task outcomes
@@ -429,12 +432,12 @@ telemetryClient.updateTelemetryState(telemetrySetting, telemetryKey, machineId)
 
 ### UI Events Tracked
 
-| UI Component        | Event                                   | Source                                                                                                   |
-| ------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Mode Selector       | `MODE_SELECTOR_OPENED`                  | [`ModeSelector.tsx`](../webview-ui/src/components/chat/ModeSelector.tsx)                                 |
-| Error Boundary      | `error_boundary_caught_error`           | [`ErrorBoundary.tsx`](../webview-ui/src/components/ErrorBoundary.tsx)                                    |
-| UI Settings         | `ui_settings_collapse_thinking_changed` | [`UISettings.tsx`](../webview-ui/src/components/settings/UISettings.tsx)                                 |
-| UI Settings         | `ui_settings_enter_behavior_changed`    | [`UISettings.tsx`](../webview-ui/src/components/settings/UISettings.tsx)                                 |
+| UI Component   | Event                                   | Source                                                                   |
+| -------------- | --------------------------------------- | ------------------------------------------------------------------------ |
+| Mode Selector  | `MODE_SELECTOR_OPENED`                  | [`ModeSelector.tsx`](../webview-ui/src/components/chat/ModeSelector.tsx) |
+| Error Boundary | `error_boundary_caught_error`           | [`ErrorBoundary.tsx`](../webview-ui/src/components/ErrorBoundary.tsx)    |
+| UI Settings    | `ui_settings_collapse_thinking_changed` | [`UISettings.tsx`](../webview-ui/src/components/settings/UISettings.tsx) |
+| UI Settings    | `ui_settings_enter_behavior_changed`    | [`UISettings.tsx`](../webview-ui/src/components/settings/UISettings.tsx) |
 
 ---
 
@@ -538,12 +541,12 @@ flowchart TD
 
 ### Cloud Events
 
-| Event                                | Where Emitted             | Properties                                                                              |
-| ------------------------------------ | ------------------------- | --------------------------------------------------------------------------------------- |
-| `SHARE_BUTTON_CLICKED`               | Share button              | —                                                                                       |
-| `SHARE_ORGANIZATION_CLICKED`         | Share → org               | —                                                                                       |
-| `SHARE_PUBLIC_CLICKED`               | Share → public            | —                                                                                       |
-| `SHARE_CONNECT_TO_CLOUD_CLICKED`     | Share → connect prompt    | —                                                                                       |
+| Event                            | Where Emitted          | Properties |
+| -------------------------------- | ---------------------- | ---------- |
+| `SHARE_BUTTON_CLICKED`           | Share button           | —          |
+| `SHARE_ORGANIZATION_CLICKED`     | Share → org            | —          |
+| `SHARE_PUBLIC_CLICKED`           | Share → public         | —          |
+| `SHARE_CONNECT_TO_CLOUD_CLICKED` | Share → connect prompt | —          |
 
 ### Error Events
 
@@ -566,16 +569,25 @@ flowchart TD
 | `MCP_ASYNC_CALL_CANCELLED` | `cancel_tasks` during async MCP call | `taskId`, `callId`, `serverName`, `toolName`, `durationMs`            |
 | `MCP_ASYNC_CALL_TIMED_OUT` | Async MCP call exceeds timeout       | `taskId`, `callId`, `serverName`, `toolName`, `timeoutSec`            |
 
-### Peer Messaging Events (task-to-task)
+### Mailbox Events (task-to-task)
 
-Emitted when running tasks exchange messages directly (`send_message_to_task`,
-async peer delivery, and peer discovery via `list_background_tasks`).
+The four points an envelope passes through ([`task_messaging.md`](task_messaging.md)).
+`MAILBOX_SENT` and `MAILBOX_DELIVERED` are deliberately BOTH recorded: a send that
+the recipient's box refuses produces neither, and the pair is what makes a refusal
+rate measurable.
 
-| Event                        | Where Emitted                                 | Properties                   |
-| ---------------------------- | --------------------------------------------- | ---------------------------- |
-| `TASK_PEER_MESSAGE_SENT`     | `SendMessageToTaskTool.ts` (peer send)        | `taskId`, message metadata   |
-| `TASK_PEER_MESSAGE_RECEIVED` | `Task.ts` (async peer-message delivery)       | `taskId`, message metadata   |
-| `TASK_PEER_DISCOVERY`        | `ListBackgroundTasksTool.ts` (peer discovery) | `taskId`, discovery metadata |
+| Event                 | Where Emitted                                                  | Properties                        |
+| --------------------- | -------------------------------------------------------------- | --------------------------------- |
+| `MAILBOX_SENT`        | `SendMessageTool.ts` / `ReplyTool.ts`, after `deliver` returns | `taskId`, `kind`, `plane`, `wake` |
+| `MAILBOX_DELIVERED`   | `Task.deliver`, once the box has accepted and persisted        | `taskId`, `kind`, `plane`, `woke` |
+| `MAILBOX_READ`        | `WaitTool.ts`, per returned batch                              | `taskId`, `count`                 |
+| `MAILBOX_EXPIRED`     | `Mailbox.sweep`, per envelope that lapsed unread               | `taskId`, `kind`                  |
+| `TASK_PEER_DISCOVERY` | `ListBackgroundTasksTool.ts` (peer discovery)                  | `taskId`, discovery metadata      |
+
+`woke` is TRUE only for the delivery that actually enqueued the wake turn. A
+second delivery arriving before that turn is drained carries `wake: true` and
+wakes nothing, so it records `false` — the label counts loop RESTARTS, not
+wake-flagged messages.
 
 ### Task Outcome Events
 
@@ -780,12 +792,12 @@ Provider implementations capture errors via `TelemetryService.instance.captureEx
 
 ### Webview UI
 
-| File                                                                                                     | Integration                                      |
-| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| [`App.tsx`](../webview-ui/src/App.tsx)                                                                   | Initializes `telemetryClient` on state hydration |
-| [`ModeSelector.tsx`](../webview-ui/src/components/chat/ModeSelector.tsx)                                 | `MODE_SELECTOR_OPENED`                           |
-| [`UISettings.tsx`](../webview-ui/src/components/settings/UISettings.tsx)                                 | UI preference changes                            |
-| [`ErrorBoundary.tsx`](../webview-ui/src/components/ErrorBoundary.tsx)                                    | React error boundary catches                     |
+| File                                                                     | Integration                                      |
+| ------------------------------------------------------------------------ | ------------------------------------------------ |
+| [`App.tsx`](../webview-ui/src/App.tsx)                                   | Initializes `telemetryClient` on state hydration |
+| [`ModeSelector.tsx`](../webview-ui/src/components/chat/ModeSelector.tsx) | `MODE_SELECTOR_OPENED`                           |
+| [`UISettings.tsx`](../webview-ui/src/components/settings/UISettings.tsx) | UI preference changes                            |
+| [`ErrorBoundary.tsx`](../webview-ui/src/components/ErrorBoundary.tsx)    | React error boundary catches                     |
 
 ---
 

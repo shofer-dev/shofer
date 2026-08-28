@@ -70,10 +70,16 @@ export interface ObserverTunables {
 
 /** How main.ts delivers for the observer (seams, so the observer stays host-free). */
 export interface DeliverySeams {
-	/** One-way injection beside the agent's next request (notify mode). */
-	notifyAgent(text: string): Promise<void>
-	/** Queue-mode injection that can restart a completed task (the finish gate). */
-	queueAgent(text: string): Promise<void>
+	/**
+	 * Put an advisory in the agent's mailbox WITHOUT resuming it: the agent reads it
+	 * on its next turn. A second brain that interrupts is a first brain.
+	 */
+	adviseAgent(text: string): Promise<void>
+	/**
+	 * Deliver with `wake: true` — the finish gate, and the only place this plugin may
+	 * restart a task that has already stopped.
+	 */
+	wakeAgent(text: string): Promise<void>
 	/** A user-visible marker row (the advisory / report renderings). */
 	marker(kind: string, text: string, data?: Record<string, unknown>): Promise<void>
 	/** Load the effective catalogue (re-read at pass boundaries). */
@@ -518,7 +524,7 @@ export class TaskObserver {
 			humanOnly: advisory.humanOnly,
 		})
 		if (!advisory.humanOnly) {
-			await this.seams.notifyAgent(renderForAgent(advisory))
+			await this.seams.adviseAgent(renderForAgent(advisory))
 		}
 	}
 
@@ -549,7 +555,7 @@ export class TaskObserver {
 			"finish-gate",
 			`🧠 Second Brain finish gate: the task stopped, but "${candidate.headline}" (${candidate.detector}) is evidenced as unfinished.`,
 		)
-		await this.seams.queueAgent(renderForAgent(candidate))
+		await this.seams.wakeAgent(renderForAgent(candidate))
 	}
 
 	private closeLapsedOutcomes(ledger: TaskLedger, now: number): void {

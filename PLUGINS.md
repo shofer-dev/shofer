@@ -159,7 +159,7 @@ reachable, when its permission is present. All keys are optional:
 | `network`      | string[] | Allowed network origins/prefixes for `ctx.host.fetch`.                                                                                                         |
 | `filesystem`   | string[] | Allowed paths for `ctx.host.fs` and `ctx.host.watch` (relative entries resolve to plugin root **and** workspace).                                              |
 | `ai`           | boolean  | Host LLM/embeddings via `ctx.ai`. **Necessary but not sufficient** — also needs the AI-billing consent (§7).                                                   |
-| `agent`        | boolean  | Proactive agent-steering via `ctx.agent.notify` (inject a message into the running agent). Billed/behavioral.                                                  |
+| `agent`        | boolean  | Deliver messages into a task's mailbox (`ctx.agent.deliver`), register a mailbox transport, and start/cancel tasks (`spawn`). Billed/behavioral.               |
 | `task`         | boolean  | Task control via `ctx.task`: timeline markers, rewind, `setCwd`, `openTask`. Each changes what a task IS (rewind destroys history), so it is its own grant.    |
 | `telemetry`    | boolean  | Report product events via `ctx.host.telemetry`. Telemetry LEAVES the machine, so it is a grant — the user's global telemetry opt-in still gates it underneath. |
 | `editor`       | boolean  | The host's multi-file diff viewer via `ctx.host.editor`.                                                                                                       |
@@ -409,24 +409,51 @@ warn, `hasConsent()` returns `false`), so the user is never silently billed. Ung
 **absent** entirely.
 
 **`ctx.agent`** (`PluginAgent`) — proactive **agent-steering**, requires `permissions.agent`. Lets a
-plugin push a message **into** the running agent (rather than only reacting to it) — from a background
-service, a `ctx.host.watch` callback, or a lifecycle hook:
+plugin put a message in front of a task (rather than only reacting to it) — from a background
+service, a `ctx.host.watch` callback, or a lifecycle hook.
 
-- `notify(message, opts?)` → `Promise<void>`. `opts.mode` (default **`"queue"`**) enqueues the message
-  into the active task's queue so the agent picks it up on its next turn (non-disruptive); **`"spawn"`**
-  starts a new task seeded with the message; **`"interrupt"`** is _reduced_ to queued-ASAP (the message
-  is enqueued and, if the loop already ended, drained immediately via the tested cancel-and-process
-  path — there is no fragile mid-turn injection). `opts.taskId` targets a specific task; otherwise the
-  current/active task is used (with no task to steer, a `queue`/`interrupt` notify falls back to spawning
-  so the message is never dropped).
+**There is ONE delivery door**, and no delivery mode to choose:
+
+- `deliver(envelope)` → `Promise<Envelope>`. The message becomes an **envelope** in the target
+  task's mailbox (`docs/task_messaging.md`): persisted, deadline-bounded, listed in the
+  `environment_details` digest on the task's next request, and read by the agent with `wait`.
+  `kind` says whether an answer is expected (`notification` / `request` / `reply`), `wake` says
+  whether a task whose loop has STOPPED is resumed for it, and `deadline` (absolute epoch ms) says
+  how long it is worth delivering at all. The **host** fills `to` and `sent_at` and mints `id` when
+  you supply none — pass an upstream idempotency key as `id` if you own one, because a mailbox
+  already holding that id acknowledges without appending, which is what makes a retry safe.
+  `taskId` targets a specific task; otherwise the host's current task.
+
+    It resolves once the box has **persisted** the envelope, so an upstream ack sent afterwards means
+    "in the box". It rejects when the box refuses (full, expired) and — deliberately — when there is
+    **no target task**: a delivery never silently becomes a billed spawn. Use `spawn` for that.
+
+- `registerMailboxTransport({ canRoute, send })` → an **unregister** function. The mirror of
+  `deliver`: how an envelope addressed to a task this node does not hold LEAVES the node. The core
+  resolves an outbound `to` locally first; an address that resolves to nothing is offered to each
+  registered transport in turn, and the first whose `canRoute(to)` accepts it owns the delivery —
+  which is what lets the agent's one `send_message` tool address a remote peer without knowing a
+  mesh exists. `canRoute` is synchronous (it runs on the send path; no I/O), and a plugin whose
+  service stops must call the returned unregister function.
+
+- `spawn(prompt, opts?)` / `cancel(taskId)` — job control (§14): a task that does not exist yet,
+  with an awaitable, cancellable handle.
 
 ```ts
 // e.g. inside a registered service watching a deploy log
-await ctx.agent?.notify("The deploy just failed — see /var/log/deploy.log for the trace.")
+await ctx.agent?.deliver({
+	from: "deploy-watcher",
+	kind: "notification",
+	subject: "deploy failed",
+	body: "The deploy just failed — see /var/log/deploy.log for the trace.",
+	deadline: Date.now() + 600_000,
+	wake: false, // it will be read on the agent's next turn
+	plane: "local",
+})
 ```
 
-Ungranted (host wired the seam) ⇒ `ctx.agent` is a _denying stub_ (`notify` throws + warns). No agent
-seam (headless/pure-core) ⇒ `ctx.agent` is **absent** entirely.
+Ungranted (host wired the seam) ⇒ `ctx.agent` is a _denying stub_ (every call throws + warns). No
+agent seam (headless/pure-core) ⇒ `ctx.agent` is **absent** entirely.
 
 **`ctx.mcp`** (`PluginMcp`) — **invoke** a tool on any MCP server the host has connected,
 requires `permissions.mcpInvoke`. This is the counterpart of `permissions.mcpServers`,

@@ -144,7 +144,7 @@ defined in `TOOL_GROUPS` — a `Record<ToolGroup, ToolGroupConfig>`:
 | --------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `read`          | Read-only data access | `read_file`, `grep_search`, `list_files`, `rag_search`, `find_files`, `read_project_structure`, `view_image`, `list_code_usages`, `get_errors`, `get_project_setup_info`, `get_changed_files`, `lsp_search`, `fetch_web_page`, `ask_live_memory`, `git_search` |
 | `write`         | Content mutations     | `apply_diff`, `write_to_file`, `generate_image`, `insert_edit`, `rename_symbol`, `create_directory`, `create_new_workspace`, `file`, `sed` (+ `customTools`: `edit`, `search_replace`, `edit_file`, `apply_patch`)                                             |
-| `execute`       | System commands       | `execute_command`, `read_command_output`, `sleep`                                                                                                                                                                                                              |
+| `execute`       | System commands       | `execute_command`, `read_command_output`                                                                                                                                                                                                                       |
 | `mcp`           | MCP protocol          | `use_mcp_tool`, `access_mcp_resource`, `call_mcp_tool_async`, `check_mcp_call_status`, `wait_for_mcp_call`                                                                                                                                                     |
 | `mode`          | Mode switching        | `switch_mode`                                                                                                                                                                                                                                                  |
 | `subtasks`      | Task orchestration    | `new_task`, `check_task_status`, `wait_for_task`, `cancel_tasks`, `answer_subtask_question`                                                                                                                                                                    |
@@ -176,7 +176,9 @@ These tools are available in every mode — unless explicitly disabled via the
 | `set_task_title`        | Set a descriptive title for the current task |
 | `give_feedback`         | Send feedback to the Shofer developers       |
 | `list_background_tasks` | List background tasks (children or peers)    |
-| `send_message_to_task`  | Send async/sync messages to peer tasks       |
+| `send_message`          | Put an envelope in another task's mailbox    |
+| `reply`                 | Answer a request in this task's mailbox      |
+| `wait`                  | Read this task's mailbox                     |
 
 ### Tool list assembly: `getToolsForMode()`
 

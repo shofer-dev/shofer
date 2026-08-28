@@ -2,6 +2,7 @@ import { z } from "zod"
 
 import type { CustomToolDefinition } from "./custom-tool.js"
 import type { HostDiagnostic, HostDisposable, HostEnv, HostFileSystem, HostSymbol, Notifier } from "./host.js"
+import type { Envelope } from "./mailbox.js"
 import type { McpToolCallResponse } from "./mcp.js"
 import type { ApiRequestFinishedPayload } from "./message.js"
 import { modeConfigObjectSchema } from "./mode.js"
@@ -778,35 +779,117 @@ export interface PluginMcp {
  * Proactive **agent-steering** handed to a plugin granted `permissions.agent` (design
  * §6.11 G8; Phase 7). Lets a plugin — from a background service ({@link
  * PluginContext.registerService}), a file watcher ({@link PluginHost.watch}), or a
- * lifecycle hook — PROACTIVELY inject a message into the running agent ("the deploy just
- * failed, here's the log"), rather than only reacting when the agent calls it. This is
- * powerful (a plugin steering the agent carries billed/behavioral impact), so it is gated
- * on a dedicated `permissions.agent` grant.
+ * lifecycle hook — PROACTIVELY put a message in front of the running agent ("the deploy
+ * just failed, here's the log"), rather than only reacting when the agent calls it. This
+ * is powerful (a plugin steering the agent carries billed/behavioral impact), so it is
+ * gated on a dedicated `permissions.agent` grant.
  *
  * As with {@link PluginAi}, the plugin-facing surface stays in `@shofer/types`
  * (browser-safe) while the concrete task-injection lives host-side behind a seam (core's
  * `PluginAgentProvider`). Ungranted (but the host wired the seam) ⇒ a denying stub whose
- * {@link notify} throws + warns; no seam wired (pure-core embedding, or the discovery-only `shofer plugin` CLI manager) ⇒ `ctx.agent` is absent — note `shofer serve` DOES wire the seam (same extension bundle, same ShoferProvider).
+ * {@link deliver} throws + warns; no seam wired (pure-core embedding, or the discovery-only `shofer plugin` CLI manager) ⇒ `ctx.agent` is absent — note `shofer serve` DOES wire the seam (same extension bundle, same ShoferProvider).
  */
 export interface PluginAgent {
 	/**
-	 * Inject `message` into the agent. Resolves once the message has been delivered
-	 * (queued / the spawned task created). Rejects (+ warns) when the plugin lacks
-	 * `permissions.agent` or the host has no task to steer.
+	 * **The one door.** Deliver an {@link Envelope} into a task's mailbox — whatever
+	 * plane the message arrived on (the event bus, an A2A relay frame, a Temporal owner
+	 * message, the plugin's own observation of the world).
+	 *
+	 * There is no delivery MODE to choose, and that is the point: what four modes used
+	 * to express is now carried by fields the sender fills in on the envelope itself.
+	 * `wake` decides whether a stopped agent loop is resumed for this message;
+	 * `deadline` decides how long the message is worth delivering at all; `kind` decides
+	 * whether an answer is expected. All three are per MESSAGE rather than fixed per
+	 * subscription, which is what lets one subscription carry both a routine event and
+	 * an urgent one.
+	 *
+	 * The host completes the envelope: it fills `to` (the resolved target task) and
+	 * `sent_at`, and mints `id` when the caller supplied none. A caller that owns an
+	 * upstream idempotency key — an A2A `message_id`, a Temporal message id — MUST pass
+	 * it as `id`, because a mailbox already holding that id acknowledges the delivery
+	 * without appending it again, and that is exactly what makes a retry safe.
+	 *
+	 * Resolves with the envelope as it was accepted, once the box has validated and
+	 * PERSISTED it. A caller that acknowledges an upstream delivery should do so only
+	 * after this promise resolves — then the receipt means "in the box", not "seen by a
+	 * plugin".
+	 *
+	 * Rejects when the plugin lacks `permissions.agent`, when the box refuses the
+	 * envelope (full, expired, addressed elsewhere), and — deliberately — **when there
+	 * is no target task at all**. It does not fall back to starting one: a plugin that
+	 * wants a new task says so with {@link spawn}, and a delivery that silently became a
+	 * task spend would be a billed side effect nobody asked for.
 	 */
-	notify(message: string, opts?: PluginAgentNotifyOptions): Promise<void>
+	deliver(envelope: PluginDeliverInput): Promise<Envelope>
+
+	/**
+	 * Register a **mailbox transport**: how envelopes addressed to a task this host does
+	 * not hold leave the node.
+	 *
+	 * The core mailbox resolves `to` locally — a live task, or one it can rehydrate from
+	 * history. A `to` that resolves to neither is offered to each registered transport in
+	 * turn, and the first whose {@link PluginMailboxTransport.canRoute} accepts it owns
+	 * the delivery. That is what lets the agent's one `send_message` tool address a peer
+	 * across the A2A mesh without the tool knowing a mesh exists.
+	 *
+	 * Returns an unregister function. A plugin whose service stops must call it, or the
+	 * host keeps offering it envelopes it can no longer send.
+	 *
+	 * Gated on `permissions.agent`: a transport decides where an agent's messages GO.
+	 */
+	registerMailboxTransport(transport: PluginMailboxTransport): () => void
 
 	/**
 	 * Start a task and get an awaitable, cancellable {@link PluginTaskHandle} (design §14).
-	 * Unlike {@link notify} (fire-and-forget), this is the **job-oriented** path a
-	 * job-runner plugin uses: `await handle.result()` for the structured outcome,
-	 * `handle.cancel()` to abort. Scoped, gated (`permissions.agent`); the plugin never
-	 * touches the task stack or `ShoferExtensionApi`.
+	 * Unlike {@link deliver} (a message to a task that already exists), this is the
+	 * **job-oriented** path a job-runner plugin uses: `await handle.result()` for the
+	 * structured outcome, `handle.cancel()` to abort. Scoped, gated
+	 * (`permissions.agent`); the plugin never touches the task stack or
+	 * `ShoferExtensionApi`.
 	 */
 	spawn(prompt: string, opts?: PluginAgentSpawnOptions): Promise<PluginTaskHandle>
 
 	/** Cancel a task by id (structured cancellation). No-op if the task is not found. */
 	cancel(taskId: string): Promise<void>
+}
+
+/**
+ * What a plugin hands {@link PluginAgent.deliver}: an {@link Envelope} minus the fields
+ * the HOST owns, plus the target selector.
+ *
+ * - `to` and `sent_at` are absent because only the host knows which task it resolved and
+ *   when it accepted the envelope. A plugin that could set `to` could address a task it
+ *   was never given.
+ * - `id` is optional: pass the upstream idempotency key when there is one, otherwise the
+ *   host mints a UUID.
+ * - `read_at` is absent because it is the mailbox's own record of what the AGENT read.
+ * - `taskId` names the target task; omitted, the delivery goes to the host's current
+ *   task. There is no "all tasks" form — a fan-out is the caller's loop, so that the
+ *   caller decides what a partial failure means.
+ */
+export type PluginDeliverInput = Omit<Envelope, "id" | "to" | "sent_at" | "read_at"> & {
+	/** The upstream idempotency key, when the caller owns one. Host-minted UUID otherwise. */
+	id?: string
+	/** Target task; defaults to the host's current task. */
+	taskId?: string
+}
+
+/**
+ * A route out of this node for envelopes the local mailbox cannot address
+ * ({@link PluginAgent.registerMailboxTransport}).
+ *
+ * Both halves are deliberately narrow. `canRoute` is a SYNCHRONOUS predicate over the
+ * address alone, because it runs on the agent's send path and must not turn a validation
+ * into a network round trip; a transport that cannot tell from the id whether the peer is
+ * reachable should answer `true` and fail in `send`. `send` resolves when the envelope
+ * has been handed to the far side and rejects otherwise — the sending tool reports that
+ * failure to the agent verbatim, so it must say what went wrong.
+ */
+export interface PluginMailboxTransport {
+	/** Whether this transport claims the address. Synchronous; no I/O. */
+	canRoute(to: string): boolean
+	/** Hand the envelope to the far side. Rejects with a message the agent will read. */
+	send(envelope: Envelope): Promise<void>
 }
 
 /** Options for {@link PluginAgent.spawn} (design §14). */
@@ -883,6 +966,19 @@ export interface PluginAgentSpawnOptions {
 export const PLUGIN_UNKNOWN_MODE_ERROR = "PluginUnknownModeError"
 
 /**
+ * The `name` of the error {@link PluginAgent.spawn} rejects with when starting the task
+ * would exceed the host's global parallel-task limit (`maxParallelTasks`).
+ *
+ * A well-known constant for the same reason as {@link PLUGIN_UNKNOWN_MODE_ERROR}, with
+ * the opposite conclusion: this one IS transient, and the caller's correct reaction is
+ * usually to do the work another way rather than to retry. The mesh plugin's `spawn`
+ * subscriptions catch it and deliver the event to the SUBSCRIBING task as an ordinary
+ * notification — so a busy selector degrades into a fuller mailbox rather than into
+ * unbounded concurrency or a silently dropped event.
+ */
+export const PLUGIN_TASK_LIMIT_ERROR = "PluginTaskLimitError"
+
+/**
  * A handle to a task started via {@link PluginAgent.spawn} (design §14). Awaitable result,
  * task-scoped event subscription, and cancellation — the primitives a runner needs to drive
  * an agent run as a durable job (e.g. a Temporal activity).
@@ -913,33 +1009,6 @@ export interface PluginTaskResult {
 	readonly output?: string
 	/** The `metadata` passed to {@link PluginAgent.spawn}, echoed back. */
 	readonly metadata?: Record<string, unknown>
-}
-
-/** Options for {@link PluginAgent.notify} (design §6.11 G8; Phase 7). */
-export interface PluginAgentNotifyOptions {
-	/**
-	 * How the message reaches the agent. Four distinct delivery modes:
-	 *
-	 * - **`"notify"`** (default): one-way notification. Appended to the target task's
-	 *   **notification queue** and drained ASAP into the **system prompt** (role: system)
-	 *   on the task's next real agent request — no explicit tool call needed. Delivered
-	 *   **only while the task loop is running**; if the loop has ended the message is not
-	 *   delivered (by design). This is the channel for fire-and-forget event routing
-	 *   (all shofer-mesh bus messages use it).
-	 * - **`"queue"`**: enqueue into the task's message queue exactly like a user prompt
-	 *   typed while the task is busy — drained on the next turn, no preemption.
-	 * - **`"interrupt"`**: enqueue **and** cancel-and-process (Send-Now semantics) —
-	 *   aborts the current turn (same task instance) and resumes with this message.
-	 * - **`"spawn"`**: start a **new** task seeded with the message.
-	 */
-	mode?: "notify" | "queue" | "interrupt" | "spawn"
-	/** Target a specific task by id; defaults to the host's active/current task. */
-	taskId?: string
-	/**
-	 * For `mode: "notify"` — a short human-readable source label (e.g. a mesh subject)
-	 * shown with the injected notification. Ignored by the other modes.
-	 */
-	source?: string
 }
 
 /**
@@ -1204,9 +1273,10 @@ export interface PluginContext {
 	readonly ai?: PluginAi
 	/**
 	 * Proactive agent-steering (design §6.11 G8; Phase 7). Present only when the host
-	 * wired its agent seam. Granted `permissions.agent` ⇒ a live surface that injects
-	 * messages into the running agent; granted-not / seam wired ⇒ a denying stub whose
-	 * `notify` throws + warns; no seam (headless) ⇒ absent entirely. See {@link PluginAgent}.
+	 * wired its agent seam. Granted `permissions.agent` ⇒ a live surface that delivers
+	 * envelopes into a task's mailbox and starts tasks; granted-not / seam wired ⇒ a
+	 * denying stub whose `deliver` throws + warns; no seam (headless) ⇒ absent entirely.
+	 * See {@link PluginAgent}.
 	 */
 	readonly agent?: PluginAgent
 	/**

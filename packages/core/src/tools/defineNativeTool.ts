@@ -29,7 +29,7 @@ export interface NativeToolSpec<S extends ZodType> {
 	 * Whether to emit OpenAI strict mode (default `true`). When `true`, the schema
 	 * is pre-baked into strict form (every property required, optionals widened to
 	 * nullable). Set `false` for tools that deliberately let the model omit
-	 * advisory parameters (e.g. `send_message_to_task`): `strict: false` is set and
+	 * advisory parameters (e.g. `send_message`, `wait`): `strict: false` is set and
 	 * optional properties stay omitted from `required` and are NOT widened.
 	 */
 	strict?: boolean

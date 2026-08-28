@@ -387,12 +387,43 @@ export class TelemetryService {
 	 * Aggregated across all files in a single batch to keep cardinality
 	 * bounded and avoid leaking individual file paths to telemetry.
 	 */
-	public capturePeerMessageSent(taskId: string, properties?: Record<string, string | number>): void {
-		this.captureEvent(TelemetryEventName.TASK_PEER_MESSAGE_SENT, { taskId, ...properties })
+	/**
+	 * A mailbox envelope was SENT, recorded by the sending tool once `deliver`
+	 * returned — so a refused send is never counted as one that landed.
+	 */
+	public captureMailboxSent(taskId: string, properties: { kind: string; plane: string; wake: boolean }): void {
+		this.captureEvent(TelemetryEventName.MAILBOX_SENT, {
+			taskId,
+			kind: properties.kind,
+			plane: properties.plane,
+			wake: String(properties.wake),
+		})
 	}
 
-	public capturePeerMessageReceived(taskId: string, properties?: Record<string, string | number>): void {
-		this.captureEvent(TelemetryEventName.TASK_PEER_MESSAGE_RECEIVED, { taskId, ...properties })
+	/**
+	 * An envelope was ACCEPTED by a box, recorded once it is persisted.
+	 *
+	 * `woke` is true only for the delivery that actually enqueued the wake turn;
+	 * a second delivery coalesced onto the same pending turn records `false`, so
+	 * the label counts loop RESTARTS rather than wake-flagged messages.
+	 */
+	public captureMailboxDelivered(taskId: string, properties: { kind: string; plane: string; woke: boolean }): void {
+		this.captureEvent(TelemetryEventName.MAILBOX_DELIVERED, {
+			taskId,
+			kind: properties.kind,
+			plane: properties.plane,
+			woke: String(properties.woke),
+		})
+	}
+
+	/** A `wait` returned a batch of envelopes to the agent. */
+	public captureMailboxRead(taskId: string, properties: { count: number }): void {
+		this.captureEvent(TelemetryEventName.MAILBOX_READ, { taskId, count: properties.count })
+	}
+
+	/** An envelope reached its deadline unread and was swept. */
+	public captureMailboxExpired(taskId: string, properties: { kind: string }): void {
+		this.captureEvent(TelemetryEventName.MAILBOX_EXPIRED, { taskId, kind: properties.kind })
 	}
 
 	public capturePeerDiscovery(taskId: string): void {

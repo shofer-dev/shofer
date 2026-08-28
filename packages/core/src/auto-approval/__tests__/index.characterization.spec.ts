@@ -39,7 +39,9 @@ describe("checkAutoApproval — tool path characterization", () => {
 			"readProjectStructure",
 			"listCodeUsages",
 			"lspSearch",
-			"sleep",
+			"sendMessage",
+			"reply",
+			"wait",
 		]
 
 		it.each(unconditional)("approves %s with only the master gate on", async (tool) => {
@@ -70,23 +72,13 @@ describe("checkAutoApproval — tool path characterization", () => {
 		})
 	})
 
-	describe("sendMessageToTask (async always; sync gated by alwaysAllowSubtasks)", () => {
-		it("approves async (fire-and-forget) regardless of toggle", async () => {
+	// The mailbox tools carry no toggle of their own: none blocks anything but the
+	// caller's own loop, so all three sit in the unconditional list above. The
+	// `alwaysAllowSubtasks` gate that once guarded a SYNC send went with it.
+	describe("the mailbox tools are never gated by alwaysAllowSubtasks", () => {
+		it.each(["sendMessage", "reply", "wait"])("approves %s with the toggle OFF", async (tool) => {
 			expect(
-				await checkAutoApproval({ state: enabled(), ...toolAsk("sendMessageToTask", { wait: false }) }),
-			).toEqual({ decision: "approve" })
-		})
-		it("asks for sync send when alwaysAllowSubtasks off", async () => {
-			expect(
-				await checkAutoApproval({ state: enabled(), ...toolAsk("sendMessageToTask", { wait: true }) }),
-			).toEqual({ decision: "ask" })
-		})
-		it("approves sync send when alwaysAllowSubtasks on", async () => {
-			expect(
-				await checkAutoApproval({
-					state: enabled({ alwaysAllowSubtasks: true }),
-					...toolAsk("sendMessageToTask", { wait: true }),
-				}),
+				await checkAutoApproval({ state: enabled({ alwaysAllowSubtasks: false }), ...toolAsk(tool) }),
 			).toEqual({ decision: "approve" })
 		})
 	})

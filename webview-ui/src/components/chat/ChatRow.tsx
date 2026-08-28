@@ -1311,12 +1311,15 @@ export const ChatRowContent = ({
 						</div>
 					)
 				case "peer_message": {
-					// Inbound async peer notification (send_message_to_task with
-					// wait=false), surfaced the moment the agent reads it.
+					// An INBOUND envelope, emitted by `wait` at the moment the agent read
+					// it — so the human sees the other half of a conversation between
+					// tasks and not only the outbound sends.
 					const peer = safeJsonParse<{
 						senderTaskId: string
 						senderTitle: string
 						message: string
+						kind?: "notification" | "request" | "reply"
+						subject?: string
 					}>(message.text)
 					if (!peer) {
 						return null
@@ -1326,11 +1329,17 @@ export const ChatRowContent = ({
 							<div style={headerStyle}>
 								<Send className="size-3 text-[var(--vscode-charts-blue,#3b82f6)]" />
 								<span style={{ fontWeight: "bold" }}>
-									{t("chat:peerMessage.from", {
-										sender: peer.senderTitle || peer.senderTaskId,
-									})}
+									{t(
+										peer.kind === "request"
+											? "chat:mailbox.receivedRequest"
+											: peer.kind === "reply"
+												? "chat:mailbox.receivedReply"
+												: "chat:mailbox.receivedNotification",
+										{ sender: peer.senderTitle || peer.senderTaskId },
+									)}
 								</span>
 							</div>
+							{peer.subject && <div className="text-vscode-descriptionForeground">{peer.subject}</div>}
 							<CollapsibleMarkdown markdown={peer.message} />
 							{peer.senderTaskId && (
 								<button
@@ -1338,7 +1347,7 @@ export const ChatRowContent = ({
 									onClick={() =>
 										vscode.postMessage({ type: "showTaskWithId", text: peer.senderTaskId })
 									}>
-									{t("chat:peerMessage.goToSender")}
+									{t("chat:mailbox.goToSender")}
 									<ArrowRight className="size-3" />
 								</button>
 							)}
@@ -1909,20 +1918,29 @@ export const ChatRowContent = ({
 								</>
 							)
 						}
-						case "sendMessageToTask": {
-							// Outbound peer message (send_message_to_task). The payload's `wait`
-							// is a boolean here (sync vs async), distinct from the wait_for_task
-							// "all"/"any" typing on ShoferSayTool, so read it via a local cast.
-							const isSync = (sayTool as { wait?: boolean }).wait === true
+						case "sendMessage": {
+							// An outbound envelope. `kind` is what the reader needs first —
+							// a request is owed an answer and a notification is not.
 							const targetTaskId = sayTool.task_id
+							const targetLabel = sayTool.task_title ?? targetTaskId
 							return (
 								<>
 									<div style={headerStyle}>
 										<Send className="size-3 text-[var(--vscode-charts-blue,#3b82f6)]" />
 										<span style={{ fontWeight: "bold" }}>
-											{isSync ? t("chat:peerMessage.sentSync") : t("chat:peerMessage.sentAsync")}
+											{sayTool.kind === "request"
+												? t("chat:mailbox.sentRequest", { target: targetLabel })
+												: t("chat:mailbox.sentNotification", { target: targetLabel })}
 										</span>
+										{typeof sayTool.timeout_sec === "number" && (
+											<span className="ml-1 text-xs text-vscode-descriptionForeground">
+												{t("chat:mailbox.expiresIn", { seconds: sayTool.timeout_sec })}
+											</span>
+										)}
 									</div>
+									{sayTool.subject && (
+										<div className="pl-6 text-vscode-descriptionForeground">{sayTool.subject}</div>
+									)}
 									{sayTool.message && (
 										<div className="pl-6">
 											<CollapsibleMarkdown markdown={sayTool.message} />
@@ -1934,9 +1952,56 @@ export const ChatRowContent = ({
 											onClick={() =>
 												vscode.postMessage({ type: "showTaskWithId", text: targetTaskId })
 											}>
-											{t("chat:peerMessage.goToTarget")}
+											{t("chat:mailbox.goToTarget")}
 											<ArrowRight className="size-3" />
 										</button>
+									)}
+								</>
+							)
+						}
+						case "reply": {
+							// One row per answered request — a batch reply is still one turn.
+							const replies = sayTool.replies ?? []
+							return (
+								<>
+									<div style={headerStyle}>
+										<Send className="size-3 text-[var(--vscode-charts-blue,#3b82f6)]" />
+										<span style={{ fontWeight: "bold" }}>
+											{t("chat:mailbox.replied", { count: replies.length })}
+										</span>
+									</div>
+									{replies.map((item) => (
+										<div key={item.message_id} className="pl-6 mt-1">
+											<div className="text-xs text-vscode-descriptionForeground">
+												{item.message_id}
+											</div>
+											<CollapsibleMarkdown markdown={item.body} />
+										</div>
+									))}
+								</>
+							)
+						}
+						case "wait": {
+							// Parking on the mailbox. The wake condition, when there is one,
+							// is the only thing worth showing: it says WHY the agent stopped.
+							const seconds = typeof sayTool.timeout_sec === "number" ? sayTool.timeout_sec : undefined
+							const condition = sayTool.in_reply_to
+								? t("chat:mailbox.waitingForReply", { id: sayTool.in_reply_to })
+								: sayTool.from_ids?.length
+									? t("chat:mailbox.waitingForSenders", { senders: sayTool.from_ids.join(", ") })
+									: undefined
+							return (
+								<>
+									<div style={headerStyle}>
+										{toolIcon("watch")}
+										<span style={{ fontWeight: "bold" }}>
+											{seconds !== undefined
+												? t("chat:mailbox.waitWithTimeout", { timeout: seconds })
+												: t("chat:mailbox.wait")}
+										</span>
+									</div>
+									{condition && (
+										<div className="pl-6 text-vscode-descriptionForeground">{condition}</div>
 									)}
 								</>
 							)

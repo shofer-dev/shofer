@@ -49,8 +49,9 @@ const ALWAYS_ON = [
 	"set_task_title",
 	"new_task",
 	"update_todo_list",
-	"send_message_to_task",
-	"wait_for_message",
+	"send_message",
+	"reply",
+	"wait",
 	"check_task_status",
 	"describe_tools",
 ]

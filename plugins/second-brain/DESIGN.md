@@ -123,27 +123,27 @@ the right tool for the one case it fits — a human explicitly asking one detect
 Everything comes through the public plugin surface (`PLUGINS.md`,
 `docs/plugin_system.md`); core knows nothing about detectors, digests, or advisories.
 
-| Seam                                                                               | What Second Brain uses it for                                                                                                                                                                                                                |
-| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contributes.modes` (`permissions.modes`)                                          | The private detector modes                                                                                                                                                                                                                   |
-| `lifecycle.beforeToolCall` / `afterToolCall`                                       | Observing tool intent (args, projected) and **error heads only** from results                                                                                                                                                                |
-| `lifecycle.beforeAsk`                                                              | Observing proposals/questions the agent raises (a signal the original never had)                                                                                                                                                             |
-| `lifecycle.onUserMessage` / `beforeTaskStart`                                      | The goal, and mid-task user prompts                                                                                                                                                                                                          |
-| `lifecycle.afterTaskComplete`                                                      | The turn/task-end pass trigger; subtask conclusions                                                                                                                                                                                          |
-| `lifecycle.onAssistantMessage`                                                     | **new core hook, §Required core changes** — the narration, the highest-value segment per byte                                                                                                                                                |
-| `lifecycle.onTaskDeleted` / `onTimelineRewind`                                     | Ledger GC; noting a timeline rewind in the digest                                                                                                                                                                                            |
-| `ctx.registerService` (`permissions.lifecycle`)                                    | The supervised observer service hosting the pass loop (the monitor's replacement)                                                                                                                                                            |
-| `ctx.ai.buildHandler(profileRef)` / `hasConsent()` (`permissions.ai`)              | The detector forks' model; the consent gate                                                                                                                                                                                                  |
-| `ctx.agent.notify(text, { mode: "notify", taskId, source })` (`permissions.agent`) | **The advisory channel**: one-way, system-prompt-injected beside the next request, delivered exactly once, dropped if no live task — the `additionalContext` analog, with the "no response is required or possible" frame already host-owned |
-| `ctx.agent.notify(text, { mode: "queue", taskId })`                                | The finish gate's wake (§Delivery)                                                                                                                                                                                                           |
-| `ctx.task.marker` (`permissions.task`)                                             | The user-visible half of every advisory, and the turn-end report row                                                                                                                                                                         |
-| `ctx.storage`                                                                      | Ledgers, gate history, status, debug captures                                                                                                                                                                                                |
-| `ctx.host.fs` (`permissions.filesystem: ["."]`) / `ctx.host.search`                | The detectors' read-only tools (`read_file`, `grep_search`, `list_files`, `rag_search`, `git_search`)                                                                                                                                        |
-| `ctx.config` + manifest `config`                                                   | Tunables, rendered in Settings → Plugins (§Configuration)                                                                                                                                                                                    |
-| `contributes.skills` / `contributes.commands`                                      | The human surfaces: stats / run / why / config / forget                                                                                                                                                                                      |
-| `ctx.ui` (`chat-input-toolbar`, `sidebar-panel`, `chat-message-addon`)             | The statusline badge, the why/stats panel, advisory row rendering                                                                                                                                                                            |
-| `handleRequest`                                                                    | Backs the skills/commands and the panel vocabulary                                                                                                                                                                                           |
-| `ctx.host.telemetry` (`permissions.telemetry`)                                     | Error accounting, tagged `plugin: "second-brain"`                                                                                                                                                                                            |
+| Seam                                                                                        | What Second Brain uses it for                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contributes.modes` (`permissions.modes`)                                                   | The private detector modes                                                                                                                                                                                                                                  |
+| `lifecycle.beforeToolCall` / `afterToolCall`                                                | Observing tool intent (args, projected) and **error heads only** from results                                                                                                                                                                               |
+| `lifecycle.beforeAsk`                                                                       | Observing proposals/questions the agent raises (a signal the original never had)                                                                                                                                                                            |
+| `lifecycle.onUserMessage` / `beforeTaskStart`                                               | The goal, and mid-task user prompts                                                                                                                                                                                                                         |
+| `lifecycle.afterTaskComplete`                                                               | The turn/task-end pass trigger; subtask conclusions                                                                                                                                                                                                         |
+| `lifecycle.onAssistantMessage`                                                              | **new core hook, §Required core changes** — the narration, the highest-value segment per byte                                                                                                                                                               |
+| `lifecycle.onTaskDeleted` / `onTimelineRewind`                                              | Ledger GC; noting a timeline rewind in the digest                                                                                                                                                                                                           |
+| `ctx.registerService` (`permissions.lifecycle`)                                             | The supervised observer service hosting the pass loop (the monitor's replacement)                                                                                                                                                                           |
+| `ctx.ai.buildHandler(profileRef)` / `hasConsent()` (`permissions.ai`)                       | The detector forks' model; the consent gate                                                                                                                                                                                                                 |
+| `ctx.agent.deliver({ kind: "notification", wake: false, taskId, … })` (`permissions.agent`) | **The advisory channel**: a notification envelope in the task's mailbox, read on the agent's next turn, expiring at its deadline if it never is — the `additionalContext` analog, with the "no response is required or possible" frame already plugin-owned |
+| `ctx.agent.deliver({ …, wake: true })`                                                      | The finish gate's wake (§Delivery) — the same door, one field different                                                                                                                                                                                     |
+| `ctx.task.marker` (`permissions.task`)                                                      | The user-visible half of every advisory, and the turn-end report row                                                                                                                                                                                        |
+| `ctx.storage`                                                                               | Ledgers, gate history, status, debug captures                                                                                                                                                                                                               |
+| `ctx.host.fs` (`permissions.filesystem: ["."]`) / `ctx.host.search`                         | The detectors' read-only tools (`read_file`, `grep_search`, `list_files`, `rag_search`, `git_search`)                                                                                                                                                       |
+| `ctx.config` + manifest `config`                                                            | Tunables, rendered in Settings → Plugins (§Configuration)                                                                                                                                                                                                   |
+| `contributes.skills` / `contributes.commands`                                               | The human surfaces: stats / run / why / config / forget                                                                                                                                                                                                     |
+| `ctx.ui` (`chat-input-toolbar`, `sidebar-panel`, `chat-message-addon`)                      | The statusline badge, the why/stats panel, advisory row rendering                                                                                                                                                                                           |
+| `handleRequest`                                                                             | Backs the skills/commands and the panel vocabulary                                                                                                                                                                                                          |
+| `ctx.host.telemetry` (`permissions.telemetry`)                                              | Error accounting, tagged `plugin: "second-brain"`                                                                                                                                                                                                           |
 
 `hookTimeoutMs` stays at the **default 500 ms**: every hook only appends a projected
 observation to an in-memory spool and returns. All thinking happens in the service.
@@ -192,10 +192,10 @@ else is plugin-local.
    how the port keeps the original's "conclusion, not the conversation" subagent contract:
    child activity is dropped, the child's final result (capped) is appended to the root's
    digest.
-4. **Advisory notifications must not be user-invisible.** `mode: "notify"` deliberately
+4. **Advisory notifications must not be user-invisible.** A mailbox delivery deliberately
    renders nothing in chat. The design's transparency invariant — _nothing is said to the
    agent that is not shown to the user, verbatim, at the same moment_ — is met plugin-side
-   by pairing every `notify` with a `ctx.task.marker` advisory row rendered by the
+   by pairing every delivery with a `ctx.task.marker` advisory row rendered by the
    plugin's `chat-message-addon`. No core change needed **iff** marker rows render for
    this region reliably in both hosts; if the headless CLI surface cannot show markers, a
    core-side rendering of `kind: "notification"` queue entries becomes necessary. Verify
@@ -226,7 +226,7 @@ flowchart TD
         LC["lifecycle hooks<br/>tool calls · asks · user msgs ·<br/>assistant text · task start/end"]
         SVC["ctx.registerService"]
         AI["ctx.ai — buildHandler · hasConsent"]
-        AG["ctx.agent.notify"]
+        AG["ctx.agent.deliver"]
         TK["ctx.task.marker"]
         FS["ctx.host.fs · ctx.host.search"]
         ST["ctx.storage"]
@@ -555,14 +555,15 @@ flowchart TD
   R -- yes --> ST{"still true at delivery?<br/>(stale_if vs later observations)"}
   ST -- no --> X
   ST -- yes --> D["cap + sanitize + frame"]
-  D --> N["notify(taskId) — the model"]
+  D --> N["deliver(taskId) — the model"]
   D --> MK["marker row — the user,<br/>same text, same moment"]
 ```
 
-**Say it to both.** Every agent-addressed advisory is a pair: `ctx.agent.notify(...,
-{ mode: "notify", source: "second-brain" })` for the model (the host already injects it
-one-shot into the system prompt with a one-way frame) and a `ctx.task.marker` advisory
-row for the human, identical text, emitted together — the marker names the detector and
+**Say it to both.** Every agent-addressed advisory is a pair: `ctx.agent.deliver(...)`
+with `kind: "notification"`, `from: "second-brain"` and `wake: false` for the model (it
+lands in the task's mailbox and is read on the next turn, so an advisory never costs a
+turn of its own) and a `ctx.task.marker` advisory row for the human, identical text,
+emitted together — the marker names the detector and
 the one-command mute. Sub-agent-floor advice is **marker-only**: a hunch too weak for the
 model's attention is still worth a person's glance, free. The plugin's own security frame
 (data-not-instructions, no user authority, hard length cap, tool-syntax stripping) wraps
@@ -580,13 +581,18 @@ contradicted`, defaulting to `no_evidence` on window lapse). Outcomes feed suppr
 Shofer has no `Stop`-hook analog and does not need the original's two-half split. The
 task-end pass runs on `afterTaskComplete` / the idle ask; if it finds **evidenced,
 specific unfinished work** clearing the higher `finish_gate.confidence_floor`, within the
-per-task budget (once per `min_interval_s`, hard `per_task_cap`), it delivers via
-`ctx.agent.notify(..., { mode: "queue", taskId })` — the message enters the task's queue
-as a user-style message, and enqueueing onto a just-completed task re-triggers the loop
-(the host's existing queue-after-abort behavior). A marker names what was unfinished and
-which detector said so. This is the single riskiest seam of the port and is **Phase 0
-verification, not an assumption**; if queue-wake proves unreliable on a completed task,
-the finish gate degrades to marker + badge only (user-facing), never to interrupting.
+per-task budget (once per `min_interval_s`, hard `per_task_cap`), it delivers through the
+same door with **one field different** — `ctx.agent.deliver({ …, wake: true })`. The host's
+wake path enqueues one synthesized turn and restarts a stopped loop (rehydrating the task
+from history if no instance is live), so the finish gate needs no second mechanism and no
+second failure mode. A marker names what was unfinished and which detector said so. This
+is the single riskiest seam of the port and is **Phase 0 verification, not an assumption**;
+if the wake proves unreliable on a completed task, the finish gate degrades to marker +
+badge only (user-facing), never to interrupting.
+
+`wake` is the ONLY difference between the two delivery seams (`adviseAgent` and
+`wakeAgent` in `src/main.ts`), which is the point of one door: an advisory that must not
+interrupt and a gate that must resume are the same call with a different value.
 
 ---
 
@@ -746,6 +752,6 @@ anything, and no attempt to be right often — only right cheaply, and quiet oth
 | The catalogue (bundled defaults + `detectors` config layering, manifest↔code sync spec)                        | **built**                                                                                                      |
 | Adjudication → suppression/uptake, demotion ladder, budgets, cross-task collisions, ledger TTL sweep            | **built**                                                                                                      |
 | Surfaces: badge, advisory row, panel, skills, commands, `handleRequest`                                         | **built**                                                                                                      |
-| Finish gate (queue-wake on a completed task) and `notify` rendering in both hosts                               | built, **live verification pending** — see TODO.md; degrades to user-only surfaces on failure                  |
+| Finish gate (`wake: true` delivery to a completed task) and advisory rendering in both hosts                    | built, **live verification pending** — see TODO.md; degrades to user-only surfaces on failure                  |
 | Digest-overflow fallback (past the hard cap, passes skip); per-detector cache accounting; spawn-based deep runs | **not built** — recorded in TODO.md                                                                            |
 | Detector calibration against real sessions                                                                      | **not started** — the tool-less three ship enabled deliberately                                                |

@@ -40,7 +40,6 @@ export enum TelemetryEventName {
 
 	TITLE_BUTTON_CLICKED = "Title Button Clicked",
 
-
 	SHARE_BUTTON_CLICKED = "Share Button Clicked",
 	SHARE_ORGANIZATION_CLICKED = "Share Organization Clicked",
 	SHARE_PUBLIC_CLICKED = "Share Public Clicked",
@@ -70,9 +69,11 @@ export enum TelemetryEventName {
 	MCP_ASYNC_CALL_CANCELLED = "MCP Async Call Cancelled",
 	MCP_ASYNC_CALL_TIMED_OUT = "MCP Async Call Timed Out",
 
-	// Peer messaging
-	TASK_PEER_MESSAGE_SENT = "Task Peer Message Sent",
-	TASK_PEER_MESSAGE_RECEIVED = "Task Peer Message Received",
+	// The mailbox (docs/task_messaging.md)
+	MAILBOX_SENT = "Mailbox Sent",
+	MAILBOX_DELIVERED = "Mailbox Delivered",
+	MAILBOX_READ = "Mailbox Read",
+	MAILBOX_EXPIRED = "Mailbox Expired",
 	TASK_PEER_DISCOVERY = "Task Peer Discovery",
 
 	// Task outcomes
@@ -222,8 +223,10 @@ export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 			TelemetryEventName.MCP_ASYNC_CALL_COMPLETED,
 			TelemetryEventName.MCP_ASYNC_CALL_CANCELLED,
 			TelemetryEventName.MCP_ASYNC_CALL_TIMED_OUT,
-			TelemetryEventName.TASK_PEER_MESSAGE_SENT,
-			TelemetryEventName.TASK_PEER_MESSAGE_RECEIVED,
+			TelemetryEventName.MAILBOX_SENT,
+			TelemetryEventName.MAILBOX_DELIVERED,
+			TelemetryEventName.MAILBOX_READ,
+			TelemetryEventName.MAILBOX_EXPIRED,
 			TelemetryEventName.TASK_PEER_DISCOVERY,
 			TelemetryEventName.TOOL_CALL_RESOLVED,
 			TelemetryEventName.TOOL_RECOVERY_FIRED,

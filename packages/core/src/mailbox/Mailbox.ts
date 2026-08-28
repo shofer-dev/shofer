@@ -35,6 +35,8 @@ import * as fs from "fs/promises"
 
 import { z } from "zod"
 
+import { TelemetryService } from "@shofer/telemetry"
+
 import {
 	envelopeSchema,
 	MAILBOX_CAPACITY,
@@ -287,6 +289,16 @@ export class Mailbox extends EventEmitter<MailboxEvents> {
 		const expired = this.envelopes.filter((env) => env.deadline <= now)
 		if (expired.length > 0) {
 			this.envelopes = this.envelopes.filter((env) => env.deadline > now)
+			// An envelope that expired unread is the one loss this design permits,
+			// so it is counted: a rising rate means deadlines are too short or
+			// recipients too slow, and neither is visible any other way.
+			try {
+				for (const env of expired) {
+					TelemetryService.instance.captureMailboxExpired(this.taskId, { kind: env.kind })
+				}
+			} catch {
+				// non-fatal
+			}
 		}
 		return expired
 	}

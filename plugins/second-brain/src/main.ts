@@ -1,5 +1,5 @@
 /**
- * second-brain — the ShoferPlugin: hooks feed, the service thinks, notify+marker speak.
+ * second-brain — the ShoferPlugin: hooks feed, the service thinks, mailbox+marker speak.
  *
  * The hooks do nothing but project the event and append it to the right task's
  * observer (in-memory, no I/O, back in well under the 500 ms default budget); all
@@ -11,7 +11,7 @@
  */
 
 import type { PluginContext, ShoferPlugin } from "@shofer/types"
-import { isIdleAsk, type ShoferAsk } from "@shofer/types"
+import { deriveSubject, isIdleAsk, MAILBOX_NOTIFICATION_TIMEOUT_SEC, type ShoferAsk } from "@shofer/types"
 
 import { STATUS_INTERVAL_MS, TICK_MS, type Observation, type StatusSnapshot, type TokenUsage } from "./types.js"
 import {
@@ -29,6 +29,9 @@ import { LedgerStore } from "./ledger.js"
 import { ForkLlmClient } from "./llm.js"
 import { ForkToolExecutor } from "./tool-executor.js"
 import { TaskObserver, type DeliverySeams, type ObserverTunables } from "./task-observer.js"
+
+/** The `from` address every second-brain advisory carries in the recipient's digest. */
+const SECOND_BRAIN_SENDER = "second-brain"
 
 /** Tools whose call means a workspace file is being mutated (collision touches). */
 const EDIT_TOOLS = new Set([
@@ -117,13 +120,38 @@ function rootOf(ctx: PluginContext): string | undefined {
 	return ctx.rootTaskId ?? ctx.taskId
 }
 
+/**
+ * Deliver one advisory into the task's mailbox — the plugin API's single door.
+ *
+ * `wake` is the whole difference between the two delivery seams, and it is a
+ * per-message field rather than a mode: an ordinary advisory waits for the agent's
+ * next turn (`false`), while the finish gate exists precisely to restart a task that
+ * has stopped (`true`). The subject is derived from the rendering's first line, which
+ * is the advisory's headline — the digest is a list of subjects, so a good one is what
+ * makes an unread advisory legible without opening it.
+ */
+async function deliverAdvisory(ctx: PluginContext, taskId: string, text: string, wake: boolean): Promise<void> {
+	await ctx.agent?.deliver({
+		taskId,
+		from: SECOND_BRAIN_SENDER,
+		kind: "notification",
+		subject: deriveSubject(text),
+		body: text,
+		deadline: Date.now() + MAILBOX_NOTIFICATION_TIMEOUT_SEC * 1000,
+		wake,
+		// In-process: this plugin observes the task it delivers to; nothing crossed a
+		// network boundary to get here.
+		plane: "local",
+	})
+}
+
 function seamsFor(ctx: PluginContext, taskId: string): DeliverySeams {
 	return {
-		async notifyAgent(text) {
-			await ctx.agent?.notify(text, { mode: "notify", taskId, source: "second-brain" })
+		async adviseAgent(text) {
+			await deliverAdvisory(ctx, taskId, text, false)
 		},
-		async queueAgent(text) {
-			await ctx.agent?.notify(text, { mode: "queue", taskId })
+		async wakeAgent(text) {
+			await deliverAdvisory(ctx, taskId, text, true)
 		},
 		async marker(kind, text, data) {
 			try {

@@ -81,17 +81,16 @@ export const toolNames = [
 	"list_background_tasks",
 	"cancel_tasks",
 	"answer_subtask_question",
-	"sleep",
 	"sed",
 	// Git History Search
 	// Async MCP tool calling
 	"call_mcp_tool_async",
 	"check_mcp_call_status",
 	"wait_for_mcp_call",
-	// Peer messaging
-	"send_message_to_task",
-	// Alias for attempt_completion with canned params (yield while waiting for a message)
-	"wait_for_message",
+	// The mailbox (docs/task_messaging.md): one send, one answer, one park
+	"send_message",
+	"reply",
+	"wait",
 	// On-demand schema loading: hands back the full contract of a stubbed tool
 	"describe_tools",
 ] as const
@@ -160,13 +159,13 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	list_background_tasks: "list background tasks",
 	cancel_tasks: "cancel background tasks",
 	answer_subtask_question: "answer subtask question",
-	sleep: "wait / sleep",
 	sed: "regex find-and-replace on files",
 	call_mcp_tool_async: "call mcp tools asynchronously",
 	check_mcp_call_status: "check async mcp call status",
 	wait_for_mcp_call: "wait for async mcp calls",
-	send_message_to_task: "send messages to peer tasks",
-	wait_for_message: "wait for a message from another task",
+	send_message: "send mail to another task",
+	reply: "answer a request in the mailbox",
+	wait: "wait for mail",
 	describe_tools: "read tool schemas",
 } as const
 
@@ -209,7 +208,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		customTools: ["edit", "search_replace", "edit_file", "apply_patch"],
 	},
 	execute: {
-		tools: ["execute_command", "read_command_output", "sleep"],
+		tools: ["execute_command", "read_command_output"],
 	},
 	mcp: {
 		tools: [
@@ -255,8 +254,12 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"set_task_title",
 	"give_feedback",
 	"list_background_tasks",
-	"send_message_to_task",
-	"wait_for_message",
+	// The mailbox tools are always available and never mode-gated: a task that
+	// can be addressed must be able to read and answer its box whatever mode it
+	// runs in, or mail lands somewhere nobody can reach it.
+	"send_message",
+	"reply",
+	"wait",
 ] as const
 
 /**

@@ -11,7 +11,7 @@ import type { ShoferMessage, ApiRequestFinishedPayload } from "@shofer/types"
  * sweep must run per task before summing.
  */
 
-export type CatKey = "llm" | "thinking" | "streaming" | "tool" | "mcp" | "waiting_subtask" | "sleeping"
+export type CatKey = "llm" | "thinking" | "streaming" | "tool" | "mcp" | "waiting_subtask"
 
 export interface CatMeta {
 	key: CatKey
@@ -27,8 +27,7 @@ export const CATEGORIES: CatMeta[] = [
 	{ key: "streaming", label: "Streaming response", color: "var(--vscode-charts-green, #16a34a)", prio: 1 },
 	{ key: "tool", label: "Tool execution", color: "var(--vscode-charts-orange, #f97316)", prio: 2 },
 	{ key: "mcp", label: "MCP calls", color: "var(--vscode-charts-indigo, #6366f1)", prio: 2 },
-	{ key: "waiting_subtask", label: "Waiting for task", color: "var(--vscode-charts-cyan, #06b6d4)", prio: 2 },
-	{ key: "sleeping", label: "Sleeping", color: "var(--vscode-charts-yellow, #eab308)", prio: 2 },
+	{ key: "waiting_subtask", label: "Waiting", color: "var(--vscode-charts-cyan, #06b6d4)", prio: 2 },
 ]
 
 export const CAT_BY_KEY: Record<CatKey, CatMeta> = CATEGORIES.reduce(
@@ -40,8 +39,10 @@ export const CAT_BY_KEY: Record<CatKey, CatMeta> = CATEGORIES.reduce(
 )
 
 export const MCP_PREFIX = "mcp:" // MCP tool spans are named `mcp:<server>/<tool>`
-const WAIT_FOR_TASK_TOOL = "wait_for_task"
-const SLEEP_TOOL = "sleep"
+// The tools whose spans are TIME SPENT WAITING rather than tool execution.
+// `waitsForTask` on the span is the authoritative flag; the names are the
+// fallback for spans recorded before it existed.
+const WAITING_TOOLS = new Set(["wait", "wait_for_task"])
 
 export function formatMs(ms: number): string {
 	if (ms < 1000) return `${Math.round(ms)}ms`
@@ -57,7 +58,7 @@ export function formatMs(ms: number): string {
 
 export interface Breakdown {
 	totals: Record<CatKey, number>
-	/** Per-tool execution time + run/error counts (excludes wait/sleep), largest first. */
+	/** Per-tool execution time + run/error counts (excludes waiting), largest first. */
 	toolTotals: Array<{ name: string; ms: number; count: number; errors: number }>
 	/** Total running time: sum of all categories. Excludes idle/inter-prompt gaps. */
 	totalMs: number
@@ -72,7 +73,7 @@ interface Segment {
 }
 
 function zeroTotals(): Record<CatKey, number> {
-	return { llm: 0, thinking: 0, streaming: 0, tool: 0, mcp: 0, waiting_subtask: 0, sleeping: 0 }
+	return { llm: 0, thinking: 0, streaming: 0, tool: 0, mcp: 0, waiting_subtask: 0 }
 }
 
 /** Compute a single task's breakdown from its `api_req_finished` payloads. */
@@ -101,14 +102,13 @@ export function breakdownFromPayloads(payloads: ApiRequestFinishedPayload[]): Br
 		for (const span of payload.toolSpans) {
 			const s = span.startedAtOffsetMs
 			const e = Math.max(span.finishedAtOffsetMs, s)
-			const isSleep = span.toolName === SLEEP_TOOL
-			const isWait = !isSleep && (span.waitsForTask === true || span.toolName === WAIT_FOR_TASK_TOOL)
-			const isMcp = !isSleep && !isWait && span.toolName.startsWith(MCP_PREFIX)
-			const cat: CatKey = isSleep ? "sleeping" : isWait ? "waiting_subtask" : isMcp ? "mcp" : "tool"
+			const isWait = span.waitsForTask === true || WAITING_TOOLS.has(span.toolName)
+			const isMcp = !isWait && span.toolName.startsWith(MCP_PREFIX)
+			const cat: CatKey = isWait ? "waiting_subtask" : isMcp ? "mcp" : "tool"
 			segments.push({ start: s, end: e, cat, prio: 2 })
 			minStart = Math.min(minStart, s)
 			maxEnd = Math.max(maxEnd, e)
-			if (!isWait && !isSleep) {
+			if (!isWait) {
 				const cur = toolMap.get(span.toolName) ?? { ms: 0, count: 0, errors: 0 }
 				cur.ms += e - s
 				cur.count += 1

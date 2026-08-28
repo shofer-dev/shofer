@@ -35,7 +35,6 @@ describe("NewTaskTool — peer_task_ids", () => {
 				registerBackgroundTask: vi.fn(),
 				registerBlockingChildResolver: vi.fn(),
 				setState: vi.fn(),
-				hasPendingSyncResolver: vi.fn().mockReturnValue(false),
 				countActiveTasks: vi.fn().mockReturnValue(0),
 				on: vi.fn(),
 				off: vi.fn(),

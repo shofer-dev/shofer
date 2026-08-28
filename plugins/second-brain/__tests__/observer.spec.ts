@@ -169,10 +169,10 @@ function makeHarness(script: Script, defs: DetectorDef[] = detectors()): Harness
 		gate: { ratePerHour: 10, cooldownS: 0, humanFloor: 0.35, adviceTtlS: 900, queueTimeoutS: 1800, muted: false },
 	}
 	const seams: DeliverySeams = {
-		async notifyAgent(text) {
+		async adviseAgent(text) {
 			notifies.push(text)
 		},
-		async queueAgent(text) {
+		async wakeAgent(text) {
 			queues.push(text)
 		},
 		async marker(kind, text) {

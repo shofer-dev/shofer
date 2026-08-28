@@ -818,12 +818,13 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "wait_for_message":
-				// Both params optional — always emit nativeArgs so the dispatcher
+			case "wait":
+				// Every param is optional — always emit nativeArgs so the dispatcher
 				// does not reject the call as "missing nativeArgs".
 				nativeArgs = {
-					rating: partialArgs.rating,
-					reason: partialArgs.reason,
+					timeout_sec: this.coerceOptionalNumber(partialArgs.timeout_sec),
+					from: Array.isArray(partialArgs.from) ? (partialArgs.from as string[]) : undefined,
+					in_reply_to: partialArgs.in_reply_to,
 				}
 				break
 
@@ -1308,22 +1309,22 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "sleep":
-				if (partialArgs.seconds !== undefined) {
+			case "send_message":
+				if (partialArgs.to !== undefined || partialArgs.body !== undefined) {
 					nativeArgs = {
-						seconds: this.coerceOptionalNumber(partialArgs.seconds)!,
+						to: partialArgs.to,
+						body: partialArgs.body,
+						kind: partialArgs.kind as "notification" | "request" | undefined,
+						subject: partialArgs.subject,
+						timeout_sec: this.coerceOptionalNumber(partialArgs.timeout_sec),
+						wake: this.coerceOptionalBoolean(partialArgs.wake),
 					}
 				}
 				break
 
-			case "send_message_to_task":
-				if (partialArgs.task_id !== undefined || partialArgs.message !== undefined) {
-					nativeArgs = {
-						task_id: partialArgs.task_id,
-						message: partialArgs.message,
-						wait: this.coerceOptionalBoolean(partialArgs.wait),
-						timeout_sec: this.coerceOptionalNumber(partialArgs.timeout_sec),
-					}
+			case "reply":
+				if (Array.isArray(partialArgs.replies)) {
+					nativeArgs = { replies: partialArgs.replies as Array<{ message_id: string; body: string }> }
 				}
 				break
 
@@ -1517,12 +1518,13 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "wait_for_message":
-					// Both params optional — always emit nativeArgs so the dispatcher
+				case "wait":
+					// Every param is optional — always emit nativeArgs so the dispatcher
 					// does not reject the call as "missing nativeArgs".
 					nativeArgs = {
-						rating: args.rating,
-						reason: args.reason,
+						timeout_sec: this.coerceOptionalNumber(args.timeout_sec),
+						from: Array.isArray(args.from) ? (args.from as string[]) : undefined,
+						in_reply_to: args.in_reply_to,
 					} as NativeArgsFor<TName>
 					break
 
@@ -2028,21 +2030,25 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "sleep":
-					if (args.seconds !== undefined) {
+				case "send_message":
+					if (args.to !== undefined && args.body !== undefined) {
 						nativeArgs = {
-							seconds: this.coerceOptionalNumber(args.seconds)!,
+							to: args.to,
+							body: args.body,
+							kind: args.kind as "notification" | "request" | undefined,
+							subject: args.subject,
+							timeout_sec: this.coerceOptionalNumber(args.timeout_sec),
+							wake: this.coerceOptionalBoolean(args.wake),
 						} as NativeArgsFor<TName>
 					}
 					break
 
-				case "send_message_to_task":
-					if (args.task_id !== undefined && args.message !== undefined) {
+				case "reply":
+					// The batch is the whole contract — an item-less call is rejected by
+					// the handler, not silently turned into a no-op here.
+					if (Array.isArray(args.replies)) {
 						nativeArgs = {
-							task_id: args.task_id,
-							message: args.message,
-							wait: this.coerceOptionalBoolean(args.wait),
-							timeout_sec: this.coerceOptionalNumber(args.timeout_sec),
+							replies: args.replies as Array<{ message_id: string; body: string }>,
 						} as NativeArgsFor<TName>
 					}
 					break

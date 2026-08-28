@@ -94,8 +94,8 @@ import callMcpToolAsync from "./call_mcp_tool_async.js"
 import checkMcpCallStatus from "./check_mcp_call_status.js"
 import waitForMcpCall from "./wait_for_mcp_call.js"
 import sed from "./sed.js"
-import sendMessageToTask from "./send_message_to_task.js"
-import sleep from "./sleep.js"
+import sendMessage from "./send_message.js"
+import reply from "./reply.js"
 import wait from "./wait.js"
 import viewImage from "./view_image.js"
 import writeToFile from "./write_to_file.js"
@@ -187,8 +187,8 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		waitForMcpCall,
 		updateTodoList,
 		sed,
-		sendMessageToTask,
-		sleep,
+		sendMessage,
+		reply,
 		wait,
 		viewImage,
 		writeToFile,

@@ -219,30 +219,6 @@ export interface McpAsyncCallHandle {
 	createdAt: number
 }
 
-/**
- * Peer notification awaiting delivery to this task via system-prompt injection.
- * Async messages always go through this dedicated FIFO queue, which is drained
- * once at the start of each agent loop in {@link getSystemPrompt}. There is no
- * Form A / Form B distinction — async peer messages are never routed through
- * the MessageQueueService (that queue is reserved for user messages and sync
- * prompts from parent/peer tasks).
- */
-export interface PeerNotification {
-	senderTaskId: string
-	senderTitle: string
-	message: string
-	timestamp: number
-	/**
-	 * `"peer"` (default): an async message from a peer task via `send_message_to_task`
-	 * (carries a reply channel). `"notification"`: a generic one-way event with no reply
-	 * channel — e.g. an agent-mesh/NATS event delivered through `ctx.agent.notify` mode
-	 * `"notify"`. Only the formatting of the system-prompt injection differs.
-	 */
-	kind?: "peer" | "notification"
-	/** For `kind: "notification"` — a short source label (e.g. a mesh subject). */
-	source?: string
-}
-
 export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	readonly taskId: string
 	readonly rootTaskId?: string
@@ -252,14 +228,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// NEW: Track background children
 	backgroundChildren: Map<string, TaskHandle> = new Map()
-
-	/**
-	 * Async peer notification FIFO queue. All async peer messages are appended
-	 * here and drained via system-prompt injection at the start of each agent
-	 * loop (see {@link getSystemPrompt}). This is separate from the
-	 * MessageQueueService to keep notifications out of the user-message flow.
-	 */
-	peerNotificationQueue: PeerNotification[] = []
 
 	/**
 	 * Least-privilege peer scope restriction. Peer tools only allow
@@ -7057,12 +7025,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
-	// `injectPeerNotifications` MUST be true only on the real agent-request path
-	// (attemptApiRequest). Condensation / truncation summary prompts also call
-	// getSystemPrompt(), and draining the peer queue there would inject the
-	// notification into a *summarizer* prompt and clear it before the agent ever
-	// sees it — silently losing the message. Those callers leave it false.
-	private async getSystemPrompt(injectPeerNotifications = false): Promise<string> {
+	/**
+	 * Build the system prompt.
+	 *
+	 * It carries NO per-turn state, deliberately: the system prompt is the
+	 * provider's prompt-cache prefix, and anything that changes per turn
+	 * invalidates it on every request. Inbound mail is rendered into
+	 * `environment_details` instead (`getEnvironmentDetails`), which already
+	 * changes per turn because it carries the clock. This method is also called
+	 * for the condense/truncation summarizers, which is the second reason
+	 * nothing consumable may be drained here — a summarizer prompt would eat it
+	 * before the agent ever saw it.
+	 */
+	private async getSystemPrompt(): Promise<string> {
 		const state = await this.providerRef.deref()?.getState()
 		const {
 			mode,
@@ -7307,7 +7282,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			if (nonParentPeers.length > 0) {
 				constraints.push("")
 				constraints.push(
-					"- Peer messaging: you have access to `send_message_to_task` and `list_background_tasks` for inter-task communication.",
+					"- Mailbox: use `send_message` to write to a peer, `reply` to answer a request in your mailbox, and `wait` to read it. `list_background_tasks` finds peers.",
 				)
 				constraints.push(
 					`  Known peer task IDs: ${nonParentPeers.join(", ")}. Use list_background_tasks(scope="peers") to discover more.`,
@@ -7316,7 +7291,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// Even with parent-only peers, let the child know it CAN message the parent.
 				constraints.push("")
 				constraints.push(
-					`- Peer messaging: you have access to send_message_to_task and can message your parent (task ID: ${this.parentTaskId}) if needed. Use list_background_tasks(scope="peers") to discover sibling tasks.`,
+					`- Mailbox: use send_message to write to your parent (task ID: ${this.parentTaskId}) if needed, reply to answer a request in your mailbox, and wait to read it. Use list_background_tasks(scope="peers") to discover sibling tasks.`,
 				)
 			}
 
@@ -7338,77 +7313,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				)
 			}
 			systemPrompt = systemPrompt + "\n\n====\n\n" + constraints.join("\n")
-		}
-
-		// Inject async peer notifications from the dedicated FIFO queue. This runs
-		// once per real agent-loop iteration (attemptApiRequest passes
-		// injectPeerNotifications=true); condensation/truncation summary prompts
-		// pass false so they don't consume the queue. Async messages are never
-		// routed through the MessageQueueService. Sync messages use a separate
-		// path (via MessageQueueService + cancelAndProcessQueuedMessages).
-		if (injectPeerNotifications && this.peerNotificationQueue.length > 0) {
-			const peerBlocks: string[] = []
-			for (const pn of this.peerNotificationQueue) {
-				if (pn.kind === "notification") {
-					// Generic one-way event (e.g. an agent-mesh/NATS message) — no reply channel.
-					peerBlocks.push(
-						`\n\n====\n\n` +
-							`NOTIFICATION${pn.source ? ` [${pn.source}]` : ""}:\n` +
-							`${pn.message}\n\n` +
-							`This is a one-way event notification — no response is required or possible.\n` +
-							`If it is not relevant to your current work, acknowledge it and continue.`,
-					)
-				} else {
-					peerBlocks.push(
-						`\n\n====\n\n` +
-							`PEER MESSAGE from task ${pn.senderTaskId} ("${pn.senderTitle}"):\n` +
-							`${pn.message}\n\n` +
-							`You may respond using send_message_to_task(task_id="${pn.senderTaskId}", message=...)\n` +
-							`IF the sender's task ID was granted to you via peer_task_ids at spawn time.\n` +
-							`(Receiving this message does NOT auto-grant you permission to reply — check\n` +
-							`your knownPeers scope first. If you cannot reply, notify your parent instead.)\n` +
-							`This is a notification — no response is required. If the message is not urgent,\n` +
-							`you may finish your current work first and respond later.`,
-					)
-				}
-			}
-			systemPrompt = systemPrompt + peerBlocks.join("")
-
-			// Surface each notification in the chat UI at the moment the agent
-			// reads it (this drain runs on the real agent request). A
-			// `peer_message` say renders as its own ChatRow so the user can see
-			// inbound async peer messages instead of them being invisible
-			// system-prompt-only injections.
-			for (const pn of this.peerNotificationQueue) {
-				if (pn.kind === "notification") continue // generic notifications are system-prompt-only for now
-				await this.say(
-					"peer_message",
-					JSON.stringify({
-						senderTaskId: pn.senderTaskId,
-						senderTitle: pn.senderTitle,
-						message: pn.message,
-						timestamp: pn.timestamp,
-					}),
-				)
-			}
-
-			// Telemetry: peer message received (system-prompt injection).
-			try {
-				const { TelemetryService } = await import("@shofer/telemetry")
-				for (const pn of this.peerNotificationQueue) {
-					if (pn.kind === "notification") continue
-					TelemetryService.instance.capturePeerMessageReceived(this.taskId, {
-						targetTaskId: pn.senderTaskId,
-						mode: "async",
-						form: "system-prompt",
-					})
-				}
-			} catch {
-				// non-fatal
-			}
-
-			// Clear after injection (delivered once per message).
-			this.peerNotificationQueue = []
 		}
 
 		return systemPrompt
@@ -7703,7 +7607,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// Real agent request: drain + inject any pending async peer notifications here
 		// (and only here) so condensation/truncation summary prompts can't consume them.
-		const systemPrompt = await this.getSystemPrompt(true)
+		const systemPrompt = await this.getSystemPrompt()
 		const { contextTokens } = this.getTokenUsage()
 
 		if (contextTokens) {
@@ -8625,7 +8529,26 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	public async deliver(envelope: Envelope): Promise<Envelope> {
 		const delivered = await this.mailbox.deliver(envelope)
 
+		/**
+		 * Record the delivery once, on every path. `woke` answers "did this
+		 * envelope restart a stopped loop", which is why it is stamped where the
+		 * wake actually happens rather than copied off `envelope.wake`: a
+		 * coalesced second delivery carries `wake: true` and wakes nothing.
+		 */
+		const record = (woke: boolean) => {
+			try {
+				TelemetryService.instance.captureMailboxDelivered(this.taskId, {
+					kind: envelope.kind,
+					plane: envelope.plane,
+					woke,
+				})
+			} catch {
+				// non-fatal
+			}
+		}
+
 		if (!envelope.wake) {
+			record(false)
 			return delivered
 		}
 
@@ -8635,6 +8558,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// still winding down would be consumed as ordinary feedback rather than
 		// waking anything.
 		if (!this.abort && !this.abandoned) {
+			record(false)
 			return delivered
 		}
 
@@ -8645,6 +8569,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				taskLog.error(`[Task#${this.taskId}] mailbox wake failed:`, error),
 			)
 		}
+		record(!alreadyQueued)
 
 		return delivered
 	}
@@ -9248,7 +9173,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	): Promise<void> {
 		// Best-effort instrumentation: a Sequence-view event must never break the
 		// tool that emitted it. Callers in the inter-task tools (new_task /
-		// send_message_to_task) invoke this inside their own try/catch, where a
+		// send_message) invoke this inside their own try/catch, where a
 		// throw here would otherwise be misreported as a tool failure.
 		try {
 			const rootOriginMs = (this.rootTask ?? this).timelineOriginMs

@@ -203,14 +203,15 @@ export async function checkAutoApproval({
 			return { decision: "approve" }
 		}
 
-		// sendMessageToTask: async is always approved (fire-and-forget); sync is gated.
-		if ((tool?.tool as string) === "sendMessageToTask") {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const isSync = (tool as any).wait === true
-			if (!isSync) {
-				return { decision: "approve" }
-			}
-			return state.alwaysAllowSubtasks === true ? { decision: "approve" } : { decision: "ask" }
+		// The mailbox tools are unconditionally auto-approved (docs/task_messaging.md
+		// § "Auto-approval"). None of them can block anything but the caller's own
+		// loop and none is terminal: `sendMessage` has no side effect on the sender
+		// and the recipient decides whether to answer, `reply` answers a request the
+		// task already holds, and `wait` parks the caller under a mandatory timeout.
+		// The `alwaysAllowSubtasks` gate that used to guard a SYNC send is gone with
+		// the blocking send it existed for.
+		if (["sendMessage", "reply", "wait"].includes(tool?.tool as string)) {
+			return { decision: "approve" }
 		}
 
 		// Background-task status tools are purely informational queries against in-memory
@@ -250,10 +251,6 @@ export async function checkAutoApproval({
 				// carry, so gating it would only stall the call that discovery exists
 				// to unblock.
 				"describeTools",
-				// sleep is harmless — it just pauses execution. Without auto-approval it
-				// would prompt the user on every pause, and without a chat row it would
-				// appear as a silent hang.
-				"sleep",
 			].includes(tool?.tool)
 		) {
 			return { decision: "approve" }

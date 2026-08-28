@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { createInMemoryHost, setHost, type PluginContext, type ShoferPlugin } from "@shofer/types"
+import {
+	createInMemoryHost,
+	setHost,
+	type PluginContext,
+	type PluginDeliverInput,
+	type PluginMailboxTransport,
+	type ShoferPlugin,
+} from "@shofer/types"
 
 import { PluginManager, type PluginFsHost, type PluginStateStore } from "../plugin-manager.js"
 import { pluginRegistry } from "../plugin-registry.js"
@@ -73,15 +80,27 @@ function makeCapturingLoader(): { loader: PluginCodeLoader; captured: () => Plug
 	return { loader, captured: () => captured }
 }
 
-/** A recording agent provider standing in for the host task-injection seam. */
+/** A recording agent provider standing in for the host delivery seam. */
 function makeAgentProvider(): PluginAgentProvider & {
-	calls: { message: string; mode?: string; taskId?: string }[]
+	calls: PluginDeliverInput[]
+	transports: PluginMailboxTransport[]
 } {
-	const calls: { message: string; mode?: string; taskId?: string }[] = []
+	const calls: PluginDeliverInput[] = []
+	const transports: PluginMailboxTransport[] = []
 	return {
 		calls,
-		async notify(message, opts) {
-			calls.push({ message, mode: opts?.mode, taskId: opts?.taskId })
+		transports,
+		async deliver(input) {
+			calls.push(input)
+			// The host completes the envelope; the seam returns what the box accepted.
+			const { taskId, id, ...fields } = input
+			return { ...fields, id: id ?? "host-minted-id", to: taskId ?? "current-task", sent_at: 1_000 }
+		},
+		registerMailboxTransport(transport) {
+			transports.push(transport)
+			return () => {
+				transports.splice(transports.indexOf(transport), 1)
+			}
 		},
 		async spawn() {
 			return {
@@ -95,6 +114,20 @@ function makeAgentProvider(): PluginAgentProvider & {
 	}
 }
 
+/** A minimal notification envelope, less the fields the host fills in. */
+function notification(body: string, taskId?: string): PluginDeliverInput {
+	return {
+		from: "tag:system-events:test",
+		kind: "notification",
+		subject: body,
+		body,
+		deadline: 10_000,
+		wake: false,
+		plane: "bus",
+		...(taskId ? { taskId } : {}),
+	}
+}
+
 const agentManifest = (name: string) => ({
 	name,
 	version: "1.0.0",
@@ -103,23 +136,40 @@ const agentManifest = (name: string) => ({
 })
 
 describe("plugin-agent — createPluginAgent / createDeniedPluginAgent (P7 unit)", () => {
-	it("live surface delegates message + opts to the host provider", async () => {
+	it("live surface delegates the envelope to the host provider and returns what it accepted", async () => {
 		const provider = makeAgentProvider()
 		const agent = createPluginAgent("p", provider)
-		await agent.notify("deploy failed", { mode: "queue" })
-		await agent.notify("start over", { mode: "spawn", taskId: "t1" })
-		expect(provider.calls).toEqual([
-			{ message: "deploy failed", mode: "queue", taskId: undefined },
-			{ message: "start over", mode: "spawn", taskId: "t1" },
+		const accepted = await agent.deliver(notification("deploy failed"))
+		await agent.deliver(notification("start over", "t1"))
+		expect(provider.calls.map((c) => [c.body, c.taskId])).toEqual([
+			["deploy failed", undefined],
+			["start over", "t1"],
 		])
-		// Surface exposes notify + the §14 job-control methods — no host internals leak through.
-		expect(Object.keys(agent)).toEqual(["notify", "spawn", "cancel"])
+		// The host owns `to` and `sent_at`; the plugin never sets either.
+		expect(accepted.to).toBe("current-task")
+		expect(accepted.sent_at).toBe(1_000)
+		// Surface exposes the one door, the transport seam, and the §14 job-control
+		// methods — no host internals leak through.
+		expect(Object.keys(agent)).toEqual(["deliver", "registerMailboxTransport", "spawn", "cancel"])
+	})
+
+	it("registers a mailbox transport and unregisters it through the returned handle", () => {
+		const provider = makeAgentProvider()
+		const agent = createPluginAgent("p", provider)
+		const transport: PluginMailboxTransport = { canRoute: () => true, send: async () => {} }
+		const unregister = agent.registerMailboxTransport(transport)
+		expect(provider.transports).toEqual([transport])
+		unregister()
+		expect(provider.transports).toEqual([])
 	})
 
 	it("surfaces + warns on a provider failure", async () => {
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
 		const provider: PluginAgentProvider = {
-			async notify() {
+			async deliver() {
+				throw new Error("boom")
+			},
+			registerMailboxTransport() {
 				throw new Error("boom")
 			},
 			async spawn() {
@@ -130,15 +180,17 @@ describe("plugin-agent — createPluginAgent / createDeniedPluginAgent (P7 unit)
 			},
 		}
 		const agent = createPluginAgent("p", provider)
-		await expect(agent.notify("x")).rejects.toThrow(/boom/)
+		await expect(agent.deliver(notification("x"))).rejects.toThrow(/boom/)
+		expect(() => agent.registerMailboxTransport({ canRoute: () => false, send: async () => {} })).toThrow(/boom/)
 		warnSpy.mockRestore()
 	})
 
-	it("denied surface throws + warns on notify", async () => {
+	it("denied surface throws + warns on deliver and on registerMailboxTransport", async () => {
 		const warn = vi.fn()
 		const agent = createDeniedPluginAgent("p", warn)
-		await expect(agent.notify("x")).rejects.toThrow(/denied/)
-		expect(warn).toHaveBeenCalledOnce()
+		await expect(agent.deliver(notification("x"))).rejects.toThrow(/denied/)
+		expect(() => agent.registerMailboxTransport({ canRoute: () => true, send: async () => {} })).toThrow(/denied/)
+		expect(warn).toHaveBeenCalledTimes(2)
 	})
 })
 
@@ -169,22 +221,22 @@ describe("PluginManager — ctx.agent gating (P7)", () => {
 		return { manager, captured, provider }
 	}
 
-	it("grants a live ctx.agent to a granted plugin — notify reaches the host seam", async () => {
+	it("grants a live ctx.agent to a granted plugin — deliver reaches the host seam", async () => {
 		const { captured, provider } = await build({ manifest: agentManifest("p"), enabled: ["p"] })
 		const agent = captured()?.agent
 		expect(agent).toBeDefined()
-		await agent!.notify("the deploy just failed")
-		expect(provider.calls).toEqual([{ message: "the deploy just failed", mode: undefined, taskId: undefined }])
+		await agent!.deliver(notification("the deploy just failed"))
+		expect(provider.calls.map((c) => c.body)).toEqual(["the deploy just failed"])
 	})
 
-	it("queues into the (stub) task via the seam and spawns on mode:spawn", async () => {
+	it("delivers to a named task and to the current one through the same door", async () => {
 		const { captured, provider } = await build({ manifest: agentManifest("p"), enabled: ["p"] })
 		const agent = captured()!.agent!
-		await agent.notify("look here", { mode: "queue" })
-		await agent.notify("new investigation", { mode: "spawn" })
-		expect(provider.calls).toEqual([
-			{ message: "look here", mode: "queue", taskId: undefined },
-			{ message: "new investigation", mode: "spawn", taskId: undefined },
+		await agent.deliver(notification("look here", "t7"))
+		await agent.deliver(notification("and here"))
+		expect(provider.calls.map((c) => [c.body, c.taskId])).toEqual([
+			["look here", "t7"],
+			["and here", undefined],
 		])
 	})
 
@@ -195,7 +247,7 @@ describe("PluginManager — ctx.agent gating (P7)", () => {
 		})
 		const agent = captured()?.agent
 		expect(agent).toBeDefined() // present-but-denying, distinct from absent
-		await expect(agent!.notify("try to steer")).rejects.toThrow(/denied/)
+		await expect(agent!.deliver(notification("try to steer"))).rejects.toThrow(/denied/)
 		// The host seam was NEVER reached — no steering attempted.
 		expect(provider.calls).toEqual([])
 	})

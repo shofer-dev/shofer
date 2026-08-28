@@ -376,7 +376,6 @@ Supported formats: PNG, JPG, JPEG, GIF, BMP, SVG, WEBP.
 | --------------------- | :----: | ------- | :--------------: | :----: | ------------------------------------------- |
 | `execute_command`     | 🔵 RC  | execute |        –         |   ✅   | Execute a CLI command                       |
 | `read_command_output` | 🔵 RC  | execute |        –         |   ✅   | Get full output of a truncated command      |
-| `sleep`               | 🟣 AW  | execute |        –         |   ✅   | Pause execution for N seconds               |
 | `fetch_web_page`      | 🆕 WS  | read    |        –         |   ✅   | Fetch and extract web page content          |
 | `read_output_channel` | 🟣 AW  | read    |        –         |   ✅   | List/read VS Code Output panel log channels |
 
@@ -432,36 +431,29 @@ Two modes:
 
 Severity filtering is best-effort: it parses the first `[level]` token VS Code's `LogOutputChannel` emits per line; continuation lines (stack traces) inherit the previous line's level. Plain channels with no level tokens return nothing under a severity filter. When `search`/`severity` are active, the byte `limit` keeps the most-recent matches (or the first matches when `tail=false`).
 
-### `sleep`
-
-Pauses agent execution for the given number of seconds. Useful for polling external resources where a small back-off is needed between checks, or any other time-based wait. To wait for a **message from another task** (not a fixed delay), use [`wait_for_message`](#wait_for_message) instead — it resumes the instant a message arrives.
-
-| Param     | Type   | Required | Description                  |
-| --------- | ------ | :------: | ---------------------------- |
-| `seconds` | number |    ✅    | How long to wait, in seconds |
-
 ---
 
 ## Task Management
 
-| Tool                      | Origin | Group | Always Available | Status | Description                                                                                                            |
-| ------------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------------------------------------------------------------------------------- |
-| `ask_followup_question`   | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question (suggested answers and/or typed form)                                                          |
-| `attempt_completion`      | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                                                                                 |
-| `wait_for_message`        | 🟣 AW  | –     |        ✅        |   ✅   | Alias for `attempt_completion`: yield while waiting for a message from another task (use `sleep` for time-based waits) |
-| `switch_mode`             | 🔵 RC  | mode  |        ✅        |   ✅   | Switch own or child task to a different mode                                                                           |
-| `new_task`                | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                                                                                  |
-| `check_task_status`       | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task                                                                         |
-| `wait_for_task`           | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any)                                                            |
-| `cancel_tasks`            | 🟣 AW  | –     |        ✅        |   ✅   | Cancel one or more running background child tasks                                                                      |
-| `answer_subtask_question` | 🟣 AW  | –     |        ✅        |   ✅   | Answer a question asked by a background child task                                                                     |
-| `list_background_tasks`   | 🟣 AW  | –     |        ✅        |   ✅   | List background tasks (children or peers)                                                                              |
-| `send_message_to_task`    | 🟣 AW  | –     |        ✅        |   ✅   | Send async/sync messages to peer tasks under same root                                                                 |
-| `update_todo_list`        | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                                                                                   |
-| `skills`                  | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                                                                               |
-| `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                                                                                     |
-| `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                                                                             |
-| `describe_tools`          | 🟣 AW  | –     |   ✅ (tiered)    |   ✅   | Return the full parameter schema of tools the mode declared as stubs                                                   |
+| Tool                      | Origin | Group | Always Available | Status | Description                                                          |
+| ------------------------- | :----: | ----- | :--------------: | :----: | -------------------------------------------------------------------- |
+| `ask_followup_question`   | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question (suggested answers and/or typed form)        |
+| `attempt_completion`      | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                               |
+| `switch_mode`             | 🔵 RC  | mode  |        ✅        |   ✅   | Switch own or child task to a different mode                         |
+| `new_task`                | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                                |
+| `check_task_status`       | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task                       |
+| `wait_for_task`           | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any)          |
+| `cancel_tasks`            | 🟣 AW  | –     |        ✅        |   ✅   | Cancel one or more running background child tasks                    |
+| `answer_subtask_question` | 🟣 AW  | –     |        ✅        |   ✅   | Answer a question asked by a background child task                   |
+| `list_background_tasks`   | 🟣 AW  | –     |        ✅        |   ✅   | List background tasks (children or peers)                            |
+| `send_message`            | 🟣 AW  | –     |        ✅        |   ✅   | Put an envelope in another task's mailbox                            |
+| `reply`                   | 🟣 AW  | –     |        ✅        |   ✅   | Answer requests sitting in this task's mailbox                       |
+| `wait`                    | 🟣 AW  | –     |        ✅        |   ✅   | Read this task's mailbox, parking until mail arrives                 |
+| `update_todo_list`        | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                                 |
+| `skills`                  | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                             |
+| `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                                   |
+| `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                           |
+| `describe_tools`          | 🟣 AW  | –     |   ✅ (tiered)    |   ✅   | Return the full parameter schema of tools the mode declared as stubs |
 
 The subtask tools form one control plane around a background child. The parent
 holds every lever; the child never talks to the user directly:
@@ -479,7 +471,8 @@ sequenceDiagram
     C->>P: ask_followup_question routed UP to the parent
     Note over U,C: a background child's question never reaches the user
     P->>C: answer_subtask_question unblocks the child
-    P->>C: send_message_to_task — async notification, or sync PEER PROMPT
+    P->>C: send_message — an envelope into the child's mailbox
+    C->>C: wait reads the box, reply answers a request
     P->>P: check_task_status — mode, status, pending question, result
     C-->>P: attempt_completion result on terminal state
     P->>P: wait_for_task blocks until all, or any, complete
@@ -644,7 +637,7 @@ Create a new task instance in the chosen mode. Supports two execution models:
 | `peer_task_ids`    | string[] \| null |    –     | Least-privilege peer scope: the spawned child's baseline `knownPeers` is parent-only. If provided, these task IDs are added (must share `rootTaskId`). **Grants are symmetric** — each listed peer also gets the new child added to _its_ `knownPeers`, so the channel is two-way. If omitted/null, the child can only communicate with its parent and its own children — sibling access is denied. Validated against `rootTaskId` at spawn time — unknown IDs are rejected. |
 | `title`            | string \| null   |    –     | Optional display title for the child task (max 60 chars; trimmed and truncated; whitespace-only is treated as absent). When set, it becomes the child's `name` from the first save **and locks it** — the [`set_task_title`](#set_task_title) tool is then **omitted from the child's tool list entirely** (and refused if somehow called). The lock (`HistoryItem.nameLocked`) survives restarts. Omit to let the child name itself.                                        |
 
-The spawned child's `Task` instance always has `knownPeers: Set<string>` set. Its baseline contains the parent's `taskId` plus any task the child later spawns (dynamic-add). Peer tools (`check_task_status`, `wait_for_task`, `send_message_to_task`, `list_background_tasks` with `scope="peers"`) enforce this set unconditionally — `undefined` means **no peer access whatsoever**.
+The spawned child's `Task` instance always has `knownPeers: Set<string>` set. Its baseline contains the parent's `taskId` plus any task the child later spawns (dynamic-add). Peer tools (`check_task_status`, `wait_for_task`, `send_message`, `list_background_tasks` with `scope="peers"`) enforce this set unconditionally — `undefined` means **no peer access whatsoever**.
 
 **Symmetric peering:** when a child is spawned with `peer_task_ids=[B]`, `NewTaskTool` mirrors the edge — it adds the child to `B`'s `knownPeers` (live instance) and persists it onto `B`'s `HistoryItem.peerIds` (rehydrated on restart), so `B` can message/discover the child in return. This opens a two-way channel from a single grant, which matters because a spawn-time grant can only name an already-existing task (so it is unavoidably one-directional as written). It mirrors the **explicit** edge only — it is **not transitive**, so a parent holding two siblings does not connect them; to make two siblings talk, spawn the later one with `peer_task_ids=[earlierSibling]`. Symmetry changes reachability, not blocking semantics — the sync-deadlock fail-fast and timeouts are unaffected. See [`task_messaging.md` § Symmetric peering](task_messaging.md#symmetric-peering-bidirectional-grants).
 
@@ -734,34 +727,71 @@ has nothing to describe.
 | ------- | -------- | :------: | ----------------------------------------------------------------------------------------------------- |
 | `names` | string[] |    ✅    | Tool names exactly as they appear in the model's tool list (`mcp--<server>--<tool>` for an MCP tool). |
 
-### `send_message_to_task`
+### `send_message`
 
-Send a message to a peer task sharing the same root task. The caller and target must share a root task (the root/parent task can message any task in its tree; sub-tasks require `knownPeers`). Discover the target's task ID via `list_background_tasks(scope="peers")`.
+Put an envelope in another task's **mailbox** — the one way to talk to another
+task ([`task_messaging.md`](task_messaging.md)).
 
-**Busy-target fail-fast:** Sync messages to busy targets (`running`, `waiting`, `waiting_input`) are REJECTED immediately. Async messages are rejected for `waiting_input` and `waiting` targets, but are **allowed** for `running` targets (the notification rides along in the system prompt on the next API call). Non-busy targets (`idle`, `completed`, `paused`) always accept messages in both modes.
+**There is no busy gate.** The recipient's lifecycle is never consulted; it
+decides only how the delivery is announced (a running task sees it in its digest,
+a parked one is returned by `wait`, a stopped one is woken). A send is accepted or
+refused with a reason — never dropped.
 
-**Async mode (`wait=false`, default):**
+Validation, in order: not self; `to` resolves (a live instance or resumable
+history); the target shares the caller's `rootTaskId`; the caller is the root
+task, or `to` is in its `knownPeers`; the recipient's box is not full.
 
-- Returns immediately (fire-and-forget). No blocking.
-- For a `running` recipient: injected into the system prompt as a PEER MESSAGE notification on the next turn (Form A delivery).
-- For a non-busy recipient (`idle`, `completed`, `paused`): enqueued as an annotated user-turn that wakes/resumes the recipient via `MessageQueueService` (Form B delivery, the same path user messages use).
-- The recipient may optionally respond via `send_message_to_task`.
-- BUSY TASKS REJECT: async to `waiting_input`/`waiting` targets fail immediately. Async to `running` is allowed.
+| Param         | Type                            | Required | Description                                                                                                |
+| ------------- | ------------------------------- | :------: | ---------------------------------------------------------------------------------------------------------- |
+| `to`          | string                          |    ✅    | Recipient task id. Discover with `list_background_tasks(scope="peers")`.                                   |
+| `body`        | string                          |    ✅    | The message itself, returned in full when the recipient calls `wait`.                                      |
+| `kind`        | `"notification"` \| `"request"` |    –     | Default `notification`. A `request` expects a `reply`; its id is what `wait(in_reply_to=…)` names.         |
+| `subject`     | string                          |    –     | One-line summary for the recipient's digest. Absent, the first 80 chars of `body` are used.                |
+| `timeout_sec` | number                          |    –     | Seconds until the envelope expires out of the recipient's box. Default 120 (request) / 600 (notification). |
+| `wake`        | boolean                         |    –     | Whether a recipient whose loop has stopped is resumed. Default `true` (request) / `false` (notification).  |
 
-**Sync mode (`wait=true`):**
+Returns `{ id, to, deadline }`; the result reads
+`Sent <kind> <id> to <to> ("<subject>"); expires in <n>s.`
 
-- Sender blocks until the recipient calls `attempt_completion` or the timeout (default 120s) expires.
-- The message is enqueued as a `PEER PROMPT` that wakes up / restarts idle, completed, or paused recipients (same Form B path as async for non-busy, but with sync resolver).
-- The recipient MUST respond via `attempt_completion`; its result is returned to the blocked sender.
-- WARNING: `attempt_completion` is TERMINAL — the recipient ends after responding. Only sync-message a peer you intend to stop and have answer you.
-- BUSY TASKS REJECT: sync to ALL busy states (`running`, `waiting`, `waiting_input`) is rejected. Use async for non-interrupting coordination with running peers.`
+### `reply`
 
-| Param         | Type            | Required | Description                                                                                                                                       |
-| ------------- | --------------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `task_id`     | string          |    ✅    | Target peer task ID (root/parent can message any tree task; sub-tasks require `knownPeers`). Discover via `list_background_tasks(scope="peers")`. |
-| `message`     | string          |    ✅    | The message to deliver (async: PEER MESSAGE notification; sync: PEER PROMPT to answer)                                                            |
-| `wait`        | boolean \| null |    –     | `true` = block until recipient responds or timeout. `false` (default) = async fire-and-forget.                                                    |
-| `timeout_sec` | number \| null  |    –     | Maximum seconds to wait when `wait=true`. Default: 120. Message is retracted on timeout.                                                          |
+Answer one or more **requests** sitting in this task's mailbox. Replying is not
+terminal, does not interrupt the replier, and can happen in the same turn the
+request is read.
+
+Each item is independent: the reply envelope is **delivered first** and only then
+is the request cleared out of the replier's box, so a refused delivery fails that
+one item and leaves the request answerable. An unknown or expired id fails that
+item and the rest of the batch still lands.
+
+| Param     | Type                     | Required | Description                           |
+| --------- | ------------------------ | :------: | ------------------------------------- |
+| `replies` | `[{ message_id, body }]` |    ✅    | One entry per request being answered. |
+
+### `wait`
+
+Read this task's mailbox, parking until something arrives if it is empty.
+
+Returns **the whole box** — every notification, request and reply, in full, each
+with its remaining time. A non-empty box returns immediately; an empty one parks,
+event-driven, until the first delivery or the timeout. A timeout with an empty box
+returns an empty list and is **not an error**.
+
+`from` and `in_reply_to` are the **wake condition only**: they decide when a
+parked `wait` returns, never what it returns.
+
+Entering `wait` puts the task in the `waiting` lifecycle and returning puts it
+back in `running` ([`task_states.md`](task_states.md)). Reading consumes a
+notification or a reply; a request stays until it is answered with `reply`.
+
+`wait` also subsumes sleeping: `wait(timeout_sec=N)` on an empty box returns at N
+seconds, and returns _earlier_ if mail arrives.
+
+| Param         | Type     | Required | Description                                                                 |
+| ------------- | -------- | :------: | --------------------------------------------------------------------------- |
+| `timeout_sec` | number   |    –     | Seconds to park when the box is empty. Default 120; `0` checks and returns. |
+| `from`        | string[] |    –     | Wake condition: return when a message from any of these task ids arrives.   |
+| `in_reply_to` | string   |    –     | Wake condition: return when the reply to this request id arrives.           |
 
 ### `set_task_title`
 
@@ -806,19 +836,6 @@ The `rating` parameter provides a self-assessment of how well the task was compl
 - `"excellent"` — task executed excellently, high quality result
 
 The optional `feedback` parameter captures concrete observations about tooling or system prompt shortcomings encountered during the task. This feedback is routed to Shofer.Dev developers for continuous improvement.
-
-### `wait_for_message`
-
-A thin convenience **alias for `attempt_completion`**. It lets the agent yield as a self-declared terminal state — same effect as `attempt_completion` (emits `TaskCompleted`, sets `task.abort`, returns control) — without having to formulate a full result. Intended **specifically for waiting on an inter-task message**: after sending a message to a peer (`send_message_to_task`), call `wait_for_message` to yield, and you are automatically resumed when a reply/message arrives. To wait for a fixed amount of time (an external process, a rate-limit window) rather than a message, use [`sleep`](#sleep) instead.
-
-The handler ([`WaitTool.ts`](../packages/core/src/tools/WaitTool.ts)) maps the params onto `attempt_completion` and delegates to its handler, so all terminal/delegation/peer-sync logic lives in one place: `reason → result`, `rating → rating`. `rating` is **required** (it covers the work completed so far); `reason` is optional and defaults to `"waiting"`. The handler keeps a defensive `"well"` fallback for the rating only for providers that don't enforce strict schemas (mirroring `attempt_completion`, which defaults a missing rating to `"poor"`). The router mirrors `attempt_completion`'s `didExecuteAttemptCompletion` duplicate-completion guard. No auto-approval / `ChatRow` wiring is needed because `attempt_completion` never prompts — it renders via `say("completion_result", …)`.
-
-| Param    | Type           | Required | Description                                                                                        |
-| -------- | -------------- | :------: | -------------------------------------------------------------------------------------------------- |
-| `rating` | string         |    ✅    | Self-assessment of the work completed so far, up to this point: `"poor"`, `"well"`, `"excellent"`. |
-| `reason` | string \| null |    –     | Short note on what you are waiting for. Default `"waiting"`.                                       |
-
-See [`adding-new-tools.md` § "Alias Tools"](adding-new-tools.md) for the delegating-alias pattern.
 
 ### `skills`
 
@@ -947,8 +964,8 @@ To read off availability for any tool:
 
 `ALWAYS_AVAILABLE_TOOLS` (available in every mode): `attempt_completion`,
 `update_todo_list`, `run_slash_command` (🔒), `skills`, `set_task_title`,
-`give_feedback`, `list_background_tasks`, `send_message_to_task`,
-`wait_for_message`, and `describe_tools` — the last of which is additionally
+`give_feedback`, `list_background_tasks`, `send_message`, `reply`, `wait`,
+and `describe_tools` — the last of which is additionally
 gated: `computeToolAccess` removes it from a mode that declares no
 `tools_full_schema`, since a mode with no stubbed tools has nothing to describe.
 Note

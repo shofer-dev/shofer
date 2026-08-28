@@ -1,0 +1,31 @@
+{
+	"name": "reply",
+	"strict": true,
+	"description": "Answer one or more REQUESTS sitting in your mailbox.\n\nYour mailbox digest, in environment_details, lists every request waiting on you and marks the ones you have already read \"awaiting your reply\". Answer every one of them — a request you never answer simply expires, and whoever asked learns nothing.\n\nReplying costs you nothing: it does not end your task, it does not interrupt what you are doing, and you can answer in the same turn you read the question. Answer, then carry on with your own work.\n\nEach item is answered independently, so an id that has already expired fails that one item and the rest of the batch still lands.\n\nNever answer a request with attempt_completion — that would end YOUR task to say one sentence. `reply` is the only way to answer a request.",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"replies": {
+				"description": "One entry per request you are answering. `message_id` is the request's id as shown in your mailbox digest or returned by `wait`; `body` is your answer.",
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"body": {
+							"description": "Your answer, delivered to whoever sent the request.",
+							"type": "string"
+						},
+						"message_id": {
+							"description": "The id of the request you are answering.",
+							"type": "string"
+						}
+					},
+					"required": ["body", "message_id"],
+					"additionalProperties": false
+				}
+			}
+		},
+		"required": ["replies"],
+		"additionalProperties": false
+	}
+}

@@ -147,7 +147,7 @@ The `0 = unlimited` convention is consistent with [`archivedTaskRetentionDays`](
 
 A task is considered **active** if its lifecycle is `"running"` or `"waiting"` — the same predicate used by [`TaskManager.isActive()`](../src/services/task-manager/TaskManager.ts). Tasks in `"idle"`, `"paused"`, `"waiting_input"`, or any terminal state (`"completed"`, `"error"`) do **not** consume a concurrency slot.
 
-Rationale: `"waiting"` tasks (blocked on `wait_for_task` or sync `send_message_to_task`) still hold an LLM context window and count against practical concurrency. `"waiting_input"` tasks (awaiting user approval) are idle — they consume no LLM resources.
+Rationale: `"waiting"` tasks (parked in `wait` on their mailbox, or blocked on `wait_for_task`) still hold an LLM context window and count against practical concurrency. `"waiting_input"` tasks (awaiting user approval) are idle — they consume no LLM resources.
 
 ### Enforcement in `new_task`
 
@@ -316,7 +316,7 @@ This preserves the invariant: background tasks should execute without stealing f
 
 ## Background Task Orchestration Tools
 
-Six tools manage the parent-child relationship for background tasks. `list_background_tasks` and `send_message_to_task` are **always available** (bypass mode filtering); the remaining four are gated by the `subtasks` tool group. `check_task_status`, `wait_for_task`, and `list_background_tasks` are unconditionally auto-approved (read-only queries). `cancel_tasks` and `answer_subtask_question` are gated by the `alwaysAllowSubtasks` toggle. `send_message_to_task` (async) is always auto-approved; sync mode is gated by `alwaysAllowSubtasks`.
+Five tools manage the parent-child relationship for background tasks. `list_background_tasks` is **always available** (bypasses mode filtering); the remaining four are gated by the `subtasks` tool group. `check_task_status`, `wait_for_task`, and `list_background_tasks` are unconditionally auto-approved (read-only queries). `cancel_tasks` and `answer_subtask_question` are gated by the `alwaysAllowSubtasks` toggle. Task-to-task messaging is not among them: `send_message`, `reply` and `wait` are always available, never mode-gated and never toggle-gated ([`task_messaging.md`](task_messaging.md)).
 
 ### `check_task_status`
 

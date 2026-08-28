@@ -831,13 +831,13 @@
 					"list_background_tasks",
 					"cancel_tasks",
 					"answer_subtask_question",
-					"sleep",
 					"sed",
 					"call_mcp_tool_async",
 					"check_mcp_call_status",
 					"wait_for_mcp_call",
-					"send_message_to_task",
-					"wait_for_message",
+					"send_message",
+					"reply",
+					"wait",
 					"describe_tools"
 				]
 			}

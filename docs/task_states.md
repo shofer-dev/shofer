@@ -36,7 +36,7 @@ stateDiagram-v2
     idle --> running: TaskStarted, TaskActive
     running --> waiting_input: TaskInteractive
     waiting_input --> running: TaskActive
-    running --> waiting: setState waiting by wait_for_task or wait_for_mcp_call
+    running --> waiting: setState waiting by wait, wait_for_task or wait_for_mcp_call
     waiting --> running: TaskActive
     running --> idle: TaskIdle
     running --> completed: TaskCompleted, carries rating
@@ -271,6 +271,30 @@ click as one.
 | `"error"`     | no-op (already moved to `error`)                            |
 | `"completed"` | unreachable — the event is not emitted for a completed task |
 
+## `waiting` versus `waiting_input`
+
+Two lifecycles mean "not advancing its own loop", and the difference is **who is
+expected to act next**:
+
+| Lifecycle       | The task is parked on…                                                                                   | It leaves when…                               | Notification badge |
+| --------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | :----------------: |
+| `waiting`       | its **mailbox** (`wait`), a subtask (`wait_for_task`), or an async MCP call (`wait_for_mcp_call`)        | anything is delivered, or the timeout expires |         no         |
+| `waiting_input` | an **ask** — a human's approval or answer, or a parent answering a question a background child routed up | the ask is answered                           |        yes         |
+
+The badge follows from the distinction rather than decorating it: `waiting_input`
+is the only one of the two where a PERSON is being waited on, so it is the only
+one worth interrupting them about. A task in `waiting` has live work elsewhere
+and needs nobody.
+
+`waiting` is also the most RECEPTIVE state a task has, not a busy one:
+`send_message` consults no lifecycle at all, and a task parked in `wait` receives
+its whole box the instant anything lands in it
+([`task_messaging.md`](task_messaging.md)).
+
+Both are **transient**: `sanitizeRestoredState` downgrades them to `idle` on
+restart, because no live `Task` instance can still be parked after the process
+that parked it is gone.
+
 ## Gaps & Areas for Improvement
 
 This section documents gaps, omissions, and areas where the document could be
@@ -291,22 +315,6 @@ which is linked twice:
 - `TaskCompleted` and `TaskAborted` — mentioned in §"Self-Contained Lifecycle
   Events" without links to
   [`events.ts`](../packages/types/src/events.ts).
-
-### `waiting` vs `waiting_input` distinction not explained
-
-The document lists all seven lifecycle values but never explains the semantic
-difference between `waiting` and `waiting_input`. The distinction exists only as
-comments in the source:
-
-- **`waiting_input`**: task is paused waiting for **user** approval or input
-  (e.g., an `ask_followup_question` or tool-approval prompt).
-- **`waiting`**: task is blocked on a **non-user external event** (e.g.,
-  `wait_for_task` on a subtask). See comment in
-  [`history.ts`](../packages/types/src/history.ts#L18).
-
-The doc should include a short paragraph explaining this distinction, as it
-drives different UI treatment (`waiting_input` gets a notification badge,
-`waiting` does not).
 
 ### `RATING_VISUAL` export status
 

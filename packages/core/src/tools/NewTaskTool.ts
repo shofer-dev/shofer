@@ -434,19 +434,8 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					async: false,
 				})
 
-				// Register resolver after createTask so we have the child's taskId.
+				// Register the resolver after createTask so we have the child's taskId.
 				// The child runs asynchronously, so registration completes before any
-				// Peer sync collision check before registration: a task
-				// cannot simultaneously be a blocking child AND a peer sync target.
-				if (provider.hasPendingSyncResolver?.(child.taskId)) {
-					pushToolResult(
-						formatResponse.toolError(
-							`Task ${child.taskId} is already serving a sync request and cannot accept another until it completes.`,
-						),
-					)
-					return
-				}
-
 				// attempt_completion could fire.
 				provider.registerBlockingChildResolver(child.taskId, resolveChildCompletion)
 

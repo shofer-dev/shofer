@@ -1,0 +1,27 @@
+{
+	"name": "wait",
+	"strict": false,
+	"description": "Read your MAILBOX, parking until something arrives if it is empty.\n\nWHAT IT RETURNS: everything in your box, in full — every notification, request and reply, each with the time it has left. If the box already has something in it the tool returns immediately. If it is empty it parks, event-driven, and returns the moment anything is delivered or when the timeout expires. A timeout with an empty box returns an empty list; that is a normal answer, not an error.\n\nWHEN TO CALL IT:\n- wait(timeout_sec=0) — check the box and return at once. Use this when the digest in environment_details shows mail and you want to read it now.\n- wait(in_reply_to=\"<id>\") — you sent a request and cannot continue without the answer.\n- wait(from=[\"<task id>\", ...]) — you are blocked on something specific from particular tasks.\n- wait(timeout_sec=N) — you genuinely need to let time pass. It returns EARLY if mail arrives, which is what you actually wanted.\n\nTHE FILTERS ARE ONLY A WAKE CONDITION. `from` and `in_reply_to` decide WHEN a parked wait returns; they never decide what it returns. You always get the whole box.\n\nWHEN NOT TO CALL IT: if you have other work you can do, do that work instead — the mail keeps. If you have nothing left to do at all, prefer ENDING YOUR TURN over parking here: a message sent with wake restarts you automatically. Parking is for when you must have an answer before your very next step.\n\nNEVER POLL. Do not loop on wait, do not re-check the box repeatedly, and do not call other tools to pass the time. One wait, with a timeout that reflects how long the answer is worth having.\n\nReading a message consumes it: notifications and replies leave your box once returned here. A request stays until you answer it with `reply`.",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"from": {
+				"description": "Wake condition: return as soon as a message from any of these task ids arrives. Does not filter what is returned — you always get the whole box.",
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
+			"in_reply_to": {
+				"description": "Wake condition: return as soon as the reply to this request id arrives. This is the id `send_message` returned for the request. Does not filter what is returned.",
+				"type": "string"
+			},
+			"timeout_sec": {
+				"description": "How many seconds to park when the box is empty. Default 120. Use 0 to check the box and return immediately.",
+				"type": "number"
+			}
+		},
+		"additionalProperties": false,
+		"required": ["from", "in_reply_to", "timeout_sec"]
+	}
+}

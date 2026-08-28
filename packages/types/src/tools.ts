@@ -108,8 +108,6 @@ export const toolParamNames = [
 	"line_ranges",
 	// find_files parameter
 	"pattern",
-	// sleep parameter
-	"seconds",
 	// file tool parameters (rm/mv)
 	"subcommand",
 	"destination",
@@ -155,8 +153,19 @@ export const toolParamNames = [
 	// git_search time range parameters
 	"since",
 	"until",
-	// send_message_to_task parameter
+	// mailbox parameters — send_message / reply / wait (docs/task_messaging.md).
+	// `message`, `text`, `reason` and `title` above are NOT reused: an envelope's
+	// fields have their own names so a parser whitelist entry never means two
+	// things.
 	"timeout_sec",
+	"to",
+	"body",
+	"kind",
+	"subject",
+	"wake",
+	"replies",
+	"from",
+	"in_reply_to",
 	// new_task peer_task_ids parameter
 	"peer_task_ids",
 	// new_task advisory soft-limit parameters
@@ -255,7 +264,6 @@ export type NativeToolArgs = {
 	rename_symbol: { path: string; filePath?: string; line: number; column: number; newName: string }
 	view_image: { path: string; filePath?: string }
 	lsp_search: { query: string; maxResults?: number | null }
-	sleep: { seconds: number }
 	sed: { path: string; pattern: string; replacement: string; isRegex?: boolean | null; global?: boolean | null }
 	call_mcp_tool_async: {
 		server_name: string
@@ -265,18 +273,19 @@ export type NativeToolArgs = {
 	}
 	check_mcp_call_status: { call_id: string }
 	wait_for_mcp_call: { call_ids: string[]; wait?: "all" | "any"; timeout?: number }
-	send_message_to_task: {
-		task_id: string
-		message: string
-		wait?: boolean | null
+	// The mailbox tools (docs/task_messaging.md). `kind` is narrowed to the two
+	// kinds a SENDER may choose: a `reply` is produced by the `reply` tool alone,
+	// never addressed by hand.
+	send_message: {
+		to: string
+		body: string
+		kind?: "notification" | "request" | null
+		subject?: string | null
 		timeout_sec?: number | null
+		wake?: boolean | null
 	}
-	// `wait_for_message` is an alias for attempt_completion. `rating` is required by
-	// the schema (assesses the work done so far); `reason` is optional (defaults to
-	// "waiting"). `rating` is kept optional in this runtime type as a defensive
-	// measure — like attempt_completion, the handler tolerates a missing rating from
-	// non-strict providers and falls back to a default ("well").
-	wait_for_message: { rating?: string; reason?: string }
+	reply: { replies: Array<{ message_id: string; body: string }> }
+	wait: { timeout_sec?: number | null; from?: string[] | null; in_reply_to?: string | null }
 	// Add more tools as they are migrated to native protocol
 }
 

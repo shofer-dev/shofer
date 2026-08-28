@@ -1,6 +1,7 @@
 import type {
 	ExtensionState,
 	ExtensionMessage,
+	Envelope,
 	HistoryItem,
 	TaskState,
 	TaskLike,
@@ -95,14 +96,13 @@ export interface TaskProviderLike<TTask = TaskLike> {
 	/** Register a resolver that a blocking foreground child fires on completion. */
 	registerBlockingChildResolver(childTaskId: string, resolver: (result: string) => void): void
 	/**
-	 * Register a peer sync resolver for a recipient task; the returned Promise
-	 * resolves with the recipient's `attempt_completion` result.
+	 * Deliver an envelope into a task's mailbox — the one door every plane's
+	 * inbound delivery reaches. Hands to a live instance, else rehydrates a
+	 * dormant one; resolves once the envelope is durable and THROWS when there is
+	 * nobody to deliver to (no history, or an `error` lifecycle). Mirrors
+	 * `ShoferProvider.deliverToTask`.
 	 */
-	registerPendingSyncResolver(recipientTaskId: string, initiatorTaskId: string): Promise<string>
-	/** Whether a pending sync resolver exists for the given recipient. */
-	hasPendingSyncResolver(recipientTaskId: string): boolean
-	/** Clear a pending sync resolver without firing it (timeout/abort path). */
-	clearPendingSyncResolver(recipientTaskId: string): void
+	deliverToTask(taskId: string, envelope: Envelope): Promise<Envelope>
 	/** Returns the provider's MCP hub, or `undefined` when MCP is unavailable. */
 	getMcpHub(): McpHub | undefined
 	/** Ensures the global MCP servers directory exists and returns its path. */

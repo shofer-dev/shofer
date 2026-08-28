@@ -13,7 +13,8 @@ file knows is missing.
   cache accounting work (a later pass showed `cacheRead=1024`); the dimmed
   **turn-end report row renders in chat** and the 🧠 badge live-updates
   (watching/passes/cost). What it could NOT reach: no advisory ever cleared the
-  gate, so neither `notify` injection nor `queue` re-trigger was observed. Blockers
+  gate, so neither the advisory delivery nor the finish gate's `wake: true` re-trigger
+  was observed. Blockers
   found, and where they stand:
 
     1. **FIXED — `ForkLlmClient` resolves the handler per call.** Empty `profileRef`
@@ -40,8 +41,8 @@ file knows is missing.
        index-keyed fragments (llm.spec.ts covers the observed shapes).
 
     All three blockers are now fixed, but **no advisory has yet been observed
-    clearing the gate end-to-end**, so `notify` injection and `queue` re-trigger
-    remain unverified against a live host. Keep treating the finish gate as
+    clearing the gate end-to-end**, so the mailbox delivery and the finish gate's
+    `wake: true` re-trigger remain unverified against a live host. Keep treating the finish gate as
     experimental until a live session shows one; it degrades to user-only surfaces
     by design.
 

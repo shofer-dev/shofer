@@ -30,6 +30,9 @@ import {
 	type TerminalActionPromptType,
 	type HistoryItem,
 	type Envelope,
+	type PluginDeliverInput,
+	type PluginMailboxTransport,
+	DEFAULT_MAX_PARALLEL_TASKS,
 	MAILBOX_WAKE_TURN_TEXT,
 	type TraceContext,
 	type TaskInteractionPayload,
@@ -150,7 +153,7 @@ import { TaskHistoryStore } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { buildPluginHostImportMap } from "./pluginHostImportMap"
-import { lastCompletionResult, unknownModeError } from "./pluginAgentResult"
+import { completeEnvelope, lastCompletionResult, taskLimitError, unknownModeError } from "./pluginAgentResult"
 import { PluginPanelManager } from "./PluginPanelManager"
 import { REQUESTY_BASE_URL } from "@shofer/core"
 import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
@@ -256,20 +259,6 @@ export class ShoferProvider
 	 * child calls attempt_completion.
 	 */
 	private blockingChildResolvers: Map<string, (result: string) => void> = new Map()
-
-	/**
-	 * Peer sync resolvers: maps recipient task ID → pending sync request metadata.
-	 * Keyed by the RECIPIENT (the task that must call attempt_completion to answer),
-	 * and storing the initiator (the task that is blocked awaiting the answer) and
-	 * the resolve function. Used by both peer (sync send_message_to_task) and parent
-	 * (new_task) initiators; the AttemptCompletionTool routes by recipient taskId
-	 * and branches on whether the initiator is a peer or the structural parent.
-	 *
-	 * Exactly one sync prompt is in flight per recipient at a time; a second
-	 * concurrent sync request is rejected at registration time.
-	 */
-	private pendingSyncResolvers: Map<string, { initiatorTaskId: string; resolve: (result: string) => void }> =
-		new Map()
 
 	public isViewLaunched = false
 	public settingsImportedAt?: number
@@ -2258,9 +2247,10 @@ export class ShoferProvider
 			// (not in @shofer/core) because it needs the extension's ProviderSettingsManager
 			// + code-index embedder to reach buildApiHandler.
 			aiProvider: this.buildPluginAiProvider(),
-			// P7 — host seam for `ctx.agent.notify` (proactive agent-steering). Wired here
-			// (not in @shofer/core) because it needs the provider's task stack + message
-			// queue; gated on `permissions.agent` inside the manager.
+			// P7 — host seam for `ctx.agent` (the one delivery door, the mailbox-transport
+			// registry, and §14 job control). Wired here (not in @shofer/core) because it
+			// needs the provider's task stack and its dormant-task rehydration; gated on
+			// `permissions.agent` inside the manager.
 			agentProvider: this.buildPluginAgentProvider(),
 			// §5.6 — host seam for `ctx.mcp` (invoke a tool on a connected MCP server).
 			// Wired here because the `McpHub` is the provider's, which is what makes a
@@ -2426,23 +2416,6 @@ export class ShoferProvider
 		}
 	}
 
-	/**
-	 * Build the host {@link PluginAgentProvider} seam that backs a granted plugin's
-	 * `ctx.agent.notify` (P7). Lets a plugin proactively steer the running agent:
-	 *
-	 * - `mode: "spawn"` ⇒ start a **new** task seeded with the message ({@link createTask}).
-	 * - `mode: "queue"` (default) ⇒ enqueue into the target task's message queue (the same
-	 *   {@link MessageQueueService} the webview "Send" uses), so the agent picks it up on its
-	 *   next `ask()`. If the loop has already terminated (e.g. `attempt_completion` set
-	 *   `abort`), the tested {@link Task.cancelAndProcessQueuedMessages} path is kicked so the
-	 *   message isn't stranded.
-	 * - `mode: "interrupt"` ⇒ **reduced** to the same queued-ASAP behavior (no fragile
-	 *   mid-turn injection; see PLUGINS.md).
-	 *
-	 * The target is an explicit `opts.taskId` (resolved against the live task stack) or the
-	 * current task. With no task to steer, it falls back to spawning so a proactive notify is
-	 * never silently dropped.
-	 */
 	/**
 	 * Continue an existing agent session for a plugin `spawn` that carries a
 	 * `sessionId`, delivering `prompt` as the next message.
@@ -2661,47 +2634,95 @@ export class ShoferProvider
 		}
 	}
 
+	/**
+	 * Mailbox transports registered by plugins ({@link PluginAgent.registerMailboxTransport}):
+	 * routes out of this node for envelopes whose `to` no local lookup resolves.
+	 *
+	 * Held on the provider rather than inside {@link buildPluginAgentProvider}'s closure
+	 * because the SENDING side reads it — the `send_message` tool consults the registered
+	 * transports after the local lookup fails — and that is a different caller from the
+	 * plugin that registered it. Insertion order is the offer order, so a plugin loaded
+	 * later cannot silently take over an address an earlier one already claims.
+	 */
+	private readonly mailboxTransports = new Set<PluginMailboxTransport>()
+
+	/**
+	 * The first registered transport that claims `to`, or `undefined` when the address
+	 * belongs to no route off this node.
+	 *
+	 * `canRoute` is a plugin's synchronous predicate, so a plugin that throws from it must
+	 * not take the send down with it: a broken transport is skipped and the next one is
+	 * asked, which degrades to "unroutable" rather than to "sending is broken".
+	 */
+	public findMailboxTransport(to: string): PluginMailboxTransport | undefined {
+		for (const transport of this.mailboxTransports) {
+			try {
+				if (transport.canRoute(to)) return transport
+			} catch (error) {
+				this.log(
+					`A registered mailbox transport threw from canRoute(${to}); skipping it: ` +
+						`${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+		}
+		return undefined
+	}
+
+	/**
+	 * Build the host {@link PluginAgentProvider} seam that backs a granted plugin's
+	 * `ctx.agent` (P7): the ONE delivery door, the mailbox-transport registry, and §14 job
+	 * control.
+	 *
+	 * There is no delivery MODE here any more, and its absence is the design: what four
+	 * modes expressed — wake me now, wait for my next turn, drop it if I am idle, make it
+	 * its own task — is carried by fields on the envelope the caller fills in, so the
+	 * decision belongs to whoever knows what the message is worth rather than to a
+	 * subscription configured once.
+	 */
 	private buildPluginAgentProvider(): PluginAgentProvider {
 		return {
-			notify: async (message: string, opts): Promise<void> => {
-				const mode = opts?.mode ?? "notify"
-				// spawn: a self-contained new task seeded with the message.
-				if (mode === "spawn") {
-					await this.createTask(message)
-					return
+			/**
+			 * The one door (`task_messaging.md`). Resolve the target task, complete the
+			 * envelope with the fields only the host may set, and hand it to that task's
+			 * mailbox.
+			 *
+			 * Resolution order is deliberate: an explicit `taskId` is looked up on the LIVE
+			 * stack first, so a task this provider holds but has not registered in
+			 * `TaskManager` (an AgentApi-created one) is delivered to in place rather than
+			 * rehydrated into a second instance. Everything else goes through
+			 * {@link deliverToTask}, which owns the managed-instance lookup and the whole
+			 * dormant-task rehydration sequence.
+			 *
+			 * With NO target it THROWS. The old `notify` fell back to starting a task, and
+			 * that fallback is exactly what one door removes: a delivery must never become a
+			 * billed spawn nobody asked for, and a plugin that wants a task says so with
+			 * `spawn`.
+			 */
+			deliver: async (input: PluginDeliverInput): Promise<Envelope> => {
+				const { taskId } = input
+				const live = taskId
+					? this.shoferStack.find((t) => t.taskId === taskId)
+					: (this.getCurrentTask() ?? undefined)
+				const to = taskId ?? live?.taskId
+				if (!to) {
+					throw new Error(
+						"ctx.agent.deliver: this host has no current task and the envelope named none — " +
+							"there is nobody to deliver to. Pass `taskId`, or start a task with ctx.agent.spawn.",
+					)
 				}
-				const target =
-					(opts?.taskId ? this.shoferStack.find((t) => t.taskId === opts.taskId) : undefined) ??
-					this.getCurrentTask()
-
-				// notify: one-way event → the target's notification queue, drained into the
-				// system prompt on its next real agent request. Delivered ONLY to a task whose
-				// loop is running (drains on the next request); if there is no live target we
-				// drop it by design — notifications are for in-flight steering, not cold start.
-				if (mode === "notify") {
-					if (!target) return
-					target.peerNotificationQueue.push({
-						senderTaskId: "",
-						senderTitle: opts?.source ?? "notification",
-						message,
-						timestamp: Date.now(),
-						kind: "notification",
-						source: opts?.source,
-					})
-					return
+				// `completeEnvelope` fills the three fields that are the HOST's — `to`,
+				// `sent_at`, and `id` when the caller supplied none (a caller owning an
+				// upstream idempotency key keeps it, or every retry becomes a redelivery).
+				const envelope = completeEnvelope(input, to, () => crypto.randomUUID())
+				if (live && !live.abandoned) {
+					return await live.deliver(envelope)
 				}
-
-				// queue / interrupt: use the user-message queue.
-				if (!target) {
-					// Nothing to steer — don't drop the message; start a task with it instead.
-					await this.createTask(message)
-					return
-				}
-				target.messageQueueService.addMessage(message)
-				// interrupt: Send-Now semantics — abort the current turn (same instance) and
-				// resume with the queued message. queue: leave it for the next turn's drain.
-				if (mode === "interrupt") {
-					await target.cancelAndProcessQueuedMessages()
+				return await this.deliverToTask(to, envelope)
+			},
+			registerMailboxTransport: (transport: PluginMailboxTransport): (() => void) => {
+				this.mailboxTransports.add(transport)
+				return () => {
+					this.mailboxTransports.delete(transport)
 				}
 			},
 			// §14: awaitable, cancellable job control. Starts a task and returns a handle whose
@@ -2715,6 +2736,16 @@ export class ShoferProvider
 				if (opts?.mode) {
 					await this.assertModeExists(opts.mode)
 				}
+				// The SAME global parallel-task limit `new_task` enforces. A plugin
+				// spawning per inbound event (a `spawn` bus subscription) is the one
+				// caller that can produce unbounded concurrency without an agent ever
+				// deciding to, so the limit has to hold on this seam too — otherwise a
+				// busy selector is a fork bomb the operator configured by accident.
+				// Refused with a well-known error name rather than a message, because
+				// the caller's correct reaction is to fall back (deliver the event as
+				// an ordinary notification), which it can only do if it can tell this
+				// refusal from a real failure.
+				await this.assertParallelTaskCapacity()
 				// `completionSchema` reshapes the task's `attempt_completion` tool so a
 				// provider with constrained decoding enforces the caller's output
 				// contract at decode time. `mode` picks the tool set the task starts
@@ -3824,6 +3855,24 @@ export class ShoferProvider
 				customModes.map((m) => m.slug),
 			)
 		}
+	}
+
+	/**
+	 * Refuse a task start that would exceed the global parallel-task limit
+	 * (`maxParallelTasks`, `parallelism.md`) — the same limit and the same default
+	 * `new_task` applies, read from the same place, so a plugin's spawn and an agent's
+	 * cannot disagree about how much concurrency this host allows. `0` disables it.
+	 *
+	 * Throws with `name === {@link PLUGIN_TASK_LIMIT_ERROR}` so a caller can distinguish
+	 * "at capacity, try something else" from a genuine failure to start a task; the
+	 * message still names the numbers for a human reading the log.
+	 */
+	private async assertParallelTaskCapacity(): Promise<void> {
+		const limit = this.contextProxy.getValue("maxParallelTasks") ?? DEFAULT_MAX_PARALLEL_TASKS
+		if (limit <= 0) return
+		const active = this.taskManager.countActiveTasks()
+		if (active < limit) return
+		throw taskLimitError(active, limit)
 	}
 
 	/**
@@ -6251,67 +6300,6 @@ export class ShoferProvider
 	 */
 	public registerBlockingChildResolver(childTaskId: string, resolver: (result: string) => void): void {
 		this.blockingChildResolvers.set(childTaskId, resolver)
-	}
-
-	/**
-	 * Register a peer sync resolver for a recipient task. Returns a Promise that
-	 * resolves with the recipient's attempt_completion result when answered.
-	 *
-	 * Rejects if a sync resolver is already registered for this recipient
-	 * (exactly one sync prompt per recipient at a time).
-	 */
-	public registerPendingSyncResolver(recipientTaskId: string, initiatorTaskId: string): Promise<string> {
-		if (this.pendingSyncResolvers.has(recipientTaskId)) {
-			return Promise.reject(
-				new Error(
-					`Task ${recipientTaskId} is already serving a sync request and cannot accept another until it completes.`,
-				),
-			)
-		}
-		return new Promise<string>((resolve) => {
-			this.pendingSyncResolvers.set(recipientTaskId, { initiatorTaskId, resolve })
-		})
-	}
-
-	/**
-	 * Check if a pending sync resolver exists for the given recipient task ID.
-	 */
-	public hasPendingSyncResolver(recipientTaskId: string): boolean {
-		return this.pendingSyncResolvers.has(recipientTaskId)
-	}
-
-	/**
-	 * Clear a pending sync resolver without firing it (timeout/abort path).
-	 */
-	public clearPendingSyncResolver(recipientTaskId: string): void {
-		this.pendingSyncResolvers.delete(recipientTaskId)
-	}
-
-	/**
-	 * Resolve a pending sync request for a recipient and deliver the result to the initiator.
-	 * Returns true if a sync (peer) resolver was found and fired; false if only a blocking-child
-	 * resolver (parent/child) was handled, or if no resolver was found.
-	 *
-	 * This is the generalized routing point called by AttemptCompletionTool — it checks
-	 * peer sync resolvers first, then falls through to the existing parent/child path.
-	 */
-	public async resolvePendingSyncForRecipient(params: {
-		recipientTaskId: string
-		completionResult: string
-	}): Promise<boolean> {
-		const { recipientTaskId, completionResult } = params
-
-		const peerEntry = this.pendingSyncResolvers.get(recipientTaskId)
-		if (peerEntry) {
-			this.pendingSyncResolvers.delete(recipientTaskId)
-			this.debug(
-				`[resolvePendingSyncForRecipient] peer path: recipientTaskId=${recipientTaskId} → initiator=${peerEntry.initiatorTaskId}`,
-			)
-			peerEntry.resolve(completionResult)
-			return true
-		}
-
-		return false
 	}
 
 	/**

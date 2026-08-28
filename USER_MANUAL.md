@@ -208,6 +208,9 @@ The model can spawn background children via `new_task` with `is_background: true
 | ------------------------- | ------------------------------------------ |
 | `check_task_status`       | Query a child's state without blocking     |
 | `wait_for_task`           | Block until one or more children finish    |
+| `send_message`            | Put an envelope in another task's mailbox  |
+| `reply`                   | Answer a request in this task's mailbox    |
+| `wait`                    | Read this task's mailbox, parking for mail |
 | `list_background_tasks`   | List all running children                  |
 | `cancel_tasks`            | Stop children early                        |
 | `answer_subtask_question` | Answer a question a background child asked |

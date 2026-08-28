@@ -23,6 +23,15 @@ import { languagesSchema } from "./vscode.js"
 export const DEFAULT_WRITE_DELAY_MS = 1000
 
 /**
+ * How many parallel tasks a host allows when `maxParallelTasks` is unset.
+ *
+ * Named here rather than at each gate because there are two of them — the agent's
+ * `new_task` and a plugin's `ctx.agent.spawn` — and a host that enforced two different
+ * ceilings would let a plugin outspend the limit its own operator set.
+ */
+export const DEFAULT_MAX_PARALLEL_TASKS = 10
+
+/**
  * Terminal output preview size options for persisted command output.
  *
  * Controls how much command output is kept in memory as a "preview" before
@@ -261,8 +270,9 @@ export const globalSettingsSchema = z.object({
 	 * Maximum number of parallel (non-terminal, non-idle) tasks allowed globally.
 	 * When the number of running/waiting tasks reaches this limit, new_task
 	 * returns an error asking the caller to wait and retry or accomplish the
-	 * work through other means. Set to 0 for unlimited.
-	 * @default 10
+	 * work through other means, and a plugin's `ctx.agent.spawn` is refused with
+	 * {@link PLUGIN_TASK_LIMIT_ERROR}. Set to 0 for unlimited.
+	 * Unset falls back to {@link DEFAULT_MAX_PARALLEL_TASKS}.
 	 */
 	maxParallelTasks: z.number().int().min(0).nullish(),
 

@@ -1,0 +1,210 @@
+/**
+ * `send_message` — put an envelope in another task's mailbox.
+ *
+ * The one send verb. It replaces the sync/async split of the old peer-messaging
+ * tool with a single non-blocking send whose only variable is whether the sender
+ * expects an answer (`kind`), and it removes the BUSY GATE entirely: the
+ * recipient's lifecycle is never consulted, because a mailbox is exactly the
+ * thing that makes a recipient's state irrelevant to a sender.
+ *
+ * The full contract, including the validation order this file implements, is
+ * `docs/task_messaging.md` § "The three tools".
+ */
+
+import { randomUUID } from "crypto"
+
+import { TelemetryService } from "@shofer/telemetry"
+
+import {
+	MAILBOX_NOTIFICATION_TIMEOUT_SEC,
+	MAILBOX_REQUEST_TIMEOUT_SEC,
+	deriveSubject,
+	type Envelope,
+	type ToolUse,
+} from "@shofer/types"
+
+import { BaseTool, ToolCallbacks } from "./BaseTool.js"
+import { getManagedTaskTitle } from "./helpers/managedTaskTitle.js"
+import { Task } from "../task/Task.js"
+import { formatResponse } from "../prompts/responses.js"
+
+interface SendMessageParams {
+	to: string
+	body: string
+	kind?: "notification" | "request" | null
+	subject?: string | null
+	timeout_sec?: number | null
+	wake?: boolean | null
+}
+
+/** Collapse whitespace and clip for a Sequence-view arrow label. */
+const vizTruncate = (value: string | undefined, max = 80): string => {
+	const s = (value ?? "").replace(/\s+/g, " ").trim()
+	return s.length > max ? `${s.slice(0, max - 1)}…` : s
+}
+
+export class SendMessageTool extends BaseTool<"send_message"> {
+	readonly name = "send_message" as const
+
+	async execute(params: SendMessageParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+		const { to, body } = params
+		const { askApproval, handleError, pushToolResult } = callbacks
+
+		try {
+			const kind = params.kind ?? "notification"
+			// Per-kind defaults (decision 5): a request expects an answer, so it
+			// wakes and expires quickly; a notification does neither.
+			const wake = params.wake ?? kind === "request"
+			const timeoutSec =
+				params.timeout_sec ??
+				(kind === "request" ? MAILBOX_REQUEST_TIMEOUT_SEC : MAILBOX_NOTIFICATION_TIMEOUT_SEC)
+
+			if (!to) {
+				pushToolResult(formatResponse.toolError("Missing required parameter 'to'."))
+				return
+			}
+			if (typeof body !== "string" || body.length === 0) {
+				pushToolResult(formatResponse.toolError("Missing required parameter 'body'."))
+				return
+			}
+
+			// --- Validation, in the documented order ---
+
+			// 1. Not self. A task cannot mail itself: it would read its own message
+			//    as if it came from somewhere, and no coordination exists to model.
+			if (to === task.taskId) {
+				pushToolResult(formatResponse.toolError("Cannot send a message to yourself."))
+				return
+			}
+
+			const provider = task.providerRef.deref()
+			if (!provider) {
+				pushToolResult(formatResponse.toolError("Provider reference lost"))
+				return
+			}
+
+			// 2. `to` resolves — a live instance, or resumable history. A remote id
+			//    is routed by a registered mailbox transport, which does not exist
+			//    yet (step 5): until it does, an id this host cannot resolve is
+			//    reported as unreachable rather than silently accepted.
+			const effectiveRootId = task.rootTaskId ?? task.taskId
+			const liveTarget = provider.taskManager.getManagedTaskInstance(to)
+			let targetRootId: string | undefined
+			if (liveTarget) {
+				targetRootId = liveTarget.rootTaskId ?? liveTarget.taskId
+			} else {
+				try {
+					const { historyItem } = await provider.getTaskWithId(to)
+					targetRootId = historyItem.rootTaskId ?? historyItem.id
+				} catch {
+					pushToolResult(
+						formatResponse.toolError(
+							`Task ${to} is not reachable from this host. Check the id with ` +
+								`list_background_tasks(scope="peers").`,
+						),
+					)
+					return
+				}
+			}
+
+			// 3. Same tree. A root id is the boundary of a conversation; crossing it
+			//    is a remote send, which the mesh transport will own.
+			if (targetRootId !== effectiveRootId) {
+				pushToolResult(formatResponse.toolError(`Task ${to} does not share your root task.`))
+				return
+			}
+
+			// 4. The in-process ACL. The root is omnipotent inside its own tree; a
+			//    sub-task may address only its granted peers.
+			if (task.rootTaskId && (!task.knownPeers || !task.knownPeers.has(to))) {
+				pushToolResult(formatResponse.toolError(`Task ${to} is not in your allowed peer set.`))
+				return
+			}
+
+			// NO BUSY GATE. The recipient's lifecycle decides only how the delivery
+			// is announced (Task.deliver), never whether it is accepted.
+
+			const subject = params.subject ? params.subject.slice(0, 120) : deriveSubject(body)
+			const now = Date.now()
+			const envelope: Envelope = {
+				id: randomUUID(),
+				from: task.taskId,
+				to,
+				kind,
+				subject,
+				body,
+				deadline: now + Math.max(1, Math.round(timeoutSec)) * 1000,
+				wake,
+				sent_at: now,
+				plane: "local",
+			}
+
+			const completeMessage = JSON.stringify({
+				tool: "sendMessage",
+				task_id: to,
+				task_title: getManagedTaskTitle(task, to),
+				message: body,
+				kind,
+				subject,
+				envelope_id: envelope.id,
+				timeout_sec: timeoutSec,
+			})
+			const didApprove = await askApproval("tool", completeMessage)
+			if (!didApprove) {
+				return
+			}
+
+			// 5. The box itself. `deliverToTask` hands to a live instance or
+			//    rehydrates a dormant one, and throws for a full box, an errored
+			//    task, or one with no history — every one of which is reported to
+			//    the sender rather than swallowed.
+			try {
+				await provider.deliverToTask(to, envelope)
+			} catch (error) {
+				pushToolResult(
+					formatResponse.toolError(
+						`Could not deliver to task ${to}: ${error instanceof Error ? error.message : String(error)}`,
+					),
+				)
+				return
+			}
+
+			await task.emitTaskInteraction({
+				fromTaskId: task.taskId,
+				toTaskId: to,
+				kind: "message",
+				label: vizTruncate(subject),
+				async: true,
+			})
+
+			try {
+				TelemetryService.instance.captureMailboxSent(task.taskId, { kind, plane: "local", wake })
+			} catch {
+				// non-fatal
+			}
+
+			const title = getManagedTaskTitle(task, to)
+			pushToolResult(
+				`Sent ${kind} ${envelope.id} to ${to}${title ? ` ("${title}")` : ""} ("${subject}"); ` +
+					`expires in ${timeoutSec}s.` +
+					(kind === "request"
+						? ` Call wait(in_reply_to="${envelope.id}") if you need the answer before you can continue.`
+						: ""),
+			)
+		} catch (error) {
+			await handleError("sending a message", error instanceof Error ? error : new Error(String(error)))
+		}
+	}
+
+	override async handlePartial(task: Task, block: ToolUse<"send_message">): Promise<void> {
+		const partialMessage = JSON.stringify({
+			tool: "sendMessage",
+			task_id: block.params.to ?? "",
+			message: block.params.body ?? "",
+			kind: block.params.kind ?? "notification",
+		})
+		await task.ask("tool", partialMessage, block.partial).catch(() => {})
+	}
+}
+
+export const sendMessageTool = new SendMessageTool()

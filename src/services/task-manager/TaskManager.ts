@@ -328,7 +328,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 	/**
 	 * "Active" = the task is doing work: running its own loop, or blocked waiting
-	 * on another task (wait_for_task / blocking new_task / sync send_message_to_task).
+	 * on another task (wait_for_task / blocking new_task) or on its mailbox (`wait`).
 	 * Idle, waiting_input (waiting on the user), paused, and terminal states are
 	 * NOT active. `activeTimeMs` accumulates active wall-clock time and excludes
 	 * only idle-equivalent time — matching the Stats "runtime" pie.

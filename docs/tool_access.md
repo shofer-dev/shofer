@@ -376,9 +376,9 @@ The check order documented in §Decision rule describes
 deny → tools_allowed → groups → false. The actual implementation in
 [`isToolAllowedForMode()`](../packages/core/src/tools/validateToolUse.ts:200) has a
 fast-path before any of those checks: `ALWAYS_AVAILABLE_TOOLS` (comprising
-`attempt_completion`, `describe_tools`, `wait_for_message`, `update_todo_list`,
+`attempt_completion`, `describe_tools`, `update_todo_list`,
 `run_slash_command`, `skills`, `set_task_title`, `give_feedback`,
-`list_background_tasks`, and `send_message_to_task`) unconditionally returns
+`list_background_tasks`, `send_message`, `reply`, and `wait`) unconditionally returns
 `true`. This means these ten tools always pass mode-level checks regardless of
 `tools`, `tools_allowed`, or `tools_denied`. `describe_tools` is the one
 qualified member: it passes the runtime check everywhere, but `computeToolAccess`

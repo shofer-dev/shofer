@@ -19,7 +19,7 @@ Shofer uses a single unified ToolGroup system as the **single source of truth** 
 | --- | --------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | 1   | `read`          | Read-only data access                                | `read_file`, `grep_search`, `list_files`, `rag_search`, `ide_file_read`, `ide_get_viewport_state` |
 | 2   | `write`         | Content mutations — file creation, editing, patching | `apply_diff`, `write_to_file`, `insert_edit`, `rename_symbol`                                     |
-| 3   | `execute`       | System command execution                             | `execute_command`, `read_command_output`, `sleep`, `ide_panel_open`, `ide_editor_goto_line`       |
+| 3   | `execute`       | System command execution                             | `execute_command`, `read_command_output`, `ide_panel_open`, `ide_editor_goto_line`                |
 | 4   | `browser`       | Browser automation and web page control              | `browser_navigate`, `browser_click`, `browser_screenshot`, `browser_read_page`                    |
 | 5   | `mcp`           | MCP protocol tools                                   | `use_mcp_tool`, `access_mcp_resource`                                                             |
 | 6   | `mode`          | Mode switching                                       | `switch_mode`                                                                                     |
@@ -65,7 +65,7 @@ Each native tool is assigned to a group in [`TOOL_GROUPS`](../packages/types/src
 export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
     read:        { tools: ["read_file", "grep_search", ...] },
     write:       { tools: ["apply_diff", "write_to_file", ...], customTools: [...] },
-    execute:     { tools: ["execute_command", "read_command_output", "sleep"] },
+    execute:     { tools: ["execute_command", "read_command_output"] },
     browser:     { tools: [] },  // external LM tools from browser-tools
     mcp:         { tools: ["use_mcp_tool", "access_mcp_resource", "call_mcp_tool_async", "check_mcp_call_status", "wait_for_mcp_call"] },
     mode:        { tools: ["switch_mode"] },
@@ -247,7 +247,7 @@ flowchart TD
 
 These tools bypass mode filtering entirely, defined in the [`ALWAYS_AVAILABLE_TOOLS`](../packages/types/src/tool.ts) constant:
 
-`attempt_completion`, `wait_for_message`, `update_todo_list`, `run_slash_command`, `skills`, `set_task_title`, `give_feedback`, `list_background_tasks`, `send_message_to_task`, `describe_tools`
+`attempt_completion`, `update_todo_list`, `run_slash_command`, `skills`, `set_task_title`, `give_feedback`, `list_background_tasks`, `send_message`, `reply`, `wait`, `describe_tools`
 
 `describe_tools` is the one member with a further condition: it belongs to the constant so that a mode which tiers its tool schemas (`tools_full_schema` — see [`tool_access.md`](tool_access.md)) gets it without listing it, and `computeToolAccess` removes it again for a mode that declares no tiering, which has no stubbed tool to describe.
 

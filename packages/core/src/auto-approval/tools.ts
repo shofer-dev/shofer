@@ -39,7 +39,6 @@ export const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	moveFile: "file",
 	insertEdit: "insert_edit",
 	renameSymbol: "rename_symbol",
-	sleep: "sleep",
 
 	// mode group
 	switchMode: "switch_mode",
@@ -54,7 +53,9 @@ export const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	answerSubtaskQuestion: "answer_subtask_question",
 
 	// mode-independent always-available (not in TOOL_GROUPS.subtasks — falls through to "uncategorized" for auto-approval)
-	sendMessageToTask: "send_message_to_task",
+	sendMessage: "send_message",
+	reply: "reply",
+	wait: "wait",
 	describeTools: "describe_tools",
 
 	// questions group

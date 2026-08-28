@@ -934,7 +934,9 @@ export interface ShoferSayTool {
 		| "listBackgroundTasks"
 		| "cancelTasks"
 		| "answerSubtaskQuestion"
-		| "sendMessageToTask"
+		| "sendMessage"
+		| "reply"
+		| "wait"
 		| "getErrors"
 		| "getChangedFiles"
 		| "getProjectSetupInfo"
@@ -952,7 +954,6 @@ export interface ShoferSayTool {
 		| "callMcpToolAsync"
 		| "checkMcpCallStatus"
 		| "waitForMcpCall"
-		| "sleep"
 		| "describeTools"
 	path?: string
 	/** For `removeFile` / `moveFile`: the rm/mv subcommand. */
@@ -1036,10 +1037,25 @@ export interface ShoferSayTool {
 	task_ids?: string[]
 	task_title?: string
 	task_titles?: string[]
-	/** For `sendMessageToTask`: the message body sent to the peer task. */
+	/** For `sendMessage`: the envelope body. */
 	message?: string
 	wait?: "all" | "any"
 	timeout?: number
+	// Mailbox rows (`sendMessage` / `reply` / `wait` — docs/task_messaging.md).
+	/** For `sendMessage`: the envelope kind the sender chose. */
+	kind?: "notification" | "request"
+	/** For `sendMessage`: the envelope subject, supplied or derived from the body. */
+	subject?: string
+	/** For `sendMessage`: the minted envelope id, so the row can be correlated with a reply. */
+	envelope_id?: string
+	/** For `sendMessage` / `wait`: seconds until the deadline / the park's timeout. */
+	timeout_sec?: number
+	/** For `reply`: one entry per answered request. */
+	replies?: Array<{ message_id: string; body: string; error?: string }>
+	/** For `wait`: the `from` wake condition, when one was given. */
+	from_ids?: string[]
+	/** For `wait`: the `in_reply_to` wake condition, when one was given. */
+	in_reply_to?: string
 	results?: Array<{
 		task_id: string
 		title?: string

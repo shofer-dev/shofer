@@ -340,11 +340,13 @@ changes but always sees the latest text.
   end-to-end. Send Now is a _soft_ variant of that flow that avoids the
   final `abortTask()`/`dispose()` step.
 - [task_states.md](task_states.md) — Task lifecycle and focus model.
-- [plugin_system.md](plugin_system.md) — the host plugin API. `ctx.agent.notify`
-  (`PluginAgentNotifyOptions`) exposes delivery modes that drive this queue: `queue` →
-  `addMessage`; `interrupt` → `addMessage` + `cancelAndProcessQueuedMessages` (Send Now). Any
-  out-of-process event source that steers an agent does so through these core paths. (The `notify`
-  mode uses the separate `peerNotificationQueue`, not this queue.)
+- [plugin_system.md](plugin_system.md) — the host plugin API. A plugin does NOT drive this
+  queue: `ctx.agent.deliver` puts an envelope in the recipient's MAILBOX, which is a
+  different mechanism with a different audience — see
+  [`task_messaging.md`](task_messaging.md). **A human message is a turn; an agent's message
+  is an envelope.** The two meet at exactly one point: a `wake` delivery to a stopped loop
+  enqueues ONE synthesized user turn here and kicks `cancelAndProcessQueuedMessages` — the
+  tested Send-Now path, reused rather than reimplemented.
 
 ## Gaps, Issues & Improvement Areas
 

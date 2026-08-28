@@ -5,7 +5,7 @@ This document describes four visualizations for a Shofer Task and its subtask tr
 1. **Tree** — hierarchical view showing parent/child task relationships under a common root, like `TaskSelector` renders.
 2. **Sequence** — a lifeline-based sequence diagram showing task-to-task communication (spawn, message, await, answer, cancel, question) across the task tree.
 3. **Trace** — a Chrome DevTools Network-panel-style waterfall for a single task, showing every API request and tool execution on a horizontal time axis.
-4. **Stats** — a donut chart breaking down the focused task's active time by phase (model wait, thinking, streaming, tool execution, waiting for task, sleeping, overhead).
+4. **Stats** — a donut chart breaking down the focused task's active time by phase (model wait, thinking, streaming, tool execution, waiting, overhead).
 
 The Trace and Stats share a common data model: offsets from a per-task `timelineOriginMs` recorded on each `api_req_finished` message. The Tree and Sequence draw on task identity (`taskId`/`parentTaskId`/`rootTaskId`) and inter-task interaction events.
 
@@ -103,14 +103,15 @@ Inter-task communication is extracted from tool invocations at execution time an
 
 See the [`TaskInteractionPayload`](#task-interaction-events) shape under Data Model. Each tool maps to a kind:
 
-| Tool                      | Kind       | Description                            |
-| ------------------------- | ---------- | -------------------------------------- |
-| `new_task`                | `spawn`    | Parent → child creation                |
-| `send_message_to_task`    | `message`  | Task → peer communication              |
-| `wait_for_task`           | `await`    | Caller blocks on target                |
-| `answer_subtask_question` | `answer`   | Parent answers child's question        |
-| `cancel_tasks`            | `cancel`   | Parent terminates child                |
-| `ask_followup_question`   | `question` | Child asks its parent (child → parent) |
+| Tool                      | Kind       | Description                             |
+| ------------------------- | ---------- | --------------------------------------- |
+| `new_task`                | `spawn`    | Parent → child creation                 |
+| `send_message`            | `message`  | An envelope into another task's mailbox |
+| `reply`                   | `answer`   | An answer to a request in the mailbox   |
+| `wait_for_task`           | `await`    | Caller blocks on target                 |
+| `answer_subtask_question` | `answer`   | Parent answers child's question         |
+| `cancel_tasks`            | `cancel`   | Parent terminates child                 |
+| `ask_followup_question`   | `question` | Child asks its parent (child → parent)  |
 
 ### Rendering
 
@@ -183,8 +184,7 @@ A request is split into phases, and tool spans into their own categories:
 | **Streaming response** | generation: `genStartOffsetMs` → request end                                          | green  |
 | **Tool execution**     | non-blocking local `ToolSpan`s                                                        | orange |
 | **MCP calls**          | `ToolSpan`s named `mcp:<server>/<tool>` (the MCP dispatch path)                       | indigo |
-| **Waiting for task**   | `ToolSpan.waitsForTask` (wait_for_task, blocking new_task, sync send_message_to_task) | cyan   |
-| **Sleeping**           | the `sleep` tool                                                                      | yellow |
+| **Waiting**            | `ToolSpan.waitsForTask` (`wait` on the mailbox, `wait_for_task`, blocking `new_task`) | cyan   |
 | **Overhead**           | remainder — see below                                                                 | gray   |
 
 Overlapping spans are resolved by painting them onto one offset axis with priority (tools > request phases) and reading back non-overlapping per-category totals.
@@ -303,8 +303,8 @@ interface ToolSpan {
 	 *  task's taskId.  Used by the Sequence view for spawn arrows. */
 	spawnedTaskId?: string
 	/** True when this span represents the task *blocking on another task* rather
-	 *  than doing its own work: `wait_for_task`, a foreground (blocking)
-	 *  `new_task`, or a sync (`wait=true`) `send_message_to_task`. Rendered as the
+	 *  than doing its own work: `wait` on its mailbox, `wait_for_task`, or a
+	 *  foreground (blocking) `new_task`. Rendered as the
 	 *  "Waiting for task" category in the Stats/Trace views. */
 	waitsForTask?: boolean
 }
@@ -329,7 +329,7 @@ interface TaskInteractionPayload {
 }
 ```
 
-Extracted from tool invocations in `presentAssistantMessage` (`maybeRecordTaskInteraction`, after the tool dispatch): `new_task` → `spawn`, `send_message_to_task` → `message`, `wait_for_task` → `await`, `answer_subtask_question` → `answer`, `cancel_tasks` → `cancel`, `ask_followup_question` → `question` (child → parent, only when the task has a parent). `rootOffsetMs` is filled in by `Task.emitTaskInteraction` from the root task's origin — all tasks in the host share one `performance.now()` clock, so origins are directly comparable.
+Extracted from tool invocations in `presentAssistantMessage` (`maybeRecordTaskInteraction`, after the tool dispatch): `new_task` → `spawn`, `wait_for_task` → `await`, `answer_subtask_question` → `answer`, `cancel_tasks` → `cancel`, `ask_followup_question` → `question` (child → parent, only when the task has a parent). The mailbox tools are the exception: `send_message` → `message` and `reply` → `answer` are emitted by their own handlers at the moment the envelope is ACCEPTED, because a refused delivery must draw no arrow and only the handler knows which happened. `rootOffsetMs` is filled in by `Task.emitTaskInteraction` from the root task's origin — all tasks in the host share one `performance.now()` clock, so origins are directly comparable.
 
 ### Invariants
 
@@ -468,8 +468,8 @@ dispatched tool that produces a result is captured exactly once). `toolName =
 block.name`, timing from a `toolSpanStartedAt` stamped just before the dispatch
 switch, `isError` derived from the `{status:"error"}` result shape,
 `spawnedTaskId = shofer.childTaskId` for `new_task`, and `waitsForTask = true`
-for blocking inter-task tools (`wait_for_task`, a foreground `new_task`, or a
-sync `send_message_to_task`). `maybeRecordTaskInteraction()` runs after the
+for tools that are the agent WAITING (`wait` on the mailbox, `wait_for_task`, or
+a foreground `new_task`). `maybeRecordTaskInteraction()` runs after the
 dispatch switch to emit the `task_interaction` events (§ Sequence).
 
 **MCP tools** run through a separate dispatch (`useMcpToolTool.handle` with its
@@ -578,7 +578,7 @@ execute_command
 
 #### Sequence — Interaction Failures
 
-`TaskInteractionPayload` carries an optional `isError` field for failed inter-task operations (e.g., `cancel_tasks` that couldn't find the target, `send_message_to_task` rejected because the target was busy). Failed interactions render as red dashed arrows instead of solid colored arrows.
+`TaskInteractionPayload` carries an optional `isError` field for failed inter-task operations (e.g., `cancel_tasks` that couldn't find the target). Failed interactions render as red dashed arrows instead of solid colored arrows.
 
 ```typescript
 interface TaskInteractionPayload {

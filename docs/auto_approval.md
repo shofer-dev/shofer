@@ -126,13 +126,15 @@ either harmless meta-operations or purely informational queries against in-memor
 
 ### Meta-Operations
 
-| Tool               | Rationale                                                                                                                                                                                                                                                                          |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `update_todo_list` | Updates the task checklist — UI-only, no side effects.                                                                                                                                                                                                                             |
-| `skills`           | Loads pre-defined instructions — skills must be user-installed.                                                                                                                                                                                                                    |
-| `set_task_title`   | Renames the task in UI and history — non-destructive.                                                                                                                                                                                                                              |
-| `give_feedback`    | Appends a feedback line to the extension output channel.                                                                                                                                                                                                                           |
-| `sleep`            | Pauses execution for a fixed delay — no I/O. Note: it is in `TOOL_GROUPS.execute`, but is approved **unconditionally**, independent of `alwaysAllowExecute`. Gating a harmless pause would only prompt the user on every delay (and, without a chat row, look like a silent hang). |
+| Tool               | Rationale                                                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `update_todo_list` | Updates the task checklist — UI-only, no side effects.                                                                     |
+| `skills`           | Loads pre-defined instructions — skills must be user-installed.                                                            |
+| `set_task_title`   | Renames the task in UI and history — non-destructive.                                                                      |
+| `give_feedback`    | Appends a feedback line to the extension output channel.                                                                   |
+| `send_message`     | Puts an envelope in another task's mailbox. No side effect on the sender; the recipient decides whether and how to answer. |
+| `reply`            | Answers a request the task already holds. Not terminal, and it costs the replier nothing.                                  |
+| `wait`             | Reads this task's mailbox, blocking only the caller's own loop under a mandatory timeout.                                  |
 
 ### Inter-Task Questions
 
@@ -175,12 +177,11 @@ or network and mutate nothing:
 > uncontrolled task-tree growth while still letting the model inspect tasks it has
 > already spawned.
 
-> **`send_message_to_task` is split by mode:** the **async** (fire-and-forget,
-> `wait: false`) form is approved **unconditionally** — it only enqueues a message
-> and returns immediately. The **sync** (`wait: true`) form blocks the caller on the
-> target's reply and is gated behind `alwaysAllowSubtasks`, like the other
-> control-plane subtask tools. See the `sendMessageToTask` branch in
-> [`checkAutoApproval`](../packages/core/src/auto-approval/index.ts).
+> **The mailbox tools carry no toggle at all.** `send_message`, `reply` and `wait`
+> are approved unconditionally: none of them blocks anything but the caller's own
+> loop, and none is terminal. The `alwaysAllowSubtasks` gate that used to guard a
+> _blocking_ send went with the blocking send itself
+> ([`task_messaging.md`](task_messaging.md)).
 
 ### Lightweight Read-Only Tools
 
@@ -462,7 +463,7 @@ These are **separate concepts**:
 | Auto-approval            | [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts) | Whether a tool invocation requires user confirmation |
 
 A tool being in `ALWAYS_AVAILABLE_TOOLS` does **not** mean it's auto-approved. For example,
-`send_message_to_task` (sync mode) is always available but still requires the
+`new_task` is always available but still requires the
 `alwaysAllowSubtasks` toggle for auto-approval. Conversely, `grep_search` is
 not in `ALWAYS_AVAILABLE_TOOLS` but is gated by `alwaysAllowReadOnly` — it is
 available through the mode's `read` group, and auto-approved only when that

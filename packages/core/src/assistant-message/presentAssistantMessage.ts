@@ -66,11 +66,11 @@ import { listBackgroundTasksTool } from "../tools/ListBackgroundTasksTool.js"
 import { describeToolsTool } from "../tools/DescribeToolsTool.js"
 import { cancelTasksTool } from "../tools/CancelTasksTool.js"
 import { answerSubtaskQuestionTool } from "../tools/AnswerSubtaskQuestionTool.js"
-import { sendMessageToTaskTool } from "../tools/SendMessageToTaskTool.js"
+import { sendMessageTool } from "../tools/SendMessageTool.js"
+import { replyTool } from "../tools/ReplyTool.js"
 import { callMcpToolAsyncTool } from "../tools/CallMcpToolAsyncTool.js"
 import { checkMcpCallStatusTool } from "../tools/CheckMcpCallStatusTool.js"
 import { waitForMcpCallTool } from "../tools/WaitForMcpCallTool.js"
-import { sleepTool } from "../tools/SleepTool.js"
 import { formatResponse } from "../prompts/responses.js"
 import { sanitizeToolUseId } from "../utils/tool-id.js"
 import { isPrivateLmTool, getPrivateToolInvokeCommand } from "../tools/private-tool-registry.js"
@@ -520,8 +520,8 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} for '${block.params.question}']`
 					case "attempt_completion":
 						return `[${block.name}]`
-					case "wait_for_message":
-						return `[${block.name}${block.params.reason ? `: ${block.params.reason}` : ""}]`
+					case "wait":
+						return `[${block.name}${block.params.in_reply_to ? ` for reply to ${block.params.in_reply_to}` : ""}]`
 					case "switch_mode":
 						return `[${block.name} to '${block.params.mode_slug}'${block.params.task_id ? ` for task ${block.params.task_id}` : ""}${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
 					case "set_task_title":
@@ -553,10 +553,10 @@ export async function presentAssistantMessage(shofer: Task) {
 						const idsStr = Array.isArray(ids) ? ids.join(", ") : ids
 						return `[${block.name} for '${idsStr ?? ""}']`
 					}
-					case "send_message_to_task": {
-						const w = block.params.wait === true ? " (sync)" : ""
-						return `[${block.name} → '${block.params.task_id ?? ""}'${w}]`
-					}
+					case "send_message":
+						return `[${block.name} → '${block.params.to ?? ""}' (${block.params.kind ?? "notification"})]`
+					case "reply":
+						return `[${block.name}]`
 					case "cancel_tasks": {
 						const ids = block.params.task_ids
 						const idsStr = Array.isArray(ids) ? ids.join(", ") : ids
@@ -600,8 +600,6 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} for '${block.params.filePath}']`
 					case "sed":
 						return `[${block.name} for '${block.params.path}']`
-					case "sleep":
-						return `[Sleep for ${block.params.seconds || "?"}s]`
 					default:
 						return `[${block.name}]`
 				}
@@ -749,17 +747,18 @@ export async function presentAssistantMessage(shofer: Task) {
 						// Non-JSON results are plain success output.
 					}
 					const finishedAt = performance.now()
-					// Does this span represent blocking on another task? wait_for_task
-					// always; a foreground (non-background) new_task; a sync (wait=true)
-					// send_message_to_task. These render as "waiting on subtasks".
+					// Does this span represent blocking on something else? `wait` parks on
+					// the mailbox; `wait_for_task` on a child; a foreground
+					// (non-background) new_task on the child it spawned. All three render
+					// as "waiting", not as tool execution. `send_message` never blocks.
 					const truthy = (v: string | undefined) => {
 						const s = String(v ?? "").toLowerCase()
 						return s === "true" || s === "1" || s === "yes"
 					}
 					const waitsForTask =
+						block.name === "wait" ||
 						block.name === "wait_for_task" ||
-						(block.name === "new_task" && !truthy(block.params.is_background)) ||
-						(block.name === "send_message_to_task" && truthy(block.params.wait))
+						(block.name === "new_task" && !truthy(block.params.is_background))
 					shofer._pendingToolSpans.push({
 						startedAtOffsetMs: (toolSpanStartedAt || finishedAt) - shofer.timelineOriginMs,
 						finishedAtOffsetMs: finishedAt - shofer.timelineOriginMs,
@@ -793,7 +792,9 @@ export async function presentAssistantMessage(shofer: Task) {
 					"list_background_tasks",
 					"cancel_tasks",
 					"answer_subtask_question",
-					"send_message_to_task",
+					"send_message",
+					"reply",
+					"wait",
 					"generate_image",
 				])
 
@@ -1257,35 +1258,16 @@ export async function presentAssistantMessage(shofer: Task) {
 					)
 					break
 				}
-				case "wait_for_message": {
-					// `wait_for_message` is an alias for attempt_completion with canned
-					// params — it is the same self-declared terminal state, so it shares
-					// the duplicate-completion guard (see the attempt_completion case above).
-					if (!block.partial) {
-						if (shofer.didExecuteAttemptCompletion) {
-							webviewLog.info(
-								`[presentAssistantMessage] Skipping duplicate completion via wait_for_message (tool_use_id: ${toolCallId})`,
-							)
-							pushToolResult(
-								formatResponse.toolError(
-									"Skipped duplicate completion. Only one attempt_completion / wait_for_message is allowed per response.",
-								),
-							)
-							break
-						}
-						shofer.didExecuteAttemptCompletion = true
-					}
-
-					const waitCallbacks: AttemptCompletionCallbacks = {
+				case "wait":
+					// `wait` parks the caller's own loop on its mailbox and returns; it is
+					// NOT a terminal state, which is exactly what distinguishes it from the
+					// attempt_completion alias it replaced.
+					await waitTool.handle(shofer, block as ToolUse<"wait">, {
 						askApproval,
 						handleError,
 						pushToolResult,
-						askFinishSubTaskApproval,
-						toolDescription,
-					}
-					await waitTool.handle(shofer, block as ToolUse<"wait_for_message">, waitCallbacks)
+					})
 					break
-				}
 				case "run_slash_command":
 					await runSlashCommandTool.handle(shofer, block as ToolUse<"run_slash_command">, {
 						askApproval,
@@ -1335,8 +1317,15 @@ export async function presentAssistantMessage(shofer: Task) {
 						pushToolResult,
 					})
 					break
-				case "send_message_to_task":
-					await sendMessageToTaskTool.handle(shofer, block as ToolUse<"send_message_to_task">, {
+				case "send_message":
+					await sendMessageTool.handle(shofer, block as ToolUse<"send_message">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "reply":
+					await replyTool.handle(shofer, block as ToolUse<"reply">, {
 						askApproval,
 						handleError,
 						pushToolResult,
@@ -1464,13 +1453,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "view_image":
 					await viewImageTool.handle(shofer, block as ToolUse<"view_image">, {
-						askApproval,
-						handleError,
-						pushToolResult,
-					})
-					break
-				case "sleep":
-					await sleepTool.handle(shofer, block as ToolUse<"sleep">, {
 						askApproval,
 						handleError,
 						pushToolResult,
@@ -1726,7 +1708,7 @@ export async function presentAssistantMessage(shofer: Task) {
  * Records `task_interaction` events for the Sequence view when an inter-task
  * control-plane tool executes:
  *
- *   new_task → spawn │ send_message_to_task → message │ wait_for_task → await
+ *   new_task → spawn │ send_message → message │ reply → answer │ wait_for_task → await
  *   answer_subtask_question → answer │ cancel_tasks → cancel
  *   ask_followup_question → question (child → parent)
  *
@@ -1750,7 +1732,7 @@ async function maybeRecordTaskInteraction(shofer: Task, block: ToolUse, toolCall
 	}
 	const isError = span.isError
 	// Async = the caller did not block on the target. `waitsForTask` covers a
-	// foreground new_task / sync send_message_to_task / wait_for_task; a child's
+	// foreground new_task / wait_for_task / `wait`; a child's
 	// ask_followup_question also blocks (it waits for the parent's answer).
 	const blocking =
 		span.waitsForTask === true || block.name === "wait_for_task" || block.name === "ask_followup_question"
@@ -1785,14 +1767,9 @@ async function maybeRecordTaskInteraction(shofer: Task, block: ToolUse, toolCall
 				)
 			}
 			break
-		case "send_message_to_task":
-			// Sync sends record their message + answer arrows from SendMessageToTaskTool
-			// (the post-dispatch hook fires only after the blocking call unblocks and was
-			// observed to drop the arrow); only async fire-and-forget sends are recorded here.
-			if (isAsync) {
-				await emit("message", block.params.task_id, truncate(block.params.message))
-			}
-			break
+		// `send_message` and `reply` record their own arrows inside their handlers, at
+		// the moment the envelope is accepted — a delivery that was REFUSED must draw
+		// no arrow, and only the handler knows which of the two happened.
 		case "answer_subtask_question":
 			await emit("answer", block.params.task_id, truncate(block.params.answer))
 			break

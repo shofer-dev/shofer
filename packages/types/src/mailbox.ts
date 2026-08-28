@@ -45,6 +45,30 @@ export const MAILBOX_SUBJECT_MAX_LENGTH = 120
 export const MAILBOX_SUBJECT_DERIVED_MAX_LENGTH = 80
 
 /**
+ * Default lifetime of a `request`, in seconds. Short: a request has somebody
+ * waiting on the answer, and a question nobody answered in two minutes is
+ * better retired than left occupying the recipient's digest.
+ */
+export const MAILBOX_REQUEST_TIMEOUT_SEC = 120
+
+/**
+ * Default lifetime of a `notification`, in seconds. Longer than a request's
+ * because nobody is blocked on it — it only has to survive until the recipient
+ * next takes a turn.
+ */
+export const MAILBOX_NOTIFICATION_TIMEOUT_SEC = 600
+
+/**
+ * Default lifetime of a `reply`, and the floor under every reply's deadline: a
+ * reply must outlive the question it answers, or a slow answer expires in
+ * transit and the asker learns nothing.
+ */
+export const MAILBOX_REPLY_TIMEOUT_SEC = 120
+
+/** Default `wait` timeout, in seconds. Mandatory and not disableable. */
+export const MAILBOX_WAIT_TIMEOUT_SEC = 120
+
+/**
  * What an envelope is FOR.
  *
  * - `notification` — no reply expected; removed once read in full.

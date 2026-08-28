@@ -176,7 +176,7 @@ flowchart TD
 		"network": ["https://jenkins.my-org.com"], // Fetch allowlist
 		"filesystem": ["./ci-config/"], // Host-path fs allowlist
 		"ai": true, // Host LLM/embeddings (billed; consented separately)
-		"agent": true, // Proactive agent-steering via ctx.agent.notify
+		"agent": true, // Deliver into a task's mailbox (ctx.agent.deliver) + job control
 		"task": true, // Task control via ctx.task: markers, rewind, setCwd, openTask
 		"editor": true, // Multi-file diff viewer via ctx.host.editor
 	},
@@ -851,61 +851,89 @@ the host is unchanged.
   The call does **not** enter the ask/approval pipeline; the grant is the gate. Full
   contract in [§5.6](#56-mcp-integration).
 
-- **`ctx.agent.notify(message, opts?)` — proactive agent-steering.** A plugin (from
-  a background service, a `ctx.host.watch` callback, or a lifecycle hook) can
-  PROACTIVELY inject a message into the running agent — e.g. "the deploy just
-  failed, here's the log." `opts.mode` selects the delivery semantics (four modes):
+- **`ctx.agent.deliver(envelope)` — the ONE delivery door.** A plugin (from a
+  background service, a `ctx.host.watch` callback, or a lifecycle hook) can
+  PROACTIVELY put a message in front of a task — a bus event, an A2A frame, a
+  Temporal owner's instruction, or its own observation ("the deploy just failed,
+  here's the log"). The message becomes an **envelope** in that task's mailbox
+  ([`task_messaging.md`](task_messaging.md)): persisted, deadline-bounded, listed in
+  the `environment_details` digest on the task's next request, and read with `wait`.
 
-    - **`"notify"`** (default) — a one-way event appended to the target task's
-      **notification queue** ([`peerNotificationQueue`](../packages/core/src/task/Task.ts))
-      and drained ASAP into the **system prompt**
-      (role: system) on the task's next real agent request — no tool call needed. Delivered
-      **only while the task loop is running**; **dropped if idle** (by design). The channel
-      for fire-and-forget event routing.
-    - **`"queue"`** — enqueue into the active task's `MessageQueueService`
-      ([`message_queue.md`](message_queue.md)) like a user prompt typed while busy; drained on
-      the next turn, non-disruptive.
-    - **`"interrupt"`** — enqueue **and** `cancelAndProcessQueuedMessages` (Send-Now): abort the
-      current turn (same task instance) and resume with the message.
-    - **`"spawn"`** — start a new task seeded with the message.
+    There is no delivery MODE to choose. What four modes used to express is carried by
+    fields the caller fills in:
 
-    `opts.taskId` targets a specific task (default: the active/current task); `opts.source`
-    is a short label shown with a `notify` event. With **no task to steer**, a `queue`/`interrupt`
-    notify falls back to spawning so the message is never dropped; a `notify` with no live target
-    is dropped. Gated on a dedicated **`permissions.agent`** grant
-    (steering the agent has billed/behavioral impact): ungranted-but-seam-wired ⇒
-    denying stub; no seam ⇒ absent. Host-side behind a `PluginAgentProvider` seam
+    | Field      | Decides                                                                                                                  |
+    | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
+    | `kind`     | `notification` (no answer expected) or `request` (a `reply` is), or `reply`                                              |
+    | `wake`     | whether a task whose loop has STOPPED is resumed for this message — a stopped task is rehydrated from history if need be |
+    | `deadline` | absolute epoch ms; past it the envelope expires out of the box unread                                                    |
+    | `plane`    | informational — `local` / `bus` / `a2a` / `temporal`, rendered in the digest                                             |
+
+    The **host** fills `to` (the resolved target task) and `sent_at`, and mints `id`
+    when the caller supplied none. A caller owning an upstream idempotency key — an A2A
+    `message_id`, a Temporal message id — MUST pass it as `id`, because a mailbox
+    already holding that id acknowledges the delivery without appending it again; that
+    is what makes a retry safe. `taskId` names the target (default: the host's current
+    task).
+
+    It resolves with the envelope as ACCEPTED, once the box has validated and persisted
+    it — so a caller acknowledging an upstream delivery should do so only after this
+    promise resolves, and the receipt then means "in the box" rather than "seen by a
+    plugin". It rejects when the box refuses the envelope (full, expired, addressed
+    elsewhere) and — deliberately — **when there is no target task at all**: a delivery
+    must never silently become a billed spawn nobody asked for. A plugin that wants a
+    new task says so with `spawn`.
+
+    Gated on a dedicated **`permissions.agent`** grant (steering the agent has
+    billed/behavioral impact): ungranted-but-seam-wired ⇒ denying stub; no seam ⇒
+    absent. Host-side behind a `PluginAgentProvider` seam
     ([`plugin-agent.ts`](../packages/core/src/plugins/plugin-agent.ts)) mirroring
-    `PluginAiProvider`, wired in `ShoferProvider.getPluginManager` against the
-    provider's task stack / message queue. `notify` is deliberately **fire-and-forget**;
-    for an awaitable, cancellable _job_ surface (`spawn → TaskHandle`, `cancel`, structured
-    result) needed by workflow/runner plugins, see
-    [§14](#14-agent-control-api-for-workflow--runner-plugins).
+    `PluginAiProvider`, wired in `ShoferProvider.getPluginManager` against the provider's
+    task stack and `deliverToTask`.
 
-The four delivery modes and their no-target fallbacks:
+- **`ctx.agent.registerMailboxTransport(transport)` — how a message LEAVES the node.**
+  The mirror of `deliver`. The core mailbox resolves an outbound `to` locally (a live
+  task, or one it can rehydrate from history); an address that resolves to neither is
+  offered to each registered transport in turn, and the first whose `canRoute(to)`
+  accepts it owns the delivery. That is what lets the agent's one `send_message` tool
+  address a peer across the A2A mesh without the tool knowing a mesh exists.
+
+    `canRoute` is a **synchronous** predicate over the address alone, because it runs on
+    the agent's send path and must not turn a validation into a network round trip; a
+    transport that cannot tell from the id whether the peer is reachable answers `true`
+    and fails in `send`. Registration returns an **unregister** function — a plugin whose
+    service stops must call it, or the host keeps offering it envelopes it can no longer
+    send. Same `permissions.agent` grant: a transport decides where an agent's messages go.
+
+The one door, and where an envelope goes from it:
 
 ```mermaid
 flowchart TD
-    N["ctx.agent.notify(message, opts)"]
+    N["ctx.agent.deliver(envelope)"]
     G{"permissions.agent granted?"}
     STUB["denying stub — seam wired but ungranted<br/>absent entirely when there is no seam"]
-    M{"opts.mode"}
-    NO["notify — default<br/>peerNotificationQueue, drained into the<br/>system prompt on the next real request"]
-    Q["queue — MessageQueueService<br/>drained on the next turn"]
-    I["interrupt — enqueue, then<br/>cancelAndProcessQueuedMessages"]
-    S["spawn — a new task seeded<br/>with the message"]
-    DROP["dropped"]
+    T{"target task"}
+    X["reject — nothing to deliver to.<br/>Use ctx.agent.spawn for a new task"]
+    L{"live instance?"}
+    MB["the task's mailbox —<br/>validate, persist, emit delivered"]
+    H{"resumable history?"}
+    RH["persist first, then rehydrate dormant,<br/>register, queue the wake turn, start"]
+    W{"envelope.wake"}
+    DG["nothing more — the digest carries it<br/>on the task's next request"]
+    WK["resume the stopped loop"]
 
     N --> G
     G -->|no| STUB
-    G -->|yes| M
-    M --> NO
-    M --> Q
-    M --> I
-    M --> S
-    NO -->|"task loop not running"| DROP
-    Q -->|"no task to steer"| S
-    I -->|"no task to steer"| S
+    G -->|yes| T
+    T -->|"none — no taskId, no current task"| X
+    T -->|resolved| L
+    L -->|yes| MB
+    L -->|no| H
+    H -->|no| X
+    H -->|yes| RH --> MB
+    MB --> W
+    W -->|false| DG
+    W -->|"true, and the loop has stopped"| WK
 ```
 
 ---
@@ -1484,7 +1512,7 @@ directory with a `.claude-plugin/plugin.json`, components discovered by conventi
 | **`${CLAUDE_PLUGIN_ROOT}` / `${CLAUDE_PLUGIN_DATA}` substitution**                               | Adopted as `${SHOFER_PLUGIN_ROOT}` / `${SHOFER_PLUGIN_DATA}` in MCP/hook configs, plus `ctx.storage` for the persistent data dir.                                                                                                 |
 | **Plugin scopes** (`user`/`project`/`local`/`managed`)                                           | Adopted as `bundled`/`global`/`project` scopes ([§8](#8-distribution--discovery)).                                                                                                                                                |
 | **User configuration prompted at enable time**                                                   | Matched by the manifest `config` schema + the Settings → Plugins form.                                                                                                                                                            |
-| **Background monitors** (shell commands feeding stdout to the agent)                             | Achieved differently — Shofer plugins run **in-process supervised services** (`ctx.registerService`) that steer the agent via `ctx.agent.notify`, rather than declarative shell monitors.                                         |
+| **Background monitors** (shell commands feeding stdout to the agent)                             | Achieved differently — Shofer plugins run **in-process supervised services** (`ctx.registerService`) that steer the agent via `ctx.agent.deliver`, rather than declarative shell monitors.                                        |
 | **Hooks as external commands / HTTP / MCP tool calls**                                           | Not adopted — Shofer's hooks are in-process (`ShoferPlugin` lifecycle hooks), which are more powerful but require code loading.                                                                                                   |
 | **LSP server configs, agent-markdown definitions, themes, output styles, token-cost estimation** | Not adopted — Shofer covers language intelligence via its own LSP tools and personas via modes.                                                                                                                                   |
 
@@ -1521,9 +1549,9 @@ model).
 
 ### 14.1 Motivation
 
-`ctx.agent.notify` ([§5.11](#511-host-capabilities-ctx)) lets a plugin _inject_ a message —
-spawn/queue/interrupt — but it is **fire-and-forget**: no handle, no completion, no result, no
-cancel. A runner/workflow plugin needs to treat an agent run as a **job**: start it, **await its
+`ctx.agent.deliver` ([§5.11](#511-host-capabilities-ctx)) lets a plugin put a message in a task's
+mailbox, but it addresses a task that ALREADY EXISTS and yields no handle: no completion, no
+result, no cancel. A runner/workflow plugin needs to treat an agent run as a **job**: start it, **await its
 structured result**, and **cancel** it (e.g. when an external orchestrator cancels, or a kill
 switch fires). The full `ShoferExtensionApi` ([`shofer-api.md`](./shofer-api.md#3-shoferextensionapi--the-host-only-surface)) already has exactly this
 (`startNewTask → taskId`, `cancelCurrentTask`, the event stream) — but it is a **companion-extension**
@@ -1534,11 +1562,11 @@ of that surface through `ctx`.
 ### 14.2 Scoped agent-control on `ctx.agent`
 
 Extend the existing `permissions.agent` capability (host-side `PluginAgentProvider` seam — the same
-recipe as `ctx.ai` / `ctx.agent.notify`) with an awaitable, cancellable task surface:
+recipe as `ctx.ai` / `ctx.agent.deliver`) with an awaitable, cancellable task surface:
 
 ```typescript
 interface PluginAgentControl {
-	// Start a task and get a HANDLE (unlike fire-and-forget notify(spawn)).
+	// Start a task and get a HANDLE (unlike deliver, which needs a task already).
 	spawn(
 		prompt: string,
 		opts?: {
@@ -1592,8 +1620,16 @@ interface TaskResult {
 - **`output` is the task's answer, not a status line.** It is the `attempt_completion` result as the
   agent rendered it — read from the task's last `completion_result` message when it settles. A
   caller awaiting `result()` has no chat to read, so a host that declined to set this would leave
-  the whole point of `spawn` (as opposed to `notify`) unreachable. It is absent, not empty, when the
+  the whole point of `spawn` (as opposed to `deliver`) unreachable. It is absent, not empty, when the
   task ended without declaring an answer.
+- **`spawn` is bounded by the host's global parallel-task limit** (`maxParallelTasks`,
+  [`parallelism.md`](parallelism.md)) — the same limit and the same default `new_task` enforces,
+  because a plugin spawning per inbound event is the one caller that can produce unbounded
+  concurrency without an agent ever deciding to. Over the limit it rejects with an error whose
+  `name` is `PLUGIN_TASK_LIMIT_ERROR`, a well-known constant rather than a message, because the
+  caller's correct reaction is to do the work another way (shofer-mesh's `spawn` subscriptions
+  fall back to delivering the event as an ordinary notification) and it can only choose that if
+  it can tell this refusal from a real failure.
 - **`taskId` is also the SESSION handle.** Passing it back as `opts.sessionId` continues that
   conversation instead of starting a cold one, which is what makes an output-contract re-prompt
   cheap and correct. Resuming a session whose loop has ENDED — the normal case for a re-prompt,
@@ -1618,8 +1654,8 @@ interface TaskResult {
 - **Completion + result.** `afterTaskComplete` ([§5.9](#59-lifecycle-hooks-permissionslifecycle)) and
   `TaskHandle.result()` carry the structured `TaskResult` (today the lifecycle context carries only a
   `reason` — this adds the result payload).
-- `ctx.agent.notify` stays as the lightweight fire-and-forget path (inbound message delivery, one-way
-  steering); `spawn`/`cancel` are the job-oriented path. This completes the **"workflow plugin"**
+- `ctx.agent.deliver` stays as the message path (inbound delivery into an existing task's mailbox);
+  `spawn`/`cancel` are the job-oriented path. This completes the **"workflow plugin"**
   use-case §5.9 already names ("observe task start, post results externally").
 - **Unattended approval (`unattended` + `approvalPolicy`).** A spawned runner task has no interactive
   approver, so it must never hang on `ask()`. In `unattended` mode any approval not granted by the
@@ -1668,7 +1704,7 @@ already "high trust," on par with `permissions.lifecycle` / `permissions.ai`.
 
 The rest of the runner/workflow surface is **already shipped**: `ctx.registerService`
 ([§5.11](#511-host-capabilities-ctx)) hosts the long-lived worker (Live-Memory-precedented);
-`ctx.agent.notify` already does spawn/queue/interrupt inbound delivery; `onEvent` + lifecycle hooks
+`ctx.agent.deliver` already does inbound delivery into a task's mailbox; `onEvent` + lifecycle hooks
 observe; `ctx.config` / `ctx.storage` back config + idempotency state. With `spawn`/`cancel` and the
 task handle now shipped too, the remaining delta is the unattended-approval pair and the socket-egress
 declaration. The first consumer and worked example is a **Temporal worker plugin**.

@@ -331,12 +331,20 @@
 		"peerTaskIds": "Peer task IDs",
 		"background": "Background task"
 	},
-	"peerMessage": {
-		"from": "Peer message from {{sender}}",
-		"goToSender": "View sender task",
-		"sentAsync": "Sent message to peer task",
-		"sentSync": "Asked peer task (waiting for reply)",
-		"goToTarget": "View target task"
+	"mailbox": {
+		"sentNotification": "Notified {{target}}",
+		"sentRequest": "Asked {{target}}",
+		"expiresIn": "expires in {{seconds}}s",
+		"goToTarget": "View target task",
+		"replied": "Replied to {{count}} request(s)",
+		"wait": "Waiting for mail",
+		"waitWithTimeout": "Waiting for mail (up to {{timeout}}s)",
+		"waitingForReply": "Waiting for the reply to {{id}}",
+		"waitingForSenders": "Waiting for mail from {{senders}}",
+		"receivedNotification": "Notification from {{sender}}",
+		"receivedRequest": "Request from {{sender}}",
+		"receivedReply": "Reply from {{sender}}",
+		"goToSender": "View sender task"
 	},
 	"collapsibleMessage": {
 		"showMore": "Show more",

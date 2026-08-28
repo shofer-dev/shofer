@@ -17,13 +17,13 @@ import type { ShoferMessage, ApiRequestFinishedPayload } from "@shofer/types"
  * shown as "Overhead":
  *   • Waiting for model (TTFB)   • Thinking (reasoning)   • Streaming response
  *   • Tool execution   • MCP calls (spans named `mcp:<server>/<tool>`)
- *   • Waiting for task (wait_for_task, a blocking new_task, or a sync
- *     send_message_to_task)   • Sleeping (the sleep tool)   • Overhead
+ *   • Waiting (parked in `wait` on the mailbox, `wait_for_task`, or a blocking
+ *     new_task)   • Overhead
  */
 
 // ── Categories ──
 
-type CatKey = "llm" | "thinking" | "streaming" | "tool" | "mcp" | "waiting_subtask" | "sleeping"
+type CatKey = "llm" | "thinking" | "streaming" | "tool" | "mcp" | "waiting_subtask"
 
 interface CatMeta {
 	key: CatKey
@@ -40,8 +40,7 @@ const CATEGORIES: CatMeta[] = [
 	{ key: "streaming", label: "Streaming response", color: "var(--vscode-charts-green, #16a34a)", prio: 1 },
 	{ key: "tool", label: "Tool execution", color: "var(--vscode-charts-orange, #f97316)", prio: 2 },
 	{ key: "mcp", label: "MCP calls", color: "var(--vscode-charts-indigo, #6366f1)", prio: 2 },
-	{ key: "waiting_subtask", label: "Waiting for task", color: "var(--vscode-charts-cyan, #06b6d4)", prio: 2 },
-	{ key: "sleeping", label: "Sleeping", color: "var(--vscode-charts-yellow, #eab308)", prio: 2 },
+	{ key: "waiting_subtask", label: "Waiting", color: "var(--vscode-charts-cyan, #06b6d4)", prio: 2 },
 ]
 
 const CAT_BY_KEY: Record<CatKey, CatMeta> = CATEGORIES.reduce(
@@ -52,8 +51,10 @@ const CAT_BY_KEY: Record<CatKey, CatMeta> = CATEGORIES.reduce(
 	{} as Record<CatKey, CatMeta>,
 )
 
-const WAIT_FOR_TASK_TOOL = "wait_for_task"
-const SLEEP_TOOL = "sleep"
+// The tools whose spans are TIME SPENT WAITING rather than tool execution.
+// `waitsForTask` on the span is the authoritative flag; the names are the
+// fallback for spans recorded before it existed.
+const WAITING_TOOLS = new Set(["wait", "wait_for_task"])
 const MCP_PREFIX = "mcp:" // MCP tool spans are named `mcp:<server>/<tool>`
 
 // ── Helpers ──
@@ -69,7 +70,7 @@ function formatMs(ms: number): string {
 
 interface Breakdown {
 	totals: Record<CatKey, number>
-	/** Per-tool execution time + run/error counts (excludes wait/sleep), largest first. */
+	/** Per-tool execution time + run/error counts (excludes waiting), largest first. */
 	toolTotals: Array<{ name: string; ms: number; count: number; errors: number }>
 	/** Total running time: sum of all categories. Excludes idle/inter-prompt gaps. */
 	totalMs: number
@@ -126,16 +127,15 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 		for (const span of payload.toolSpans) {
 			const s = span.startedAtOffsetMs
 			const e = Math.max(span.finishedAtOffsetMs, s)
-			// The sleep tool is its own "Sleeping" category. `waitsForTask` flags
-			// blocking inter-task tools (fall back to the tool name for older spans).
-			const isSleep = span.toolName === SLEEP_TOOL
-			const isWait = !isSleep && (span.waitsForTask === true || span.toolName === WAIT_FOR_TASK_TOOL)
-			const isMcp = !isSleep && !isWait && span.toolName.startsWith(MCP_PREFIX)
-			const cat: CatKey = isSleep ? "sleeping" : isWait ? "waiting_subtask" : isMcp ? "mcp" : "tool"
+			// `waitsForTask` flags a span that is the agent WAITING — parked in
+			// `wait` on its mailbox, or blocked on a child — rather than executing.
+			const isWait = span.waitsForTask === true || WAITING_TOOLS.has(span.toolName)
+			const isMcp = !isWait && span.toolName.startsWith(MCP_PREFIX)
+			const cat: CatKey = isWait ? "waiting_subtask" : isMcp ? "mcp" : "tool"
 			segments.push({ start: s, end: e, cat, prio: 2 })
 			minStart = Math.min(minStart, s)
 			maxEnd = Math.max(maxEnd, e)
-			if (!isWait && !isSleep) {
+			if (!isWait) {
 				const cur = toolMap.get(span.toolName) ?? { ms: 0, count: 0, errors: 0 }
 				cur.ms += e - s
 				cur.count += 1
@@ -158,7 +158,6 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 		tool: 0,
 		mcp: 0,
 		waiting_subtask: 0,
-		sleeping: 0,
 	}
 	const points = Array.from(new Set([minStart, maxEnd, ...segments.flatMap((s) => [s.start, s.end])])).sort(
 		(a, b) => a - b,
@@ -184,14 +183,7 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 		.map(([name, v]) => ({ name, ms: v.ms, count: v.count, errors: v.errors }))
 		.sort((x, y) => y.ms - x.ms)
 
-	const totalMs =
-		totals.llm +
-		totals.thinking +
-		totals.streaming +
-		totals.tool +
-		totals.mcp +
-		totals.waiting_subtask +
-		totals.sleeping
+	const totalMs = totals.llm + totals.thinking + totals.streaming + totals.tool + totals.mcp + totals.waiting_subtask
 
 	return { totals, toolTotals, totalMs, requestCount }
 }
