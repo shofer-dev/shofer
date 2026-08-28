@@ -344,7 +344,7 @@ changes but always sees the latest text.
   (`PluginAgentNotifyOptions`) exposes delivery modes that drive this queue: `queue` →
   `addMessage`; `interrupt` → `addMessage` + `cancelAndProcessQueuedMessages` (Send Now). Any
   out-of-process event source that steers an agent does so through these core paths. (The `notify`
-  mode uses the separate `peerNotificationQueue`, not this queue — see [notifications.md](notifications.md).)
+  mode uses the separate `peerNotificationQueue`, not this queue.)
 
 ## Gaps, Issues & Improvement Areas
 

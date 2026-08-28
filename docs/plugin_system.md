@@ -857,8 +857,8 @@ the host is unchanged.
   failed, here's the log." `opts.mode` selects the delivery semantics (four modes):
 
     - **`"notify"`** (default) — a one-way event appended to the target task's
-      **notification queue** ([`peerNotificationQueue`](../packages/core/src/task/Task.ts),
-      [`notifications.md`](notifications.md)) and drained ASAP into the **system prompt**
+      **notification queue** ([`peerNotificationQueue`](../packages/core/src/task/Task.ts))
+      and drained ASAP into the **system prompt**
       (role: system) on the task's next real agent request — no tool call needed. Delivered
       **only while the task loop is running**; **dropped if idle** (by design). The channel
       for fire-and-forget event routing.
