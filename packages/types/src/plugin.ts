@@ -826,11 +826,19 @@ export interface PluginAgent {
 	 * Register a **mailbox transport**: how envelopes addressed to a task this host does
 	 * not hold leave the node.
 	 *
-	 * The core mailbox resolves `to` locally — a live task, or one it can rehydrate from
-	 * history. A `to` that resolves to neither is offered to each registered transport in
-	 * turn, and the first whose {@link PluginMailboxTransport.canRoute} accepts it owns
-	 * the delivery. That is what lets the agent's one `send_message` tool address a peer
-	 * across the A2A mesh without the tool knowing a mesh exists.
+	 * The core resolves `to` in three steps, and a transport is the SECOND:
+	 *
+	 * 1. a live task instance on this host;
+	 * 2. each registered transport's {@link PluginMailboxTransport.canRoute}, first
+	 *    claimant wins;
+	 * 3. otherwise a dormant local task rehydrated from history.
+	 *
+	 * The transport sits AHEAD of the history lookup deliberately. Where several hosts
+	 * share one task store — a worker pool on a shared Postgres — a task running on
+	 * another pod has a history row here too, so a history-first order both refuses the
+	 * send (applying in-process rules to a remote peer) and, worse, can rehydrate a
+	 * SECOND live instance of a task another pod is already running. Only the transport
+	 * can tell the two apart, so it is asked first.
 	 *
 	 * Returns an unregister function. A plugin whose service stops must call it, or the
 	 * host keeps offering it envelopes it can no longer send.
@@ -878,16 +886,26 @@ export type PluginDeliverInput = Omit<Envelope, "id" | "to" | "sent_at" | "read_
  * A route out of this node for envelopes the local mailbox cannot address
  * ({@link PluginAgent.registerMailboxTransport}).
  *
- * Both halves are deliberately narrow. `canRoute` is a SYNCHRONOUS predicate over the
- * address alone, because it runs on the agent's send path and must not turn a validation
- * into a network round trip; a transport that cannot tell from the id whether the peer is
- * reachable should answer `true` and fail in `send`. `send` resolves when the envelope
- * has been handed to the far side and rejects otherwise — the sending tool reports that
- * failure to the agent verbatim, so it must say what went wrong.
+ * **`canRoute` must be HONEST, and it is allowed to be slow to manage it.** It answers
+ * "is this address a peer somewhere else?", and the host acts on that answer by NOT
+ * looking in its own task history — so a transport that guesses can send a local message
+ * off-node, or let the host start a second live copy of a task another node is running.
+ * It runs only after the live-local lookup has already failed, so on the overwhelmingly
+ * common path (a peer in this process) it is never called at all, and paying a directory
+ * round trip on the rare non-local path is the right trade. Answer `false` when the
+ * answer is genuinely unknown — the host then falls through to its own history, which is
+ * the correct behaviour for a dormant local task.
+ *
+ * `send` resolves when the envelope has been handed to the far side and rejects
+ * otherwise — the sending tool reports that failure to the agent verbatim, so it must say
+ * what went wrong.
  */
 export interface PluginMailboxTransport {
-	/** Whether this transport claims the address. Synchronous; no I/O. */
-	canRoute(to: string): boolean
+	/**
+	 * Whether this transport claims the address. May do I/O; resolve `false` rather than
+	 * rejecting when the answer cannot be established.
+	 */
+	canRoute(to: string): Promise<boolean>
 	/** Hand the envelope to the far side. Rejects with a message the agent will read. */
 	send(envelope: Envelope): Promise<void>
 }

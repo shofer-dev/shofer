@@ -106,16 +106,22 @@ export interface TaskProviderLike<TTask = TaskLike> {
 	 * The first plugin-registered mailbox transport that claims `to`, or
 	 * `undefined` when the address belongs to no route off this node.
 	 *
-	 * The counterpart of {@link deliverToTask}, and consulted only AFTER it has
-	 * nothing to offer: an id with no live instance and no resumable history is
-	 * not necessarily unreachable — it may be a peer on the A2A mesh, which the
-	 * `shofer-mesh` plugin registers a transport for. Keeping the order that way
-	 * round is what makes a local id always resolve locally, so a transport can
-	 * never quietly capture a task this host holds.
+	 * Asked AFTER the live-instance lookup and BEFORE the history one. The middle
+	 * position is the whole point: a host that shares its task store with its
+	 * siblings — a worker pool on one Postgres — has a history row for a task
+	 * another pod is running, so history cannot tell a dormant local task from a
+	 * live remote one. The transport can, and asking it first is what stops the
+	 * host applying in-process rules to a remote peer or rehydrating a second
+	 * live instance of somebody else's task.
+	 *
+	 * Asynchronous because the honest answer needs the mesh directory. It is
+	 * never on the common path (a live local peer resolves before it), and a
+	 * transport that cannot establish the answer resolves `false`, which lets the
+	 * caller fall through to history.
 	 *
 	 * Mirrors `ShoferProvider.findMailboxTransport`.
 	 */
-	findMailboxTransport(to: string): PluginMailboxTransport | undefined
+	findMailboxTransport(to: string): Promise<PluginMailboxTransport | undefined>
 	/** Returns the provider's MCP hub, or `undefined` when MCP is unavailable. */
 	getMcpHub(): McpHub | undefined
 	/** Ensures the global MCP servers directory exists and returns its path. */

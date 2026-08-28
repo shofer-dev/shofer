@@ -120,8 +120,11 @@ export class ReplyTool extends BaseTool<"reply"> {
 				// Remote-routing block: a request that came over the mesh is answered
 				// over the mesh. Only an `a2a` request is offered to a transport — a
 				// local id must always be delivered locally, and `bus`/`temporal` are
-				// inbound-only planes that are never a reply target.
-				const transport = request.plane === "a2a" ? provider.findMailboxTransport?.(request.from) : undefined
+				// inbound-only planes that are never a reply target. The plane test also
+				// keeps the directory call off every local reply: `canRoute` may do I/O,
+				// and a local answer must not pay for the mesh.
+				const transport =
+					request.plane === "a2a" ? await provider.findMailboxTransport?.(request.from) : undefined
 				try {
 					if (transport) {
 						await transport.send(envelope)

@@ -250,6 +250,17 @@ describe("createRequestHandler (§11)", () => {
 			expect(envelope.subject).toBe("the vm is ready")
 		})
 
+		it("mints an `id` when the caller sent none, as the plugin door does", async () => {
+			const res = mockRes()
+			const { id: _omitted, ...withoutId } = body
+			await run(mockReq("POST", "/api/v1/task/t1/mailbox", withoutId), res as unknown as ServerResponse)
+
+			expect(res.statusCode).toBe(202)
+			const envelope = vi.mocked(api.deliverToMailbox).mock.calls[0]![1]
+			expect(envelope.id).toMatch(/^[0-9a-f-]{36}$/)
+			expect(JSON.parse(res.body)).toEqual({ taskId: "t1", delivered: envelope.id })
+		})
+
 		it("overrides a `to` the client tried to set", async () => {
 			const res = mockRes()
 			await run(

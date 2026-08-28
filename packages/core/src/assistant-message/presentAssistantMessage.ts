@@ -7,6 +7,7 @@ import type { ToolName, ShoferAsk, ToolProgressStatus, TaskInteractionPayload, P
 import { ConsecutiveMistakeError, TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 import { customToolRegistry } from "../custom-tools/custom-tool-registry.js"
+import { coerceCustomToolArgs } from "../tools/helpers/coerceToolArgs.js"
 import { pluginRegistry } from "../plugins/plugin-registry.js"
 
 import { t } from "../i18n/index.js"
@@ -1449,7 +1450,20 @@ export async function presentAssistantMessage(shofer: Task) {
 
 							if (customTool.parameters) {
 								try {
-									customToolArgs = customTool.parameters.parse(block.nativeArgs || block.params || {})
+									// Narrow stringified scalars to the types the schema
+									// declares before validating. Several providers stringify
+									// every scalar, and a stubbed tool's arguments are
+									// hand-written JSON from the model (`arguments_json`, which
+									// the parser has already unwrapped into `nativeArgs` by
+									// here) — so `"wake": "true"` and `"ttl_sec": "300"` are
+									// routine. Native tools absorb this per parameter; this is
+									// the one place that does it for every plugin tool.
+									customToolArgs = customTool.parameters.parse(
+										coerceCustomToolArgs(
+											customTool.parameters,
+											block.nativeArgs || block.params || {},
+										),
+									)
 								} catch (parseParamsError) {
 									const errMsg =
 										parseParamsError instanceof Error

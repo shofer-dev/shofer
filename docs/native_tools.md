@@ -708,6 +708,19 @@ Unknown names never fail the call: the model is told which names do not exist,
 given the nearest ones that do, and still receives the schemas of the names that
 were found.
 
+**Scalars are coerced from strings.** Arguments that arrive through
+`arguments_json` are JSON the model wrote by hand, and several providers stringify
+scalars even on an ordinary tool call — `"wake": "true"`, `"ttl_sec": "300"`. For
+a **plugin-contributed tool**, whose arguments are validated against its declared
+Zod schema, `coerceCustomToolArgs`
+(`packages/core/src/tools/helpers/coerceToolArgs.ts`) narrows those strings to the
+types the schema asks for before validation: `"true"`/`"false"` become booleans, a
+string that parses as a finite number becomes that number, and an array of either
+is coerced element-wise. Nothing else is touched — a declared string, an enum, a
+nested object and an undeclared key are all passed through, and a value that
+cannot be converted confidently still fails validation, so the model gets a real
+error rather than a fabricated argument.
+
 Offered only where the mode declares `tools_full_schema`; a mode with no stubs
 has nothing to describe.
 

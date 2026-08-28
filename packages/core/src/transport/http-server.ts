@@ -1,4 +1,5 @@
 import http from "node:http"
+import { randomUUID } from "node:crypto"
 
 import { deriveSubject, envelopeSchema, traceContextFromHeaders, traceContextSchema } from "@shofer/types"
 
@@ -435,8 +436,11 @@ export function createRequestHandler(
 				// only prose still produces a scannable digest row.
 				const body = await readJson(req)
 				if (typeof body.body !== "string") return send(res, 400, { error: "body is required" })
+				// `id` is the idempotency key a retrying sender re-uses; a caller
+				// with no retry story gets one minted here, as the plugin door does.
 				const candidate = {
 					...body,
+					id: typeof body.id === "string" && body.id ? body.id : randomUUID(),
 					to: decodeURIComponent(taskId),
 					sent_at: Date.now(),
 					subject: typeof body.subject === "string" ? body.subject : deriveSubject(body.body),

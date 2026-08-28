@@ -153,7 +153,13 @@ import { TaskHistoryStore } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { buildPluginHostImportMap } from "./pluginHostImportMap"
-import { completeEnvelope, lastCompletionResult, taskLimitError, unknownModeError } from "./pluginAgentResult"
+import {
+	assertNotLiveElsewhere,
+	completeEnvelope,
+	lastCompletionResult,
+	taskLimitError,
+	unknownModeError,
+} from "./pluginAgentResult"
 import { PluginPanelManager } from "./PluginPanelManager"
 import { REQUESTY_BASE_URL } from "@shofer/core"
 import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
@@ -2500,9 +2506,11 @@ export class ShoferProvider
 	 * this does not warrant resuming anyone, and the envelope is waiting in the
 	 * file for whenever the task next runs.
 	 *
-	 * @throws when the task has no history at all, or its lifecycle is `error` —
-	 * both mean there is nobody to deliver to, and the sender is told rather than
-	 * having the message silently dropped.
+	 * @throws when the task has no history at all, when its lifecycle is `error`, or
+	 * when a registered transport says it is live on ANOTHER node — the last of those
+	 * because rehydrating it here would produce a second live instance of one task,
+	 * which is worse than a refusal. Every one is reported to the sender rather than
+	 * silently dropped.
 	 */
 	public async deliverToTask(taskId: string, envelope: Envelope): Promise<Envelope> {
 		// A task is only "warm" while its LOOP is live. Being on the stack is not
@@ -2515,6 +2523,13 @@ export class ShoferProvider
 		if (live && !live.abandoned) {
 			return live.deliver(envelope)
 		}
+
+		// Before ANY history lookup: is this task live on another node? On a pool
+		// sharing one task store the history row exists here either way, so
+		// rehydrating from it would start a SECOND live instance of a task a sibling
+		// pod is already running — two loops on one task id, both persisting. That is
+		// a worse failure than refusing, so refuse, and say which it is.
+		await assertNotLiveElsewhere(taskId, (id) => this.findMailboxTransport(id))
 
 		let historyItem: HistoryItem
 		try {
@@ -2614,17 +2629,22 @@ export class ShoferProvider
 	 * The first registered transport that claims `to`, or `undefined` when the address
 	 * belongs to no route off this node.
 	 *
-	 * `canRoute` is a plugin's synchronous predicate, so a plugin that throws from it must
-	 * not take the send down with it: a broken transport is skipped and the next one is
-	 * asked, which degrades to "unroutable" rather than to "sending is broken".
+	 * Callers ask this AFTER the live-instance lookup and BEFORE the history one — see
+	 * {@link deliverToTask} and `SendMessageTool` — because on a pool sharing one task
+	 * store, history alone cannot tell a dormant local task from a live remote one.
+	 *
+	 * `canRoute` may do I/O (the mesh answers it from the agent directory), and a plugin
+	 * that throws or hangs must not take the send down with it: a rejecting transport is
+	 * skipped and the next one asked, which degrades to "unroutable" — i.e. the caller
+	 * falls back to its own history — rather than to "sending is broken".
 	 */
-	public findMailboxTransport(to: string): PluginMailboxTransport | undefined {
+	public async findMailboxTransport(to: string): Promise<PluginMailboxTransport | undefined> {
 		for (const transport of this.mailboxTransports) {
 			try {
-				if (transport.canRoute(to)) return transport
+				if (await transport.canRoute(to)) return transport
 			} catch (error) {
 				this.log(
-					`A registered mailbox transport threw from canRoute(${to}); skipping it: ` +
+					`A registered mailbox transport failed canRoute(${to}); skipping it: ` +
 						`${error instanceof Error ? error.message : String(error)}`,
 				)
 			}

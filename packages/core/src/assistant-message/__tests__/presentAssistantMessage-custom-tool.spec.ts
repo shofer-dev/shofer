@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest"
 
-import { setHost, createInMemoryHost } from "@shofer/types"
+import { setHost, createInMemoryHost, parametersSchema as z } from "@shofer/types"
 
 import { presentAssistantMessage } from "../presentAssistantMessage.js"
 import { validateToolUse } from "../../tools/validateToolUse.js"
@@ -134,6 +134,79 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 			// Should record as "custom_tool", not "my_custom_tool"
 			expect(mockTask.recordToolUsage).toHaveBeenCalledWith("custom_tool")
 			expect(TelemetryService.instance.captureToolUsage).toHaveBeenCalledWith(mockTask.taskId, "custom_tool")
+		})
+	})
+
+	/**
+	 * Several providers stringify every scalar in a tool call, and a STUBBED
+	 * tool's arguments are hand-written JSON the model produced for
+	 * `arguments_json` (already unwrapped into `nativeArgs` by the parser). This
+	 * is the reported live failure — `events_subscribe` with `"wake": "true"` and
+	 * `"ttl_sec": "300"` — reproduced through the real dispatch path.
+	 */
+	describe("Custom tool argument coercion", () => {
+		it("narrows stringified scalars to the types the schema declares", async () => {
+			const execute = vi.fn().mockResolvedValue("subscribed")
+			mockTask.assistantMessageContent = [
+				{
+					type: "tool_use",
+					id: "tool_call_events_subscribe",
+					name: "events_subscribe",
+					params: {},
+					nativeArgs: { selector: "resource:vm-*", wake: "true", ttl_sec: "300" },
+					partial: false,
+				},
+			]
+
+			vi.mocked(customToolRegistry.isDispatchable).mockReturnValue(true)
+			vi.mocked(customToolRegistry.getDispatchable).mockReturnValue({
+				name: "events_subscribe",
+				description: "Subscribe to bus events",
+				parameters: z.object({
+					selector: z.string(),
+					wake: z.boolean().optional(),
+					ttl_sec: z.number().optional(),
+				}),
+				execute,
+			} as any)
+
+			await presentAssistantMessage(mockTask)
+
+			// It validated instead of failing, and the handler received real scalars.
+			expect(mockTask.say).not.toHaveBeenCalledWith("error", expect.stringContaining("validation failed"))
+			expect(execute).toHaveBeenCalledTimes(1)
+			expect(execute.mock.calls[0]![0]).toEqual({
+				selector: "resource:vm-*",
+				wake: true,
+				ttl_sec: 300,
+			})
+		})
+
+		it("still reports a genuinely invalid argument", async () => {
+			const execute = vi.fn().mockResolvedValue("never")
+			mockTask.assistantMessageContent = [
+				{
+					type: "tool_use",
+					id: "tool_call_events_subscribe_bad",
+					name: "events_subscribe",
+					params: {},
+					nativeArgs: { selector: "resource:vm-*", wake: "maybe" },
+					partial: false,
+				},
+			]
+
+			vi.mocked(customToolRegistry.isDispatchable).mockReturnValue(true)
+			vi.mocked(customToolRegistry.getDispatchable).mockReturnValue({
+				name: "events_subscribe",
+				description: "Subscribe to bus events",
+				parameters: z.object({ selector: z.string(), wake: z.boolean().optional() }),
+				execute,
+			} as any)
+
+			await presentAssistantMessage(mockTask)
+
+			expect(execute).not.toHaveBeenCalled()
+			expect(mockTask.say).toHaveBeenCalledWith("error", expect.stringContaining("validation failed"))
 		})
 	})
 

@@ -201,12 +201,12 @@ describe("ReplyTool — answering a request that arrived over the mesh", () => {
 		deliverToTask = vi.fn(async (_id: string, envelope: Envelope) => envelope)
 		sent = []
 		transport = {
-			canRoute: vi.fn(() => true),
+			canRoute: vi.fn(async () => true),
 			send: vi.fn(async (envelope: Envelope) => {
 				sent.push(envelope)
 			}),
 		}
-		findMailboxTransport = vi.fn(() => transport)
+		findMailboxTransport = vi.fn(async () => transport)
 	})
 
 	afterEach(async () => {

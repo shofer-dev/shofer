@@ -7,11 +7,23 @@
  * recipient's lifecycle is never consulted, because a mailbox is exactly the
  * thing that makes a recipient's state irrelevant to a sender.
  *
- * A `to` this host cannot resolve is not automatically unreachable: after the
- * local lookup fails the id is offered to the plugin-registered **mailbox
- * transports**, and the `shofer-mesh` plugin claims agent ids on the A2A mesh.
- * That is what lets one send verb address a peer in another pod without the
- * tool knowing a mesh exists.
+ * # Resolving `to`, in three steps and in this order
+ *
+ * 1. **A live instance on this host** (`TaskManager`) — always wins.
+ * 2. **A registered mailbox transport** that claims the id. `shofer-mesh` claims
+ *    ids the mesh directory says are registered on ANOTHER node, which is what
+ *    lets one send verb address a peer in another pod.
+ * 3. **A dormant local task**, rehydrated from history.
+ *
+ * **The transport is asked BEFORE history, and that ordering is a bug fix rather
+ * than a preference.** Several hosts can share one task store — a worker pool on
+ * one Postgres is the deployed case — and then a task running on a SIBLING pod
+ * has a history row here too. A history-first order therefore read a remote peer
+ * as a dormant local task and did two wrong things with it: it applied the
+ * in-process ACL (refusing the send with "does not share your root task", which
+ * is meaningless across pods), and on a `wake: true` delivery it would rehydrate
+ * a SECOND live instance of a task another pod is already running. Only the
+ * directory can tell those apart, so it is consulted first.
  *
  * The full contract, including the validation order this file implements, is
  * `docs/task_messaging.md` § "The three tools".
@@ -91,23 +103,25 @@ export class SendMessageTool extends BaseTool<"send_message"> {
 				return
 			}
 
-			// 2. `to` resolves — a live instance, resumable history, or a registered
-			//    mailbox transport that claims the id. LOCAL FIRST, always: a
-			//    transport is asked only about ids this host does not hold, so it
-			//    can never quietly capture a task running here.
+			// 2. Resolve `to`: live instance → transport → dormant history.
 			const effectiveRootId = task.rootTaskId ?? task.taskId
 			const liveTarget = provider.taskManager.getManagedTaskInstance(to)
 			let targetRootId: string | undefined
 			let transport: PluginMailboxTransport | undefined
 			if (liveTarget) {
+				// A task running in THIS process. Nothing beats it, and no directory
+				// call is made — the common case pays nothing for the rare one.
 				targetRootId = liveTarget.rootTaskId ?? liveTarget.taskId
 			} else {
-				try {
-					const { historyItem } = await provider.getTaskWithId(to)
-					targetRootId = historyItem.rootTaskId ?? historyItem.id
-				} catch {
-					transport = provider.findMailboxTransport?.(to)
-					if (!transport) {
+				// Ask the mesh BEFORE history: on a pool sharing one task store, a
+				// sibling pod's live task has a history row here, and only the
+				// directory can tell it from a dormant local one.
+				transport = await provider.findMailboxTransport?.(to)
+				if (!transport) {
+					try {
+						const { historyItem } = await provider.getTaskWithId(to)
+						targetRootId = historyItem.rootTaskId ?? historyItem.id
+					} catch {
 						pushToolResult(
 							formatResponse.toolError(
 								`Task ${to} is not reachable from this host and no mesh transport claims it. ` +
@@ -120,13 +134,15 @@ export class SendMessageTool extends BaseTool<"send_message"> {
 				}
 			}
 
-			// 3 & 4 are the IN-PROCESS gate, and they apply only to an in-process
-			// send. A remote peer shares no root task by construction and appears in
+			// 3 & 4 are the IN-PROCESS gate, and they apply only to the LOCAL
+			// branches (a live instance, or a dormant task rehydrated from history).
+			// A remote peer shares no root task by construction and appears in
 			// nobody's `knownPeers`, so applying either to a transport-routed
-			// envelope would refuse every remote send there is. What gates a remote
-			// send instead is the message-broker's A2A facet — badge, registration,
-			// policy pairing, target liveness — which is a trusted gate, unlike this
-			// process (`docs/messaging/a2a_messaging.md` §4.3).
+			// envelope would refuse every remote send there is — which is exactly
+			// the defect the ordering above fixes. What gates a remote send instead
+			// is the message-broker's A2A facet — badge, registration, policy
+			// pairing, target liveness — a trusted gate, unlike this process
+			// (`docs/messaging/a2a_messaging.md` §4.3).
 			if (!transport) {
 				// 3. Same tree. A root id is the boundary of a conversation.
 				if (targetRootId !== effectiveRootId) {

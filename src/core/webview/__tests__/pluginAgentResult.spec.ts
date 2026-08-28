@@ -12,7 +12,13 @@
 import type { PluginDeliverInput, ShoferMessage } from "@shofer/types"
 import { PLUGIN_TASK_LIMIT_ERROR, PLUGIN_UNKNOWN_MODE_ERROR } from "@shofer/types"
 
-import { completeEnvelope, lastCompletionResult, taskLimitError, unknownModeError } from "../pluginAgentResult"
+import {
+	assertNotLiveElsewhere,
+	completeEnvelope,
+	lastCompletionResult,
+	taskLimitError,
+	unknownModeError,
+} from "../pluginAgentResult"
 
 function say(name: string, text: string): ShoferMessage {
 	return { ts: 0, type: "say", say: name as ShoferMessage["say"], text }
@@ -115,5 +121,37 @@ describe("completeEnvelope", () => {
 		expect(env.deadline).toBe(2_000)
 		expect(env.wake).toBe(false)
 		expect(env.plane).toBe("bus")
+	})
+})
+
+/**
+ * The guard in front of every rehydrate. It is the fix for the live-verified defect in
+ * which a worker pool sharing one Postgres task store could rehydrate a task a SIBLING
+ * pod was already running — two agent loops on one task id, both persisting.
+ */
+describe("assertNotLiveElsewhere", () => {
+	const transport = { canRoute: async () => true, send: async () => {} }
+
+	it("allows the rehydrate when no transport claims the id", async () => {
+		const find = vi.fn(async () => undefined)
+		await expect(assertNotLiveElsewhere("task-1", find)).resolves.toBeUndefined()
+		expect(find).toHaveBeenCalledWith("task-1")
+	})
+
+	it("REFUSES when a transport says the task is live on another node", async () => {
+		await expect(assertNotLiveElsewhere("task-1", async () => transport)).rejects.toThrow(/is live on another node/)
+	})
+
+	it("names the task and points at the route that does work", async () => {
+		let message = ""
+		try {
+			await assertNotLiveElsewhere("task-1", async () => transport)
+		} catch (e) {
+			message = (e as Error).message
+		}
+		expect(message).toContain("task-1")
+		expect(message).toContain("send_message")
+		// It must not read as "unreachable" — the task is fine, it is just not ours.
+		expect(message).toContain("must not rehydrate it")
 	})
 })

@@ -178,16 +178,38 @@ but the caller's own loop.
 | `timeout_sec` | number                          | –        | `deadline = now + timeout_sec`; defaults per kind                                                                         |
 | `wake`        | boolean                         | –        | defaults per kind                                                                                                         |
 
-Validation runs in this order, and each failure is its own error message:
+`to` is resolved in **three steps, in this order**, and the order is load-bearing:
+
+1. **A live instance on this host** (`TaskManager`). Always wins, and costs nothing.
+2. **A registered mailbox transport** that claims the id — the mesh, for a peer in
+   another pod.
+3. **A dormant local task**, rehydrated from history.
+
+**The transport is asked before history**, because history alone cannot tell a
+dormant local task from a live remote one: several hosts can share a single task
+store (a worker pool on one Postgres), and then a task running on a sibling pod
+has a history row here too. Reading it as local did two wrong things — it applied
+the in-process ACL to a remote peer (refusing with "does not share your root
+task", which means nothing across pods), and on a `wake: true` delivery it would
+rehydrate a **second live instance** of a task the sibling was already running.
+Only the directory distinguishes them, so it is consulted first; `canRoute` is
+asynchronous for exactly that reason, and answers `false` whenever the answer is
+unknown, so an unclaimed id still falls through to history.
+
+**The in-process ACL applies to the local branches only.** Both checks below are
+about a shared `rootTaskId`, which a remote peer does not have by construction;
+what gates a remote send is the message-broker's A2A facet — badge, registration,
+policy pairing, target liveness — which, unlike this process, is a trusted gate.
 
 ```mermaid
 flowchart TD
     S["send_message — to, body, kind, subject, timeout_sec, wake"]
     V1{"to is the caller itself"}
-    V2{"to resolves — live instance,<br/>resumable history, or a transport that canRoute"}
+    L1{"a live instance on this host"}
+    L2{"a transport claims it — canRoute"}
+    L3{"resumable history"}
     V3{"caller is the root task"}
     V4{"to is in the caller's knownPeers"}
-    LOC{"local task id"}
     TR["hand to the mailbox transport —<br/>the mesh relay"]
     CAP{"recipient's box is full"}
     D["Task.deliver — persist, emit delivered, wake"]
@@ -196,18 +218,21 @@ flowchart TD
 
     S --> V1
     V1 -->|yes| X
-    V1 -->|no| V2
-    V2 -->|no| X
-    V2 -->|yes| V3
-    V3 -->|"yes — omnipotent in its own tree"| LOC
+    V1 -->|no| L1
+    L1 -->|yes| V3
+    L1 -->|no| L2
+    L2 -->|yes| TR
+    L2 -->|no| L3
+    L3 -->|no| X
+    L3 -->|yes| V3
+    V3 -->|"yes — omnipotent in its own tree"| CAP
     V3 -->|no| V4
     V4 -->|no| X
-    V4 -->|yes| LOC
-    LOC -->|no| TR
-    LOC -->|yes| CAP
+    V4 -->|yes| CAP
     CAP -->|yes| X
     CAP -->|no| D
     D --> OK
+    TR --> OK
 ```
 
 **There is no busy gate.** The recipient's lifecycle is not consulted at all,
@@ -547,10 +572,12 @@ than "seen by a plugin". An `a2a_notify` becomes a `notification` carrying the
 claim id.
 
 Outbound, the mesh plugin registers a **mailbox transport** with the host —
-`{ canRoute(to), send(envelope) }` — and `send_message` with a `to` that no local
-lookup resolves is handed to it. **Local first, always**: a transport is offered
-only ids this host does not hold, so it can never quietly route a message
-off-node for a task running right here. The recipient's `reply` travels back the
+`{ canRoute(to), send(envelope) }` — and `send_message` hands it any `to` that no
+LIVE local instance resolves, before consulting history (see
+[the three tools](#the-three-tools)). `canRoute` asks the mesh directory whether
+that id is registered on another node: "registered here" is `false` and costs no
+call, "registered elsewhere" is `true`, and anything unknown is `false` so the
+host falls through to its own history. The recipient's `reply` travels back the
 same way, and its `in_reply_to` — which is the relay's own `message_id` — is how
 the plugin finds the exchange to answer on, so no second correlation map exists
 to drift.
@@ -570,6 +597,11 @@ the mailbox's contract rather than the mesh's:
   remote send there is. What gates a remote send is the message-broker's A2A
   facet — badge, registration, policy pairing, target liveness — which, unlike
   this process, is a trusted gate.
+- **A host never rehydrates a task that is live elsewhere.** The same directory
+  answer guards `Task.deliver`'s rehydrate path, so the AgentApi mailbox door and
+  a `wake: true` delivery both refuse with `Task <id> is live on another node`
+  rather than starting a second agent loop on one task id — which, on a pool
+  sharing a task store, is what a history-only check would have done.
 
 That is what let the five `agents_*` messaging verbs disappear into the core
 three:

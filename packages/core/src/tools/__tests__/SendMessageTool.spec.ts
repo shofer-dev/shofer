@@ -224,12 +224,12 @@ describe("SendMessageTool — remote routing over a mailbox transport", () => {
 		sent = []
 		deliverToTask = vi.fn(async (_id: string, envelope: Envelope) => envelope)
 		transport = {
-			canRoute: vi.fn(() => true),
+			canRoute: vi.fn(async () => true),
 			send: vi.fn(async (envelope: Envelope) => {
 				sent.push(envelope)
 			}),
 		}
-		findMailboxTransport = vi.fn(() => transport)
+		findMailboxTransport = vi.fn(async () => transport)
 	})
 
 	const buildProvider = (overrides: Record<string, any> = {}) => ({
@@ -283,16 +283,68 @@ describe("SendMessageTool — remote routing over a mailbox transport", () => {
 		expect(results[0]).toContain("over the agent mesh")
 	})
 
-	it("LOCAL FIRST: a resolvable id never reaches a transport, even one claiming everything", async () => {
+	it("a LIVE local instance wins outright — no directory call is made for it", async () => {
 		const provider = buildProvider({
-			getTaskWithId: vi.fn(async (id: string) => ({ historyItem: { id, rootTaskId: "root-1" } })),
+			taskManager: {
+				getManagedTaskInstance: vi.fn(() => ({ taskId: "peer-1", rootTaskId: "root-1" })),
+				getManagedTask: vi.fn().mockReturnValue(undefined),
+				setState: vi.fn(),
+			},
 		})
 		const { callbacks } = buildCallbacks()
 		await tool.execute({ to: "peer-1", body: "ping" }, buildTask({ provider }), callbacks)
 
 		expect(deliverToTask).toHaveBeenCalledTimes(1)
 		expect(transport.send).not.toHaveBeenCalled()
+		// The common path pays nothing for the rare one.
 		expect(findMailboxTransport).not.toHaveBeenCalled()
+	})
+
+	/**
+	 * The live-verified defect: two pods of one worker pool share a Postgres task
+	 * store, so a task running on the SIBLING pod has a history row here too. With
+	 * history consulted first it was read as a dormant local task — refused with an
+	 * in-process rule that means nothing across pods, and, on a waking delivery,
+	 * rehydrated into a second live instance of somebody else's task.
+	 */
+	it("asks the transport BEFORE history, so a shared-store sibling is not mistaken for a local task", async () => {
+		const getTaskWithId = vi.fn(async (id: string) => ({ historyItem: { id, rootTaskId: "another-root" } }))
+		const provider = buildProvider({ getTaskWithId })
+		const { callbacks, results } = buildCallbacks()
+		await tool.execute({ to: "sibling-task", body: "ping", kind: "request" }, buildTask({ provider }), callbacks)
+
+		expect(sent).toHaveLength(1)
+		expect(sent[0]).toMatchObject({ to: "sibling-task", plane: "a2a" })
+		// History was never consulted, so its foreign root never produced a refusal.
+		expect(getTaskWithId).not.toHaveBeenCalled()
+		expect(deliverToTask).not.toHaveBeenCalled()
+		expect(results[0]).not.toContain("does not share your root task")
+	})
+
+	it("falls through to history when no transport claims the id — a dormant local task", async () => {
+		findMailboxTransport = vi.fn(async () => undefined)
+		const getTaskWithId = vi.fn(async (id: string) => ({ historyItem: { id, rootTaskId: "root-1" } }))
+		const provider = buildProvider({ getTaskWithId })
+		const { callbacks } = buildCallbacks()
+		await tool.execute({ to: "peer-1", body: "ping" }, buildTask({ provider }), callbacks)
+
+		expect(findMailboxTransport).toHaveBeenCalledWith("peer-1")
+		expect(getTaskWithId).toHaveBeenCalledWith("peer-1")
+		expect(deliverToTask).toHaveBeenCalledTimes(1)
+		expect(transport.send).not.toHaveBeenCalled()
+	})
+
+	it("still applies the in-process ACL on the dormant-local branch", async () => {
+		findMailboxTransport = vi.fn(async () => undefined)
+		const provider = buildProvider({
+			getTaskWithId: vi.fn(async (id: string) => ({ historyItem: { id, rootTaskId: "root-1" } })),
+		})
+		const { callbacks, results } = buildCallbacks()
+		// knownPeers holds "peer-1" only, and this is a sub-task.
+		await tool.execute({ to: "peer-9", body: "ping" }, buildTask({ provider }), callbacks)
+
+		expect(results[0]).toContain("not in your allowed peer set")
+		expect(deliverToTask).not.toHaveBeenCalled()
 	})
 
 	it("skips the in-process ACL for a remote send — the broker is the gate", async () => {

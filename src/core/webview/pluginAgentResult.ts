@@ -2,7 +2,8 @@
  * The host-side decisions behind `ctx.agent.spawn` and `ctx.agent.deliver` that are
  * worth reading on their own: what a spawned task's ANSWER is, what happens when a
  * caller names a mode the host does not define, what happens at the parallel-task
- * limit, and how a plugin's partial envelope is completed into a real one.
+ * limit, how a plugin's partial envelope is completed into a real one, and when this
+ * host must REFUSE to rehydrate a task from history.
  *
  * Both exist because a plugin driving Shofer as a durable job
  * ([`docs/plugin_system.md`](../../../docs/plugin_system.md) §14) has no user
@@ -102,4 +103,36 @@ export function completeEnvelope(
 ): Envelope {
 	const { taskId: _taskId, id, ...fields } = input
 	return { ...fields, id: id ?? mintId(), to, sent_at: now }
+}
+
+/**
+ * Refuse to rehydrate `taskId` from history when a registered mailbox transport says it
+ * is live on another node.
+ *
+ * This is the guard in front of every rehydrate — the AgentApi mailbox door and the wake
+ * path both reach it — and it exists because **history is not proof of locality**. Hosts
+ * can share one task store (a worker pool on a single Postgres is the deployed case), so
+ * a task running on a sibling pod has a history row here as well. Rehydrating from it
+ * would start a SECOND live agent loop on one task id, with both instances persisting to
+ * the same rows: a far worse failure than a refused delivery, and one that is nearly
+ * invisible afterwards.
+ *
+ * A transport claiming the id is the only signal that distinguishes the two, which is why
+ * it is asked BEFORE the history lookup rather than after it.
+ *
+ * Takes the lookup as a parameter rather than the provider, so the decision is testable
+ * without one.
+ */
+export async function assertNotLiveElsewhere(
+	taskId: string,
+	findMailboxTransport: (to: string) => Promise<unknown>,
+): Promise<void> {
+	if (!(await findMailboxTransport(taskId))) {
+		return
+	}
+	throw new Error(
+		`Task ${taskId} is live on another node: it is registered on the mesh from a different ` +
+			`host, so this one must not rehydrate it. Send to it over the mesh instead ` +
+			`(send_message routes there automatically).`,
+	)
 }
