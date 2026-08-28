@@ -681,6 +681,13 @@ stuck, and remains parent-only.
 The `alwaysAllowSubtasks` gate on _sending_ is removed: there is no blocking
 send left for it to guard ([`auto_approval.md`](auto_approval.md)).
 
+"Always" means **ahead of the master switch** as well: the three are approved
+before `autoApprovalEnabled` is consulted, so a served node with no posture
+(the `ask` default) still lets a task read its own mail. Gating `wait` behind
+a human is exactly the starvation the mailbox exists to end — an L1 task was
+observed parked for five minutes on "Run the `wait` tool" before this was
+made explicit.
+
 ## Edge cases
 
 | Situation                                                  | Behaviour                                                                                                                                                                                                                                                              |

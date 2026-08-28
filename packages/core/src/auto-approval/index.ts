@@ -45,6 +45,19 @@ export async function checkAutoApproval({
 		return { decision: "approve" }
 	}
 
+	// The mailbox tools are approved BEFORE the master switch (docs/task_messaging.md
+	// § "Auto-approval"). A node whose posture is "ask" — no `autoApprovalEnabled`,
+	// the served-node default — must still let a task read its own mail: gating
+	// `wait` behind a human is exactly the starvation the mailbox exists to end
+	// (live-verified: an L1 task parked five minutes on "Run the wait tool").
+	// None of the three can block anything but the caller's own loop and none is
+	// terminal: `sendMessage` has no side effect on the sender and the recipient
+	// decides whether to answer, `reply` answers a request the task already holds,
+	// and `wait` parks the caller under a mandatory timeout.
+	if (ask === "tool" && isMailboxTool(text)) {
+		return { decision: "approve" }
+	}
+
 	if (!state || !state.autoApprovalEnabled) {
 		return { decision: "ask" }
 	}
@@ -202,17 +215,6 @@ export async function checkAutoApproval({
 			return { decision: "approve" }
 		}
 
-		// The mailbox tools are unconditionally auto-approved (docs/task_messaging.md
-		// § "Auto-approval"). None of them can block anything but the caller's own
-		// loop and none is terminal: `sendMessage` has no side effect on the sender
-		// and the recipient decides whether to answer, `reply` answers a request the
-		// task already holds, and `wait` parks the caller under a mandatory timeout.
-		// The `alwaysAllowSubtasks` gate that used to guard a SYNC send is gone with
-		// the blocking send it existed for.
-		if (["sendMessage", "reply", "wait"].includes(tool?.tool as string)) {
-			return { decision: "approve" }
-		}
-
 		// Background-task status tools are purely informational queries against in-memory
 		// state owned by the parent task. They mutate nothing, so they are always auto-approved
 		// — matching the UX of `updateTodoList` / `skill`.
@@ -308,3 +310,16 @@ export async function checkAutoApproval({
 }
 
 export { AutoApprovalHandler } from "./AutoApprovalHandler.js"
+
+/** The chat-row payloads of the three mailbox tools, approved ahead of the master switch. */
+const MAILBOX_TOOL_ROWS = new Set(["sendMessage", "reply", "wait"])
+
+/** True when a `tool` ask's payload names one of the mailbox tools; a malformed payload is not one. */
+function isMailboxTool(text: string | undefined): boolean {
+	try {
+		const tool = (JSON.parse(text || "{}") as { tool?: unknown }).tool
+		return typeof tool === "string" && MAILBOX_TOOL_ROWS.has(tool)
+	} catch {
+		return false
+	}
+}

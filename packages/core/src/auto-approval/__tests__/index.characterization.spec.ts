@@ -82,6 +82,25 @@ describe("checkAutoApproval — tool path characterization", () => {
 		})
 	})
 
+	// "Always" means ahead of the MASTER switch too: a served node with no posture
+	// (`autoApprovalEnabled` false) must still let a task read its own mail — an
+	// L1 task was live-observed parked five minutes on "Run the wait tool".
+	describe("the mailbox tools are approved ahead of the master switch", () => {
+		it.each(["sendMessage", "reply", "wait"])("approves %s with autoApprovalEnabled OFF", async (tool) => {
+			expect(
+				await checkAutoApproval({ state: enabled({ autoApprovalEnabled: false }), ...toolAsk(tool) }),
+			).toEqual({ decision: "approve" })
+		})
+		it.each(["sendMessage", "reply", "wait"])("approves %s with no state at all", async (tool) => {
+			expect(await checkAutoApproval({ state: undefined, ...toolAsk(tool) })).toEqual({ decision: "approve" })
+		})
+		it("still asks for an unrelated tool with the master switch off", async () => {
+			expect(
+				await checkAutoApproval({ state: enabled({ autoApprovalEnabled: false }), ...toolAsk("newTask") }),
+			).toEqual({ decision: "ask" })
+		})
+	})
+
 	describe("browser group (alwaysAllowBrowser)", () => {
 		it("asks for a browser_ tool when off", async () => {
 			expect(await checkAutoApproval({ state: enabled(), ...toolAsk("browser_navigate") })).toEqual({
