@@ -42,7 +42,7 @@ export const MCP_PREFIX = "mcp:" // MCP tool spans are named `mcp:<server>/<tool
 // The tools whose spans are TIME SPENT WAITING rather than tool execution.
 // `waitsForTask` on the span is the authoritative flag; the names are the
 // fallback for spans recorded before it existed.
-const WAITING_TOOLS = new Set(["wait", "wait_for_task"])
+const WAITING_TOOLS = new Set(["wait"])
 
 export function formatMs(ms: number): string {
 	if (ms < 1000) return `${Math.round(ms)}ms`

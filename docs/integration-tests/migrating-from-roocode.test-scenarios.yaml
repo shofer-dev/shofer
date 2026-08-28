@@ -60,30 +60,32 @@ scenarios:
   # §2  Async / Background Tasks
   # ---------------------------------------------------------------------------
 
-  - id: background-task-spawning
+  - id: concurrent-task-spawning
     description: >
-      The LLM spawns a background child and the parent continues its own work.
+      The LLM spawns a child and the parent continues its own work.
     steps:
-      - Send a message asking the LLM to spawn 2 background tasks:
+      - Send a message asking the LLM to spawn 2 tasks:
         1. "Write a haiku about programming"
         2. "List the files in the current directory"
       - While children run, send a follow-up question to the parent.
       - Verify the parent responds without waiting for children.
 
-  - id: wait-for-task-all
+  - id: wait-for-both-child-results
     description: >
-      Parent blocks on wait_for_task(all) until every child finishes.
+      Parent parks in wait until both children's result envelopes arrive.
     steps:
-      - Send a message asking the LLM to spawn 2 background tasks and then
-        call wait_for_task with wait="all".
+      - Send a message asking the LLM to spawn 2 tasks and then call wait
+        until both results are in its mailbox.
       - Verify the parent does not respond until both children complete.
       - Verify the final response includes results from both children.
+      - Note that the first result wakes the parent, so a second wait call is
+        expected before both are in hand.
 
   - id: check-task-status
     description: >
       Parent polls a child's status via check_task_status.
     steps:
-      - Start a long-running background child (sleep 10).
+      - Start a long-running child (sleep 10).
       - Immediately ask the parent to call check_task_status.
       - Verify the response shows the child is still running.
       - Wait for completion and call check_task_status again.

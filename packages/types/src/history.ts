@@ -134,7 +134,7 @@ export const historyItemSchema = z.object({
 	backgroundChildIds: z.array(z.string()).optional(),
 	isBackground: z.boolean().optional(),
 	/** Task IDs that this task is allowed to peer-communicate with
-	 *  (check_task_status, wait_for_task, send_message, list_background_tasks).
+	 *  (check_task_status, wait, send_message, list_background_tasks).
 	 *  Populated by peer_task_ids at spawn time.  Survives restarts. */
 	peerIds: z.array(z.string()).optional(),
 	// Skills that have been loaded via skills and should survive rehydration
@@ -149,7 +149,7 @@ export const historyItemSchema = z.object({
 	deletions: z.number().optional(),
 	/**
 	 * Accumulated active wall-clock time in milliseconds — time spent `running`
-	 * or `waiting` (blocked on another task: wait_for_task, a blocking new_task,
+	 * or `waiting` (blocked on another task: wait on the mailbox,
 	 * or a `wait` on the mailbox). Excludes only idle-equivalent states:
 	 * waiting for user input (`waiting_input`), manually paused (`paused`), and
 	 * idle. Matches the Stats "runtime" total. Survives restarts; on resume, new

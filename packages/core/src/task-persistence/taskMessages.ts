@@ -10,7 +10,7 @@
  *
  * That equivalence is the whole point, and its absence was a live bug: these
  * functions used to call the SQLite store directly, so a parent asking
- * `wait_for_task` about a child driven by another process read an empty
+ * `wait` about a child driven by another process read an empty
  * transcript from a local `.db` file the child had never written to — reporting
  * the child's status with no result, silently, exactly the failure
  * `backend.ts`'s selection is documented to refuse.

@@ -89,8 +89,8 @@ was modified externally before reload, it is evicted from context.
 
 **Goal:** Verify multiple concurrent questions are serialized via the FIFO queue.
 
-1. Start 3 Shofer tasks simultaneously (or use `new_task` with
-   `is_background=true`).
+1. Start 3 Shofer tasks simultaneously (or spawn three children with
+   `new_task`, which always runs them concurrently).
 2. Each task should ask a distinct question via `ask_live_memory`.
 3. Observe the Live Memory status: transitions `Ready` → `Busy` → `Ready`
    → `Busy` → `Ready` → `Busy` → `Ready` (no overlapping Busy periods).

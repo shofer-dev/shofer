@@ -274,54 +274,110 @@ scenarios:
 
   # ── Task management tools ─────────────────────────────────────────────────
 
-  - name: "new_task: synchronous child completes and parent resumes"
-    tool: new_task
-    params:
-      mode: ask
-      message: "What is 2+2?"
-      is_background: false
-    expect: allowed_and_executes
-    note: "Parent blocks until child attempt_completion"
-
-  - name: "new_task: background child starts and parent continues"
+  - name: "new_task: child starts and parent continues"
     tool: new_task
     params:
       mode: ask
       message: "List files in the root"
-      is_background: true
     expect: allowed_and_executes
-    note: "Parent continues immediately, child runs concurrently"
+    note: "new_task is concurrent-only — the parent continues immediately"
 
   - name: "check_task_status: returns running status for active child"
     tool: check_task_status
     params:
-      task_id: "${background_child_id}"
+      task_id: "${child_1_id}"
     expect: allowed_and_executes
 
-  - name: "wait_for_task all: blocks until all listed tasks complete"
-    tool: wait_for_task
-    params:
-      task_ids:
-        - "${child_1_id}"
-        - "${child_2_id}"
-      wait: all
-    expect: allowed_and_executes
-
-  - name: "wait_for_task any: returns when first task completes"
-    tool: wait_for_task
-    params:
-      task_ids:
-        - "${child_1_id}"
-        - "${child_2_id}"
-      wait: any
-    expect: allowed_and_executes
-
-  - name: "cancel_tasks: cancels running background children"
+  - name: "cancel_tasks: cancels running children"
     tool: cancel_tasks
     params:
       task_ids:
-        - "${background_child_id}"
+        - "${child_1_id}"
     expect: allowed_and_executes
+
+  # ── Mailbox tools ─────────────────────────────────────────────────────────
+  # docs/task_messaging.md. All three are always available and auto-approved.
+
+  - name: "send_message: missing required param `to` should error"
+    tool: send_message
+    params:
+      body: "Which tables does UserService use?"
+    expect: error
+    error_contains: "to"
+
+  - name: "send_message: notification is the default kind"
+    tool: send_message
+    params:
+      to: "${child_1_id}"
+      body: "The staging DB is the one to use."
+    expect: allowed_and_executes
+    note: "kind defaults to notification, wake defaults to false, subject is derived from the first 80 chars of body"
+
+  - name: "send_message: request carries an explicit subject and deadline"
+    tool: send_message
+    params:
+      to: "${child_1_id}"
+      body: "Which tables does UserService use?"
+      kind: request
+      subject: "UserService tables"
+      timeout_sec: 120
+      wake: true
+    expect: allowed_and_executes
+
+  - name: "send_message: sending to yourself is rejected"
+    tool: send_message
+    params:
+      to: "${self_task_id}"
+      body: "hello"
+    expect: error
+
+  - name: "send_message: a task outside the caller's root is rejected"
+    tool: send_message
+    params:
+      to: "${unrelated_root_task_id}"
+      body: "hello"
+    expect: error
+    note: "the ACL is shared rootTaskId + knownPeers, unless a registered transport can route the id"
+
+  - name: "wait: timeout_sec 0 checks the box and returns immediately"
+    tool: wait
+    params:
+      timeout_sec: 0
+    expect: allowed_and_executes
+    note: "returns every pending envelope in full; an empty box returns [] and is NOT an error"
+
+  - name: "wait: parks until a reply to a named message arrives"
+    tool: wait
+    params:
+      timeout_sec: 120
+      in_reply_to: "${request_message_id}"
+    expect: allowed_and_executes
+    note: "the filter is the wake CONDITION only — the return value is always the whole box"
+
+  - name: "wait: from filter wakes on a message from a named peer"
+    tool: wait
+    params:
+      timeout_sec: 60
+      from:
+        - "${child_1_id}"
+    expect: allowed_and_executes
+
+  - name: "reply: answers a request out of the caller's own box"
+    tool: reply
+    params:
+      replies:
+        - message_id: "${request_message_id}"
+          body: "users, user_sessions, user_roles"
+    expect: allowed_and_executes
+
+  - name: "reply: an unknown or expired message_id fails that item"
+    tool: reply
+    params:
+      replies:
+        - message_id: "00000000-0000-4000-8000-000000000000"
+          body: "too late"
+    expect: error
+    note: "reject, don't drop — the per-item outcome is reported"
 
   # ── MCP async tools ───────────────────────────────────────────────────────
 
@@ -372,20 +428,6 @@ scenarios:
     expect: allowed_and_executes
     preconditions:
       live_memory_configured: true
-
-  # ── sleep tool ────────────────────────────────────────────────────────────
-
-  - name: "sleep: pauses for specified duration"
-    tool: sleep
-    params:
-      seconds: 0.5
-    expect: allowed_and_executes
-
-  - name: "sleep: rejects duration above maximum"
-    tool: sleep
-    params:
-      seconds: 600
-    expect: error
 
   # ── fetch_web_page ────────────────────────────────────────────────────────
 

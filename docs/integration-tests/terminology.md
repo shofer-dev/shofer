@@ -53,10 +53,10 @@ Tests that verify the canonical terminology, naming, and concepts described in [
     - `completed` → green checkmark icon
     - `error` → red warning icon
 
-### TS2 — `waiting` Lifecycle Appears During `wait_for_task`
+### TS2 — `waiting` Lifecycle Appears During `wait`
 
-- **Setup**: Spawn a long-running background subtask via `new_task` with `is_background=true`.
-- **Action**: Call `wait_for_task` from the parent. Observe the parent's state dot.
+- **Setup**: Spawn a long-running subtask via `new_task`.
+- **Action**: Call `wait` from the parent. Observe the parent's state dot.
 - **Assert**: The parent transitions to yellow `waiting` state (not `idle` and not `running`). When the child completes, the parent resumes to `running`.
 
 ### TS3 — Rating Overlay Appears After Completion

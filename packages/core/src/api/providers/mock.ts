@@ -164,7 +164,7 @@ const BUILT_IN_SCENARIOS: MockScenario[] = [
 			{
 				tool: {
 					name: "new_task",
-					arguments: { mode: "code", message: "Reply with: SUBTASK_OK", is_background: "false" },
+					arguments: { mode: "code", message: "Reply with: SUBTASK_OK" },
 				},
 			},
 			{ response: "PARENT_GOT: SUBTASK_OK" },

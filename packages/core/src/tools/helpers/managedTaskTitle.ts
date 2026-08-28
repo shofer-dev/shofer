@@ -2,7 +2,7 @@
  * Shared helper for resolving the human-readable title of a managed background task
  * from the parent Task's TaskManager.
  *
- * Background tools (`check_task_status`, `wait_for_task`, `list_background_tasks`)
+ * Background tools (`check_task_status`, `wait`, `list_background_tasks`)
  * all need to surface the child task's display name to the UI. This module
  * centralizes both the deref-chain (`providerRef → taskManager → managedTask`)
  * and the "missing name" policy: we always return `undefined` when no name is

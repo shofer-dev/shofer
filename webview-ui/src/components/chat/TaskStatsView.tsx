@@ -17,8 +17,7 @@ import type { ShoferMessage, ApiRequestFinishedPayload } from "@shofer/types"
  * shown as "Overhead":
  *   • Waiting for model (TTFB)   • Thinking (reasoning)   • Streaming response
  *   • Tool execution   • MCP calls (spans named `mcp:<server>/<tool>`)
- *   • Waiting (parked in `wait` on the mailbox, `wait_for_task`, or a blocking
- *     new_task)   • Overhead
+ *   • Waiting (parked in `wait` on the mailbox)   • Overhead
  */
 
 // ── Categories ──
@@ -54,7 +53,7 @@ const CAT_BY_KEY: Record<CatKey, CatMeta> = CATEGORIES.reduce(
 // The tools whose spans are TIME SPENT WAITING rather than tool execution.
 // `waitsForTask` on the span is the authoritative flag; the names are the
 // fallback for spans recorded before it existed.
-const WAITING_TOOLS = new Set(["wait", "wait_for_task"])
+const WAITING_TOOLS = new Set(["wait"])
 const MCP_PREFIX = "mcp:" // MCP tool spans are named `mcp:<server>/<tool>`
 
 // ── Helpers ──

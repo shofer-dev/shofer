@@ -438,7 +438,7 @@ export const toolSpanSchema = z.object({
 	spawnedTaskId: z.string().optional(),
 	/**
 	 * True when this span represents the task *blocking on another task* rather
-	 * than doing its own work: wait_for_task, a foreground (blocking) new_task,
+	 * than doing its own work: wait on the mailbox,
 	 * or a `wait` parked on the mailbox. Categorised as "waiting on
 	 * subtasks" in the Stats/Trace views.
 	 */

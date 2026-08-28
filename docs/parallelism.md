@@ -583,11 +583,9 @@ Task instances are **not** automatically rehydrated — tasks remain idle until 
 
 4. **A child's result is DELIVERED, not polled for.** `attempt_completion` puts it in the parent's mailbox with `wake: true`, so a parent that ended its turn is restarted and one that is parked in `wait` returns at once. `check_task_status` remains for inspecting a child mid-flight, which is a different question.
 
-5. **Sync `new_task` must be called alone.** The model instruction enforces single-tool-per-turn for synchronous delegation to prevent the parent from issuing conflicting tool calls while the child runs.
+5. **`alwaysAllow*` inheritance.** Children inherit the parent's `alwaysAllow*` settings. Mode is specified by the caller; if not provided, defaults to the parent's current mode.
 
-6. **`alwaysAllow*` inheritance.** Background children inherit the parent's `alwaysAllow*` settings. Mode is specified by the caller; if not provided, defaults to the parent's current mode.
-
-7. **Children are aborted when parent terminates.** `AttemptCompletionTool` explicitly calls `Task.abortBackgroundChildren()` before completing the parent. `TaskManager`'s abort handler similarly cleans up children when a parent is stopped. No child outlives its parent in normal operation.
+6. **Children are aborted when parent terminates.** `AttemptCompletionTool` explicitly calls `Task.abortBackgroundChildren()` before completing the parent. `TaskManager`'s abort handler similarly cleans up children when a parent is stopped. No child outlives its parent in normal operation.
 
 ---
 
@@ -597,15 +595,11 @@ Discovered during source-code verification. These are areas where the documentat
 
 ### Documentation Gaps
 
-1. **`blockingChildResolvers` mechanism**: The sync `new_task` flow relies on `ShoferProvider.blockingChildResolvers` — a `Map<childTaskId, resolveFn>` set by `NewTaskTool.execute()` before the child runs. When the child calls `attempt_completion`, `resumeBlockingParent()` fires the resolver to unblock the parent's suspended `NewTaskTool.execute()`. This resolver-registration protocol is not described in the doc.
+1. **`cleanupBackgroundChildren()` on Task**: [`Task.cleanupBackgroundChildren()`](../packages/core/src/task/Task.ts) reaps dead children whose instances are no longer alive in `TaskManager`, consulting persisted history for final status. This method exists but has no corresponding documentation.
 
-2. **`cleanupBackgroundChildren()` on Task**: [`Task.cleanupBackgroundChildren()`](../packages/core/src/task/Task.ts) reaps dead children whose instances are no longer alive in `TaskManager`, consulting persisted history for final status. This method exists but has no corresponding documentation.
+2. **`TaskManager` events consumed by tools**: `check_task_status` consults the `managedTasks` map for live state. Its state dependency is not documented.
 
-3. **`TaskManager` events consumed by tools**: `check_task_status` consults the `managedTasks` map for live state. Its state dependency is not documented.
-
-4. **`PendingParentQuestionInfo` interface**: Defined in [`@shofer/types/src/task.ts`](../packages/types/src/task.ts:282) with fields `{ question, suggestions }`. The question routing flow (§"`ask_followup_question` routing") uses this interface but it isn't formally introduced.
-
-5. **Auto-approval granularity for background tools**: `check_task_status` and `list_background_tasks` are unconditionally auto-approved (read-only) in [`auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts); `cancel_tasks` is gated by `alwaysAllowSubtasks` because it destroys in-flight work. The doc could explain why these two tiers exist.
+3. **Auto-approval granularity for the subtask tools**: `check_task_status` and `list_background_tasks` are unconditionally auto-approved (read-only) in [`auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts); `cancel_tasks` is gated by `alwaysAllowSubtasks` because it destroys in-flight work. The doc could explain why these two tiers exist.
 
 ### Observability Gaps
 

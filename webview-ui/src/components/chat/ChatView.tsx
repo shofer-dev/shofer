@@ -961,7 +961,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		//  - "running": running an auto-approved tool (MCP call, long shell
 		//    command) or processing a tool result between API turns.
 		//  - "waiting": blocked on an external event with no pending user ask —
-		//    e.g. wait_for_task / wait_for_mcp_call (auto-approved, so shoferAsk
+		//    e.g. wait / wait_for_mcp_call (auto-approved, so shoferAsk
 		//    is cleared) or a subtask blocked on its parent. Without this the
 		//    Stop button vanished entirely and the task became un-cancellable.
 		// Mirrors TaskManager.isActive (running || waiting). In both states there

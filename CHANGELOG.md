@@ -1,6 +1,32 @@
 # Shofer Changelog
 
-## 2.2.0 — 2026-07-06 (Current)
+## 2.74.0–2.76.0 — 2026-08-28 (Current)
+
+> The **agent mailbox** release. Every message that reaches a task — from a peer, from a child, from a plugin, from the network — is now one **envelope** in one **mailbox**, read with **three tools**. Twelve overlapping tools and four plugin delivery modes collapse into that; nothing an agent sends blocks it on the recipient's schedule any more, and answering a peer no longer ends the answerer.
+
+### Behavior Changes
+
+- **`new_task` is always concurrent.** The `is_background` parameter is gone and there is no blocking mode: the parent keeps its turn, and a child's result arrives as an envelope. A parent that wants the result calls `wait`. A blocked parent could not answer its own child, cancel it, or coordinate — which is why the blocking mode existed only to be worked around.
+- **Answering a peer no longer completes your task.** The old reply mechanism was `attempt_completion`, so a task could answer exactly once, terminally. `reply` answers and keeps going.
+- **There is no busy gate.** A message to a task that is running, waiting, or waiting on input lands in its box instead of being refused. `waiting` — parked in `wait` — is now the most receptive state a task can be in, not a rejected target.
+- **Tools removed**: `send_message_to_task`, `wait_for_task`, `wait_for_message`, `answer_subtask_question`, `sleep`, and the mesh's five `agents_*` messaging verbs (`agents_send`, `agents_reply`, `agents_request`, `agents_get_response`, `agents_respond`). `sleep` is subsumed by `wait(timeout_sec=N)`, which returns at N seconds on an empty box and _earlier_ if mail arrives. `agents_discover`, `new_task`, `check_task_status`, `list_background_tasks`, `cancel_tasks`, `attempt_completion` and `ask_followup_question` are unchanged or rewired in place.
+- **Plugin API**: `ctx.agent.notify` and its four modes (`notify`/`queue`/`interrupt`/`spawn`) are replaced by the single door `ctx.agent.deliver(envelope)`. `wake` is now a field on the envelope rather than a mode; `spawn` survives as a subscription option in the mesh plugin; mid-turn `interrupt` is deleted. A plugin that delivered through the old door must port.
+
+### Features
+
+#### The mailbox
+
+- **One envelope for every plane.** `notification` (no reply expected), `request` (a reply expected, correlated by `in_reply_to`) or `reply`. Each carries an absolute **deadline** — expiry removes it, lazily at read, with no timers — and a **`wake` flag the sender chooses**, because only the sender knows whether a message is worth resuming a stopped loop for.
+- **Three tools.** `send_message(to, body, kind, subject, timeout_sec, wake)` sends to any task id, local or across the mesh; `reply([{ message_id, body }])` answers requests in a batch, per-item; `wait(timeout_sec, from?, in_reply_to?)` drains the WHOLE box in one call and parks — event-driven, never polling — when it is empty. The filters are the wake _condition_ only; the return value is always the whole box. A timeout with an empty box returns nothing and is not an error. All three are always available and auto-approved.
+- **A `# Mailbox` digest in `environment_details`**, listing pending mail with the time remaining on each, recomputed every turn. Deliberately not in the system prompt: that is the provider's prompt-cache prefix, and a countdown there would invalidate it on every request.
+- **Wake.** A delivery marked `wake` to a task whose loop has stopped restarts it; a task with no live instance is rehydrated from its history, its box loaded, and the loop resumed. Coalesced, so ten deliveries do not queue ten resumes.
+- **Persisted per task**, in its own file beside the history, bounded by deadlines plus a cap. Delivery is idempotent on the envelope id, which is what makes a network retry safe to replay.
+- **Parent and child talk through it.** A child's `attempt_completion` delivers its result to the parent's box; a child's `ask_followup_question` becomes a `request` there while ALSO raising the ask in the child's own chat — first answer wins, whichever side it comes from.
+- **`send_message` reaches across the A2A mesh.** A plugin registers a mailbox transport with `ctx.agent.registerMailboxTransport`, and a non-local recipient id routes over it; the reply comes back into the sender's box the same way. A remote sender's `wake` is a request the receiving host polices, not an instruction.
+- **Bus and work-plane deliveries land in the same box.** An event subscription carries its own `wake` and TTL; a Temporal owner message is acknowledged once the box has persisted it, so the ack means something.
+- **Telemetry**: `captureMailboxSent`, `captureMailboxDelivered`, `captureMailboxRead`, `captureMailboxExpired`.
+
+## 2.2.0 — 2026-07-06
 
 > A **plugin system** release. Shofer is now extensible: third-party and first-party plugins can contribute tools, modes, commands, skills, MCP servers, UI regions, lifecycle hooks, and background services, with a restricted host capability surface. **Live Memory has been reimplemented as a bundled first-party plugin** at full parity with the former built-in — and, as a plugin, it is now **disabled by default** and requires **explicit AI consent** before it makes any (billed) model calls. Only notable changes since 2.0.0 are listed.
 

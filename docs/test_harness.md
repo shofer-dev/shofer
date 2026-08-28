@@ -482,14 +482,15 @@ await api.deleteProfile(profileName)
 console.log("profile deleted:", !api.getProfiles().includes(profileName))
 ```
 
-### 20. Subtask (new_task tool) — foreground blocking
+### 20. Subtask (new_task tool) — spawn, then wait for the result envelope
 
-Verifies: the agent spawns a blocking foreground subtask and receives the result.
+Verifies: the agent spawns a concurrent subtask and reads its result out of the mailbox.
 
 ```bash
 shofer-local --print \
-  "Spawn a subtask (using the new_task tool, is_background=false) with the prompt \
-'Reply with: SUBTASK_OK'. After it completes, report its result prefixed with: PARENT_GOT:"
+  "Spawn a subtask (using the new_task tool) with the prompt \
+'Reply with: SUBTASK_OK', then call wait until its result arrives. Report that result \
+prefixed with: PARENT_GOT:"
 # expect: PARENT_GOT: SUBTASK_OK
 ```
 

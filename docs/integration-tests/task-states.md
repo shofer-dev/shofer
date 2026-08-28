@@ -50,25 +50,25 @@ transitions back to `running`.
 **Expected**: `running` → `waiting_input` when `TaskInteractive` fires,
 `waiting_input` → `running` when `TaskActive` fires after approval.
 
-### 4. Parent waits for child subtask → `waiting`
+### 4. Parent waits on its mailbox → `waiting`
 
-1. Start a task that spawns a background child with `is_background=true` and
-   then calls `wait_for_task`.
+1. Start a task that spawns a child with `new_task` and then calls
+   `wait(from: [<child id>])`.
 2. Observe: parent transitions to `waiting` (watch icon, blue) while child runs.
 3. Open the TaskSelector — the parent row shows `codicon-watch`, the child
    row shows the appropriate state (likely `running`).
 
-**Expected**: Parent transitions `running` → `waiting` during the
-`wait_for_task` block, and `waiting` → `running` when the child completes and
-the parent resumes.
+**Expected**: Parent transitions `running` → `waiting` for the duration of the
+`wait` park, and `waiting` → `running` when the child's `attempt_completion`
+delivers its result envelope and the parent resumes.
 
-### 5. Background child asks a question → parent sees pending question
+### 5. Child asks a question → the parent's mailbox
 
-1. Start a task that spawns a background child instructed to call
+1. Start a task that spawns a child instructed to call
    `ask_followup_question` with a specific question.
-2. Call `check_task_status` on the child — it should surface the pending
-   question.
-3. Answer via `answer_subtask_question`.
+2. Read the parent's `environment_details` — the `# Mailbox` digest should list
+   the question as a `request` envelope with a remaining time.
+3. Answer with `reply([{ message_id, body }])`.
 4. Verify the child resumes and completes.
 
 **Expected**: Child enters `waiting_input` (question mark), parent's
