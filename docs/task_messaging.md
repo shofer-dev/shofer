@@ -322,7 +322,10 @@ output goes.
   the child's chat, the parent may answer with `reply`, and **the first answer
   wins** — a parent's `reply` answers the parked ask through the same webview
   ask-response path, and a human's answer resolves the request out of the
-  parent's box. On expiry the child's ask behaves like any timed-out ask. The
+  parent's box. On expiry the child's parked ask is answered with a synthesized
+  `messageResponse` — `Your question to the parent expired unanswered after
+<n>s. Decide yourself, or ask again.` — so the child regains liveness
+  (there is no `lapsed` verb on the ask channel to express it otherwise). The
   child sits in `waiting_input` throughout: it is parked on an answer, not on
   mail.
 - **[`new_task`](../packages/core/src/tools/NewTaskTool.ts)** — always spawns a
@@ -382,7 +385,33 @@ Three things about the stopped-loop path are load-bearing:
   races the queue. The rehydrated instance must also be registered in
   [`TaskManager`](../src/services/task-manager/TaskManager.ts) explicitly —
   `createTaskWithHistoryItem` pushes onto the stack only, so an unregistered
-  rehydrate is unreachable by the next sender.
+  rehydrate is unreachable by the next sender. Two more things the dormant
+  path must do, both learned the hard way: re-apply the mode's provider
+  profile (`applyModeApiConfig`) — a headless host deliberately does not
+  restore provider settings from history, so a resumed task otherwise runs on
+  the node's default model with the right tools and the wrong brain — and let
+  the running state reach disk before the loop restarts
+  (`waitForPendingPersist`, which `cancelAndProcessQueuedMessages` already
+  does; reuse that path, never reimplement it).
+
+### The doors
+
+Everything above is reached through exactly three doors, and nothing else
+writes into a box:
+
+- **`Task.deliver(envelope)`** — the in-process door; the three tools and the
+  parent/child rewiring use it directly.
+- **`ctx.agent.deliver(envelope)`** — the plugin door, one for every plugin
+  (bus events, A2A frames, Temporal steering). The host fills `to` and
+  `sent_at`, mints `id` when absent, and refuses when there is no target task.
+- **`POST /api/v1/task/:id/mailbox`** — the AgentApi door
+  (`packages/core/src/transport/http-server.ts`, beside the `/message` TURN
+  door), for a controller that holds no plugin seam. The body is an envelope
+  minus `to`/`sent_at`; `id` is minted when absent; `subject` is derived when
+  absent; 202 `{ taskId, delivered }` on acceptance, 400 for a body that is not
+  an envelope, 409 when the box refuses (no such task, errored, full, or the
+  task is live on another node). A 202 means _in the box, persisted_ — the
+  receipt is the point of the door.
 
 ### Persistence
 
