@@ -14,8 +14,8 @@ repo's docs-hygiene check. **Live-verified on staging (2026-08-28) on every
 plane** — in-process request/reply/result, wake of a completed task and lazy
 expiry; parent/child; bus events as notifications; a cross-pod A2A request
 answered with its ledger row; a Temporal-delegated task steered through its box
-and its result pushed back into the owner's. **Owed:** the `integration-tests/`
-coverage that a verified surface earns (in progress). The per-step register
+and its result pushed back into the owner's, each plane also covered by the
+integrator's `integration-tests/` heavy specs (slices 49–52). The per-step register
 is [Roadmap](#roadmap) at the end of this document, which is the authority on
 where each step stands.
 
