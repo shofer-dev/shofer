@@ -6,6 +6,7 @@ import type {
 	TaskState,
 	TaskLike,
 	TaskProviderEvents,
+	MailboxPlane,
 	ManagedTask,
 	PluginMailboxTransport,
 	TaskManagerEvents,
@@ -119,9 +120,23 @@ export interface TaskProviderLike<TTask = TaskLike> {
 	 * transport that cannot establish the answer resolves `false`, which lets the
 	 * caller fall through to history.
 	 *
+	 * `from` is the SENDING task, and it is not decoration: the transport
+	 * authenticates its lookup as that task, so passing the wrong one asks the
+	 * directory about the wrong principal and fails whenever that principal's own
+	 * standing has lapsed.
+	 *
 	 * Mirrors `ShoferProvider.findMailboxTransport`.
 	 */
-	findMailboxTransport(to: string): Promise<PluginMailboxTransport | undefined>
+	findMailboxTransport(to: string, from: string): Promise<PluginMailboxTransport | undefined>
+	/**
+	 * The registered transport that carries `plane`, or `undefined`.
+	 *
+	 * How a `reply` reaches a request that arrived from off-node: the plane the request
+	 * came in on names the transport that still holds its exchange, so no routability
+	 * question is asked and none should be — the asker is by definition reachable,
+	 * because it just reached us. Synchronous and free.
+	 */
+	mailboxTransportForPlane(plane: MailboxPlane): PluginMailboxTransport | undefined
 	/** Returns the provider's MCP hub, or `undefined` when MCP is unavailable. */
 	getMcpHub(): McpHub | undefined
 	/** Ensures the global MCP servers directory exists and returns its path. */

@@ -2,7 +2,7 @@ import { z } from "zod"
 
 import type { CustomToolDefinition } from "./custom-tool.js"
 import type { HostDiagnostic, HostDisposable, HostEnv, HostFileSystem, HostSymbol, Notifier } from "./host.js"
-import type { Envelope } from "./mailbox.js"
+import type { Envelope, MailboxPlane } from "./mailbox.js"
 import type { McpToolCallResponse } from "./mcp.js"
 import type { ApiRequestFinishedPayload } from "./message.js"
 import { modeConfigObjectSchema } from "./mode.js"
@@ -896,16 +896,34 @@ export type PluginDeliverInput = Omit<Envelope, "id" | "to" | "sent_at" | "read_
  * answer is genuinely unknown — the host then falls through to its own history, which is
  * the correct behaviour for a dormant local task.
  *
+ * **It is asked on behalf of a specific SENDING task**, whose credential any lookup must
+ * use. A transport authenticating as "some other task on this node" answers a question
+ * about the wrong principal, and gets the wrong answer the moment that other task's own
+ * standing has lapsed. That was a live failure: the reply path asked the directory as a
+ * finished setup task, was refused `403 the caller's registration has lapsed`, read the
+ * refusal as "not routable", and dropped the answer.
+ *
  * `send` resolves when the envelope has been handed to the far side and rejects
  * otherwise — the sending tool reports that failure to the agent verbatim, so it must say
  * what went wrong.
  */
 export interface PluginMailboxTransport {
 	/**
-	 * Whether this transport claims the address. May do I/O; resolve `false` rather than
+	 * The plane this transport carries.
+	 *
+	 * A `reply` to a request that ARRIVED on this plane is routed straight here, with no
+	 * routability question asked at all: the request came this way, so the answer goes back
+	 * this way. That is not a shortcut but a correctness property — the exchange the reply
+	 * needs is already held by this transport, and asking a directory whether the ASKER is
+	 * reachable could only turn a well-formed answer into a dropped one.
+	 */
+	readonly plane: MailboxPlane
+	/**
+	 * Whether this transport claims `to`, asked on behalf of the sending task `from` —
+	 * whose credential any lookup must use. May do I/O; resolve `false` rather than
 	 * rejecting when the answer cannot be established.
 	 */
-	canRoute(to: string): Promise<boolean>
+	canRoute(to: string, from: string): Promise<boolean>
 	/** Hand the envelope to the far side. Rejects with a message the agent will read. */
 	send(envelope: Envelope): Promise<void>
 }

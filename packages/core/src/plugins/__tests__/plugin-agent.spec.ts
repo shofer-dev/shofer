@@ -156,7 +156,11 @@ describe("plugin-agent — createPluginAgent / createDeniedPluginAgent (P7 unit)
 	it("registers a mailbox transport and unregisters it through the returned handle", () => {
 		const provider = makeAgentProvider()
 		const agent = createPluginAgent("p", provider)
-		const transport: PluginMailboxTransport = { canRoute: async () => true, send: async () => {} }
+		const transport: PluginMailboxTransport = {
+			plane: "a2a" as const,
+			canRoute: async () => true,
+			send: async () => {},
+		}
 		const unregister = agent.registerMailboxTransport(transport)
 		expect(provider.transports).toEqual([transport])
 		unregister()
@@ -181,9 +185,13 @@ describe("plugin-agent — createPluginAgent / createDeniedPluginAgent (P7 unit)
 		}
 		const agent = createPluginAgent("p", provider)
 		await expect(agent.deliver(notification("x"))).rejects.toThrow(/boom/)
-		expect(() => agent.registerMailboxTransport({ canRoute: async () => false, send: async () => {} })).toThrow(
-			/boom/,
-		)
+		expect(() =>
+			agent.registerMailboxTransport({
+				plane: "a2a" as const,
+				canRoute: async () => false,
+				send: async () => {},
+			}),
+		).toThrow(/boom/)
 		warnSpy.mockRestore()
 	})
 
@@ -191,9 +199,9 @@ describe("plugin-agent — createPluginAgent / createDeniedPluginAgent (P7 unit)
 		const warn = vi.fn()
 		const agent = createDeniedPluginAgent("p", warn)
 		await expect(agent.deliver(notification("x"))).rejects.toThrow(/denied/)
-		expect(() => agent.registerMailboxTransport({ canRoute: async () => true, send: async () => {} })).toThrow(
-			/denied/,
-		)
+		expect(() =>
+			agent.registerMailboxTransport({ plane: "a2a" as const, canRoute: async () => true, send: async () => {} }),
+		).toThrow(/denied/)
 		expect(warn).toHaveBeenCalledTimes(2)
 	})
 })

@@ -118,13 +118,20 @@ export class ReplyTool extends BaseTool<"reply"> {
 				}
 
 				// Remote-routing block: a request that came over the mesh is answered
-				// over the mesh. Only an `a2a` request is offered to a transport — a
-				// local id must always be delivered locally, and `bus`/`temporal` are
-				// inbound-only planes that are never a reply target. The plane test also
-				// keeps the directory call off every local reply: `canRoute` may do I/O,
-				// and a local answer must not pay for the mesh.
-				const transport =
-					request.plane === "a2a" ? await provider.findMailboxTransport?.(request.from) : undefined
+				// over the mesh, and the plane it ARRIVED on names the transport that
+				// still holds its exchange. No routability question is asked, and none
+				// should be — the asker is reachable by definition, because it just
+				// reached us, and the transport refuses with its own clear error if the
+				// exchange is genuinely gone.
+				//
+				// Asking was worse than redundant: it made answering depend on a
+				// directory lookup that could be refused for reasons having nothing to
+				// do with the asker, and a refusal read as "not routable" silently
+				// dropped a well-formed reply (live failure, 2026-08-29).
+				//
+				// A `local` request is always delivered locally, and `bus`/`temporal`
+				// are inbound-only planes that are never a reply target.
+				const transport = request.plane === "a2a" ? provider.mailboxTransportForPlane?.("a2a") : undefined
 				try {
 					if (transport) {
 						await transport.send(envelope)

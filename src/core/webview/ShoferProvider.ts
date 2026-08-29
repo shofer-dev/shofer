@@ -30,6 +30,7 @@ import {
 	type TerminalActionPromptType,
 	type HistoryItem,
 	type Envelope,
+	type MailboxPlane,
 	type PluginDeliverInput,
 	type PluginMailboxTransport,
 	DEFAULT_MAX_PARALLEL_TASKS,
@@ -2529,7 +2530,11 @@ export class ShoferProvider
 		// rehydrating from it would start a SECOND live instance of a task a sibling
 		// pod is already running — two loops on one task id, both persisting. That is
 		// a worse failure than refusing, so refuse, and say which it is.
-		await assertNotLiveElsewhere(taskId, (id) => this.findMailboxTransport(id))
+		// The task is the subject of the question and also the best credential to ask
+		// it with: a task registered elsewhere still holds its own badge here only if
+		// this host is running it, which is exactly the case being ruled out. Asking as
+		// the task itself keeps the lookup attributable and needs no third party.
+		await assertNotLiveElsewhere(taskId, (id) => this.findMailboxTransport(id, id))
 
 		let historyItem: HistoryItem
 		try {
@@ -2638,16 +2643,31 @@ export class ShoferProvider
 	 * skipped and the next one asked, which degrades to "unroutable" — i.e. the caller
 	 * falls back to its own history — rather than to "sending is broken".
 	 */
-	public async findMailboxTransport(to: string): Promise<PluginMailboxTransport | undefined> {
+	public async findMailboxTransport(to: string, from: string): Promise<PluginMailboxTransport | undefined> {
 		for (const transport of this.mailboxTransports) {
 			try {
-				if (await transport.canRoute(to)) return transport
+				if (await transport.canRoute(to, from)) return transport
 			} catch (error) {
 				this.log(
-					`A registered mailbox transport failed canRoute(${to}); skipping it: ` +
+					`A registered mailbox transport failed canRoute(${to}) for sender ${from}; skipping it: ` +
 						`${error instanceof Error ? error.message : String(error)}`,
 				)
 			}
+		}
+		return undefined
+	}
+
+	/**
+	 * The registered transport carrying `plane`, or `undefined`.
+	 *
+	 * The reply path's lookup: a request that arrived on a plane is answered on the same
+	 * plane, by the transport that still holds its exchange. Deliberately asks no
+	 * routability question — the asker reached us, so it is reachable, and a directory
+	 * refusal for some unrelated reason must never turn a good answer into a dropped one.
+	 */
+	public mailboxTransportForPlane(plane: MailboxPlane): PluginMailboxTransport | undefined {
+		for (const transport of this.mailboxTransports) {
+			if (transport.plane === plane) return transport
 		}
 		return undefined
 	}

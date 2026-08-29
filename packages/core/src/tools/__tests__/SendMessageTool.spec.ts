@@ -215,7 +215,7 @@ describe("SendMessageTool", () => {
 describe("SendMessageTool — remote routing over a mailbox transport", () => {
 	let tool: SendMessageTool
 	let sent: Envelope[]
-	let transport: { canRoute: ReturnType<typeof vi.fn>; send: ReturnType<typeof vi.fn> }
+	let transport: { plane: "a2a"; canRoute: ReturnType<typeof vi.fn>; send: ReturnType<typeof vi.fn> }
 	let deliverToTask: ReturnType<typeof vi.fn>
 	let findMailboxTransport: ReturnType<typeof vi.fn>
 
@@ -224,6 +224,7 @@ describe("SendMessageTool — remote routing over a mailbox transport", () => {
 		sent = []
 		deliverToTask = vi.fn(async (_id: string, envelope: Envelope) => envelope)
 		transport = {
+			plane: "a2a" as const,
 			canRoute: vi.fn(async () => true),
 			send: vi.fn(async (envelope: Envelope) => {
 				sent.push(envelope)
@@ -275,7 +276,10 @@ describe("SendMessageTool — remote routing over a mailbox transport", () => {
 		const { callbacks, results } = buildCallbacks()
 		await tool.execute({ to: "mesh-agent-9", body: "ping", kind: "request" }, buildTask(), callbacks)
 
-		expect(findMailboxTransport).toHaveBeenCalledWith("mesh-agent-9")
+		// Asked on behalf of the SENDER, whose credential the lookup must use: asking
+		// as anyone else answers a question about the wrong principal, and fails the
+		// moment that principal's own registration has lapsed.
+		expect(findMailboxTransport).toHaveBeenCalledWith("mesh-agent-9", "caller-1")
 		expect(sent).toHaveLength(1)
 		expect(sent[0]).toMatchObject({ from: "caller-1", to: "mesh-agent-9", kind: "request", plane: "a2a" })
 		// Nothing went into a local box.
@@ -328,7 +332,7 @@ describe("SendMessageTool — remote routing over a mailbox transport", () => {
 		const { callbacks } = buildCallbacks()
 		await tool.execute({ to: "peer-1", body: "ping" }, buildTask({ provider }), callbacks)
 
-		expect(findMailboxTransport).toHaveBeenCalledWith("peer-1")
+		expect(findMailboxTransport).toHaveBeenCalledWith("peer-1", "caller-1")
 		expect(getTaskWithId).toHaveBeenCalledWith("peer-1")
 		expect(deliverToTask).toHaveBeenCalledTimes(1)
 		expect(transport.send).not.toHaveBeenCalled()

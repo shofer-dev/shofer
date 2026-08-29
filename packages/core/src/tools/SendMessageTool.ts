@@ -116,7 +116,10 @@ export class SendMessageTool extends BaseTool<"send_message"> {
 				// Ask the mesh BEFORE history: on a pool sharing one task store, a
 				// sibling pod's live task has a history row here, and only the
 				// directory can tell it from a dormant local one.
-				transport = await provider.findMailboxTransport?.(to)
+				// The sender's own id: the transport authenticates its directory
+				// lookup as this task, and asking as anyone else answers a question
+				// about the wrong principal.
+				transport = await provider.findMailboxTransport?.(to, task.taskId)
 				if (!transport) {
 					try {
 						const { historyItem } = await provider.getTaskWithId(to)

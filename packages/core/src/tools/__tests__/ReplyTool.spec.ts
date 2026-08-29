@@ -189,8 +189,9 @@ describe("ReplyTool — answering a request that arrived over the mesh", () => {
 	let storageRoot: string
 	let mailbox: Mailbox
 	let deliverToTask: ReturnType<typeof vi.fn>
-	let transport: { canRoute: ReturnType<typeof vi.fn>; send: ReturnType<typeof vi.fn> }
+	let transport: { plane: "a2a"; canRoute: ReturnType<typeof vi.fn>; send: ReturnType<typeof vi.fn> }
 	let findMailboxTransport: ReturnType<typeof vi.fn>
+	let mailboxTransportForPlane: ReturnType<typeof vi.fn>
 	let sent: Envelope[]
 
 	beforeEach(async () => {
@@ -201,12 +202,14 @@ describe("ReplyTool — answering a request that arrived over the mesh", () => {
 		deliverToTask = vi.fn(async (_id: string, envelope: Envelope) => envelope)
 		sent = []
 		transport = {
+			plane: "a2a" as const,
 			canRoute: vi.fn(async () => true),
 			send: vi.fn(async (envelope: Envelope) => {
 				sent.push(envelope)
 			}),
 		}
 		findMailboxTransport = vi.fn(async () => transport)
+		mailboxTransportForPlane = vi.fn(() => transport)
 	})
 
 	afterEach(async () => {
@@ -236,7 +239,7 @@ describe("ReplyTool — answering a request that arrived over the mesh", () => {
 			rootTaskId: "root-1",
 			mailbox,
 			mailboxReady: Promise.resolve(),
-			providerRef: { deref: () => ({ deliverToTask, findMailboxTransport }) },
+			providerRef: { deref: () => ({ deliverToTask, findMailboxTransport, mailboxTransportForPlane }) },
 			emitTaskInteraction: vi.fn(async () => {}),
 		}) as any
 
@@ -257,7 +260,10 @@ describe("ReplyTool — answering a request that arrived over the mesh", () => {
 		const { callbacks, results } = buildCallbacks()
 		await tool.execute({ replies: [{ message_id: "a2a-message-1", body: "three hosts" }] }, buildTask(), callbacks)
 
-		expect(findMailboxTransport).toHaveBeenCalledWith("remote-asker")
+		// Routed by the PLANE the request arrived on — no routability question, and so
+		// no directory lookup that could refuse a well-formed answer.
+		expect(mailboxTransportForPlane).toHaveBeenCalledWith("a2a")
+		expect(findMailboxTransport).not.toHaveBeenCalled()
 		expect(deliverToTask).not.toHaveBeenCalled()
 		expect(sent).toHaveLength(1)
 		expect(sent[0]).toMatchObject({
@@ -296,7 +302,7 @@ describe("ReplyTool — answering a request that arrived over the mesh", () => {
 		const { callbacks } = buildCallbacks()
 		await tool.execute({ replies: [{ message_id: "a2a-message-1", body: "answer" }] }, buildTask(), callbacks)
 
-		expect(findMailboxTransport).not.toHaveBeenCalled()
+		expect(mailboxTransportForPlane).not.toHaveBeenCalled()
 		expect(transport.send).not.toHaveBeenCalled()
 		expect(deliverToTask).toHaveBeenCalledTimes(1)
 		expect(deliverToTask.mock.calls[0]![1].plane).toBe("local")
@@ -306,6 +312,6 @@ describe("ReplyTool — answering a request that arrived over the mesh", () => {
 		await seed("bus")
 		const { callbacks } = buildCallbacks()
 		await tool.execute({ replies: [{ message_id: "a2a-message-1", body: "answer" }] }, buildTask(), callbacks)
-		expect(findMailboxTransport).not.toHaveBeenCalled()
+		expect(mailboxTransportForPlane).not.toHaveBeenCalled()
 	})
 })
