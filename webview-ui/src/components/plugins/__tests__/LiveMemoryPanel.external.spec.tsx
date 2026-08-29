@@ -68,6 +68,25 @@ function stateMsg(over: Partial<Record<string, unknown>> = {}) {
 	}
 }
 
+/**
+ * Mount the panel and wait for its `ready` handshake. The panel subscribes to the
+ * scoped channel in a mount effect and posts `ready` from that same effect; the DOM
+ * node appears at commit, BEFORE that passive effect runs, so a state message pushed
+ * on `findByTestId` alone races the subscription and is silently dropped under
+ * full-suite load. `ready` is exactly the signal the extension side waits for before
+ * it sends state, so the test honours the same handshake.
+ */
+async function mountPanel() {
+	render(<PluginSlotView region="sidebar-panel" contributions={[contribution()]} task={task} />)
+	await screen.findByTestId("lm-panel")
+	await waitFor(() =>
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "pluginUiMessage",
+			pluginUiMessage: { pluginName: PLUGIN, message: { type: "ready" } },
+		}),
+	)
+}
+
 const assistantWith = (toolInProgress: boolean) => ({
 	id: "a1",
 	role: "assistant",
@@ -94,20 +113,13 @@ describe("LiveMemoryPanel — external sidebar-panel bundle (Stage E)", () => {
 	})
 
 	it("loads the built bundle and requests initial state on mount", async () => {
-		render(<PluginSlotView region="sidebar-panel" contributions={[contribution()]} task={task} />)
-		expect(await screen.findByTestId("lm-panel")).toBeInTheDocument()
-		// On mount the panel posts { type: "ready" } out over its scoped channel.
-		await waitFor(() =>
-			expect(vscode.postMessage).toHaveBeenCalledWith({
-				type: "pluginUiMessage",
-				pluginUiMessage: { pluginName: PLUGIN, message: { type: "ready" } },
-			}),
-		)
+		// mountPanel asserts both halves: the bundle rendered and posted { type: "ready" }.
+		await mountPanel()
+		expect(screen.getByTestId("lm-panel")).toBeInTheDocument()
 	})
 
 	it("renders the state header + streamed typed parts, and transitions spinner → done", async () => {
-		render(<PluginSlotView region="sidebar-panel" contributions={[contribution()]} task={task} />)
-		await screen.findByTestId("lm-panel")
+		await mountPanel()
 
 		// ── Busy turn: reasoning + markdown text + an in-progress tool call ──
 		pushFromPlugin(stateMsg({ state: "Busy", stateMessage: "Processing…", messages: [assistantWith(true)] }))
@@ -135,8 +147,7 @@ describe("LiveMemoryPanel — external sidebar-panel bundle (Stage E)", () => {
 	})
 
 	it("round-trips clear + empty commands out over the scoped channel", async () => {
-		render(<PluginSlotView region="sidebar-panel" contributions={[contribution()]} task={task} />)
-		await screen.findByTestId("lm-panel")
+		await mountPanel()
 		vi.mocked(vscode.postMessage).mockClear() // drop the mount "ready"
 
 		fireEvent.click(screen.getByTestId("lm-clear"))
@@ -153,8 +164,7 @@ describe("LiveMemoryPanel — external sidebar-panel bundle (Stage E)", () => {
 	})
 
 	it("ignores a state message addressed to another plugin (channel namespacing)", async () => {
-		render(<PluginSlotView region="sidebar-panel" contributions={[contribution()]} task={task} />)
-		await screen.findByTestId("lm-panel")
+		await mountPanel()
 
 		pushFromPlugin(stateMsg({ state: "Error", messages: [assistantWith(false)] }), "other-plugin")
 		// The panel stayed on its initial Standby state — the foreign message never reached it.
