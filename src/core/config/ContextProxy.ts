@@ -31,6 +31,7 @@ import { supportPrompt } from "@shofer/types"
 import {
 	loadLayeredOverlay,
 	loadLockedManifest,
+	readScopeSettingsFile,
 	resolveScopeRoots,
 	seedScopeSettingsFile,
 	writeScopeSetting,
@@ -405,16 +406,7 @@ export class ContextProxy {
 		value: ShoferSettings[K],
 	): Promise<void> {
 		try {
-			const roots = this.resolveScopeRoots()
-
-			// The scope this write lands in: the user's `settingsWriteScope`
-			// selection ("project" persists into the workspace's committed
-			// `.shofer/settings.json`), defaulting to the user scope. The selector
-			// itself always persists at the user scope — routing it into the
-			// project file would commit one user's preference for everyone.
-			const targetProject =
-				key !== "settingsWriteScope" && this.getValue("settingsWriteScope") === "project" && !!roots.project
-			const root = targetProject ? roots.project : roots.user
+			const { roots, root } = this.resolveWriteScope(key)
 			if (!root) {
 				return
 			}
@@ -429,6 +421,62 @@ export class ContextProxy {
 				`Failed to write-through ${String(key)} to the scope settings file: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
+	}
+
+	/**
+	 * Where a write of `key` lands: the project scope when the user selected
+	 * `settingsWriteScope: "project"` and a workspace is open, the user scope
+	 * otherwise. `settingsWriteScope` itself always persists at the user scope —
+	 * routing the selector into the project file would commit one user's preference
+	 * for everyone.
+	 *
+	 * Shared by {@link writeThroughToUserScope} and {@link getWriteScopeValue} so a
+	 * read of "what does the write scope already hold" can never disagree with where
+	 * the write actually goes.
+	 */
+	private resolveWriteScope(key: ShoferSettingsKey): { roots: ScopeRoots; root?: string; isProject: boolean } {
+		const roots = this.resolveScopeRoots()
+		const isProject =
+			key !== "settingsWriteScope" && this.getValue("settingsWriteScope") === "project" && !!roots.project
+		return { roots, root: isProject ? roots.project : roots.user, isProject }
+	}
+
+	/**
+	 * The WRITE SCOPE's own stored value for `key` — deliberately **not** the merged
+	 * effective view {@link getValue} serves.
+	 *
+	 * A caller that merges into a record-valued setting (`alwaysAllowGroups`) must
+	 * start from the map as the write scope itself stores it. Merging into the
+	 * effective view instead would copy every entry the org-global and other scopes
+	 * contribute into this scope's own file, where they would then shadow those
+	 * scopes' later changes forever — the file would keep asserting a value the org
+	 * has since moved on from, and nothing would say so.
+	 *
+	 * Resolution, in order:
+	 *   1. the write scope's `settings.json`, when it declares the key — the file
+	 *      layer is the source of truth;
+	 *   2. otherwise this host's own `globalState`, which is the runtime cache of
+	 *      the same writes (`setValue` writes both) and is therefore the right
+	 *      answer on a host whose file layer has not been materialised yet;
+	 *   3. except when the write scope is the PROJECT scope, where step 2 is
+	 *      skipped and the answer is `undefined`: `globalState` holds this user's
+	 *      own accumulated preferences, and seeding a committed, shared project
+	 *      file from them would publish them to everyone working in the repo.
+	 *
+	 * Returns `undefined` when no scope-local value exists; the caller decides what
+	 * an empty starting point means.
+	 */
+	public async getWriteScopeValue<K extends ShoferSettingsKey>(key: K): Promise<ShoferSettings[K] | undefined> {
+		const { root, isProject } = this.resolveWriteScope(key)
+
+		if (root) {
+			const own = await readScopeSettingsFile(root)
+			if (Object.prototype.hasOwnProperty.call(own, key)) {
+				return own[key as keyof LayeredSettings] as ShoferSettings[K]
+			}
+		}
+
+		return isProject ? undefined : (this.getGlobalState(key as GlobalStateKey) as ShoferSettings[K])
 	}
 
 	/**

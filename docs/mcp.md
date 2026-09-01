@@ -363,22 +363,20 @@ For each MCP tool, the group is resolved by [`fetchToolsList()`](../packages/cor
 MCP tool calls arrive at [`checkAutoApproval()`](../packages/core/src/auto-approval/index.ts) through the `ask === "use_mcp_server"` path (distinct from the `ask === "tool"` path used by native tools). They are gated in two stages:
 
 - **Master gate:** `alwaysAllowMcp` must be enabled for **any** MCP tool to be auto-approved. If it is off, the call always prompts.
-- **Per-group gate:** With the master gate on, the tool's resolved group (via [`getMcpToolGroup()`](../packages/core/src/auto-approval/mcp.ts)) is mapped through `MCP_GROUP_APPROVAL_GATE` to a dedicated toggle that must **also** be enabled. This mirrors the per-group control that mode filtering and native tools already apply, so an MCP-served browser tool honors `alwaysAllowBrowser` rather than being approved by `alwaysAllowMcp` alone:
+- **Per-group gate:** With the master gate on, the tool's resolved group (via [`getMcpToolGroup()`](../packages/core/src/auto-approval/mcp.ts)) is decided by `isGroupAutoApproved()` over the shared `GROUP_GATE` table in [`group-gates.ts`](../packages/core/src/auto-approval/group-gates.ts) — a builtin group's dedicated toggle must **also** be enabled, and a **dynamic category** (any group with no `GROUP_GATE` entry, `browser` included) is gated by its entry in the `alwaysAllowGroups` record instead:
 
-    | Resolved group  | Required toggle (in addition to `alwaysAllowMcp`) |
-    | --------------- | ------------------------------------------------- |
-    | `read`          | `alwaysAllowReadOnly`                             |
-    | `write`         | `alwaysAllowWrite`                                |
-    | `execute`       | `alwaysAllowExecute`                              |
-    | `browser`       | `alwaysAllowBrowser`                              |
-    | `mode`          | `alwaysAllowModeSwitch`                           |
-    | `subtasks`      | `alwaysAllowSubtasks`                             |
-    | `questions`     | `alwaysAllowFollowupQuestions`                    |
-    | `uncategorized` | `alwaysAllowUncategorized`                        |
+    | Resolved group  | Required toggle (in addition to `alwaysAllowMcp`)     |
+    | --------------- | ----------------------------------------------------- |
+    | `read`          | `alwaysAllowReadOnly`                                 |
+    | `write`         | `alwaysAllowWrite`                                    |
+    | `execute`       | `alwaysAllowExecute`                                  |
+    | `mode`          | `alwaysAllowModeSwitch`                               |
+    | `subtasks`      | `alwaysAllowSubtasks`                                 |
+    | `questions`     | `alwaysAllowFollowupQuestions`                        |
+    | `uncategorized` | `alwaysAllowUncategorized`                            |
+    | any other name  | `alwaysAllowGroups["<name>"]` (or the `"*"` wildcard) |
 
-    Groups not in the map (e.g. the generic `mcp` protocol group) are approved by `alwaysAllowMcp` alone. `access_mcp_resource` calls are gated by `alwaysAllowMcp` only (no per-group stage).
-
-> **Note:** Before this gate was added, the MCP path only checked `alwaysAllowMcp` plus an `"uncategorized"` special case, so `alwaysAllowBrowser` was effectively dead for browser tools served over MCP — they auto-approved as soon as `alwaysAllowMcp` was on. The group→toggle mapping above closes that gap.
+    So an MCP-served browser tool honors `alwaysAllowGroups["browser"]` rather than being approved by `alwaysAllowMcp` alone. The bare `mcp` protocol group carries no dedicated toggle (`GROUP_GATE` maps it to `null`) and is approved by `alwaysAllowMcp` alone. `access_mcp_resource` calls are gated by `alwaysAllowMcp` only (no per-group stage).
 
 ---
 

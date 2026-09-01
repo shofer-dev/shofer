@@ -148,10 +148,17 @@ Each `locked` entry is one of:
 
 - a bare settings key (`"autoApprovalEnabled"`) — locks that top-level key;
 - a collection namespace (`"modes"`, `"providers"`, `"plugins"`) — locks the whole
-  collection; or
+  collection;
 - a `"<namespace>/<id>"` entry (`"modes/Code"`, `"providers/default"`,
   `"plugins/git-guard"`) — locks a single named entity, leaving its siblings on the
-  unlocked merge.
+  unlocked merge; or
+- a **record-entry** path (`"alwaysAllowGroups/browser"`) — locks ONE entry of an
+  open record, leaving the rest of the map on the unlocked merge. The keys that
+  take this form are `RECORD_ENTRY_KEYS` in
+  [`layered-config.ts`](../packages/core/src/config/layered-config.ts), today
+  `alwaysAllowGroups` alone; the bare key still locks the whole map. This is what
+  lets an org pin a single tool category's auto-approval — `browser` off, say —
+  without freezing every category a user or a server may later add.
 
 Named-entity collections known to the settings engine are `modes` (→ `customModes`,
 keyed by `slug`) and `providers` (→ `listApiConfigMeta`, keyed by `name`); `plugins`
@@ -207,12 +214,12 @@ Two consequences worth stating plainly, because both are deliberate:
 
 - **The launch flag decides nothing about approvals.** `--interactive` changes
   how asks are surfaced, not which tools raise them.
-- **`browser` gets no exemption.** The group holds no native tools — every member
-  arrives over MCP — so an unconfigured node parks on its first browser call.
-  That is the intended answer: a browser clicks, types, fills and submits inside
-  whatever session its executor's profile carries, and "nobody stated a posture"
-  is not consent to that. A deployment that wants a headless agent to browse
-  names `alwaysAllowBrowser: true` in its own scope.
+- **`browser` gets no exemption.** The category holds no native tools — every
+  member arrives over MCP — so an unconfigured node parks on its first browser
+  call. That is the intended answer: a browser clicks, types, fills and submits
+  inside whatever session its executor's profile carries, and "nobody stated a
+  posture" is not consent to that. A deployment that wants a headless agent to
+  browse names `alwaysAllowGroups: { "browser": true }` in its own scope.
 
 **Why the master gate is stated rather than left absent too.** Absent and `false`
 mean the same thing to the gate, but not to `globalState`, which persists across
@@ -222,12 +229,15 @@ closes that, and one key suffices — with the master gate off, no per-group tog
 can approve anything.
 
 That seed is still a **default, not an override**. Every posture key —
+`APPROVAL_POSTURE_KEYS` in
+[`approval-posture.ts`](../apps/cli/src/agent/approval-posture.ts):
 `autoApprovalEnabled`, `alwaysAllowReadOnly`,
 `alwaysAllowReadOnlyOutsideWorkspace`, `alwaysAllowWrite`,
 `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected`,
-`alwaysAllowBrowser`, `alwaysAllowMcp`, `alwaysAllowModeSwitch`,
-`alwaysAllowSubtasks`, `alwaysAllowExecute`, `alwaysAllowUncategorized`,
-`alwaysAllowFollowupQuestions`, `allowedCommands` and `deniedCommands` — is an
+`alwaysAllowGroups`, `alwaysAllowMcp`, `alwaysAllowModeSwitch`,
+`alwaysAllowSubtasks`, `alwaysAllowExecute`, `allowedCommands`,
+`deniedCommands`, `alwaysAllowUncategorized` and
+`alwaysAllowFollowupQuestions` — is an
 ordinary `settings.json` key, so any scope may set it and **the scope wins**:
 
 - A posture key **any scope supplies** is not seeded at all. The host omits it
@@ -253,6 +263,19 @@ tempts an operator to reach for:
 - `alwaysAllowFollowupQuestions` — its effect is to answer a question with a
   suggestion after a timeout. A headless node has no one to ask, which is a
   reason to relay the question, not to fabricate an answer.
+
+`alwaysAllowGroups` is the one posture key that is a RECORD rather than a
+boolean: one entry per dynamic tool category, plus a `"*"` wildcard meaning
+"every category nobody has spoken about". Two things follow for a config author:
+
+- **It is taken over at the granularity of the KEY, not the entry.** A scope that
+  declares `alwaysAllowGroups` at all has stated its dynamic-category posture, so
+  its record replaces the seed's wholesale — the wildcard included. Per-entry
+  precedence is a question for the SCOPES, answered by `mergeLayeredConfig`'s
+  deep merge and by the per-entry `alwaysAllowGroups/<name>` locks above.
+- **An explicit `false` beats the wildcard**, so `{ "*": true, "browser": false }`
+  is the way to say "auto-approve the categories we have not thought about, but
+  not that one".
 
 ```mermaid
 flowchart TD
@@ -818,7 +841,7 @@ with the naming confusion noted above). Entire functional areas are
 absent:
 
 - **Auto-approval** — `autoApprovalEnabled`, `alwaysAllowReadOnly`,
-  `alwaysAllowWrite`, `alwaysAllowBrowser`, `alwaysAllowMcp`,
+  `alwaysAllowWrite`, `alwaysAllowGroups`, `alwaysAllowMcp`,
   `alwaysAllowExecute`, `alwaysAllowModeSwitch`, `alwaysAllowSubtasks`
 - **Context window** — `autoCondenseContext`,
   `autoCondenseContextPercent`, `maxOpenTabsContext`, `maxWorkspaceFiles`

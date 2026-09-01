@@ -81,7 +81,7 @@ describe("approval posture", () => {
 				alwaysAllowWrite: true,
 				alwaysAllowWriteOutsideWorkspace: true,
 				alwaysAllowWriteProtected: true,
-				alwaysAllowBrowser: true,
+				alwaysAllowGroups: { "*": true },
 				alwaysAllowMcp: true,
 				alwaysAllowModeSwitch: true,
 				alwaysAllowSubtasks: true,
@@ -142,6 +142,37 @@ describe("approval posture", () => {
 			expect(posture.summary).toBe(
 				"from config (autoApprovalEnabled=true, execute auto-approved, 2 keys from .shofer config)",
 			)
+		})
+
+		// A record is ONE key however many grants it carries, so a key count alone
+		// would report "auto-approves every dynamic category" identically to
+		// "auto-approves none". The summary names the categories instead.
+		it("names the categories alwaysAllowGroups approves rather than counting the key", () => {
+			const wildcard = applyConfiguredApprovalPosture(defaultApprovalSeed(), {
+				autoApprovalEnabled: true,
+				alwaysAllowGroups: { "*": true },
+			})
+			expect(wildcard.summary).toBe(
+				"from config (autoApprovalEnabled=true, execute gated, alwaysAllowGroups{*}, 2 keys from .shofer config)",
+			)
+
+			const some = applyConfiguredApprovalPosture(defaultApprovalSeed(), {
+				autoApprovalEnabled: true,
+				alwaysAllowGroups: { salesforce: true, browser: false },
+			})
+			expect(some.summary).toBe(
+				"from config (autoApprovalEnabled=true, execute gated, alwaysAllowGroups{salesforce}, 2 keys from .shofer config)",
+			)
+
+			// Declared and granting nothing is distinct from absent, which adds no fact.
+			const none = applyConfiguredApprovalPosture(defaultApprovalSeed(), {
+				autoApprovalEnabled: true,
+				alwaysAllowGroups: {},
+			})
+			expect(none.summary).toContain("alwaysAllowGroups{}")
+			expect(
+				applyConfiguredApprovalPosture(defaultApprovalSeed(), { autoApprovalEnabled: true }).summary,
+			).not.toContain("alwaysAllowGroups")
 		})
 
 		it("gates execute when the master toggle is on but alwaysAllowExecute is off", () => {
@@ -333,7 +364,7 @@ describe("approval posture", () => {
 			const browsing = postureOf({
 				autoApprovalEnabled: true,
 				alwaysAllowMcp: true,
-				alwaysAllowBrowser: true,
+				alwaysAllowGroups: { browser: true },
 			})
 			expect(
 				await checkAutoApproval({
@@ -342,6 +373,54 @@ describe("approval posture", () => {
 					text: call("browser_navigate"),
 				}),
 			).toEqual({ decision: "approve" })
+		})
+
+		// The wildcard is the unattended seed's contract expressed for a vocabulary
+		// nobody has met yet: a category minted mid-run by a server connecting has no
+		// name anyone could have enumerated in advance.
+		it("approves a dynamic category under the wildcard, and an explicit false beats it", async () => {
+			const wildcard = postureOf({
+				autoApprovalEnabled: true,
+				alwaysAllowMcp: true,
+				alwaysAllowGroups: { "*": true },
+			})
+			expect(
+				await checkAutoApproval({
+					state: wildcard as never,
+					ask: "use_mcp_server",
+					text: call("browser_navigate"),
+				}),
+			).toEqual({ decision: "approve" })
+
+			const exception = postureOf({
+				autoApprovalEnabled: true,
+				alwaysAllowMcp: true,
+				alwaysAllowGroups: { "*": true, browser: false },
+			})
+			expect(
+				await checkAutoApproval({
+					state: exception as never,
+					ask: "use_mcp_server",
+					text: call("browser_navigate"),
+				}),
+			).toEqual({ decision: "ask" })
+		})
+
+		// Containment: the wildcard covers the DYNAMIC categories only. `uncategorized`
+		// is a builtin gated by its own flat toggle, so a tool whose server declared
+		// nothing keeps asking even under the most permissive seed there is.
+		it("does not let the wildcard reach an unclassified tool", async () => {
+			const result = await checkAutoApproval({
+				state: postureOf({
+					autoApprovalEnabled: true,
+					alwaysAllowMcp: true,
+					alwaysAllowGroups: { "*": true },
+				}) as never,
+				ask: "use_mcp_server",
+				text: call("unclassified"),
+			})
+
+			expect(result).toEqual({ decision: "ask" })
 		})
 
 		// Unchanged by the flip: neither was ever seeded, and `uncategorized` is the
@@ -353,7 +432,7 @@ describe("approval posture", () => {
 					autoApprovalEnabled: true,
 					alwaysAllowMcp: true,
 					alwaysAllowReadOnly: true,
-					alwaysAllowBrowser: true,
+					alwaysAllowGroups: { browser: true },
 				}) as never,
 				ask: "use_mcp_server",
 				text: call("unclassified"),

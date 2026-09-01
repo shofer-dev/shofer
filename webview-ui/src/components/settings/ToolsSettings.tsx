@@ -2,9 +2,9 @@ import { HTMLAttributes, forwardRef, useImperativeHandle, useMemo, useState } fr
 
 import {
 	TOOL_DISPLAY_NAMES,
-	TOOL_GROUPS,
 	ALWAYS_AVAILABLE_TOOLS,
 	TOOL_ALIASES,
+	getToolGroupConfig,
 	toolGroups,
 	type ToolGroup,
 	type ToolName,
@@ -35,9 +35,11 @@ import { SearchableSetting } from "./SearchableSetting"
  * Display structure:
  * - "Essential" section: tools in `ALWAYS_AVAILABLE_TOOLS`. Rendered with a
  *   disabled checkbox + tooltip — they cannot be turned off.
- * - One section per `ToolGroup` (read / edit / command / mcp / modes), listing
- *   tools that are NOT essential. `customTools` (opt-in only) are flagged with
- *   a badge.
+ * - One section per category — the eight builtins, then every DYNAMIC category
+ *   (registered at runtime from an MCP server's declared group, a plugin's custom
+ *   tool, or an `mcp.json` override) — listing tools that are NOT essential.
+ *   `customTools` (opt-in only) are flagged with a badge. A dynamic category has no
+ *   native tools and no i18n key, so its section carries the raw category name.
  * - The internal `custom_tool` placeholder is filtered out — it is a meta-name
  *   for user-defined tools, not an end-user-toggleable tool.
  *
@@ -52,6 +54,8 @@ type ToolsSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	disabledTools?: ToolName[]
 	setCachedStateField: SetCachedStateField<"disabledTools">
 	mcpServers?: McpServer[]
+	/** Registry snapshot of the dynamic categories the host has seen this session. */
+	dynamicToolGroups?: string[]
 	/**
 	 * Fired when an MCP per-tool toggle is staged. `SettingsView` wires this to
 	 * `setChangeDetected(true)` so the Save button enables. (Native-tool toggles
@@ -160,7 +164,31 @@ function extractMcpTools(mcpServers: McpServer[] = []): McpToolEntry[] {
 	return tools
 }
 
-function buildSections(mcpServers: McpServer[] = []): Section[] {
+const BUILTIN_GROUPS: ReadonlySet<string> = new Set<string>(toolGroups)
+
+/**
+ * The categories to render sections for: the eight builtins, then the dynamic ones.
+ *
+ * Dynamic names come from two places that need not agree. The registry snapshot
+ * (`dynamicToolGroups`) is authoritative and may name a category whose tools are not
+ * loaded; the groups carried on the MCP tools themselves catch a category whose server
+ * connected before the snapshot was pushed. Taking the union means a tool never lands
+ * in a section that does not exist.
+ */
+function resolveGroupOrder(dynamicToolGroups: string[], mcpTools: McpToolEntry[]): string[] {
+	const dynamic: string[] = []
+	const seen = new Set<string>(BUILTIN_GROUPS)
+
+	for (const name of [...dynamicToolGroups, ...mcpTools.map((tool) => tool.group)]) {
+		if (seen.has(name)) continue
+		seen.add(name)
+		dynamic.push(name)
+	}
+
+	return [...toolGroups, ...dynamic]
+}
+
+function buildSections(mcpServers: McpServer[] = [], dynamicToolGroups: string[] = []): Section[] {
 	const seen = new Set<ToolName>()
 	const sections: Section[] = []
 
@@ -171,9 +199,15 @@ function buildSections(mcpServers: McpServer[] = []): Section[] {
 		tools: essentialTools.map((name) => ({ name, isCustom: false })),
 	})
 
-	// Add native tools
-	for (const group of toolGroups) {
-		const cfg = TOOL_GROUPS[group]
+	const mcpTools = extractMcpTools(mcpServers)
+	const groupOrder = resolveGroupOrder(dynamicToolGroups, mcpTools)
+
+	// Add native tools. A dynamic category has no `TOOL_GROUPS` entry — it carries no
+	// native tools by construction — so it contributes no entries here and only gets a
+	// section below if MCP tools name it.
+	for (const group of groupOrder) {
+		const cfg = getToolGroupConfig(group)
+		if (!cfg) continue
 		const entries: { name: ToolName; isCustom: boolean }[] = []
 		const append = (name: ToolName, isCustom: boolean) => {
 			if (META_TOOL_NAMES.has(name) || seen.has(name)) return
@@ -186,18 +220,14 @@ function buildSections(mcpServers: McpServer[] = []): Section[] {
 	}
 
 	// Add MCP tools grouped by their assigned group
-	const mcpTools = extractMcpTools(mcpServers)
-	const toolsByGroup = mcpTools.reduce<Record<ToolGroup, McpToolEntry[]>>(
-		(acc, tool) => {
-			if (!acc[tool.group]) acc[tool.group] = []
-			acc[tool.group].push(tool)
-			return acc
-		},
-		{} as Record<ToolGroup, McpToolEntry[]>,
-	)
+	const toolsByGroup = mcpTools.reduce<Record<string, McpToolEntry[]>>((acc, tool) => {
+		if (!acc[tool.group]) acc[tool.group] = []
+		acc[tool.group].push(tool)
+		return acc
+	}, {})
 
 	// Append MCP tools to their respective group sections
-	for (const group of toolGroups) {
+	for (const group of groupOrder) {
 		const section = sections.find((s) => s.id === group)
 		const mcpGroupTools = toolsByGroup[group]
 
@@ -227,11 +257,11 @@ function buildSections(mcpServers: McpServer[] = []): Section[] {
 }
 
 export const ToolsSettings = forwardRef<ToolsSettingsRef, ToolsSettingsProps>(function ToolsSettings(
-	{ disabledTools, setCachedStateField, mcpServers, onToolsDirty, ...props },
+	{ disabledTools, setCachedStateField, mcpServers, dynamicToolGroups, onToolsDirty, ...props },
 	ref,
 ) {
 	const { t } = useAppTranslation()
-	const sections = useMemo(() => buildSections(mcpServers), [mcpServers])
+	const sections = useMemo(() => buildSections(mcpServers, dynamicToolGroups), [mcpServers, dynamicToolGroups])
 
 	const disabledSet = useMemo(() => new Set(disabledTools ?? []), [disabledTools])
 
@@ -366,7 +396,11 @@ export const ToolsSettings = forwardRef<ToolsSettingsRef, ToolsSettingsProps>(fu
 					<div key={section.id} className="mb-6">
 						<div className="flex items-center gap-2 mb-2">
 							<span className="font-semibold text-vscode-foreground">
-								{t(`settings:tools.groups.${section.id}`)}
+								{/* A dynamic category has no i18n key — it is a name someone
+								    declared at runtime — so it labels itself. */}
+								{section.id === "essential" || BUILTIN_GROUPS.has(section.id)
+									? t(`settings:tools.groups.${section.id}`)
+									: section.id}
 							</span>
 							<span className="text-xs text-vscode-descriptionForeground">
 								{t("settings:tools.groupToolCount", { count: section.tools.length })}

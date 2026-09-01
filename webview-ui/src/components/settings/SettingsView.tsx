@@ -37,6 +37,11 @@ import { cn } from "@src/lib/utils"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { ExtensionStateContextType, useExtensionState } from "@src/context/ExtensionStateContext"
 import {
+	asAlwaysAllowGroupsSetting,
+	diffAlwaysAllowGroups,
+	isEmptyAlwaysAllowGroupsPatch,
+} from "@src/utils/alwaysAllowGroups"
+import {
 	AlertDialog,
 	AlertDialogContent,
 	AlertDialogTitle,
@@ -191,7 +196,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		alwaysAllowModeSwitch,
 		alwaysAllowSubtasks,
 		alwaysAllowWrite,
-		alwaysAllowBrowser,
+		alwaysAllowGroups,
+		dynamicToolGroups,
 		alwaysAllowWriteOutsideWorkspace,
 		alwaysAllowWriteProtected,
 		autoCondenseContext,
@@ -413,6 +419,13 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 	const handleSubmit = () => {
 		if (isSettingValid) {
+			// `alwaysAllowGroups` is the ONE key sent as a per-entry PATCH rather than a
+			// value. The map in cachedState is the EFFECTIVE one (deep-merged across the
+			// `.shofer/` scopes), so posting it whole would copy org- and project-scope
+			// entries into the user write scope, where they would shadow those scopes'
+			// later changes forever. Only entries the user actually moved are sent.
+			const alwaysAllowGroupsPatch = diffAlwaysAllowGroups(extensionState.alwaysAllowGroups, alwaysAllowGroups)
+
 			vscode.postMessage({
 				type: "updateSettings",
 				updatedSettings: {
@@ -421,7 +434,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					alwaysAllowReadOnly: alwaysAllowReadOnly ?? undefined,
 					alwaysAllowReadOnlyOutsideWorkspace: alwaysAllowReadOnlyOutsideWorkspace ?? undefined,
 					alwaysAllowWrite: alwaysAllowWrite ?? undefined,
-					alwaysAllowBrowser: alwaysAllowBrowser ?? undefined,
+					...(isEmptyAlwaysAllowGroupsPatch(alwaysAllowGroupsPatch)
+						? {}
+						: { alwaysAllowGroups: asAlwaysAllowGroupsSetting(alwaysAllowGroupsPatch) }),
 					alwaysAllowWriteOutsideWorkspace: alwaysAllowWriteOutsideWorkspace ?? undefined,
 					alwaysAllowWriteProtected: alwaysAllowWriteProtected ?? undefined,
 					alwaysAllowExecute: alwaysAllowExecute ?? undefined,
@@ -933,7 +948,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								alwaysAllowReadOnly={alwaysAllowReadOnly}
 								alwaysAllowReadOnlyOutsideWorkspace={alwaysAllowReadOnlyOutsideWorkspace}
 								alwaysAllowWrite={alwaysAllowWrite}
-								alwaysAllowBrowser={alwaysAllowBrowser}
+								alwaysAllowGroups={alwaysAllowGroups}
+								dynamicToolGroups={dynamicToolGroups}
 								alwaysAllowWriteOutsideWorkspace={alwaysAllowWriteOutsideWorkspace}
 								alwaysAllowWriteProtected={alwaysAllowWriteProtected}
 								alwaysAllowMcp={alwaysAllowMcp}
@@ -961,6 +977,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								disabledTools={disabledTools}
 								setCachedStateField={setCachedStateField}
 								mcpServers={extensionState.mcpServers}
+								dynamicToolGroups={dynamicToolGroups}
 							/>
 						)}
 

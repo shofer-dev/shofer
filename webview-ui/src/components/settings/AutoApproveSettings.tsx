@@ -1,4 +1,4 @@
-import { HTMLAttributes, useState } from "react"
+import { HTMLAttributes, useMemo, useState } from "react"
 import { X } from "lucide-react"
 import { Trans } from "react-i18next"
 import { Package } from "@src/utils/package"
@@ -7,12 +7,14 @@ import { useAppTranslation } from "@/i18n/TranslationContext"
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { vscode } from "@/utils/vscode"
 import { Button, Input, Slider } from "@/components/ui"
+import { useExtensionState } from "@/context/ExtensionStateContext"
+import { getGroupsListedByAnyMode } from "@/utils/modeToolGroups"
 
 import { SetCachedStateField } from "./types"
 import { SectionHeader } from "./SectionHeader"
 import { Section } from "./Section"
 import { SearchableSetting } from "./SearchableSetting"
-import { AutoApproveToggle } from "./AutoApproveToggle"
+import { AutoApproveToggle, AutoApproveDynamicToggles } from "./AutoApproveToggle"
 import { MaxLimitInputs } from "./MaxLimitInputs"
 import { useAutoApprovalState } from "@/hooks/useAutoApprovalState"
 import { useAutoApprovalToggles } from "@/hooks/useAutoApprovalToggles"
@@ -23,7 +25,10 @@ type AutoApproveSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	alwaysAllowWrite?: boolean
 	alwaysAllowWriteOutsideWorkspace?: boolean
 	alwaysAllowWriteProtected?: boolean
-	alwaysAllowBrowser?: boolean
+	/** Per-DYNAMIC-category toggles; a name absent from the map means "ask". */
+	alwaysAllowGroups?: Record<string, boolean>
+	/** Registry snapshot of the dynamic categories the host has seen this session. */
+	dynamicToolGroups?: string[]
 	alwaysAllowMcp?: boolean
 	alwaysAllowUncategorized?: boolean
 	alwaysAllowModeSwitch?: boolean
@@ -44,7 +49,7 @@ type AutoApproveSettingsProps = HTMLAttributes<HTMLDivElement> & {
 		| "alwaysAllowWrite"
 		| "alwaysAllowWriteOutsideWorkspace"
 		| "alwaysAllowWriteProtected"
-		| "alwaysAllowBrowser"
+		| "alwaysAllowGroups"
 		| "alwaysAllowMcp"
 		| "alwaysAllowUncategorized"
 		| "alwaysAllowModeSwitch"
@@ -68,7 +73,8 @@ export const AutoApproveSettings = ({
 	alwaysAllowWrite,
 	alwaysAllowWriteOutsideWorkspace,
 	alwaysAllowWriteProtected,
-	alwaysAllowBrowser,
+	alwaysAllowGroups,
+	dynamicToolGroups,
 	alwaysAllowMcp,
 	alwaysAllowUncategorized,
 	alwaysAllowModeSwitch,
@@ -93,8 +99,19 @@ export const AutoApproveSettings = ({
 	const [writePathInput, setWritePathInput] = useState("")
 
 	const toggles = useAutoApprovalToggles()
+	const { customModes } = useExtensionState()
 
 	const { effectiveAutoApprovalEnabled } = useAutoApprovalState(toggles, autoApprovalEnabled)
+
+	// Declaring a category NARROWS visibility: a mode exposes a category's tools only
+	// when it lists that name, so a category no mode names has a working toggle and no
+	// tools to apply it to. That is legitimate (the declaring server may just not have
+	// connected yet), so it is surfaced as a hint rather than refused.
+	const groupsListedByAnyMode = useMemo(() => getGroupsListedByAnyMode(customModes), [customModes])
+	const unexposedGroups = useMemo(
+		() => (dynamicToolGroups ?? []).filter((name) => !groupsListedByAnyMode.has(name)),
+		[dynamicToolGroups, groupsListedByAnyMode],
+	)
 
 	const handleAddCommand = () => {
 		const currentCommands = allowedCommands ?? []
@@ -187,7 +204,6 @@ export const AutoApproveSettings = ({
 					<AutoApproveToggle
 						alwaysAllowReadOnly={alwaysAllowReadOnly}
 						alwaysAllowWrite={alwaysAllowWrite}
-						alwaysAllowBrowser={alwaysAllowBrowser}
 						alwaysAllowMcp={alwaysAllowMcp}
 						alwaysAllowUncategorized={alwaysAllowUncategorized}
 						alwaysAllowModeSwitch={alwaysAllowModeSwitch}
@@ -196,6 +212,41 @@ export const AutoApproveSettings = ({
 						alwaysAllowFollowupQuestions={alwaysAllowFollowupQuestions}
 						onToggle={(key, value) => setCachedStateField(key, value)}
 					/>
+
+					{(dynamicToolGroups?.length ?? 0) > 0 && (
+						<SearchableSetting
+							settingId="auto-approve-dynamic-categories"
+							section="autoApprove"
+							label={t("settings:autoApprove.dynamicSection.title")}>
+							<div data-testid="auto-approve-dynamic-section">
+								<span className="font-medium">{t("settings:autoApprove.dynamicSection.title")}</span>
+								<div className="text-vscode-descriptionForeground text-sm mt-1">
+									{t("settings:autoApprove.dynamicSection.description")}
+								</div>
+								{/* Save-gated like every builtin toggle: this stages the whole edited
+								    map into cachedState, and handleSubmit posts only the entries that
+								    actually moved (see diffAlwaysAllowGroups). */}
+								<AutoApproveDynamicToggles
+									names={dynamicToolGroups ?? []}
+									alwaysAllowGroups={alwaysAllowGroups}
+									onToggle={(name, value) =>
+										setCachedStateField("alwaysAllowGroups", {
+											...(alwaysAllowGroups ?? {}),
+											[name]: value,
+										})
+									}
+								/>
+								{unexposedGroups.map((name) => (
+									<div
+										key={name}
+										className="text-vscode-descriptionForeground text-sm"
+										data-testid={`auto-approve-dynamic-hint-${name}`}>
+										{t("settings:autoApprove.dynamicSection.noModeHint", { name })}
+									</div>
+								))}
+							</div>
+						</SearchableSetting>
+					)}
 
 					<MaxLimitInputs
 						allowedMaxRequests={allowedMaxRequests}

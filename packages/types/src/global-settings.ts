@@ -94,7 +94,20 @@ export const globalSettingsSchema = z.object({
 	alwaysAllowWrite: z.boolean().optional(),
 	alwaysAllowWriteOutsideWorkspace: z.boolean().optional(),
 	alwaysAllowWriteProtected: z.boolean().optional(),
-	alwaysAllowBrowser: z.boolean().optional(),
+	/**
+	 * Per-DYNAMIC-category auto-approval toggles: category name → allowed.
+	 *
+	 * One open bucket rather than a flat `alwaysAllow<Something>` per category,
+	 * because a synthesized flat key can never be routed — `ContextProxy` routes by
+	 * `GLOBAL_STATE_KEYS`, this schema strips unknown keys, and `parseScopeSettings`
+	 * drops them silently. (`pluginConfigs` is the precedent.)
+	 *
+	 * Consulted ONLY for non-builtin categories: a builtin name in this map is
+	 * ignored, so each category has exactly one source of truth for its toggle.
+	 * `"*"` approves every dynamic category — the unattended headless seed — and an
+	 * explicit per-category `false` beats it. An absent entry means ASK.
+	 */
+	alwaysAllowGroups: z.record(z.string(), z.boolean()).optional(),
 	writeDelayMs: z.number().min(0).optional(),
 	requestDelaySeconds: z.number().optional(),
 	/**
@@ -484,7 +497,6 @@ export const EVALS_SETTINGS: ShoferSettings = {
 	alwaysAllowWrite: true,
 	alwaysAllowWriteOutsideWorkspace: false,
 	alwaysAllowWriteProtected: false,
-	alwaysAllowBrowser: false,
 	writeDelayMs: 1000,
 	requestDelaySeconds: 10,
 	alwaysAllowMcp: true,

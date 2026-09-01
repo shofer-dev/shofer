@@ -101,19 +101,69 @@ describe("checkAutoApproval — tool path characterization", () => {
 		})
 	})
 
-	describe("browser group (alwaysAllowBrowser)", () => {
-		it("asks for a browser_ tool when off", async () => {
+	// `browser` is a DYNAMIC category — it has no flat `alwaysAllow*` key and no
+	// GROUP_GATE entry, so it is gated by its `alwaysAllowGroups` entry.
+	describe("browser group (alwaysAllowGroups)", () => {
+		it("asks for a browser_ tool when the record is absent", async () => {
 			expect(await checkAutoApproval({ state: enabled(), ...toolAsk("browser_navigate") })).toEqual({
 				decision: "ask",
 			})
 		})
-		it("approves a browser_ tool when on", async () => {
+		it("asks for a browser_ tool when the record names other categories only", async () => {
 			expect(
 				await checkAutoApproval({
-					state: enabled({ alwaysAllowBrowser: true }),
+					state: enabled({ alwaysAllowGroups: { salesforce: true } }),
+					...toolAsk("browser_navigate"),
+				}),
+			).toEqual({ decision: "ask" })
+		})
+		it("approves a browser_ tool when its entry is on", async () => {
+			expect(
+				await checkAutoApproval({
+					state: enabled({ alwaysAllowGroups: { browser: true } }),
 					...toolAsk("browser_navigate"),
 				}),
 			).toEqual({ decision: "approve" })
+		})
+		it("approves a browser_ tool under the wildcard, and an explicit false beats it", async () => {
+			expect(
+				await checkAutoApproval({
+					state: enabled({ alwaysAllowGroups: { "*": true } }),
+					...toolAsk("browser_navigate"),
+				}),
+			).toEqual({ decision: "approve" })
+
+			expect(
+				await checkAutoApproval({
+					state: enabled({ alwaysAllowGroups: { "*": true, browser: false } }),
+					...toolAsk("browser_navigate"),
+				}),
+			).toEqual({ decision: "ask" })
+		})
+	})
+
+	// The builtin fall-through is load-bearing, not an omission: an `ide_`-inferred
+	// say tool resolves to the `execute` group, and `alwaysAllowExecute` is
+	// documented to require the command-allowlist leg that only the `command` ask
+	// path applies. Widening the gate to every builtin would auto-approve it here
+	// on the toggle alone.
+	describe("builtin groups outside read/write keep falling through to ask", () => {
+		it("asks for an ide_-inferred execute say tool under alwaysAllowExecute with an empty allowlist", async () => {
+			expect(
+				await checkAutoApproval({
+					state: enabled({ alwaysAllowExecute: true, allowedCommands: [] }),
+					...toolAsk("ide_openFile"),
+				}),
+			).toEqual({ decision: "ask" })
+		})
+
+		it("asks for an unmapped say tool (uncategorized) even with alwaysAllowUncategorized on", async () => {
+			expect(
+				await checkAutoApproval({
+					state: enabled({ alwaysAllowUncategorized: true }),
+					...toolAsk("someUnmappedTool"),
+				}),
+			).toEqual({ decision: "ask" })
 		})
 	})
 

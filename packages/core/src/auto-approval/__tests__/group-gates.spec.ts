@@ -8,9 +8,103 @@ import { GROUP_GATE, isGroupAutoApproved } from "../group-gates.js"
  * checkAutoApproval characterization suite; these tests pin the engine itself.
  */
 describe("GROUP_GATE / isGroupAutoApproved", () => {
-	it("declares a gate for every ToolGroup (no group can be silently ungated)", () => {
+	it("declares a gate for every builtin ToolGroup (no group can be silently ungated)", () => {
 		const missing = toolGroups.filter((g) => !(g in GROUP_GATE))
 		expect(missing, `ToolGroup(s) missing a GROUP_GATE entry: ${missing.join(", ")}`).toEqual([])
+	})
+
+	// The converse of the check above, and the reason it keeps its value now that
+	// the vocabulary is open: the static table must carry the builtins and NOTHING
+	// else, or a dynamic category would silently acquire a flat toggle.
+	it("carries no name that is not a builtin", () => {
+		expect(Object.keys(GROUP_GATE).sort()).toEqual([...toolGroups].sort())
+		expect("browser" in GROUP_GATE).toBe(false)
+	})
+
+	describe("dynamic categories (alwaysAllowGroups)", () => {
+		it("asks when the record is absent or the category is unnamed", () => {
+			expect(isGroupAutoApproved("salesforce", {} as any, {}, { applyModifiers: false })).toBe(false)
+			expect(
+				isGroupAutoApproved("salesforce", { alwaysAllowGroups: {} } as any, {}, { applyModifiers: false }),
+			).toBe(false)
+			expect(
+				isGroupAutoApproved(
+					"salesforce",
+					{ alwaysAllowGroups: { browser: true } } as any,
+					{},
+					{ applyModifiers: false },
+				),
+			).toBe(false)
+		})
+
+		it("approves on an explicit true", () => {
+			expect(
+				isGroupAutoApproved(
+					"salesforce",
+					{ alwaysAllowGroups: { salesforce: true } } as any,
+					{},
+					{ applyModifiers: false },
+				),
+			).toBe(true)
+		})
+
+		it("approves under the wildcard", () => {
+			expect(
+				isGroupAutoApproved(
+					"salesforce",
+					{ alwaysAllowGroups: { "*": true } } as any,
+					{},
+					{ applyModifiers: false },
+				),
+			).toBe(true)
+		})
+
+		it("lets an explicit false beat the wildcard (deny by exception)", () => {
+			expect(
+				isGroupAutoApproved(
+					"salesforce",
+					{ alwaysAllowGroups: { salesforce: false, "*": true } } as any,
+					{},
+					{ applyModifiers: false },
+				),
+			).toBe(false)
+		})
+
+		it("ignores a builtin name in the record — read still needs alwaysAllowReadOnly", () => {
+			expect(
+				isGroupAutoApproved(
+					"read",
+					{ alwaysAllowGroups: { read: true } } as any,
+					{},
+					{ applyModifiers: false },
+				),
+			).toBe(false)
+			expect(
+				isGroupAutoApproved("read", { alwaysAllowGroups: { "*": true } } as any, {}, { applyModifiers: false }),
+			).toBe(false)
+			expect(
+				isGroupAutoApproved(
+					"execute",
+					{ alwaysAllowGroups: { execute: true } } as any,
+					{},
+					{ applyModifiers: false },
+				),
+			).toBe(false)
+		})
+
+		// Dynamic categories have no modifier toggles: those are read/write-specific
+		// and `isPathAutoApproved` refuses every other group.
+		it("is a no-op for applyModifiers", () => {
+			const state = { alwaysAllowGroups: { salesforce: true } } as any
+			expect(
+				isGroupAutoApproved(
+					"salesforce",
+					state,
+					{ isOutsideWorkspace: true, isProtected: true, absolutePath: "/elsewhere/f" },
+					{ applyModifiers: true },
+				),
+			).toBe(true)
+		})
 	})
 
 	it("requires the base toggle for a gated group", () => {

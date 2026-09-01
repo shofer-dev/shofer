@@ -1,7 +1,15 @@
 import React from "react"
 import { render, fireEvent, screen } from "@/utils/test-utils"
 
+import { vscode } from "@src/utils/vscode"
+
 import McpToolRow from "../McpToolRow"
+
+const mockExtensionState = { dynamicToolGroups: ["browser"] as string[] }
+
+vi.mock("@src/context/ExtensionStateContext", () => ({
+	useExtensionState: () => mockExtensionState,
+}))
 
 vi.mock("@src/i18n/TranslationContext", () => ({
 	useAppTranslation: () => ({
@@ -183,5 +191,115 @@ describe("McpToolRow", () => {
 		// Check that the description has normal opacity
 		expect(toolDescription).toHaveClass("opacity-80")
 		expect(toolDescription).not.toHaveClass("opacity-40")
+	})
+
+	describe("group selector", () => {
+		// The selector is editable only with a server context — that is the Settings →
+		// MCP Servers view, the one place a per-tool group override can be written.
+		const editableProps = { serverName: "acme", serverSource: "global" as const }
+
+		const openNewCategoryField = () => {
+			fireEvent.change(screen.getByTestId("mcp-tool-group-select"), { target: { value: "__new__" } })
+		}
+
+		it("offers the builtin groups plus the registered dynamic categories", () => {
+			render(<McpToolRow tool={mockTool} {...editableProps} />)
+
+			const options = Array.from(screen.getByTestId("mcp-tool-group-select").querySelectorAll("option")).map(
+				(option) => option.getAttribute("value"),
+			)
+
+			// 8 builtins, the dynamic category from the registry snapshot, the
+			// server-declared default, and the free-text entry.
+			expect(options).toContain("read")
+			expect(options).toContain("uncategorized")
+			expect(options).toContain("browser")
+			expect(options).toContain("default")
+			expect(options).toContain("__new__")
+			// `browser` is no longer a builtin: it appears once, from the registry.
+			expect(options.filter((value) => value === "browser")).toHaveLength(1)
+		})
+
+		it("posts the selected group without opening the free-text field", () => {
+			render(<McpToolRow tool={mockTool} {...editableProps} />)
+
+			fireEvent.change(screen.getByTestId("mcp-tool-group-select"), { target: { value: "read" } })
+
+			expect(vscode.postMessage).toHaveBeenCalledWith({
+				type: "setMcpToolGroup",
+				serverName: "acme",
+				source: "global",
+				toolName: "test-tool",
+				toolGroup: "read",
+			})
+			expect(screen.queryByTestId("mcp-tool-group-new-input")).not.toBeInTheDocument()
+		})
+
+		it("clears the override when the server-declared default is chosen", () => {
+			render(<McpToolRow tool={mockTool} {...editableProps} />)
+
+			fireEvent.change(screen.getByTestId("mcp-tool-group-select"), { target: { value: "default" } })
+
+			expect(vscode.postMessage).toHaveBeenCalledWith(
+				expect.objectContaining({ type: "setMcpToolGroup", toolGroup: null }),
+			)
+		})
+
+		it("mints a category from a valid slug", () => {
+			render(<McpToolRow tool={mockTool} {...editableProps} />)
+
+			openNewCategoryField()
+			fireEvent.change(screen.getByTestId("mcp-tool-group-new-input"), { target: { value: "my-service" } })
+			fireEvent.click(screen.getByTestId("mcp-tool-group-new-confirm"))
+
+			expect(vscode.postMessage).toHaveBeenCalledWith({
+				type: "setMcpToolGroup",
+				serverName: "acme",
+				source: "global",
+				toolName: "test-tool",
+				toolGroup: "my-service",
+			})
+			expect(screen.queryByTestId("mcp-tool-group-new-error")).not.toBeInTheDocument()
+		})
+
+		it.each(["Salesforce", "sales force", "sales_force", "-lead", "trailing-", ""])(
+			"refuses the non-slug name %j without posting",
+			(name) => {
+				render(<McpToolRow tool={mockTool} {...editableProps} />)
+
+				openNewCategoryField()
+				fireEvent.change(screen.getByTestId("mcp-tool-group-new-input"), { target: { value: name } })
+				fireEvent.click(screen.getByTestId("mcp-tool-group-new-confirm"))
+
+				expect(screen.getByTestId("mcp-tool-group-new-error")).toHaveTextContent(
+					"mcp:tool.groupNewInvalidError",
+				)
+				expect(vscode.postMessage).not.toHaveBeenCalledWith(
+					expect.objectContaining({ type: "setMcpToolGroup" }),
+				)
+			},
+		)
+
+		it("refuses the reserved wildcard by name, with its own message", () => {
+			render(<McpToolRow tool={mockTool} {...editableProps} />)
+
+			openNewCategoryField()
+			fireEvent.change(screen.getByTestId("mcp-tool-group-new-input"), { target: { value: "*" } })
+			fireEvent.click(screen.getByTestId("mcp-tool-group-new-confirm"))
+
+			expect(screen.getByTestId("mcp-tool-group-new-error")).toHaveTextContent("mcp:tool.groupNewWildcardError")
+			expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "setMcpToolGroup" }))
+		})
+
+		it("refuses a name longer than 64 characters", () => {
+			render(<McpToolRow tool={mockTool} {...editableProps} />)
+
+			openNewCategoryField()
+			fireEvent.change(screen.getByTestId("mcp-tool-group-new-input"), { target: { value: "a".repeat(65) } })
+			fireEvent.click(screen.getByTestId("mcp-tool-group-new-confirm"))
+
+			expect(screen.getByTestId("mcp-tool-group-new-error")).toBeInTheDocument()
+			expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "setMcpToolGroup" }))
+		})
 	})
 })

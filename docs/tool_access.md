@@ -98,8 +98,13 @@ flowchart TD
 
 ### `tools`
 
-A list of broad capability groups (e.g. `read`, `write`, `execute`, `mcp`,
-`browser`). Each entry can be one of three forms:
+A list of broad capability groups. Any tool CATEGORY may be named here: one of
+the eight builtins (`read`, `write`, `execute`, `mcp`, `mode`, `subtasks`,
+`questions`, `uncategorized`) or any dynamic category a tool declared —
+`browser` is one, and so is a name an MCP server invented. Each entry is
+validated as a slug (`toolGroupNameSchema`), not against a fixed enum, so a
+mistyped category is accepted and simply matches no tools. Each entry can be one
+of three forms:
 
 1. **Bare group name** (string): grants all tools in the group.
 
@@ -130,9 +135,14 @@ A list of broad capability groups (e.g. `read`, `write`, `execute`, `mcp`,
     `read` group it gets ONLY `mcp--shofer--web_search` — not `read_file`,
     `grep_search`, etc.
 
-Group definitions are in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts) as
-`TOOL_GROUPS`, which maps each group name to the concrete tool IDs it grants,
-and are re-exported from [`packages/types/src/tools.ts`](../packages/types/src/tools.ts).
+The NATIVE membership of a builtin group is
+`TOOL_GROUPS` in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts),
+which maps each builtin group name to the concrete tool IDs it grants; read it
+through `getToolGroupConfig(name)`, which returns `undefined` for a dynamic
+category rather than throwing. A dynamic category has no entry there and
+contributes no native tools — its members are the MCP, private-provider and
+plugin tools that declared it. See
+[`tool-categories.md`](tool-categories.md).
 
 ### `tools_allowed`
 

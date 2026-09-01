@@ -1,10 +1,10 @@
 import { type GroupEntry, type ModeConfig, type PromptComponent } from "./mode.js"
-import { type ToolGroup, TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } from "./tool.js"
+import { getToolGroupConfig, ALWAYS_AVAILABLE_TOOLS } from "./tool.js"
 
 export type Mode = string
 
 // Helper to extract group name regardless of format (string, tuple, or scoped object)
-export function getGroupName(group: GroupEntry): ToolGroup {
+export function getGroupName(group: GroupEntry): string {
 	if (typeof group === "string") {
 		return group
 	}
@@ -14,7 +14,7 @@ export function getGroupName(group: GroupEntry): ToolGroup {
 	}
 
 	// Scoped group entry: { "groupName": { allowed?, denied? } }
-	return Object.keys(group)[0] as ToolGroup
+	return Object.keys(group)[0]!
 }
 
 // Helper to get all tools for a mode
@@ -29,7 +29,10 @@ export function getToolsForMode(
 	if (tools) {
 		tools.forEach((group) => {
 			const groupName = getGroupName(group)
-			const groupConfig = TOOL_GROUPS[groupName]
+			// A dynamic category (or a name nothing defines) contributes no NATIVE
+			// tools — its members arrive over MCP or from a private provider and are
+			// filtered elsewhere. Treat it as the empty set rather than throwing.
+			const groupTools = (getToolGroupConfig(groupName)?.tools ?? []) as readonly string[]
 
 			// Extract group-level scope (allowed/denied) from scoped entries
 			let scope: { allowed?: readonly string[]; denied?: readonly string[] } | undefined
@@ -39,7 +42,6 @@ export function getToolsForMode(
 
 			if (scope?.allowed) {
 				// Exclusive list: only these tools from the group (must be subset)
-				const groupTools = groupConfig.tools as readonly string[]
 				scope.allowed.forEach((tool: string) => {
 					if (groupTools.includes(tool)) {
 						toolSet.add(tool)
@@ -47,7 +49,7 @@ export function getToolsForMode(
 				})
 			} else {
 				// Add all tools from the group
-				groupConfig.tools.forEach((tool: string) => toolSet.add(tool))
+				groupTools.forEach((tool: string) => toolSet.add(tool))
 			}
 
 			// Apply group-level denied (removes from what was added)

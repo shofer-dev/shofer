@@ -17,29 +17,27 @@ import { Popover, PopoverContent, PopoverTrigger, StandardTooltip, ToggleSwitch,
 
 import { AutoApproveSetting, autoApproveSettingsConfig } from "../settings/AutoApproveToggle"
 
+import { getModeAllowedGroups } from "@/utils/modeToolGroups"
+
 /**
- * Resolve the set of ToolGroup names accessible to the current mode.
- *
- * Mode group entries can be bare strings ("read") or tuples
- * (["write", { fileRegex: "..." }]), or scoped objects
- * ({ read: { allowed: [...], denied: [...] } }).
- * This extracts just the group name from each entry.
- *
- * `modes` is the effective mode list from extension state — the user's, the
- * project's and the plugin-contributed ones (which is where Shofer's own modes come
- * from). A slug that names no mode shows every toggle rather than hiding all of them.
+ * One rendered row of the dropdown, flattening the two kinds of category behind a
+ * single shape so the grid, the counts, the tooltip and Select-All/None do not have to
+ * branch. A BUILTIN row writes its own flat `alwaysAllow*` key; a DYNAMIC row writes an
+ * entry of `alwaysAllowGroups` through the generic per-entry patch.
  */
-function getModeAllowedGroups(
-	modeSlug: string | undefined,
-	modes: Array<{ slug: string; tools?: Array<string | [string, unknown]> }> | undefined,
-): Set<string> {
-	const mode = modeSlug ? modes?.find((m) => m.slug === modeSlug) : undefined
-
-	if (!mode?.tools) {
-		return new Set(Object.values(autoApproveSettingsConfig).map((c) => c.toolGroup))
-	}
-
-	return new Set(mode.tools.map((g) => (typeof g === "string" ? g : Array.isArray(g) ? g[0] : Object.keys(g)[0]!)))
+type ToggleRow = {
+	/** React key and `data-testid` discriminator. */
+	id: string
+	/** The category name the current mode is filtered against. */
+	toolGroup: string
+	label: string
+	description: string
+	icon: string
+	enabled: boolean
+	/** True when another setting must be on first (e.g. uncategorized needs MCP). */
+	dependencyDisabled: boolean
+	testId: string
+	toggle: (value: boolean) => void
 }
 
 interface AutoApproveDropdownProps {
@@ -57,18 +55,32 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 		setAutoApprovalEnabled,
 		setAlwaysAllowReadOnly,
 		setAlwaysAllowWrite,
-		setAlwaysAllowBrowser,
 		setAlwaysAllowExecute,
 		setAlwaysAllowMcp,
 		setAlwaysAllowUncategorized,
 		setAlwaysAllowModeSwitch,
 		setAlwaysAllowSubtasks,
 		setAlwaysAllowFollowupQuestions,
+		setDynamicToolGroupApproval,
+		alwaysAllowGroups,
+		dynamicToolGroups,
 		mode,
 		customModes,
 	} = useExtensionState()
 
 	const toggles = useAutoApprovalToggles()
+
+	// Turning any category on implies the master gate: a toggle that is on while
+	// auto-approval is off approves nothing.
+	const ensureAutoApprovalEnabled = React.useCallback(
+		(value: boolean) => {
+			if (value && !autoApprovalEnabled) {
+				setAutoApprovalEnabled(true)
+				vscode.postMessage({ type: "autoApprovalEnabled", bool: true })
+			}
+		},
+		[autoApprovalEnabled, setAutoApprovalEnabled],
+	)
 
 	const onAutoApproveToggle = React.useCallback(
 		(key: AutoApproveSetting, value: boolean) => {
@@ -80,9 +92,6 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 					break
 				case "alwaysAllowWrite":
 					setAlwaysAllowWrite(value)
-					break
-				case "alwaysAllowBrowser":
-					setAlwaysAllowBrowser(value)
 					break
 				case "alwaysAllowExecute":
 					setAlwaysAllowExecute(value)
@@ -104,58 +113,88 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 					break
 			}
 
-			// If enabling any option, ensure autoApprovalEnabled is true.
-			if (value && !autoApprovalEnabled) {
-				setAutoApprovalEnabled(true)
-				vscode.postMessage({ type: "autoApprovalEnabled", bool: true })
-			}
+			ensureAutoApprovalEnabled(value)
 		},
 		[
-			autoApprovalEnabled,
+			ensureAutoApprovalEnabled,
 			setAlwaysAllowReadOnly,
 			setAlwaysAllowWrite,
-			setAlwaysAllowBrowser,
 			setAlwaysAllowExecute,
 			setAlwaysAllowMcp,
 			setAlwaysAllowUncategorized,
 			setAlwaysAllowModeSwitch,
 			setAlwaysAllowSubtasks,
 			setAlwaysAllowFollowupQuestions,
-			setAutoApprovalEnabled,
 		],
 	)
 
-	// Calculate enabled and total counts as separate properties
-	const allSettingsArray = React.useMemo(() => Object.values(autoApproveSettingsConfig), [])
+	// One generic write for every dynamic category — no per-name setter exists, and
+	// none can: the category was minted at runtime. The context setter posts the
+	// per-entry `alwaysAllowGroups` patch itself.
+	const onDynamicToggle = React.useCallback(
+		(name: string, value: boolean) => {
+			setDynamicToolGroupApproval(name, value)
+			ensureAutoApprovalEnabled(value)
+		},
+		[setDynamicToolGroupApproval, ensureAutoApprovalEnabled],
+	)
 
-	// Filter to only show toggles for groups accessible in the current mode.
-	const allowedGroups = React.useMemo(
-		() => getModeAllowedGroups(mode, (customModes as any) ?? []),
-		[mode, customModes],
+	const builtinRows = React.useMemo<ToggleRow[]>(
+		() =>
+			Object.values(autoApproveSettingsConfig).map((config) => ({
+				id: config.key,
+				toolGroup: config.toolGroup,
+				label: t(config.labelKey),
+				description: t(config.descriptionKey),
+				icon: config.icon,
+				enabled: !!toggles[config.key],
+				dependencyDisabled: config.isDisabled?.(toggles) ?? false,
+				testId: `auto-approve-${config.key}`,
+				toggle: (value: boolean) => onAutoApproveToggle(config.key, value),
+			})),
+		[t, toggles, onAutoApproveToggle],
 	)
-	const settingsArray = React.useMemo(
-		() => allSettingsArray.filter((s) => allowedGroups.has(s.toolGroup)),
-		[allSettingsArray, allowedGroups],
+
+	const dynamicRows = React.useMemo<ToggleRow[]>(
+		() =>
+			(dynamicToolGroups ?? []).map((name) => ({
+				id: `group:${name}`,
+				toolGroup: name,
+				label: t("settings:autoApprove.dynamic.label", { name }),
+				description: t("settings:autoApprove.dynamic.description", { name }),
+				icon: "tag",
+				enabled: alwaysAllowGroups?.[name] === true,
+				dependencyDisabled: false,
+				testId: `auto-approve-group-${name}`,
+				toggle: (value: boolean) => onDynamicToggle(name, value),
+			})),
+		[t, dynamicToolGroups, alwaysAllowGroups, onDynamicToggle],
 	)
+
+	// Filter to only show toggles for categories accessible in the current mode. The
+	// match is plain string comparison, so a dynamic category appears exactly when the
+	// mode lists its name. `undefined` means there is nothing to filter against (an
+	// unknown slug, or a mode declaring no tools) — show everything rather than nothing.
+	const allowedGroups = React.useMemo(() => getModeAllowedGroups(mode, customModes), [mode, customModes])
+	const settingsArray = React.useMemo(() => {
+		const rows = [...builtinRows, ...dynamicRows]
+		return allowedGroups ? rows.filter((row) => allowedGroups.has(row.toolGroup)) : rows
+	}, [builtinRows, dynamicRows, allowedGroups])
 
 	const handleSelectAll = React.useCallback(() => {
 		// Enable all mode-accessible options
-		settingsArray.forEach(({ key }) => {
-			onAutoApproveToggle(key, true)
-		})
+		settingsArray.forEach((row) => row.toggle(true))
 		// Enable master auto-approval
 		if (!autoApprovalEnabled) {
 			setAutoApprovalEnabled(true)
 			vscode.postMessage({ type: "autoApprovalEnabled", bool: true })
 		}
-	}, [onAutoApproveToggle, autoApprovalEnabled, setAutoApprovalEnabled, settingsArray])
+	}, [autoApprovalEnabled, setAutoApprovalEnabled, settingsArray])
 
 	const handleSelectNone = React.useCallback(() => {
 		// Disable all mode-accessible options
-		settingsArray.forEach(({ key }) => {
-			onAutoApproveToggle(key, false)
-		})
-	}, [onAutoApproveToggle, settingsArray])
+		settingsArray.forEach((row) => row.toggle(false))
+	}, [settingsArray])
 
 	const handleOpenSettings = React.useCallback(
 		() =>
@@ -176,8 +215,8 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 		// trigger badge can show a stale "N auto-approved" that includes toggles
 		// the active mode cannot exercise (e.g. MCP enabled while in a mode that
 		// excludes the `mcp` group).
-		return settingsArray.filter(({ key }) => !!toggles[key]).length
-	}, [toggles, settingsArray])
+		return settingsArray.filter((row) => row.enabled).length
+	}, [settingsArray])
 
 	const totalCount = React.useMemo(() => {
 		return settingsArray.length
@@ -190,8 +229,8 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 			? t("chat:autoApprove.tooltipManage")
 			: t("chat:autoApprove.tooltipStatus", {
 					toggles: settingsArray
-						.filter((setting) => toggles[setting.key])
-						.map((setting) => t(setting.labelKey))
+						.filter((row) => row.enabled)
+						.map((row) => row.label)
 						.join(", "),
 				})
 
@@ -256,31 +295,40 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 						</p>
 					</div>
 					<div className="grid grid-cols-1 min-[340px]:grid-cols-2 gap-x-2 gap-y-2 p-3">
-						{settingsArray.map(({ key, labelKey, descriptionKey, icon, isDisabled }) => {
-							const isEnabled = toggles[key]
-							const dependencyDisabled = isDisabled?.(toggles) ?? false
-							const buttonDisabled = !effectiveAutoApprovalEnabled || dependencyDisabled
-							return (
-								<StandardTooltip key={key} content={t(descriptionKey)}>
-									<Button
-										variant={isEnabled ? "primary" : "secondary"}
-										onClick={() => onAutoApproveToggle(key, !isEnabled)}
-										className={cn(
-											"flex items-center gap-2 px-2 py-2 text-sm text-left justify-start h-auto",
-											"transition-all duration-150",
-											!effectiveAutoApprovalEnabled &&
-												"opacity-50 cursor-not-allowed hover:opacity-50",
-											dependencyDisabled && "opacity-30 cursor-not-allowed hover:opacity-30",
-											!isEnabled && "bg-vscode-button-background/15",
-										)}
-										disabled={buttonDisabled}
-										data-testid={`auto-approve-${key}`}>
-										<span className={`codicon codicon-${icon} text-sm flex-shrink-0`} />
-										<span className="flex-1 truncate">{t(labelKey)}</span>
-									</Button>
-								</StandardTooltip>
-							)
-						})}
+						{settingsArray.map(
+							({
+								id,
+								label,
+								description,
+								icon,
+								enabled: isEnabled,
+								dependencyDisabled,
+								testId,
+								toggle,
+							}) => {
+								const buttonDisabled = !effectiveAutoApprovalEnabled || dependencyDisabled
+								return (
+									<StandardTooltip key={id} content={description}>
+										<Button
+											variant={isEnabled ? "primary" : "secondary"}
+											onClick={() => toggle(!isEnabled)}
+											className={cn(
+												"flex items-center gap-2 px-2 py-2 text-sm text-left justify-start h-auto",
+												"transition-all duration-150",
+												!effectiveAutoApprovalEnabled &&
+													"opacity-50 cursor-not-allowed hover:opacity-50",
+												dependencyDisabled && "opacity-30 cursor-not-allowed hover:opacity-30",
+												!isEnabled && "bg-vscode-button-background/15",
+											)}
+											disabled={buttonDisabled}
+											data-testid={testId}>
+											<span className={`codicon codicon-${icon} text-sm flex-shrink-0`} />
+											<span className="flex-1 truncate">{label}</span>
+										</Button>
+									</StandardTooltip>
+								)
+							},
+						)}
 					</div>
 
 					{/* Bottom bar with Select All/None buttons */}

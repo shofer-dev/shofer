@@ -6,7 +6,6 @@ import type { TelemetrySetting } from "./telemetry.js"
 import type { Experiments } from "./experiment.js"
 import type { ShoferMessage, QueuedMessage, TaskInteractionPayload } from "./message.js"
 import type { TodoItem } from "./todo.js"
-import type { ToolGroup } from "./tool.js"
 import type { OrganizationAllowList } from "./organization.js"
 import type { SerializedCustomToolDefinition } from "./custom-tool.js"
 import type { WebviewMetricsPush } from "./metrics.js"
@@ -304,7 +303,7 @@ export type ExtensionState = Pick<
 	| "alwaysAllowWrite"
 	| "alwaysAllowWriteOutsideWorkspace"
 	| "alwaysAllowWriteProtected"
-	| "alwaysAllowBrowser"
+	| "alwaysAllowGroups"
 	| "alwaysAllowMcp"
 	| "settingsWriteScope"
 	| "alwaysAllowUncategorized"
@@ -413,6 +412,17 @@ export type ExtensionState = Pick<
 	customModes: ModeConfig[]
 	toolRequirements?: Record<string, boolean> // Map of tool names to their requirements (e.g. {"apply_diff": true})
 
+	/**
+	 * Snapshot of the dynamic tool categories the host has registered this session
+	 * (`toolGroupRegistry` in `@shofer/core`), sorted.
+	 *
+	 * It is runtime discovery, not a setting: a category exists because something
+	 * declared it (an MCP server's `_meta`, an `mcp.json` override, a private-tool
+	 * provider, a plugin's custom tool). The webview renders one auto-approve
+	 * toggle per name here, backed by `alwaysAllowGroups`.
+	 */
+	dynamicToolGroups?: string[]
+
 	cwd?: string // Current working directory
 	telemetrySetting: TelemetrySetting
 	telemetryKey?: string
@@ -508,6 +518,22 @@ export interface UpdateTodoListPayload {
 }
 
 export type EditQueuedMessagePayload = Pick<QueuedMessage, "id" | "text" | "images">
+
+/**
+ * The `updateSettings` payload.
+ *
+ * Every key carries the value to STORE, exactly as `ShoferSettings` declares it —
+ * with one deliberate exception. `alwaysAllowGroups` is a **patch**, not the value:
+ * the record the webview displays is the deep-merged view across the `.shofer/`
+ * scopes, so posting it back whole would copy org-scope entries into the write
+ * scope's own file, where they would shadow the org's later changes forever. The
+ * message therefore carries only the entries to change, and a `null` value DELETES
+ * that entry; the host merges the patch into the write scope's own map. The STORED
+ * setting stays `Record<string, boolean>` — `null` never reaches it.
+ */
+export type UpdatedSettings = Omit<ShoferSettings, "alwaysAllowGroups"> & {
+	alwaysAllowGroups?: Record<string, boolean | null>
+}
 
 export interface WebviewMessage {
 	type:
@@ -739,11 +765,13 @@ export interface WebviewMessage {
 	toolName?: string
 	isEnabled?: boolean
 	/**
-	 * Target tool group (category) for `setMcpToolGroup`. One of the
-	 * {@link ToolGroup} values, or `null` to clear the per-tool override so the
-	 * tool falls back to its server-declared group / `"uncategorized"`.
+	 * Target tool group (category) for `setMcpToolGroup`: any category name — a
+	 * builtin, an already-registered dynamic category, or a NEW slug the
+	 * user typed, which mints one. `null` clears the per-tool override so the tool
+	 * falls back to its server-declared group / `"uncategorized"`. The host
+	 * re-validates the slug in `McpHub.setToolGroup`.
 	 */
-	toolGroup?: ToolGroup | null
+	toolGroup?: string | null
 	/**
 	 * Partial MCP server configuration patch sent from the Settings → MCP
 	 * Servers editor. Keys map to `mcp.json` fields (command, args, cwd, env,
@@ -807,7 +835,7 @@ export interface WebviewMessage {
 	list?: string[] // For dismissedUpsells response
 	organizationId?: string | null // For organization switching
 	useProviderSignup?: boolean // For shoferCloudSignIn to use provider signup flow
-	updatedSettings?: ShoferSettings
+	updatedSettings?: UpdatedSettings
 	/** For `trustOutsideWorkspacePath`: the directory to task-scope trust (the pending file's parent dir). */
 	outsideWorkspacePath?: string
 	/** For `trustOutsideWorkspacePath`: whether to trust read only, or read+write (write-group tool). */

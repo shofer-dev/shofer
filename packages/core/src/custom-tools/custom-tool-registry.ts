@@ -17,6 +17,7 @@ import { pathToFileURL } from "url"
 import type { CustomToolDefinition, SerializedCustomToolDefinition, CustomToolParametersSchema } from "@shofer/types"
 
 import type { StoredCustomTool, LoadResult } from "./types.js"
+import { toolGroupRegistry } from "../tool-groups/category-registry.js"
 import { serializeCustomTool } from "./serialize.js"
 import { runEsbuild, NODE_BUILTIN_MODULES, COMMONJS_REQUIRE_BANNER } from "./esbuild-runner.js"
 
@@ -76,6 +77,7 @@ export class CustomToolRegistry {
 						}
 
 						this.tools.set(def.name, { ...def, source: filePath })
+						this.recordDeclaredGroup(def)
 						console.log(`[CustomToolRegistry] loaded tool ${def.name} from ${filePath}`)
 						result.loaded.push(def.name)
 					}
@@ -162,6 +164,22 @@ export class CustomToolRegistry {
 
 		const storedTool: StoredCustomTool = source ? { ...validated, source } : validated
 		this.tools.set(id, storedTool)
+		this.recordDeclaredGroup(validated)
+	}
+
+	/**
+	 * Publish a tool's declared category to the tool-group registry at REGISTRATION
+	 * time, not at first call.
+	 *
+	 * Two things depend on the timing. A dynamic category minted here gets its
+	 * auto-approve toggle before the tool is ever invoked, and the tool → group
+	 * mapping lets the approval path resolve the group the definition declared
+	 * instead of inferring one from the tool's name.
+	 */
+	private recordDeclaredGroup(definition: CustomToolDefinition): void {
+		if (definition.group) {
+			toolGroupRegistry.registerToolMapping(definition.name, definition.group)
+		}
 	}
 
 	/**

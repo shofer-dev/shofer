@@ -272,8 +272,11 @@
 		"alwaysAllowWriteProtected": {
 			"type": "boolean"
 		},
-		"alwaysAllowBrowser": {
-			"type": "boolean"
+		"alwaysAllowGroups": {
+			"type": "object",
+			"additionalProperties": {
+				"type": "boolean"
+			}
 		},
 		"writeDelayMs": {
 			"type": "number",
@@ -590,17 +593,9 @@
 							"anyOf": [
 								{
 									"type": "string",
-									"enum": [
-										"read",
-										"write",
-										"execute",
-										"browser",
-										"mcp",
-										"mode",
-										"subtasks",
-										"questions",
-										"uncategorized"
-									]
+									"minLength": 1,
+									"maxLength": 64,
+									"pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
 								},
 								{
 									"type": "array",
@@ -609,17 +604,9 @@
 									"items": [
 										{
 											"type": "string",
-											"enum": [
-												"read",
-												"write",
-												"execute",
-												"browser",
-												"mcp",
-												"mode",
-												"subtasks",
-												"questions",
-												"uncategorized"
-											]
+											"minLength": 1,
+											"maxLength": 64,
+											"pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
 										},
 										{
 											"type": "object",

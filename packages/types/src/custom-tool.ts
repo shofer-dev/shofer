@@ -64,6 +64,10 @@ export interface CustomToolDefinition {
 	 * bug rather than a policy. Declaring the group is how a plugin tool participates in
 	 * the same policy a native tool does; it does not grant anything, because the group's
 	 * toggle still has to be on.
+	 *
+	 * Any slug is accepted, not only a builtin: naming one nothing has used yet MINTS
+	 * a dynamic category, which then carries its own toggle. Registration happens when
+	 * the tool is registered, so the toggle exists before the tool is ever called.
 	 */
 	group?: ToolGroup
 

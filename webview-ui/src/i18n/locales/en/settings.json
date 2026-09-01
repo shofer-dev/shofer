@@ -374,7 +374,6 @@
 			"write": "Write",
 			"execute": "Run",
 			"mcp": "MCP",
-			"browser": "Browser",
 			"mode": "Mode",
 			"subtasks": "Subtasks",
 			"questions": "Questions",
@@ -418,9 +417,14 @@
 			"label": "Mode",
 			"description": "Automatically switch between different modes without requiring approval"
 		},
-		"browser": {
-			"label": "Browser",
-			"description": "Automatically execute browser actions (navigate, click, type, screenshot, etc.) without requiring approval"
+		"dynamic": {
+			"label": "Always allow {{name}} tools",
+			"description": "Automatically run tools in the {{name}} category without requiring approval."
+		},
+		"dynamicSection": {
+			"title": "Custom categories",
+			"description": "Categories created on demand by an MCP server, a plugin, or a per-tool override. Each one asks for approval until you allow it here.",
+			"noModeHint": "No mode currently exposes these tools: nothing runs under {{name}} until a mode lists that category."
 		},
 		"subtasks": {
 			"label": "Subtasks",

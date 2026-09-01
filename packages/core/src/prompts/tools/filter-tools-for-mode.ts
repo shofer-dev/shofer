@@ -8,7 +8,7 @@ import {
 	modeStubsToolSchemas,
 	resolveModeConfig,
 } from "@shofer/types"
-import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/types"
+import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES, getToolGroupConfig } from "@shofer/types"
 import { defaultModeSlug } from "@shofer/types"
 import { resolveToolAlias } from "../../tools/tool-aliases.js"
 import { buildMcpToolName } from "../../utils/mcp-name.js"
@@ -402,7 +402,8 @@ export function getAvailableToolsInGroup(
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- settings is an open-ended bag of host-provided flags
 	settings?: Record<string, any>,
 ): ToolName[] {
-	const toolGroup = TOOL_GROUPS[groupName]
+	// A dynamic category has no native tools; an unknown name has none either.
+	const toolGroup = getToolGroupConfig(groupName)
 	if (!toolGroup) {
 		return []
 	}
@@ -467,7 +468,7 @@ export function filterMcpToolsForMode(
 	// (see McpHub.fetchToolsList) and is visible only when the mode lists it —
 	// the same rule filterPrivateToolsForMode applies, one vocabulary in both
 	// filters. Auto-approval is gated separately by `alwaysAllowUncategorized`
-	// (see getMcpToolGroup / MCP_GROUP_APPROVAL_GATE), so visibility here never
+	// (see getMcpToolGroup / GROUP_GATE), so visibility here never
 	// loosens the approval requirement.
 
 	// Build a per-tool lookup keyed by the canonical OpenAI function name

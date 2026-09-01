@@ -26,6 +26,28 @@ describe("parseScopeSettings", () => {
 		expect(parsed.voidedReason).toBeUndefined()
 	})
 
+	// The path that silently strips a key it does not know. `alwaysAllowGroups` is
+	// an OPEN record whose entry names nobody registered in the schema, so it is
+	// worth pinning that the KEY is known even though its members are arbitrary —
+	// a dynamic category's toggle written into a `.shofer/settings.json` must reach
+	// the merge engine, and a regression here would look like a toggle that saves
+	// and then does nothing.
+	it("round-trips alwaysAllowGroups, whose entry names are arbitrary", () => {
+		const parsed = parseScopeSettings(
+			JSON.stringify({ alwaysAllowGroups: { browser: true, "salesforce-crm": false, "*": true } }),
+		)
+		expect(parsed.settings).toEqual({ alwaysAllowGroups: { browser: true, "salesforce-crm": false, "*": true } })
+		expect(parsed.rejected).toEqual([])
+	})
+
+	it("drops alwaysAllowGroups alone when an entry is not a boolean", () => {
+		const parsed = parseScopeSettings(
+			JSON.stringify({ alwaysAllowGroups: { browser: "yes" }, alwaysAllowReadOnly: true }),
+		)
+		expect(parsed.settings).toEqual({ alwaysAllowReadOnly: true })
+		expect(parsed.rejected.map((r) => r.key)).toEqual(["alwaysAllowGroups"])
+	})
+
 	it("keeps the file when defaultCostLimit.maxUsd is 0 and drops only that key", () => {
 		const parsed = parseScopeSettings(
 			JSON.stringify({

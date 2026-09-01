@@ -165,6 +165,7 @@ import { PluginPanelManager } from "./PluginPanelManager"
 import { REQUESTY_BASE_URL } from "@shofer/core"
 import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
 import { addTaskLogListener } from "@shofer/core"
+import { toolGroupRegistry } from "@shofer/core"
 import type { TaskProviderLike as CoreTaskProviderLike } from "@shofer/core"
 import { time } from "@shofer/core"
 
@@ -427,6 +428,18 @@ export class ShoferProvider
 					this._logFlushTimer = undefined
 				}
 			},
+		})
+
+		// A tool category was minted this session — an MCP server connected declaring
+		// `_meta["shofer.dev/toolGroup"]`, a plugin registered a custom tool, a name was
+		// typed into the MCP group dropdown. The category exists from that moment, so
+		// its auto-approve toggle must appear without a reload: a toggle the user can
+		// only reach after restarting is indistinguishable from one that does not exist,
+		// and the call it would have governed asks in the meantime.
+		this.disposables.push({
+			dispose: toolGroupRegistry.onDidChange(() => {
+				void this.postInitState()
+			}),
 		})
 
 		// A `.shofer/` settings file changed underneath this host (another pod on the
@@ -5031,7 +5044,7 @@ export class ShoferProvider
 			alwaysAllowWrite,
 			alwaysAllowWriteOutsideWorkspace,
 			alwaysAllowWriteProtected,
-			alwaysAllowBrowser,
+			alwaysAllowGroups,
 			alwaysAllowExecute,
 			allowedCommands,
 			deniedCommands,
@@ -5154,7 +5167,11 @@ export class ShoferProvider
 			alwaysAllowWrite: alwaysAllowWrite ?? false,
 			alwaysAllowWriteOutsideWorkspace: alwaysAllowWriteOutsideWorkspace ?? false,
 			alwaysAllowWriteProtected: alwaysAllowWriteProtected ?? false,
-			alwaysAllowBrowser: alwaysAllowBrowser ?? false,
+			// The dynamic-category toggles, and the categories themselves. The record
+			// is the effective (scope-merged) view for RENDERING; a write back is a
+			// per-entry patch, never this whole map (see `UpdatedSettings`).
+			alwaysAllowGroups: alwaysAllowGroups ?? {},
+			dynamicToolGroups: toolGroupRegistry.getDynamicGroups(),
 			alwaysAllowExecute: alwaysAllowExecute ?? false,
 			alwaysAllowMcp: alwaysAllowMcp ?? false,
 			alwaysAllowModeSwitch: alwaysAllowModeSwitch ?? false,
@@ -5438,7 +5455,8 @@ export class ShoferProvider
 			alwaysAllowReadOnly: stateValues.alwaysAllowReadOnly ?? false,
 			alwaysAllowReadOnlyOutsideWorkspace: stateValues.alwaysAllowReadOnlyOutsideWorkspace ?? false,
 			alwaysAllowWrite: stateValues.alwaysAllowWrite ?? false,
-			alwaysAllowBrowser: stateValues.alwaysAllowBrowser ?? false,
+			alwaysAllowGroups: stateValues.alwaysAllowGroups ?? {},
+			dynamicToolGroups: toolGroupRegistry.getDynamicGroups(),
 			alwaysAllowWriteOutsideWorkspace: stateValues.alwaysAllowWriteOutsideWorkspace ?? false,
 			alwaysAllowWriteProtected: stateValues.alwaysAllowWriteProtected ?? false,
 			alwaysAllowExecute: stateValues.alwaysAllowExecute ?? false,

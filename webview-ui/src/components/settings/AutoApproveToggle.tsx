@@ -8,7 +8,6 @@ type AutoApproveToggles = Pick<
 	GlobalSettings,
 	| "alwaysAllowReadOnly"
 	| "alwaysAllowWrite"
-	| "alwaysAllowBrowser"
 	| "alwaysAllowMcp"
 	| "alwaysAllowUncategorized"
 	| "alwaysAllowModeSwitch"
@@ -37,6 +36,15 @@ type AutoApproveConfig = {
 	isDisabled?: (props: AutoApproveToggles) => boolean
 }
 
+/**
+ * The BUILTIN toggles, one per reserved category. There are exactly eight, and this
+ * record is hand-written on purpose: each builtin has its own flat `alwaysAllow*`
+ * settings key, its own icon and its own copy.
+ *
+ * A DYNAMIC category has none of that — it is minted at runtime from a name nobody
+ * hardcoded — so it is rendered by {@link AutoApproveDynamicToggles} from the
+ * `dynamicToolGroups` snapshot instead, against generic templated labels.
+ */
 export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveConfig> = {
 	alwaysAllowReadOnly: {
 		key: "alwaysAllowReadOnly",
@@ -87,14 +95,6 @@ export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveCo
 		descriptionKey: "settings:autoApprove.subtasks.description",
 		icon: "list-tree",
 		testId: "always-allow-subtasks-toggle",
-	},
-	alwaysAllowBrowser: {
-		key: "alwaysAllowBrowser",
-		toolGroup: "browser",
-		labelKey: "settings:autoApprove.browser.label",
-		descriptionKey: "settings:autoApprove.browser.description",
-		icon: "globe",
-		testId: "always-allow-browser-toggle",
 	},
 	alwaysAllowExecute: {
 		key: "alwaysAllowExecute",
@@ -147,6 +147,67 @@ export const AutoApproveToggle = ({ onToggle, ...props }: AutoApproveToggleProps
 					)
 				},
 			)}
+		</div>
+	)
+}
+
+/** Stable test id for a dynamic category's toggle button. */
+export const dynamicToggleTestId = (name: string) => `always-allow-group-${name}-toggle`
+
+type AutoApproveDynamicTogglesProps = {
+	/** Registered dynamic category names — the `dynamicToolGroups` state snapshot. */
+	names: readonly string[]
+	/**
+	 * The effective per-category map. A name ABSENT from it means "ask", which is the
+	 * same fail-closed posture an unconfigured category has always had.
+	 */
+	alwaysAllowGroups?: Record<string, boolean>
+	onToggle: (name: string, value: boolean) => void
+	/** Renders every row non-interactive (e.g. the master auto-approval gate is off). */
+	disabled?: boolean
+}
+
+/**
+ * One toggle per DYNAMIC category, rendered from data rather than from a config
+ * record.
+ *
+ * Labels come from a single templated i18n pair interpolated with the category name,
+ * because a category is created on demand — there is no key to add when an MCP server
+ * declares `salesforce`, and hand-keying one per category would make the i18n files
+ * the thing that decides which categories can be shown.
+ */
+export const AutoApproveDynamicToggles = ({
+	names,
+	alwaysAllowGroups,
+	onToggle,
+	disabled = false,
+}: AutoApproveDynamicTogglesProps) => {
+	const { t } = useAppTranslation()
+
+	return (
+		<div className={cn("flex flex-row flex-wrap gap-2 py-2")}>
+			{names.map((name) => {
+				const enabled = alwaysAllowGroups?.[name] === true
+				return (
+					<StandardTooltip key={name} content={t("settings:autoApprove.dynamic.description", { name })}>
+						<Button
+							variant={enabled ? "primary" : "secondary"}
+							onClick={() => onToggle(name, !enabled)}
+							aria-label={t("settings:autoApprove.dynamic.label", { name })}
+							aria-pressed={enabled}
+							data-testid={dynamicToggleTestId(name)}
+							disabled={disabled}
+							className={cn(
+								"gap-1.5 text-xs whitespace-nowrap",
+								!enabled && "opacity-50",
+								disabled && "opacity-30 cursor-not-allowed",
+							)}>
+							<span className="codicon codicon-tag text-sm" />
+							<span>{t("settings:autoApprove.dynamic.label", { name })}</span>
+						</Button>
+					</StandardTooltip>
+				)
+			})}
 		</div>
 	)
 }

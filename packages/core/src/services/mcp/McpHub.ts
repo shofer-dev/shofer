@@ -34,7 +34,7 @@ import type {
 	McpToolCallResponse,
 	ToolGroup,
 } from "@shofer/types"
-import { toolGroupsSchema } from "@shofer/types"
+import { toolGroupNameSchema } from "@shofer/types"
 import {
 	recordMcpDuration,
 	incMcpCalls,
@@ -47,6 +47,7 @@ import { t } from "../../i18n/index.js"
 
 import type { TaskProviderLike } from "../../task-provider/index.js"
 import { mcpLog as mcpSysLog } from "../../logging/subsystems.js"
+import { registerToolGroup } from "../../tool-groups/category-registry.js"
 
 import { fileExistsAtPath } from "../../fs/fs.js"
 import { getWorkspacePath } from "../../path/path.js"
@@ -162,9 +163,11 @@ const BaseConfigSchema = z.object({
 	timeout: z.number().min(1).max(3600).optional().default(60),
 	watchPaths: z.array(z.string()).optional(), // paths to watch for changes and restart server
 	disabledTools: z.array(z.string()).default([]),
-	// Per-tool group assignments. Keys are tool names; values must be a valid ToolGroup.
-	// Invalid group strings cause config load to fail (surface user errors early).
-	toolGroups: z.record(toolGroupsSchema).optional(),
+	// Per-tool group assignments. Keys are tool names; values must be a valid
+	// category NAME — a builtin or any slug, since naming a category nobody has
+	// used yet is how a user mints one. A value that is not a slug is malformed
+	// input and fails config load (surface user errors early).
+	toolGroups: z.record(toolGroupNameSchema).optional(),
 })
 
 // Custom error messages for better user feedback
@@ -1407,14 +1410,22 @@ export class McpHub {
 			//   3. Server-declared `_meta["shofer.dev/toolGroup"]`
 			//   4. Default `uncategorized`
 			// Auto-approval is gated by group, not by a per-tool flag.
+			// A declared group is validated as a SLUG, not against the builtin enum:
+			// a server naming `salesforce` mints that category here, at DISCOVERY, so
+			// its auto-approve toggle exists before the tool is ever called. Only a
+			// malformed name is dropped (to `uncategorized` by the caller's fallback).
 			const resolveGroup = (raw: unknown): McpTool["group"] => {
-				const parsed = toolGroupsSchema.safeParse(raw)
-				return parsed.success ? parsed.data : undefined
+				const parsed = toolGroupNameSchema.safeParse(raw)
+				if (!parsed.success) {
+					return undefined
+				}
+				registerToolGroup(parsed.data)
+				return parsed.data
 			}
 			// A verb-multiplexing tool's per-operation map (see MCP_META_OP_GROUPS),
-			// sanitized entry by entry: a value that is not a known group is dropped
-			// rather than failing the listing or being forwarded — the call then
-			// falls back to the tool-level group, which is the maximum over the
+			// sanitized entry by entry: a value that is not a valid category name is
+			// dropped rather than failing the listing or being forwarded — the call
+			// then falls back to the tool-level group, which is the maximum over the
 			// operations. A declaration that is not a plain object, or one nothing
 			// survives, yields `undefined`.
 			const resolveOpGroups = (raw: unknown): McpTool["opGroups"] => {
@@ -2451,7 +2462,7 @@ export class McpHub {
 		serverName: string,
 		source: "global" | "project",
 		toolName: string,
-		group: z.infer<typeof toolGroupsSchema> | null | undefined,
+		group: string | null | undefined,
 	): Promise<void> {
 		try {
 			const connection = this.findConnection(serverName, source)
@@ -2459,9 +2470,13 @@ export class McpHub {
 				throw new Error(`Server ${serverName} with source ${source} not found`)
 			}
 
-			// Validate the group up front (when one was provided).
+			// Validate the group up front (when one was provided). Any slug is
+			// accepted: this is the path by which a name typed into the MCP group
+			// dropdown CREATES a category, so it is registered here rather than only
+			// on the re-list that follows the write.
 			if (group != null) {
-				toolGroupsSchema.parse(group)
+				toolGroupNameSchema.parse(group)
+				registerToolGroup(group)
 			}
 
 			// Resolve the correct config file for this server's source.

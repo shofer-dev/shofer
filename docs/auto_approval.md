@@ -14,10 +14,14 @@ supplies, and never for one a scope does. A served node seeds one key,
 `autoApprovalEnabled: false`, and leaves the rest ABSENT, which denies: nothing
 auto-approves unless a `.shofer/` scope states it `true`. A local unattended run
 (`shofer run` without `--require-approval`, `shofer acp`) states the opposite seed
-for itself — every DECLARED capability (`read`, `write`, `execute`, `browser`,
-`mcp`, `mode`, `subtasks`) plus `allowedCommands: ["*"]` — because the person who
-typed the command is the author of that grant. `alwaysAllowUncategorized` and
-`alwaysAllowFollowupQuestions` are in neither seed. Configuration wins over both. See
+for itself — every DECLARED capability (the builtins `read`, `write`, `execute`,
+`mcp`, `mode`, `subtasks`, plus `alwaysAllowGroups: { "*": true }` for every
+dynamic category, `browser` included) and `allowedCommands: ["*"]` — because the
+person who typed the command is the author of that grant. The wildcard is how a
+seed grants a vocabulary nobody has met yet: a category exists because something
+declared it, possibly mid-run, so there is no set of names the seed could
+enumerate. `alwaysAllowUncategorized` and `alwaysAllowFollowupQuestions` are in
+neither seed. Configuration wins over both. See
 [`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag).
 
 ---
@@ -101,21 +105,58 @@ declarations.
 
 These are the boolean toggles exposed in the UI. Each controls a specific class of actions.
 
-| Toggle (`alwaysAllow*`)        | Controls                                                                       | Additional Options                                                              |
-| ------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `alwaysAllowReadOnly`          | Tools in the `read` ToolGroup                                                  | `alwaysAllowReadOnlyOutsideWorkspace`                                           |
-| `alwaysAllowWrite`             | Tools in the `write` ToolGroup                                                 | `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected`                 |
-| `alwaysAllowBrowser`           | Tools in the `browser` ToolGroup                                               | –                                                                               |
-| `alwaysAllowMcp`               | Master gate for MCP tool calls and resource access                             | Per-group toggle for the tool's group (see [`alwaysAllowMcp`](#alwaysallowmcp)) |
-| `alwaysAllowModeSwitch`        | `switch_mode` tool                                                             | –                                                                               |
-| `alwaysAllowSubtasks`          | `new_task`, `finishTask`, `cancel_tasks`                                       | –                                                                               |
-| `alwaysAllowExecute`           | Shell command execution (gate — requires `allowedCommands` to have any effect) | `allowedCommands`, `deniedCommands`                                             |
-| `alwaysAllowFollowupQuestions` | Follow-up question suggestions                                                 | `followupAutoApproveTimeoutMs`                                                  |
+Each of the eight BUILTIN tool categories has one flat key; every DYNAMIC
+category shares the single `alwaysAllowGroups` record.
+
+| Toggle                         | Controls                                                                       | Additional Options                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `alwaysAllowReadOnly`          | Tools in the `read` ToolGroup                                                  | `alwaysAllowReadOnlyOutsideWorkspace`, `allowedReadPaths`                            |
+| `alwaysAllowWrite`             | Tools in the `write` ToolGroup                                                 | `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected`, `allowedWritePaths` |
+| `alwaysAllowMcp`               | Master gate for MCP tool calls and resource access                             | Per-group toggle for the tool's group (see [`alwaysAllowMcp`](#alwaysallowmcp))      |
+| `alwaysAllowModeSwitch`        | `switch_mode` tool                                                             | –                                                                                    |
+| `alwaysAllowSubtasks`          | `new_task`, `finishTask`, `cancel_tasks`                                       | –                                                                                    |
+| `alwaysAllowExecute`           | Shell command execution (gate — requires `allowedCommands` to have any effect) | `allowedCommands`, `deniedCommands`                                                  |
+| `alwaysAllowFollowupQuestions` | Follow-up question suggestions                                                 | `followupAutoApproveTimeoutMs`                                                       |
+| `alwaysAllowUncategorized`     | Tools in the `uncategorized` ToolGroup                                         | –                                                                                    |
+| `alwaysAllowGroups`            | One entry per DYNAMIC category — `Record<string, boolean>`, not a boolean      | the `"*"` wildcard entry                                                             |
+
+### `alwaysAllowGroups`
+
+The one key that carries every category nobody hardcoded. It is declared in
+`globalSettingsSchema` ([`global-settings.ts`](../packages/types/src/global-settings.ts))
+as `z.record(z.string(), z.boolean())` and resolved by `isGroupAutoApproved`:
+
+- an explicit `true` approves that category;
+- **`"*"` approves every category nobody has spoken about** — it is not a valid
+  slug (`toolGroupNameSchema` rejects it), so it can never collide with a real
+  name;
+- **an explicit `false` beats the wildcard** — the entry is a statement about
+  that category and the wildcard is a statement about the rest;
+- **absent is not a decision and never approves.** A registered category's
+  toggle defaults to absent, which means ask.
+
+A builtin NAME appearing inside the record is ignored: a builtin's toggle is its
+flat key and each category has exactly one source of truth.
+
+Two plumbing facts a controller or a config author needs:
+
+- **The webview posts a PATCH, not the map.** `UpdatedSettings` types
+  `alwaysAllowGroups` as `Record<string, boolean | null>`, where `null` DELETES
+  an entry, and `webviewMessageHandler` folds it into the map the WRITE SCOPE
+  itself stores — read back with `ContextProxy.getWriteScopeValue`, never the
+  merged effective view. Folding into the effective view would write every
+  org-contributed entry into this scope's own file, pinning values the org may
+  later change.
+- **`locked.json` locks per entry.** `alwaysAllowGroups/<name>` locks one
+  category (`RECORD_ENTRY_KEYS` in
+  [`layered-config.ts`](../packages/core/src/config/layered-config.ts)); the bare
+  key `alwaysAllowGroups` still locks the whole map.
 
 > **Each toggle maps to a ToolGroup** (see [`tool-categories.md`](tool-categories.md)).
-> Adding a new group to `TOOL_GROUPS` in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)
-> automatically makes it available for auto-approval — a tool inherits the toggle of the group
-> it belongs to.
+> A new tool inherits the toggle of the group it belongs to — a builtin's flat
+> key, or the group's entry in `alwaysAllowGroups` when the group is a dynamic
+> category. Declaring a NEW category adds no key: it is gated by
+> `alwaysAllowGroups[name]` the moment it is registered.
 
 ---
 
@@ -212,6 +253,28 @@ unconditionally approved:
 ---
 
 ## Conditional Auto-Approval (Toggle-Gated)
+
+### What the NATIVE path gates by group, and what it does not
+
+On the `ask === "tool"` path, after the unconditional lists above, exactly two
+kinds of group reach `isGroupAutoApproved`:
+
+1. **`read` and `write`** — the modifier-bearing groups, evaluated with
+   `applyModifiers: true` so the outside-workspace and protected-file toggles
+   (and the per-path allowlists) apply.
+2. **Any group with no `GROUP_GATE` entry** — a dynamic category, `browser`
+   included — gated by its `alwaysAllowGroups` entry with
+   `applyModifiers: false`, since those modifiers are `read`/`write`-specific.
+
+**Every other builtin group still falls through to a user prompt on this path,
+and that is load-bearing rather than an omission.** They are either handled by
+the tool-specific branches above (`mode` → `switchMode`, `subtasks` →
+`newTask`/`finishTask`/`cancelTasks`) or intentionally unhandled. Widening them
+into the group gate would let an `execute`-resolved say tool — anything the
+`ide_` prefix inference lands on — auto-approve on `alwaysAllowExecute` ALONE,
+without the command-allowlist leg that toggle is documented to require, and
+would make an `uncategorized` say tool honour `alwaysAllowUncategorized` on a
+path where it never has.
 
 ### `alwaysAllowSubtasks`
 
@@ -354,16 +417,23 @@ tool-level group → default `"uncategorized"`; see
 `GROUP_GATE` table in [`auto-approval/group-gates.ts`](../packages/core/src/auto-approval/group-gates.ts)
 maps it to the toggle that must **also** be enabled:
 
-| Resolved group  | Required toggle (in addition to `alwaysAllowMcp`) |
-| --------------- | ------------------------------------------------- |
-| `read`          | `alwaysAllowReadOnly`                             |
-| `write`         | `alwaysAllowWrite`                                |
-| `execute`       | `alwaysAllowExecute`                              |
-| `browser`       | `alwaysAllowBrowser`                              |
-| `mode`          | `alwaysAllowModeSwitch`                           |
-| `subtasks`      | `alwaysAllowSubtasks`                             |
-| `questions`     | `alwaysAllowFollowupQuestions`                    |
-| `uncategorized` | `alwaysAllowUncategorized`                        |
+| Resolved group                    | Required toggle (in addition to `alwaysAllowMcp`)                     |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `read`                            | `alwaysAllowReadOnly`                                                 |
+| `write`                           | `alwaysAllowWrite`                                                    |
+| `execute`                         | `alwaysAllowExecute`                                                  |
+| `mode`                            | `alwaysAllowModeSwitch`                                               |
+| `subtasks`                        | `alwaysAllowSubtasks`                                                 |
+| `questions`                       | `alwaysAllowFollowupQuestions`                                        |
+| `uncategorized`                   | `alwaysAllowUncategorized`                                            |
+| `mcp`                             | none — `base: null`, the master gate already approved it              |
+| any other name (dynamic category) | `alwaysAllowGroups[name]`, or the `"*"` wildcard when it has no entry |
+
+The last row is a MECHANISM, not a list. `GROUP_GATE` is keyed by
+`BuiltinToolGroup`, so a dynamic category could not have an entry in it — its
+gate is an entry in the `alwaysAllowGroups` record, evaluated by the same
+`isGroupAutoApproved` call. `browser` goes through that row: it is a dynamic
+category with no flat toggle of its own.
 
 ```mermaid
 flowchart TD
@@ -378,27 +448,34 @@ flowchart TD
     R1 --> R2["2. the call's operation — opGroups from _meta"]
     R2 --> R3["3. the tool-level group — _meta"]
     R3 --> R4["4. default: uncategorized"]
-    R4 --> GG["isGroupAutoApproved(group, ...)<br/>GROUP_GATE, applyModifiers false"]
-    GG -->|"the group's toggle is on"| OK
-    GG -->|"the group's toggle is off"| ASK
+    R4 --> GG["isGroupAutoApproved(group, ...)<br/>applyModifiers false"]
+    GG --> BI{"a builtin?"}
+    BI -->|yes| FLAT["GROUP_GATE: the group's flat toggle"]
+    BI -->|"no — a dynamic category"| DYN["alwaysAllowGroups[name]<br/>or the * wildcard"]
+    FLAT -->|on| OK
+    FLAT -->|off| ASK
+    DYN -->|"true, or absent under *"| OK
+    DYN -->|"false, or absent with no *"| ASK
 ```
 
 The `mcp` gateway grants **visibility**, not auto-execution: an ungrouped MCP
 tool resolves to `uncategorized` and therefore still needs
 `alwaysAllowUncategorized` on top of `alwaysAllowMcp`.
 
-> **One source of truth (§4).** `GROUP_GATE` is the single per-group gating table,
-> evaluated via `isGroupAutoApproved()` by **both** the MCP path (above) and the
-> native-tool path (`read`/`write`/`browser`). The native path additionally enforces
-> the outside-workspace / protected-file modifier toggles (`applyModifiers: true`);
-> the MCP path does not. Previously these were two separate declarations
-> (`MCP_GROUP_APPROVAL_GATE` plus inline `if` branches) that could drift.
+> **One source of truth (§4).** `isGroupAutoApproved()` is the single answer to
+> "which toggle decides this group", evaluated by **both** the MCP path (above)
+> and the native-tool path. `GROUP_GATE` decides the eight builtins;
+> `alwaysAllowGroups` decides everything else. The native path additionally
+> enforces the outside-workspace / protected-file modifier toggles
+> (`applyModifiers: true`); the MCP path does not, and the modifiers are a no-op
+> for a dynamic category — they are `read`/`write`-specific and
+> `isPathAutoApproved` refuses every other group.
 
 Ungrouped MCP tools default to `"uncategorized"`, so they require `alwaysAllowUncategorized`
 **in addition to** `alwaysAllowMcp` to auto-approve — the `mcp` gateway grants _visibility_, not
-auto-execution. A browser tool served over MCP honors `alwaysAllowBrowser` exactly like a native
-browser tool. Groups genuinely absent from the map (e.g. the bare `mcp` protocol group itself)
-are approved by `alwaysAllowMcp` alone, but `getMcpToolGroup()` never returns `mcp` for a
+auto-execution. A browser tool served over MCP honors `alwaysAllowGroups["browser"]` exactly like
+a `browser`-prefixed say tool. The bare `mcp` protocol group carries `base: null` and is approved
+by `alwaysAllowMcp` alone, but `getMcpToolGroup()` never returns `mcp` for a
 `use_mcp_tool` call — it returns the tool's resolved group or `uncategorized`. For
 `access_mcp_resource`, the `alwaysAllowMcp` toggle alone is sufficient (no per-group stage).
 

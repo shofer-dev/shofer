@@ -76,6 +76,45 @@ import { getCommand } from "@shofer/core"
 
 const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
+/**
+ * Fold an `alwaysAllowGroups` PATCH from an `updateSettings` message into the map
+ * the WRITE SCOPE itself stores, and return the map to persist.
+ *
+ * The payload is a patch by definition (see `UpdatedSettings` in `@shofer/types`):
+ * each entry is a category toggle to set, and a `null` value DELETES that entry so
+ * the category falls back to whatever a less specific scope — or nothing — says.
+ *
+ * Two things this must not do, and the reason for each:
+ *
+ *   - **Never merge into the effective view.** What the webview renders is the
+ *     deep-merged record across the `.shofer/` scopes, so folding a patch into that
+ *     would write every org-contributed entry into this scope's own file, pinning
+ *     values the org may later change and leaving the file asserting a policy
+ *     nobody set. `ContextProxy.getWriteScopeValue` reads the write scope's own map
+ *     instead, which is the only base that keeps the write to one entry.
+ *   - **Never let `null` reach storage.** The stored setting is
+ *     `Record<string, boolean>`; `null` is a wire verb meaning "remove", and a
+ *     stored `null` would be neither a grant nor an absence to every consumer that
+ *     tests `=== true`.
+ */
+async function mergeAlwaysAllowGroupsPatch(
+	provider: ShoferProvider,
+	patch: Record<string, boolean | null>,
+): Promise<Record<string, boolean>> {
+	const own = (await provider.contextProxy.getWriteScopeValue("alwaysAllowGroups")) ?? {}
+	const merged: Record<string, boolean> = { ...own }
+
+	for (const [name, value] of Object.entries(patch)) {
+		if (value === null) {
+			delete merged[name]
+		} else {
+			merged[name] = value
+		}
+	}
+
+	return merged
+}
+
 import { webviewLog, scrollLog } from "@shofer/core"
 import { resolveTaskCwd } from "./resolveTaskCwd"
 
@@ -794,6 +833,13 @@ export const webviewMessageHandler = async (provider: ShoferProvider, message: W
 					if (key === "language") {
 						newValue = value ?? "en"
 						changeLanguage(newValue as Language)
+					} else if (key === "alwaysAllowGroups") {
+						// A PATCH, never the whole map — see mergeAlwaysAllowGroupsPatch.
+						if (!value || typeof value !== "object" || Array.isArray(value)) {
+							continue
+						}
+
+						newValue = await mergeAlwaysAllowGroupsPatch(provider, value as Record<string, boolean | null>)
 					} else if (key === "allowedCommands") {
 						const commands = value ?? []
 

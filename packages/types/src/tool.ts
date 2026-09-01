@@ -1,8 +1,31 @@
 import { z } from "zod"
 
 /**
- * ToolGroup — 8 categories shared across mode filtering, auto-approval,
- * and external tool classification. Single source of truth.
+ * The grammar every tool-category name obeys: a lowercase slug, hyphen-separated,
+ * at most 64 characters — the same rule skill names follow.
+ *
+ * It is deliberately a strict subset of the platform's object-tag atom with `:`
+ * excluded, so namespaced categories stay open without renaming anything. Two
+ * consequences the callers rely on:
+ *
+ *   - `*` is NOT a valid name, so the `alwaysAllowGroups` wildcard can never
+ *     collide with a real category;
+ *   - every builtin group name is itself a valid slug, so "builtin or slug"
+ *     collapses to "slug" at every validation site.
+ *
+ * A string that fails this rule is malformed input, not a name: it is dropped to
+ * `uncategorized`, which is the fail-closed guard for undeclared tools.
+ */
+export const toolGroupNameSchema = z
+	.string()
+	.min(1)
+	.max(64)
+	.regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Tool group names must be lowercase alphanumeric words joined by hyphens")
+
+/**
+ * BuiltinToolGroup — the 8 RESERVED categories that carry native tools or
+ * special semantics. They are the closed vocabulary the exhaustive records
+ * ({@link TOOL_GROUPS}, `GROUP_GATE`) are keyed by. Single source of truth.
  *
  *   read          – Read-only data access (files, search, diagnostics)
  *   write         – Content mutations (apply_diff, write_to_file, etc.)
@@ -11,23 +34,29 @@ import { z } from "zod"
  *   mode          – Mode switching and task lifecycle
  *   subtasks      – Background / delegated task management
  *   questions     – User-facing questions (ask_followup_question)
- *   uncategorized – Fallback for tools without explicit classification
+ *   uncategorized – Fallback for tools that declare NOTHING (or declare a name
+ *                   that is not a valid slug)
+ *
+ * Any other slug is a DYNAMIC category, minted on first use by whatever declared
+ * it (an MCP server's `_meta`, an `mcp.json` override, a private-tool provider,
+ * a plugin's custom tool). Adding a 9th builtin is a coordinated change and needs
+ * justification; adding a dynamic category needs nothing.
  */
-export const toolGroups = [
-	"read",
-	"write",
-	"execute",
-	"browser",
-	"mcp",
-	"mode",
-	"subtasks",
-	"questions",
-	"uncategorized",
-] as const
+export const toolGroups = ["read", "write", "execute", "mcp", "mode", "subtasks", "questions", "uncategorized"] as const
 
 export const toolGroupsSchema = z.enum(toolGroups)
 
-export type ToolGroup = z.infer<typeof toolGroupsSchema>
+export type BuiltinToolGroup = z.infer<typeof toolGroupsSchema>
+
+/**
+ * The name of any tool category — a builtin or a dynamic one.
+ *
+ * `(string & {})` keeps the builtin literals as editor completions while still
+ * accepting an arbitrary slug. Everything that can carry a dynamic name (MCP tool
+ * metadata, mode group entries, private-tool meta) takes this type; only the two
+ * exhaustive records take {@link BuiltinToolGroup}.
+ */
+export type ToolGroup = BuiltinToolGroup | (string & {})
 
 /**
  * ToolName
@@ -167,9 +196,13 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 
 /**
  * TOOL_GROUPS
- * Defines available tool groups and their membership.
+ * Defines the BUILTIN tool groups and their native-tool membership.
+ *
+ * A dynamic category has no entry here — it carries no native tools by
+ * construction, so every lookup goes through {@link getToolGroupConfig}, which
+ * answers `undefined` (an empty native set) rather than throwing.
  */
-export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
+export const TOOL_GROUPS: Record<BuiltinToolGroup, ToolGroupConfig> = {
 	read: {
 		tools: [
 			"read_file",
@@ -224,12 +257,22 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 	questions: {
 		tools: ["ask_followup_question"],
 	},
-	browser: {
-		tools: [],
-	},
 	uncategorized: {
 		tools: [],
 	},
+}
+
+/**
+ * The native tools a group contributes, or `undefined` when the group is not a
+ * builtin.
+ *
+ * Every consumer that resolves a group name coming from CONFIG (a mode's `tools`
+ * array, an agent's declared groups) must go through this: those names are
+ * slug-validated but open, so a dynamic category — or a typo — reaches the lookup
+ * and a bare `TOOL_GROUPS[name].tools` would throw a TypeError.
+ */
+export function getToolGroupConfig(group: string): ToolGroupConfig | undefined {
+	return (TOOL_GROUPS as Record<string, ToolGroupConfig | undefined>)[group]
 }
 
 /**

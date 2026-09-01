@@ -263,20 +263,40 @@ describe("shofermodes JSON schema", () => {
 		expect(valid).toBe(false)
 	})
 
-	it("should reject an invalid tool group name", () => {
+	it("should reject a tool group name that is not a valid slug", () => {
 		const config = {
 			customModes: [
 				{
 					slug: "bad-group",
 					name: "Bad Group",
 					roleDefinition: "Invalid group name.",
-					tools: ["nonexistent"],
+					tools: ["Bad_Name"],
 				},
 			],
 		}
 
 		const valid = validate(config)
 		expect(valid).toBe(false)
+	})
+
+	// The vocabulary is OPEN: a mode may list a dynamic category by name, and the
+	// only constraint is the slug grammar. A name nothing defines matches no tools
+	// rather than failing validation — which is also what a typo now does.
+	it("should accept a dynamic tool group name nothing has defined", () => {
+		const config = {
+			customModes: [
+				{
+					slug: "salesforce-mode",
+					name: "Salesforce Mode",
+					roleDefinition: "A mode that lists a dynamic category.",
+					tools: ["read", "salesforce"],
+				},
+			],
+		}
+
+		const valid = validate(config)
+		expect(validate.errors).toBeNull()
+		expect(valid).toBe(true)
 	})
 
 	it("should reject additional properties on CustomMode", () => {
@@ -355,7 +375,9 @@ describe("shofermodes JSON schema", () => {
 		expect(valid).toBe(true)
 	})
 
-	it("should accept the browser tool group (deprecated but valid)", () => {
+	// `browser` is no longer a builtin — it is the worked example of a dynamic
+	// category, and the builtin modes still list it by name.
+	it("should accept the browser tool group (a dynamic category)", () => {
 		const config = {
 			customModes: [
 				{

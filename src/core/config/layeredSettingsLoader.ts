@@ -6,6 +6,7 @@ import {
 	isPathLocked,
 	loadLayeredOverlay,
 	loadLockedManifestFromDisk,
+	readScopeSettingsFile,
 	resolveScopeRoots,
 	type LockedManifest,
 	type ScopeRootInputs,
@@ -17,7 +18,7 @@ import {
 // the CLI host, which must resolve the same overlay before it seeds a served node's
 // approval posture. Re-exported here so the host-side config modules keep one
 // import site.
-export { loadLayeredOverlay, resolveScopeRoots, type ScopeRootInputs, type ScopeRoots }
+export { loadLayeredOverlay, readScopeSettingsFile, resolveScopeRoots, type ScopeRootInputs, type ScopeRoots }
 
 /**
  * layeredSettingsLoader — the **host-side WRITE** half of the layered `.shofer/`

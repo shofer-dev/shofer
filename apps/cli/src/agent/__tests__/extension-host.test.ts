@@ -336,7 +336,7 @@ describe("ExtensionHost", () => {
 							"alwaysAllowWrite",
 							"alwaysAllowWriteOutsideWorkspace",
 							"alwaysAllowWriteProtected",
-							"alwaysAllowBrowser",
+							"alwaysAllowGroups",
 							"alwaysAllowMcp",
 							"alwaysAllowModeSwitch",
 							"alwaysAllowSubtasks",

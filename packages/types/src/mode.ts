@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { toolGroupsSchema } from "./tool.js"
+import { toolGroupNameSchema } from "./tool.js"
 
 /**
  * GroupOptions
@@ -62,13 +62,19 @@ const scopedGroupEntrySchema = z
 	.refine((obj) => Object.keys(obj).length === 1, {
 		message: "Each scoped group entry must have exactly one group name",
 	})
-	.refine((obj) => toolGroupsSchema.safeParse(Object.keys(obj)[0]).success, {
+	.refine((obj) => toolGroupNameSchema.safeParse(Object.keys(obj)[0]).success, {
 		message: "Scoped group entry key must be a valid group name",
 	})
 
+/**
+ * A group entry names a category by SLUG, not by membership in a closed enum: a
+ * mode may list a dynamic category (`salesforce`) exactly as it lists a builtin.
+ * A name matching no category simply matches no tools — which is also what a
+ * typo now does, since the schema wall that used to reject one is gone.
+ */
 export const groupEntrySchema = z.union([
-	toolGroupsSchema,
-	z.tuple([toolGroupsSchema, groupOptionsSchema]),
+	toolGroupNameSchema,
+	z.tuple([toolGroupNameSchema, groupOptionsSchema]),
 	scopedGroupEntrySchema,
 ])
 

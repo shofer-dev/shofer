@@ -1,6 +1,7 @@
 import type { ShoferSayTool } from "@shofer/types"
 import { TOOL_GROUPS } from "@shofer/types"
 import { customToolRegistry } from "../custom-tools/custom-tool-registry.js"
+import { registerToolGroup, toolGroupRegistry } from "../tool-groups/category-registry.js"
 
 /**
  * Map of ShoferSayTool.tool (camelCase) values to their snake_case tool names.
@@ -73,8 +74,14 @@ export const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
  * Resolution order:
  *  1. Native tools — look up snake_case name in TOOL_GROUPS
  *  2. Custom/plugin tools — the `group` the definition declared
- *  3. External LM tools — infer from naming prefix (browser_ → browser, ide_ → read/execute)
- *  4. Fallback to "uncategorized"
+ *  3. Any tool whose group was DECLARED elsewhere and recorded in the tool-group
+ *     registry (a private-tool provider's `group`, a plugin's custom tool)
+ *  4. External LM tools — infer from naming prefix (browser_ → browser, ide_ → execute)
+ *  5. Fallback to "uncategorized"
+ *
+ * Step 3 is what keeps this path and `filterPrivateToolsForMode` in agreement:
+ * visibility reads a private tool's DECLARED group, so an approval path that only
+ * ever guessed from the name prefix would classify the same tool differently.
  *
  * @param tool - The tool metadata from the approval payload
  * @returns The ToolGroup this tool belongs to
@@ -100,9 +107,25 @@ export function getToolGroupForSayTool(tool: ShoferSayTool): string {
 		return declared
 	}
 
-	// External LM tools: infer group from the tool name prefix
-	// This handles browser_* and ide_* tools when they use askApproval.
+	// Any other tool whose group was declared at discovery — a private-tool
+	// provider's `group`, a provider-level `toolGroups` config entry. Consulted
+	// BEFORE prefix inference because a declaration is a fact and a prefix is a
+	// guess; a `browser_`-prefixed tool a server put in another category must be
+	// gated by the category it declared.
+	const registered = toolGroupRegistry.groupForTool(sayName)
+	if (registered) {
+		return registered
+	}
+
+	// External LM tools: infer group from the tool name prefix.
+	// LAST RESORT. `browser` is a DYNAMIC category, and its normal birth is
+	// discovery — an MCP server declaring `_meta["shofer.dev/toolGroup"]` at
+	// `tools/list`, which registers it at connect. Inference runs at APPROVAL time,
+	// so a category first minted here gets its toggle only after a call was already
+	// attempted, which is a broken affordance rather than a working one. Register it
+	// anyway so the toggle exists from the second call onward.
 	if (sayName.startsWith("browser") || sayName.startsWith("browser_")) {
+		registerToolGroup("browser")
 		return "browser"
 	}
 

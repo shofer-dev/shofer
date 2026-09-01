@@ -8,13 +8,13 @@
 import { z } from "zod"
 import { zodToJsonSchema } from "zod-to-json-schema"
 
-import { toolGroups } from "./tool.js"
+import { toolGroupNameSchema } from "./tool.js"
 import { groupOptionsSchema, modeConfigObjectSchema } from "./mode.js"
 
-const allToolGroupsSchema = z.enum(toolGroups)
-
-// Build a GroupEntry schema that uses the extended tool group list.
-const groupEntrySchema = z.union([allToolGroupsSchema, z.tuple([allToolGroupsSchema, groupOptionsSchema])])
+// Build a GroupEntry schema over the OPEN category vocabulary: a mode may list a
+// dynamic category, so the constraint an editor enforces is the slug grammar,
+// not membership in the builtin enum.
+const groupEntrySchema = z.union([toolGroupNameSchema, z.tuple([toolGroupNameSchema, groupOptionsSchema])])
 
 // Build the RuleFile schema (used during import/export but not part of the
 // core Zod types).

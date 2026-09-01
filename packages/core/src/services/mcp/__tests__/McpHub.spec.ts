@@ -22,6 +22,7 @@ import { setSharedPluginManager } from "../../../plugins/plugin-manager.js"
 import { pluginRegistry } from "../../../plugins/plugin-registry.js"
 import { RESOLVE_MCP_CALL_HEADERS, currentMcpCallHeaders } from "../call-headers.js"
 import { sanitizeToolUseId } from "../../../utils/tool-id.js"
+import { getDynamicToolGroups, toolGroupRegistry } from "../../../tool-groups/category-registry.js"
 
 // Mock fs/promises before importing anything that uses it
 vi.mock("fs/promises", () => ({
@@ -104,6 +105,10 @@ describe("McpHub", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
+
+		// The tool-group registry is a process-lifetime singleton, so a category
+		// minted by one test would otherwise be visible to the next.
+		toolGroupRegistry.reset()
 
 		// Mock console.error to suppress error messages during tests
 		console.error = vi.fn()
@@ -2407,7 +2412,8 @@ describe("McpHub", () => {
 								{ name: "k3s_ops", _meta: { [MCP_META_TOOL_GROUP]: "read" } },
 								{ name: "pipeline_create", _meta: { [MCP_META_TOOL_GROUP]: "write" } },
 								{ name: "mystery" },
-								{ name: "bogus", _meta: { [MCP_META_TOOL_GROUP]: "not-a-group" } },
+								{ name: "salesy", _meta: { [MCP_META_TOOL_GROUP]: "salesforce" } },
+								{ name: "bogus", _meta: { [MCP_META_TOOL_GROUP]: "Not A Group" } },
 							],
 						}),
 					} as any,
@@ -2419,10 +2425,16 @@ describe("McpHub", () => {
 			const group = (name: string) => tools.find((t: any) => t.name === name).group
 			expect(group("k3s_ops")).toBe("read")
 			expect(group("pipeline_create")).toBe("write")
-			// Declaring nothing, or declaring nonsense, still resolves to the
-			// fallback — never to a permissive guess.
+			// A valid slug nobody has seen before is KEPT — this is how a server
+			// mints a dynamic category — and registered so its toggle exists before
+			// the tool is ever called.
+			expect(group("salesy")).toBe("salesforce")
+			expect(getDynamicToolGroups()).toContain("salesforce")
+			// Declaring nothing, or declaring something that is not a name at all,
+			// still resolves to the fallback — never to a permissive guess.
 			expect(group("mystery")).toBe("uncategorized")
 			expect(group("bogus")).toBe("uncategorized")
+			expect(getDynamicToolGroups()).not.toContain("Not A Group")
 		})
 
 		// The user's own assignment stays authoritative over what the server says
@@ -2482,7 +2494,12 @@ describe("McpHub", () => {
 									name: "events",
 									_meta: {
 										[MCP_META_TOOL_GROUP]: "write",
-										[MCP_META_OP_GROUPS]: { list: "read", create: "write", junk: "not-a-group" },
+										[MCP_META_OP_GROUPS]: {
+											list: "read",
+											create: "write",
+											close: "salesforce",
+											junk: "Not A Group",
+										},
 									},
 								},
 								// Declarations that are not a usable map at all.
@@ -2496,7 +2513,7 @@ describe("McpHub", () => {
 								},
 								{
 									name: "allJunk",
-									_meta: { [MCP_META_TOOL_GROUP]: "read", [MCP_META_OP_GROUPS]: { a: "nope" } },
+									_meta: { [MCP_META_TOOL_GROUP]: "read", [MCP_META_OP_GROUPS]: { a: "NOPE!" } },
 								},
 								// The ordinary single-verb tool: no map, unchanged.
 								{ name: "web_search", _meta: { [MCP_META_TOOL_GROUP]: "read" } },
@@ -2513,8 +2530,10 @@ describe("McpHub", () => {
 			// The tool-level group is untouched — it is the fail-safe maximum a
 			// client that ignores the map gates at.
 			expect(tool("events").group).toBe("write")
-			// A nonsense entry is dropped; the survivors stand.
-			expect(tool("events").opGroups).toEqual({ list: "read", create: "write" })
+			// A malformed entry is dropped; the survivors stand, including a
+			// dynamic category declared per operation.
+			expect(tool("events").opGroups).toEqual({ list: "read", create: "write", close: "salesforce" })
+			expect(getDynamicToolGroups()).toContain("salesforce")
 			// Nothing usable declared ⇒ no map, so every call falls back to the
 			// tool group.
 			expect(tool("arrayish").opGroups).toBeUndefined()

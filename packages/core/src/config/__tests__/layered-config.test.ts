@@ -176,6 +176,92 @@ describe("mergeLayeredConfig — named-entity collections (customModes)", () => 
 	})
 })
 
+/**
+ * `alwaysAllowGroups` is the record-valued key: one auto-approve toggle per tool
+ * CATEGORY, in a map whose membership nobody can enumerate in advance (a dynamic
+ * category is minted by whatever declares it). It therefore merges and locks per
+ * ENTRY — the `<key>/<name>` grammar the named-entity collections use, applied to
+ * a record — because an org pinning one category must not thereby freeze every
+ * user's unrelated toggles.
+ */
+describe("mergeLayeredConfig — record-valued keys (alwaysAllowGroups)", () => {
+	it("merges per entry across scopes rather than replacing the map", () => {
+		const result = mergeLayeredConfig({
+			global: { alwaysAllowGroups: { browser: false } },
+			user: { alwaysAllowGroups: { salesforce: true } },
+		})
+		expect(result.alwaysAllowGroups).toEqual({ browser: false, salesforce: true })
+	})
+
+	it("unlocked entry: project wins, and user beats global", () => {
+		const result = mergeLayeredConfig({
+			global: { alwaysAllowGroups: { browser: false, salesforce: false, jira: false } },
+			user: { alwaysAllowGroups: { browser: true, salesforce: true } },
+			project: { alwaysAllowGroups: { browser: false } },
+		})
+		expect(result.alwaysAllowGroups).toEqual({ browser: false, salesforce: true, jira: false })
+	})
+
+	it("locked entry: global's value wins for it alone, siblings still merge", () => {
+		const result = mergeLayeredConfig(
+			{
+				global: { alwaysAllowGroups: { browser: false, salesforce: false } },
+				user: { alwaysAllowGroups: { browser: true, salesforce: true, jira: true } },
+			},
+			locked(["alwaysAllowGroups/browser"]),
+		)
+		expect(result.alwaysAllowGroups).toEqual({ browser: false, salesforce: true, jira: true })
+	})
+
+	it("the bare key still locks the whole map, additions included", () => {
+		const result = mergeLayeredConfig(
+			{
+				global: { alwaysAllowGroups: { browser: false } },
+				user: { alwaysAllowGroups: { browser: true, salesforce: true } },
+				project: { alwaysAllowGroups: { jira: true } },
+			},
+			locked(["alwaysAllowGroups"]),
+		)
+		expect(result.alwaysAllowGroups).toEqual({ browser: false })
+	})
+
+	// Locking what nobody set is meaningless, exactly as for a scalar key or a
+	// named entity: there is no global value for the lock to make final.
+	it("locking an entry the global layer never set falls back to the unlocked merge", () => {
+		const result = mergeLayeredConfig(
+			{
+				user: { alwaysAllowGroups: { browser: true } },
+				project: { alwaysAllowGroups: { browser: false } },
+			},
+			locked(["alwaysAllowGroups/browser"]),
+		)
+		expect(result.alwaysAllowGroups).toEqual({ browser: false })
+	})
+
+	// The asymmetry the per-entry merge leaves: a scope ADDS or OVERRIDES, never
+	// deletes. An org revokes a grant by locking an explicit `false`.
+	it("a scope cannot delete an entry another scope declared", () => {
+		const result = mergeLayeredConfig({
+			global: { alwaysAllowGroups: { browser: true } },
+			project: { alwaysAllowGroups: {} },
+		})
+		expect(result.alwaysAllowGroups).toEqual({ browser: true })
+	})
+
+	it("is additive when only one scope declares the key", () => {
+		const result = mergeLayeredConfig({ user: { alwaysAllowGroups: { salesforce: true } } })
+		expect(result.alwaysAllowGroups).toEqual({ salesforce: true })
+	})
+
+	it("does not mutate the input layers", () => {
+		const global: LayeredSettings = { alwaysAllowGroups: { browser: false } }
+		const user: LayeredSettings = { alwaysAllowGroups: { browser: true } }
+		mergeLayeredConfig({ global, user })
+		expect(global.alwaysAllowGroups).toEqual({ browser: false })
+		expect(user.alwaysAllowGroups).toEqual({ browser: true })
+	})
+})
+
 describe("mergeLayeredConfig — additive top-level keys", () => {
 	it("user/project may add keys the global layer does not define", () => {
 		const result = mergeLayeredConfig({

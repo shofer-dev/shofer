@@ -187,9 +187,10 @@ describe("PromptsView", () => {
 			</ExtensionStateContext.Provider>,
 		)
 
-		// Enter tools edit mode and toggle the "browser" group on.
+		// Enter tools edit mode and toggle the "execute" group on. (Any BUILTIN group
+		// works; the checkbox list is `toolGroups`, which dynamic categories are not in.)
 		fireEvent.click(await waitFor(() => screen.getByTestId("edit-tools-button")))
-		fireEvent.click(await waitFor(() => screen.getByTestId("tool-group-checkbox-browser")))
+		fireEvent.click(await waitFor(() => screen.getByTestId("tool-group-checkbox-execute")))
 
 		// Toggling must NOT post — the edit is staged locally.
 		expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "updateCustomMode" }))
@@ -200,7 +201,7 @@ describe("PromptsView", () => {
 		expect(vscode.postMessage).toHaveBeenCalledWith({
 			type: "updateCustomMode",
 			slug: "my-custom",
-			modeConfig: expect.objectContaining({ tools: ["read", "browser"] }),
+			modeConfig: expect.objectContaining({ tools: ["read", "execute"] }),
 		})
 	})
 

@@ -4,7 +4,7 @@ import { customToolRegistry } from "../custom-tools/custom-tool-registry.js"
 
 import { type Mode, FileRestrictionError, getModeBySlug, getGroupName } from "@shofer/types"
 import { EXPERIMENT_IDS } from "@shofer/types"
-import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/types"
+import { ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES, getToolGroupConfig } from "@shofer/types"
 
 /**
  * Check whether a tool name belongs to a tool from a private provider
@@ -364,12 +364,18 @@ export function isToolAllowedForMode(
 		const options = getGroupOptions(group)
 		const scope = getGroupScope(group)
 
-		const groupConfig = TOOL_GROUPS[groupName]
-
 		// Check if this is a dynamic MCP tool and the mcp group is allowed
 		if (isDynamicMcpTool && groupName === "mcp") {
 			// Dynamic MCP tools are allowed if the mcp group is in the mode's groups
 			return true
+		}
+
+		// A dynamic category (or a name nothing defines) contributes no NATIVE
+		// tools, so it can never admit `resolvedTool`. Same rule as
+		// `getToolsForMode`: an unknown group is the empty set, not a TypeError.
+		const groupConfig = getToolGroupConfig(groupName)
+		if (!groupConfig) {
+			continue
 		}
 
 		// Check if the tool is in the group's regular tools

@@ -248,6 +248,58 @@ describe("useAutoApprovalState", () => {
 			expect(result.current.effectiveAutoApprovalEnabled).toBe(true)
 		})
 
+		it("should not count an EMPTY alwaysAllowGroups record as an enabled option", () => {
+			// The record is an object, so a naive truthiness fold over the toggles would
+			// report "something is enabled" for every user who has no dynamic category.
+			const toggles = {
+				alwaysAllowReadOnly: false,
+				alwaysAllowGroups: {},
+			}
+
+			const { result } = renderHook(() => useAutoApprovalState(toggles, true))
+
+			expect(result.current.hasEnabledOptions).toBe(false)
+		})
+
+		it("should not count dynamic categories that are explicitly false", () => {
+			const toggles = {
+				alwaysAllowReadOnly: false,
+				alwaysAllowGroups: { browser: false, salesforce: false },
+			}
+
+			const { result } = renderHook(() => useAutoApprovalState(toggles, true))
+
+			expect(result.current.hasEnabledOptions).toBe(false)
+		})
+
+		it("should count a dynamic category that is true", () => {
+			const toggles = {
+				alwaysAllowReadOnly: false,
+				alwaysAllowWrite: false,
+				alwaysAllowGroups: { browser: false, salesforce: true },
+			}
+
+			const { result } = renderHook(() => useAutoApprovalState(toggles, true))
+
+			expect(result.current.hasEnabledOptions).toBe(true)
+		})
+
+		it("should count the wildcard entry", () => {
+			const toggles = { alwaysAllowGroups: { "*": true } }
+
+			const { result } = renderHook(() => useAutoApprovalState(toggles, true))
+
+			expect(result.current.hasEnabledOptions).toBe(true)
+		})
+
+		it("should count alwaysAllowUncategorized, which the interface used to omit", () => {
+			const toggles = { alwaysAllowUncategorized: true }
+
+			const { result } = renderHook(() => useAutoApprovalState(toggles, true))
+
+			expect(result.current.hasEnabledOptions).toBe(true)
+		})
+
 		it("should handle mixed truthy/falsy values correctly", () => {
 			const toggles = {
 				alwaysAllowReadOnly: 1 as any, // truthy non-boolean

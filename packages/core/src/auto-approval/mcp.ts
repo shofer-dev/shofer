@@ -1,4 +1,4 @@
-import type { McpServerUse, McpServer, McpTool, ToolGroup } from "@shofer/types"
+import type { McpServerUse, McpServer, McpTool } from "@shofer/types"
 
 /**
  * The argument by which a verb-multiplexing MCP tool names the verb to run.
@@ -70,7 +70,7 @@ function readOperation(mcpServerUse: McpServerUse): string | undefined {
  *      `filterMcpToolsForMode`, where `uncategorized` is an ordinary group the
  *      mode must list.
  */
-export function getMcpToolGroup(mcpServerUse: McpServerUse, mcpServers: McpServer[] | undefined): ToolGroup {
+export function getMcpToolGroup(mcpServerUse: McpServerUse, mcpServers: McpServer[] | undefined): string {
 	if (mcpServerUse.type === "use_mcp_tool" && mcpServerUse.toolName) {
 		const server = mcpServers?.find((s: McpServer) => s.name === mcpServerUse.serverName)
 		const tool = server?.tools?.find((t: McpTool) => t.name === mcpServerUse.toolName)

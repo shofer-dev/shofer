@@ -235,4 +235,62 @@ describe("ContextProxy — scope-aware write-through (Part E4)", () => {
 		expect(onDisk.mode).toBe("code")
 		expect(onDisk.autoApprovalEnabled).toBe(true)
 	})
+
+	/**
+	 * `getWriteScopeValue` exists for the record-valued settings — today
+	 * `alwaysAllowGroups` — where a write is a per-entry PATCH and the base it
+	 * merges into decides whether the write stays one entry wide.
+	 */
+	describe("getWriteScopeValue — the write scope's OWN value, never the merged view", () => {
+		it("(d) returns only this scope's entries, not the ones other scopes contribute", async () => {
+			const globalDir = await tmpDir()
+			const homeDir = await tmpDir()
+			process.env.SHOFER_GLOBAL_DIR = globalDir
+			hoisted.home = homeDir
+
+			await writeSettings(globalDir, { alwaysAllowGroups: { browser: false } })
+			await writeSettings(path.join(homeDir, ".shofer"), { alwaysAllowGroups: { salesforce: true } })
+
+			const proxy = new ContextProxy(mockContext)
+			await proxy.initialize()
+
+			// What the webview renders is the merged view — both scopes' entries.
+			expect(proxy.getValue("alwaysAllowGroups")).toEqual({ browser: false, salesforce: true })
+
+			// What a patch merges into is this scope's own map. Folding the merged
+			// view back would copy the org's `browser: false` into the user file,
+			// where it would shadow every later change the org makes to it.
+			expect(await proxy.getWriteScopeValue("alwaysAllowGroups")).toEqual({ salesforce: true })
+		})
+
+		it("(d') falls back to globalState when the user file does not carry the key yet", async () => {
+			hoisted.home = "/nonexistent-home"
+			mockGlobalState.get.mockImplementation((key: string) =>
+				key === "alwaysAllowGroups" ? { salesforce: true } : undefined,
+			)
+
+			const proxy = new ContextProxy(mockContext)
+			await proxy.initialize()
+
+			expect(await proxy.getWriteScopeValue("alwaysAllowGroups")).toEqual({ salesforce: true })
+		})
+
+		it("(d'') never seeds a project file from this user's globalState", async () => {
+			const homeDir = await tmpDir()
+			const wsDir = await tmpDir()
+			hoisted.home = homeDir
+			wsHoisted.ws = wsDir
+
+			const proxy = new ContextProxy(mockContext)
+			await proxy.initialize()
+			await proxy.setValue("settingsWriteScope", "project")
+			await proxy.setValue("alwaysAllowGroups", { salesforce: true })
+
+			// The project's `.shofer/settings.json` is committed and shared, so its
+			// starting point is what the FILE says and nothing else — a personal
+			// preference cached in globalState must not be published to the repo.
+			await fs.rm(path.join(wsDir, ".shofer", "settings.json"))
+			expect(await proxy.getWriteScopeValue("alwaysAllowGroups")).toBeUndefined()
+		})
+	})
 })

@@ -103,7 +103,7 @@ Tests for the tool-group classification system, mode-based filtering, and auto-a
 3. Issue an `apply_diff` call → should require manual approval (write toggle is off).
 4. Enable `alwaysAllowWrite`.
 5. Issue another `apply_diff` → should be auto-approved.
-6. Repeat for `alwaysAllowExecute`, `alwaysAllowBrowser`, `alwaysAllowMcp`, `alwaysAllowSubtasks`, `alwaysAllowModeSwitch`.
+6. Repeat for `alwaysAllowExecute`, `alwaysAllowMcp`, `alwaysAllowSubtasks`, `alwaysAllowModeSwitch` — and for the dynamic `browser` category via its `alwaysAllowGroups["browser"]` toggle in the Custom categories block.
 
 **Expected:** Each toggle gates exactly the tools in its corresponding group.
 

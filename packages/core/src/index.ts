@@ -133,6 +133,7 @@ export * from "./prompts/responses.js"
 export * from "./protect/ShoferProtectedController.js"
 export * from "./webview/aggregateTaskCosts.js"
 export * from "./auto-approval/commands.js"
+export * from "./tool-groups/category-registry.js"
 // tree-sitter code-definition parsing (portable, wasm-backed). Public surface:
 // parseSourceCodeDefinitionsForFile / extensions / get|setMinComponentLines (index)
 // and LanguageParser / loadRequiredLanguageParsers (languageParser).

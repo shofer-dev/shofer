@@ -1,31 +1,125 @@
 # Tool Categories
 
 **Status:** Implemented  
-**Last Updated:** 2026-08-13
+**Last Updated:** 2026-09-01
 
 ## Overview
 
 Shofer uses a single unified ToolGroup system as the **single source of truth** for mode-based filtering, auto-approval classification, and grouping of external language model tools. Every tool — whether native, MCP, or registered by another extension — falls into exactly one category.
 
-> **Not to be confused with the host boundary's "Category I / II".** The nine
+The vocabulary is **open over a closed set of builtins**. Eight builtin
+categories carry the native tools and the special approval semantics; every
+other valid slug is a **dynamic category**, minted the moment something declares
+it. Two types express that in [`tool.ts`](../packages/types/src/tool.ts):
+`BuiltinToolGroup` is the closed union the exhaustive records are keyed by, and
+`ToolGroup = BuiltinToolGroup | (string & {})` is what every declaration site
+accepts.
+
+> **Not to be confused with the host boundary's "Category I / II".** The
 > ToolGroups here (`read`, `write`, …) classify _tools by capability_. The
 > Category I / Category II terminology in [`host-boundary.md`](host-boundary.md)
-> and [`host-boundary.md`](host-boundary.md) is unrelated — it classifies _host
-> interfaces_ (portable seam vs. VS Code adapter).
+> is unrelated — it classifies _host interfaces_ (portable seam vs. VS Code
+> adapter).
 
-## The 9 Categories
+## The 8 Builtin Categories
 
-| #   | Category        | Purpose                                              | Example tools                                                                                     |
-| --- | --------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| 1   | `read`          | Read-only data access                                | `read_file`, `grep_search`, `list_files`, `rag_search`, `ide_file_read`, `ide_get_viewport_state` |
-| 2   | `write`         | Content mutations — file creation, editing, patching | `apply_diff`, `write_to_file`, `insert_edit`, `rename_symbol`                                     |
-| 3   | `execute`       | System command execution                             | `execute_command`, `read_command_output`, `ide_panel_open`, `ide_editor_goto_line`                |
-| 4   | `browser`       | Browser automation and web page control              | `browser_navigate`, `browser_click`, `browser_screenshot`, `browser_read_page`                    |
-| 5   | `mcp`           | MCP protocol tools                                   | `use_mcp_tool`, `access_mcp_resource`                                                             |
-| 6   | `mode`          | Mode switching                                       | `switch_mode`                                                                                     |
-| 7   | `subtasks`      | Delegated task management                            | `new_task`, `check_task_status`, `cancel_tasks`                                                   |
-| 8   | `questions`     | User-facing questions and follow-ups                 | `ask_followup_question`                                                                           |
-| 9   | `uncategorized` | Fallback for tools without explicit classification   | (empty by default; MCP tools that declare no group land here)                                     |
+`toolGroups` in [`tool.ts`](../packages/types/src/tool.ts) — the reserved
+vocabulary. Each has a flat `alwaysAllow*` settings key and a hand-rendered UI
+row; nothing else does.
+
+| #   | Category        | Purpose                                              | Example tools                                                                       |
+| --- | --------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 1   | `read`          | Read-only data access                                | `read_file`, `grep_search`, `list_files`, `ide_file_read`, `ide_get_viewport_state` |
+| 2   | `write`         | Content mutations — file creation, editing, patching | `apply_diff`, `write_to_file`, `insert_edit`, `rename_symbol`                       |
+| 3   | `execute`       | System command execution                             | `execute_command`, `read_command_output`, `ide_panel_open`                          |
+| 4   | `mcp`           | MCP protocol tools                                   | `use_mcp_tool`, `access_mcp_resource`                                               |
+| 5   | `mode`          | Mode switching                                       | `switch_mode`                                                                       |
+| 6   | `subtasks`      | Delegated task management                            | `new_task`, `check_task_status`, `cancel_tasks`                                     |
+| 7   | `questions`     | User-facing questions and follow-ups                 | `ask_followup_question`                                                             |
+| 8   | `uncategorized` | Fallback for tools that declare NOTHING usable       | (empty by default; MCP tools that declare no group land here)                       |
+
+`uncategorized` is deliberately narrow: it is the bucket for a tool that
+declares nothing, or declares a string that is not a valid slug. A
+valid-but-unknown NAME no longer folds into it — that name becomes its own
+category.
+
+## Dynamic Categories
+
+Any slug that is not one of the eight is a dynamic category. It behaves exactly
+like a builtin for mode filtering and auto-approval; what it does not have is a
+flat settings key, a hand-written UI row, or an entry in any exhaustive record.
+
+### The slug rule
+
+`toolGroupNameSchema` validates every category name, builtin or not:
+`/^[a-z0-9]+(-[a-z0-9]+)*$/`, 1–64 characters — the same grammar skill names
+follow. Two consequences the callers rely on:
+
+- **`*` is reserved and is not a valid slug**, so the `alwaysAllowGroups`
+  wildcard can never collide with a real category. `TOOL_GROUP_WILDCARD` in
+  [`category-registry.ts`](../packages/core/src/tool-groups/category-registry.ts)
+  refuses it explicitly rather than relying on that coincidence.
+- **Every builtin name is itself a valid slug**, so "builtin or slug" collapses
+  to "slug" at every validation site.
+
+A string that fails the rule is malformed input, not a name: it is dropped to
+`uncategorized`.
+
+### Where a category is minted
+
+Registration happens at **discovery**, not at first approval — a toggle that
+only appears after a call was already attempted is a broken affordance. Six
+sites mint:
+
+| Site                                                                   | What declares the name                                                                              |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| MCP `_meta["shofer.dev/toolGroup"]` and `_meta["shofer.dev/opGroups"]` | `resolveGroup` in [`McpHub.ts`](../packages/core/src/services/mcp/McpHub.ts), at `tools/list`       |
+| `toolGroups` map in `mcp.json`                                         | the same `resolveGroup`, over the merged config layer                                               |
+| The MCP group dropdown's free-text "New category…" entry               | `McpHub.setToolGroup`, which registers before it writes the file                                    |
+| A private-tool provider's `group` (or its `toolGroups` config)         | `resolvePrivateToolGroup` in [`build-tools.ts`](../packages/core/src/task/build-tools.ts)           |
+| A plugin's custom-tool `group`                                         | [`custom-tool-registry.ts`](../packages/core/src/custom-tools/custom-tool-registry.ts)              |
+| `browser`-prefixed tool names, as a LAST RESORT                        | `getToolGroupForSayTool` in [`auto-approval/tools.ts`](../packages/core/src/auto-approval/tools.ts) |
+
+### The registry
+
+[`toolGroupRegistry`](../packages/core/src/tool-groups/category-registry.ts) is
+the one place that knows which dynamic categories exist. It holds two things:
+
+- **The set of registered names** (`registerToolGroup`, `getDynamicToolGroups`,
+  `onDidChange`), which the UI renders one auto-approve toggle per, delivered as
+  `ExtensionState.dynamicToolGroups`.
+- **The declared tool-name → group mapping** (`registerToolMapping`,
+  `groupForTool`), which `getToolGroupForSayTool` consults **before** prefix
+  inference. Without it, visibility would read a private tool's declared group
+  while approval inferred one from its name — so a `salesforce` tool would be
+  visible as `salesforce` yet gated as `uncategorized`, its toggle on and the
+  call still asking.
+
+Registration grants nothing: a registered category's toggle defaults to ABSENT,
+which means ask. Lifetime is the session, and there is deliberately no
+deregistration — a stale name is an inert entry in `alwaysAllowGroups`, not an
+error.
+
+### `browser` is the worked example
+
+`browser` is a dynamic category and has **no builtin toggle**. It holds no
+native tools; every browser tool arrives over MCP, declared by the server or
+inferred from the `browser_` prefix. It is gated by
+`alwaysAllowGroups["browser"]` like any other dynamic name, and the built-in
+modes that list `"browser"` in their `tools` array are simply listing a dynamic
+name — `groupEntrySchema` in [`mode.ts`](../packages/types/src/mode.ts) validates
+each entry with `toolGroupNameSchema`, so any slug is accepted.
+
+### Declaring a category NARROWS visibility
+
+A tool grouped `salesforce` is visible only in a mode whose `tools` array names
+`salesforce`. That is the same rule every category obeys, but it bites harder
+for a new one, because no existing mode names it: **a typo'd group in a mode
+silently matches nothing**, and a category no mode exposes has a working toggle
+in front of tools no model will ever see. The Settings UI says so per category,
+via the `settings.json` locale key `autoApprove.dynamicSection.noModeHint`: _"No mode
+currently exposes these tools: nothing runs under {{name}} until a mode lists
+that category."_
 
 ## Where Each Tool Gets Its Group
 
@@ -33,10 +127,10 @@ Three origins, three resolution paths, one shared `ToolGroup` vocabulary:
 
 ```mermaid
 flowchart TD
-    NAT["Shofer native tool"] --> NG["TOOL_GROUPS<br/>packages/types/src/tool.ts<br/>the canonical declaration"]
+    NAT["Shofer native tool"] --> NG["TOOL_GROUPS<br/>packages/types/src/tool.ts<br/>builtins only, the canonical declaration"]
 
-    EXT["external LM tool<br/>from a companion extension"] --> EF["filterPrivateToolsForMode<br/>reads the extension's toolGroups config"]
-    EXT --> EA["getToolGroupForSayTool<br/>infers from the tool-name prefix:<br/>browser_ to browser, ide_ to execute"]
+    EXT["external LM tool<br/>private provider or plugin custom tool"] --> EF["filterPrivateToolsForMode<br/>reads the tool's declared group"]
+    EXT --> ED["registerToolMapping<br/>records tool name to group<br/>in the category registry"]
 
     MCPT["MCP server tool"] --> M1{"toolGroups override<br/>in mcp.json?"}
     M1 -->|yes| GROUP
@@ -49,24 +143,31 @@ flowchart TD
 
     NG --> GROUP["the group gating THIS call"]
     EF --> GROUP
+    ED --> EA["getToolGroupForSayTool:<br/>declared mapping first,<br/>prefix inference last"]
     EA --> GROUP
 
-    GROUP --> USE1["mode filtering"]
-    GROUP --> USE2["auto-approval classification"]
+    GROUP --> REG{"a builtin?"}
+    REG -->|yes| BG["GROUP_GATE:<br/>the group's flat alwaysAllow key"]
+    REG -->|"no — a dynamic category"| DG["alwaysAllowGroups[name]"]
 
-    EF -.->|"these two paths are independent<br/>and MUST agree"| EA
+    GROUP --> USE1["mode filtering"]
+    BG --> USE2["auto-approval classification"]
+    DG --> USE2
 ```
+
+The registry is what makes the visibility path and the approval path agree: both
+read the DECLARED group, so prefix inference only ever runs for a tool nobody
+classified.
 
 ### 1. Shofer Native Tools — Declared in Code
 
-Each native tool is assigned to a group in [`TOOL_GROUPS`](../packages/types/src/tool.ts#L141) in `packages/types/src/tool.ts`. This is the canonical source for all built-in tools.
+Each native tool is assigned to a group in [`TOOL_GROUPS`](../packages/types/src/tool.ts) in `packages/types/src/tool.ts`. This is the canonical source for all built-in tools, and it is keyed by `BuiltinToolGroup` — a dynamic category contributes no native tools and has no entry here.
 
 ```typescript
-export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
+export const TOOL_GROUPS: Record<BuiltinToolGroup, ToolGroupConfig> = {
     read:        { tools: ["read_file", "grep_search", ...] },
     write:       { tools: ["apply_diff", "write_to_file", ...], customTools: [...] },
     execute:     { tools: ["execute_command", "read_command_output"] },
-    browser:     { tools: [] },  // external LM tools from browser-tools
     mcp:         { tools: ["use_mcp_tool", "access_mcp_resource", "call_mcp_tool_async", "check_mcp_call_status", "wait_for_mcp_call"] },
     mode:        { tools: ["switch_mode"] },
     subtasks:    { tools: ["new_task", "check_task_status", "cancel_tasks"] },
@@ -75,14 +176,16 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 }
 ```
 
-### 2. External LM Tools — Declared by the Extension That Registers Them
+Read it through `getToolGroupConfig(name)`, never by direct index: a name coming from config (a mode's `tools` array, a server's `_meta`) is slug-validated but open, so a dynamic category — or a typo — reaches the lookup and `TOOL_GROUPS[name].tools` would throw.
 
-Extensions that register language model tools via `vscode.lm.registerTool()` declare each tool's group in their **VS Code configuration** under a `toolGroups` property. Shofer reads this configuration at runtime via [`filterPrivateToolsForMode`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts) in `filter-tools-for-mode.ts`.
+### 2. External LM Tools — Declared by Whatever Registers Them
 
-| Extension               | Config namespace                  | Tool prefix |
-| ----------------------- | --------------------------------- | ----------- |
-| `arkware-vscode-tools`  | `arkware.vscodeTools.toolGroups`  | `ide_`      |
-| `arkware-browser-tools` | (MCP server — inferred by prefix) | `browser_`  |
+Extensions that register language model tools via `vscode.lm.registerTool()` declare each tool's group in their **VS Code configuration** under a `toolGroups` property. Shofer resolves it at runtime in `resolvePrivateToolGroup` ([`build-tools.ts`](../packages/core/src/task/build-tools.ts)), which takes the definition's own `group` first and falls back to the provider's `shofer.<providerId>.toolGroups` config. Either way the name only has to be a valid SLUG — a provider naming a category nobody has used before mints it, and only a malformed name falls through to `uncategorized`.
+
+| Extension               | Config namespace                   | Tool prefix |
+| ----------------------- | ---------------------------------- | ----------- |
+| `arkware-vscode-tools`  | `arkware.vscodeTools.toolGroups`   | `ide_`      |
+| `arkware-browser-tools` | (MCP server — declares in `_meta`) | `browser_`  |
 
 **Example — vscode-tools** (`extensions/vscode-tools/package.json`):
 
@@ -95,7 +198,7 @@ Extensions that register language model tools via `vscode.lm.registerTool()` dec
 }
 ```
 
-Browser tools (`browser_*`) are registered as an MCP server (not via a `toolGroups` config). Their group is inferred by the `browser_` prefix in [`getToolGroupForSayTool()`](../packages/core/src/auto-approval/tools.ts), which maps `browser_*` → `"browser"` and `ide_*` → `"execute"` as a fallback.
+Accepting a group also records the tool-name → group mapping in the registry, which is what lets `getToolGroupForSayTool` gate the tool by what it DECLARED. Prefix inference in [`getToolGroupForSayTool()`](../packages/core/src/auto-approval/tools.ts) is only reached for a tool nothing classified, and guesses two things: a `browser`-prefixed name into the dynamic `browser` category (registering it on the way past), and `ide_` into `execute`.
 
 ### 3. MCP Tools — Server Declaration + User Override
 
@@ -171,11 +274,13 @@ must not auto-approve that group, **every call to it parks on a
 `ToolSchema`, so it survives the parse.
 
 Declaring the group is therefore what makes a tool usable headlessly, and each
-group answers differently: the headless seed sets `alwaysAllowReadOnly`,
-`alwaysAllowWrite`, `alwaysAllowExecute`, `alwaysAllowBrowser`,
-`alwaysAllowModeSwitch` and `alwaysAllowSubtasks`, but never
-`alwaysAllowUncategorized` — so a `read`- or `browser`-declared tool runs
-unattended while an undeclared one still parks
+group answers differently. A served node seeds only `autoApprovalEnabled: false`
+and denies everything else by absence; an **unattended local run** seeds
+`alwaysAllowReadOnly`, `alwaysAllowWrite`, `alwaysAllowExecute`,
+`alwaysAllowModeSwitch`, `alwaysAllowSubtasks` and
+`alwaysAllowGroups: { "*": true }` — the wildcard covering every dynamic
+category — but never `alwaysAllowUncategorized`. So under an unattended run a
+`read`- or `browser`-declared tool runs while an undeclared one still parks
 ([`configuration.md`](configuration.md#headless-hosts-the-approval-posture-is-configuration-not-a-flag)).
 
 Which tier a server should use follows from whether its catalog is static: a
@@ -224,6 +329,10 @@ reading verbs.
 | web-search    | `browser`, `questions`, `mcp`                                                                  |
 | reviewer      | `read`, `execute`, `browser`, `mcp`, `subtasks`, `questions`                                   |
 
+`browser` in those lists is a **dynamic** category name, not a builtin — the mode
+schema validates each entry as a slug, so a mode may list any category the same
+way. A mode listing a category nothing has registered simply matches no tools.
+
 Worked through for a mode declaring `tools: ["read", "mcp"]`:
 
 ```mermaid
@@ -257,15 +366,16 @@ Tools with no `_meta["shofer.dev/toolGroup"]` (and no `toolGroups` entry) defaul
 
 For example, a mode with `tools: ["read", "mcp"]` exposes:
 
+- The `mcp` gateway tools (`use_mcp_tool`, `access_mcp_resource`)
 - All MCP tools classified as `read` (explicitly assigned)
-- All ungrouped MCP tools (default `uncategorized`, made visible by the `mcp` gateway)
-- But NOT tools classified as `write`, `execute`, or `browser`
+- But NOT tools classified as `write`, `execute`, `browser`, or `uncategorized` — the mode lists none of those, and the `mcp` gateway does not imply `uncategorized`
 
 ## Adding a New Extension's Tools
 
-1. Add a `toolGroups` configuration contribution in the extension's `package.json` mapping each tool name to its group (see `arkware.vscodeTools.toolGroups` for the existing pattern)
-2. Ensure the group exists as a valid [`ToolGroup`](../packages/types/src/tool.ts) value
-3. For prefix-based automatic classification (used by browser tools), the `browser_` prefix maps to `"browser"` and `ide_` prefix maps to `"execute"` in [`getToolGroupForSayTool()`](../packages/core/src/auto-approval/tools.ts)
+1. Declare each tool's group — in the definition's own `group`, or in a `toolGroups` configuration contribution in the extension's `package.json` (see `arkware.vscodeTools.toolGroups` for the existing pattern).
+2. **Pick any slug you like.** The name does not have to be one of the eight builtins and does not have to exist anywhere first: a valid slug that is not a builtin becomes a dynamic category the moment the tool is discovered, with its own auto-approve toggle in Settings and in the chat Auto-Approve dropdown. There is no enum to extend and no settings key to add.
+3. **Name it in a mode.** A category narrows visibility, so a tool grouped `salesforce` is invisible until some mode's `tools` array lists `salesforce`. Settings flags a category no mode exposes.
+4. Prefix inference is a fallback for tools that declare nothing: `browser`-prefixed names resolve to the dynamic `browser` category and `ide_` to `execute`, in [`getToolGroupForSayTool()`](../packages/core/src/auto-approval/tools.ts). Prefer declaring — a declaration is a fact, a prefix is a guess, and a declared group is registered at discovery rather than at first approval.
 
 ## Gaps, Issues & Areas for Improvement
 
@@ -275,21 +385,18 @@ This section tracks known deficiencies in this document and in the tool-group sy
 
 - **No coverage of `TOOL_ALIASES`**: The [`TOOL_ALIASES`](../packages/types/src/tool.ts) constant maps deprecated tool names to canonical ones (e.g., `write_file` → `write_to_file`, `search_and_replace` → `edit`). This document does not explain how aliases interact with tool groups — aliased tools inherit the group of their canonical form.
 - **No coverage of `customTools`**: The `write` group has a `customTools` array (`["edit", "search_replace", "edit_file", "apply_patch"]`). These are legacy/alias edit tools that receive special handling in the parser. The document does not explain what `customTools` means or how they differ from regular `tools`.
-- **No coverage of `filterPrivateToolsForMode`**: The document mentions `filterNativeToolsForMode` and `filterMcpToolsForMode` (implicitly), but the third filter — `filterPrivateToolsForMode` (for extension-registered private tools like `ide_*`) — is not discussed. All three filters live in [`filter-tools-for-mode.ts`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts).
-- **No discussion of how `uncategorized` actually gates access**: The `uncategorized` group is listed as a fallback, but the document does not explain that a mode must explicitly include `"uncategorized"` in its `tools` array for uncategorized tools to be available. Currently only `code` and `debug` include it; `architect`, `code-search`, `web-search`, and `reviewer` do not.
-- **Missing external-tool group resolution detail**: External LM tools (`ide_*` from `arkware-vscode-tools`) get their groups from `arkware.vscodeTools.toolGroups` in `package.json`, processed by `filterPrivateToolsForMode`. For auto-approval, `getToolGroupForSayTool()` in [`auto-approval/tools.ts`](../packages/core/src/auto-approval/tools.ts) falls back to prefix-based inference (`ide_*` → `"execute"`, `browser_*` → `"browser"`). These two resolution paths are not documented on the same page.
+- **No coverage of `filterPrivateToolsForMode`**: The document mentions `filterNativeToolsForMode` and `filterMcpToolsForMode` (implicitly), but the third filter — `filterPrivateToolsForMode` (for extension-registered private tools like `ide_*`) — is not discussed in its own right. Note it is module-private to [`build-tools.ts`](../packages/core/src/task/build-tools.ts), while `filterNativeToolsForMode` and `filterMcpToolsForMode` are exported from [`filter-tools-for-mode.ts`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts) — the three are not co-located.
 
 ### Source-of-truth risks
 
-- **Fragile `#L141` line anchor**: The link to [`TOOL_GROUPS`](../packages/types/src/tool.ts#L141) points to line 141, but the constant is at line 175. Line-number anchors in documentation are inherently fragile. Consider linking to the symbol name only.
-- **No version pin in the doc**: The doc says "Last Updated: 2026-05-04" but has no version number that can be correlated with the extension version that last changed `TOOL_GROUPS` or the `builtin-config` plugin's mode definitions. Consider adding a `Version` field that matches the extension version at the time of last verification.
+- **No version pin in the doc**: The header carries a "Last Updated" date but no version number that can be correlated with the extension version that last changed `TOOL_GROUPS` or the `builtin-config` plugin's mode definitions. Consider adding a `Version` field that matches the extension version at the time of last verification.
 
 ### Tool-group system design observations
 
 - **`alwaysAvailable` is not a group-level property**: The old doc erroneously showed `alwaysAvailable: true` as a field on the `mode` group entry in `TOOL_GROUPS`. In reality, `ToolGroupConfig` has only `tools` and `customTools`; always-availability is a separate constant `ALWAYS_AVAILABLE_TOOLS` that is checked independently of groups.
 - **`new_task` lives in `subtasks`, not `mode`**: Although `new_task` is about task lifecycle, it belongs to the `subtasks` group (alongside `check_task_status` and `cancel_tasks`), not the `mode` group (which contains only `switch_mode`). The `subtasks` group is the correct home because `new_task` is a control-plane subtask tool that shares the `alwaysAllowSubtasks` auto-approval toggle.
 - **`give_feedback` is always-available but not in any group**: [`give_feedback`](../packages/types/src/tool.ts) is in `ALWAYS_AVAILABLE_TOOLS` but does not appear in any `TOOL_GROUPS` entry. This is intentional — always-available tools are injected into every mode's tool set regardless of group membership.
-- **browser group has zero native tools**: The `browser` group contains `tools: []` — all browser tools come from the `arkware-browser-tools` MCP server, classified by the `browser_` prefix. The group exists solely as a mode-filtering/auto-approval category for these external tools.
+- **A dynamic category is a name with no schema behind it**: nothing validates that the category a server declares means what a user's toggle assumes it means. The slug rule is the only check, so two unrelated servers may both declare `data` and share one toggle. That is inherent to a vocabulary anyone may extend; the containment is that a category grants nothing until someone turns it on.
 
 ## References
 
@@ -299,3 +406,5 @@ This section tracks known deficiencies in this document and in the tool-group sy
 - [MCP Hub — Tool Metadata](../packages/core/src/services/mcp/McpHub.ts)
 - [Auto-Approval Tool Group Inference](../packages/core/src/auto-approval/tools.ts)
 - [Per-Call MCP Group Resolution](../packages/core/src/auto-approval/mcp.ts)
+- [Dynamic Category Registry](../packages/core/src/tool-groups/category-registry.ts)
+- [Per-Group Approval Gates](../packages/core/src/auto-approval/group-gates.ts)

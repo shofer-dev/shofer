@@ -137,8 +137,9 @@ call and doc names them).
 
 **File:** [`packages/types/src/tool.ts`](../../../packages/types/src/tool.ts)
 
-The `tools` field in each mode uses symbolic names. The actual tool membership is
-defined in `TOOL_GROUPS` — a `Record<ToolGroup, ToolGroupConfig>`:
+The `tools` field in each mode uses symbolic names. The NATIVE tool membership of
+the eight BUILTIN categories is defined in `TOOL_GROUPS` — a
+`Record<BuiltinToolGroup, ToolGroupConfig>`:
 
 | Group           | Category              | Member Tools                                                                                                                                                                                                                                                   |
 | --------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -149,16 +150,24 @@ defined in `TOOL_GROUPS` — a `Record<ToolGroup, ToolGroupConfig>`:
 | `mode`          | Mode switching        | `switch_mode`                                                                                                                                                                                                                                                  |
 | `subtasks`      | Task orchestration    | `new_task`, `check_task_status`, `cancel_tasks`                                                                                                                                                                                                                |
 | `questions`     | User interaction      | `ask_followup_question`                                                                                                                                                                                                                                        |
-| `browser`       | Browser automation    | _(empty — browser tools are provided by the `browser-tools` MCP server)_                                                                                                                                                                                       |
-| `uncategorized` | Fallback              | _(empty — for tools without explicit classification)_                                                                                                                                                                                                          |
+| `uncategorized` | Fallback              | _(empty — for tools that declare nothing usable)_                                                                                                                                                                                                              |
 
 The `customTools` array (currently only on `write`) lists tools that are **opt-in
 only** — they are not included automatically by group membership. They only become
 available when explicitly included via the model's `includedTools` configuration.
 
-There are exactly **9** groups. Adding a 10th is a coordinated change affecting the
-`toolGroups` const, the `TOOL_GROUPS` object, `toolGroupsSchema`, mode definitions,
-auto-approval, and documentation.
+**A mode may list a category that is not a builtin.** `groupEntrySchema` validates
+each `tools` entry as a slug (`toolGroupNameSchema`), so any **dynamic category** —
+one minted when an MCP server, a private-tool provider or a plugin declared it —
+is a legal entry. `browser` is exactly that: it appears in all six built-in modes
+below, has no row in `TOOL_GROUPS`, contributes no native tools, and gathers the
+browser tools the `browser-tools` MCP server declares. A category no tool has
+declared is accepted and matches nothing.
+
+There are exactly **8 builtin** groups. Adding a 9th is a coordinated change
+affecting the `toolGroups` const, the `TOOL_GROUPS` object, `GROUP_GATE`, a new
+settings key, mode definitions and documentation — whereas adding a dynamic
+category requires no change at all.
 
 ### Always-available tools
 
@@ -187,7 +196,7 @@ These tools are available in every mode — unless explicitly disabled via the
 Assembles the final tool name set from a mode's `tools`, `tools_allowed` and
 `tools_denied` fields:
 
-1. Iterate `tools[]` → look up each in `TOOL_GROUPS` → collect tools
+1. Iterate `tools[]` → look each up with `getToolGroupConfig()` → collect tools. A dynamic category resolves to `undefined` and contributes no NATIVE tools; its members reach the mode through the MCP / private-tool / plugin filters instead.
 2. **Scoped group entries** (`{ "groupName": { allowed: [...], denied: [...] } }`) narrow the tool set:
     - `allowed`: exclusive list — only these tools from that group
     - `denied`: removes the listed tools from the group's normal set

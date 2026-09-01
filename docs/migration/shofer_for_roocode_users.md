@@ -266,11 +266,11 @@ See [`auto_approval.md`](../auto_approval.md) and [`tool-categories.md`](../tool
 
 ### What Was Built
 
-| Feature                               | Description                                                                                                                                                                                                         |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ToolGroup-driven auto-approval**    | Auto-approval toggles now correspond to 9 canonical tool categories (`read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`) — a single source of truth.                    |
-| **Unified 9 categories**              | Every tool — native, MCP, or registered by another extension — falls into exactly one category. Mode-based filtering and auto-approval both use the same groups. See [`tool-categories.md`](../tool-categories.md). |
-| **Scoped auto-approve trigger badge** | The auto-approve badge in the chat header is scoped to the current mode, showing only relevant toggles.                                                                                                             |
+| Feature                               | Description                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ToolGroup-driven auto-approval**    | Auto-approval toggles correspond to 8 builtin tool categories (`read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`) plus user-defined **dynamic categories** (`browser` is one), each gated by its `alwaysAllowGroups` entry — a single source of truth.                    |
+| **Open category vocabulary**          | Every tool — native, MCP, or registered by another extension — falls into exactly one category, and a tool may declare a NEW category by name (slug-validated, minted at registration). Mode-based filtering and auto-approval both use the same groups. See [`tool-categories.md`](../tool-categories.md). |
+| **Scoped auto-approve trigger badge** | The auto-approve badge in the chat header is scoped to the current mode, showing only relevant toggles.                                                                                                                                                                                                     |
 
 <!-- 📸 TODO: screenshot of auto-approval toolbar in chat header showing category toggles -->
 

@@ -66,6 +66,7 @@ const mockShoferProvider = {
 		},
 		setValue: vi.fn(),
 		getValue: vi.fn(),
+		getWriteScopeValue: vi.fn(),
 	},
 	log: vi.fn(),
 	postInitState: vi.fn().mockResolvedValue(undefined),
@@ -885,6 +886,67 @@ describe("webviewMessageHandler - mcpEnabled", () => {
 
 		expect((mockShoferProvider as any).getMcpHub).toHaveBeenCalledTimes(1)
 		expect(mockShoferProvider.postInitState).toHaveBeenCalledTimes(1)
+	})
+})
+
+/**
+ * `alwaysAllowGroups` is the one `updateSettings` value that is a PATCH rather
+ * than the value to store: the record the webview renders is merged across the
+ * `.shofer/` scopes, so posting it back whole would copy other scopes' entries
+ * into the write scope's own file and pin them there.
+ */
+describe("webviewMessageHandler - alwaysAllowGroups is a per-entry patch", () => {
+	const writeScopeValue = () => vi.mocked((mockShoferProvider as any).contextProxy.getWriteScopeValue)
+	const storedGroups = () =>
+		vi.mocked(mockShoferProvider.contextProxy.setValue).mock.calls.find(([key]) => key === "alwaysAllowGroups")?.[1]
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+	})
+
+	it("merges the patch into the write scope's own map, never the effective view", async () => {
+		writeScopeValue().mockResolvedValue({ salesforce: true })
+
+		await webviewMessageHandler(mockShoferProvider, {
+			type: "updateSettings",
+			updatedSettings: { alwaysAllowGroups: { browser: true } },
+		})
+
+		expect(writeScopeValue()).toHaveBeenCalledWith("alwaysAllowGroups")
+		expect(storedGroups()).toEqual({ salesforce: true, browser: true })
+	})
+
+	it("deletes an entry on a null value, and never stores the null itself", async () => {
+		writeScopeValue().mockResolvedValue({ salesforce: true, browser: true })
+
+		await webviewMessageHandler(mockShoferProvider, {
+			type: "updateSettings",
+			updatedSettings: { alwaysAllowGroups: { browser: null } },
+		})
+
+		expect(storedGroups()).toEqual({ salesforce: true })
+	})
+
+	it("starts from an empty map when the write scope holds nothing", async () => {
+		writeScopeValue().mockResolvedValue(undefined)
+
+		await webviewMessageHandler(mockShoferProvider, {
+			type: "updateSettings",
+			updatedSettings: { alwaysAllowGroups: { browser: false } },
+		})
+
+		expect(storedGroups()).toEqual({ browser: false })
+	})
+
+	it("ignores a payload that is not a record rather than clobbering the map", async () => {
+		writeScopeValue().mockResolvedValue({ salesforce: true })
+
+		await webviewMessageHandler(mockShoferProvider, {
+			type: "updateSettings",
+			updatedSettings: { alwaysAllowGroups: undefined },
+		})
+
+		expect(storedGroups()).toBeUndefined()
 	})
 })
 

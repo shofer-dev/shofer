@@ -307,12 +307,12 @@ scenarios:
         isProtected: true
         expect_decision: approve
 
-  # ── alwaysAllowBrowser ───────────────────────────────────────────────────
+  # ── browser (dynamic category via alwaysAllowGroups) ─────────────────────
 
-  - name: "browser tools require alwaysAllowBrowser"
+  - name: "browser tools require the alwaysAllowGroups browser entry"
     state:
       autoApprovalEnabled: true
-      alwaysAllowBrowser: false
+      alwaysAllowGroups: { browser: false }
     test:
       - ask: tool
         tool: "browser_navigate"
@@ -321,10 +321,10 @@ scenarios:
         tool: "browser_click"
         expect_decision: ask
 
-  - name: "browser tools approved when alwaysAllowBrowser is ON"
+  - name: "browser tools approved when the browser category entry is ON"
     state:
       autoApprovalEnabled: true
-      alwaysAllowBrowser: true
+      alwaysAllowGroups: { browser: true }
     test:
       - ask: tool
         tool: "browser_navigate"

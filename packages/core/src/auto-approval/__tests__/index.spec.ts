@@ -82,7 +82,7 @@ describe("checkAutoApproval", () => {
 		const mcpUse = (serverName: string, toolName: string) =>
 			JSON.stringify({ type: "use_mcp_tool", serverName, toolName })
 
-		it("asks for a browser-group MCP tool when alwaysAllowBrowser is off (even with alwaysAllowMcp on)", async () => {
+		it("asks for a browser-group MCP tool when its alwaysAllowGroups entry is absent (even with alwaysAllowMcp on)", async () => {
 			const result = await checkAutoApproval({
 				state: { autoApprovalEnabled: true, alwaysAllowMcp: true, mcpServers } as any,
 				ask: "use_mcp_server",
@@ -92,12 +92,12 @@ describe("checkAutoApproval", () => {
 			expect(result).toEqual({ decision: "ask" })
 		})
 
-		it("approves a browser-group MCP tool when both alwaysAllowMcp and alwaysAllowBrowser are on", async () => {
+		it("approves a browser-group MCP tool when alwaysAllowMcp is on and alwaysAllowGroups names it", async () => {
 			const result = await checkAutoApproval({
 				state: {
 					autoApprovalEnabled: true,
 					alwaysAllowMcp: true,
-					alwaysAllowBrowser: true,
+					alwaysAllowGroups: { browser: true },
 					mcpServers,
 				} as any,
 				ask: "use_mcp_server",
@@ -105,6 +105,58 @@ describe("checkAutoApproval", () => {
 			})
 
 			expect(result).toEqual({ decision: "approve" })
+		})
+
+		// A category no config anywhere names: the server declared it at
+		// `tools/list` and the gate is the record entry, exactly as for `browser`.
+		it("gates a dynamic-category MCP tool on its own alwaysAllowGroups entry", async () => {
+			const servers = [{ name: "crm", tools: [{ name: "close_deal", group: "salesforce" }] }] as any
+			const base = { autoApprovalEnabled: true, alwaysAllowMcp: true, mcpServers: servers } as any
+			const text = mcpUse("crm", "close_deal")
+
+			expect(await checkAutoApproval({ state: base, ask: "use_mcp_server", text })).toEqual({ decision: "ask" })
+
+			expect(
+				await checkAutoApproval({
+					state: { ...base, alwaysAllowGroups: { salesforce: true } },
+					ask: "use_mcp_server",
+					text,
+				}),
+			).toEqual({ decision: "approve" })
+
+			// The wildcard covers a category nobody has met; an explicit false wins.
+			expect(
+				await checkAutoApproval({
+					state: { ...base, alwaysAllowGroups: { "*": true } },
+					ask: "use_mcp_server",
+					text,
+				}),
+			).toEqual({ decision: "approve" })
+
+			expect(
+				await checkAutoApproval({
+					state: { ...base, alwaysAllowGroups: { "*": true, salesforce: false } },
+					ask: "use_mcp_server",
+					text,
+				}),
+			).toEqual({ decision: "ask" })
+		})
+
+		// `alwaysAllowGroups` is consulted ONLY for non-builtin categories, so each
+		// category keeps exactly one source of truth for its toggle.
+		it("ignores a builtin name inside alwaysAllowGroups", async () => {
+			const result = await checkAutoApproval({
+				state: {
+					autoApprovalEnabled: true,
+					alwaysAllowMcp: true,
+					alwaysAllowGroups: { read: true },
+					mcpServers,
+				} as any,
+				ask: "use_mcp_server",
+				text: mcpUse("browser-tools", "read_dom"),
+			})
+
+			expect(result).toEqual({ decision: "ask" })
 		})
 
 		it("asks for a read-group MCP tool when alwaysAllowReadOnly is off", async () => {
@@ -145,7 +197,7 @@ describe("checkAutoApproval", () => {
 
 		it("asks when the master gate alwaysAllowMcp is off regardless of group toggles", async () => {
 			const result = await checkAutoApproval({
-				state: { autoApprovalEnabled: true, alwaysAllowBrowser: true, mcpServers } as any,
+				state: { autoApprovalEnabled: true, alwaysAllowGroups: { browser: true }, mcpServers } as any,
 				ask: "use_mcp_server",
 				text: mcpUse("browser-tools", "navigate"),
 			})

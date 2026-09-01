@@ -78,8 +78,9 @@ import { loadLayeredOverlay, resolveScopeRoots, type LayeredSettings, type Scope
 
 /**
  * The settings keys that constitute a node's tool-approval posture: the master
- * gate, every per-group `alwaysAllow*` toggle, and the command allow/deny lists
- * that qualify `alwaysAllowExecute`.
+ * gate, every per-group `alwaysAllow*` toggle, the `alwaysAllowGroups` record
+ * carrying one toggle per DYNAMIC category (plus its `"*"` wildcard), and the
+ * command allow/deny lists that qualify `alwaysAllowExecute`.
  *
  * This is the exact set config may take over, and — since {@link
  * defaultApprovalSeed} sets only the master gate — very nearly the exact set that
@@ -98,7 +99,7 @@ export const APPROVAL_POSTURE_KEYS = [
 	"alwaysAllowWrite",
 	"alwaysAllowWriteOutsideWorkspace",
 	"alwaysAllowWriteProtected",
-	"alwaysAllowBrowser",
+	"alwaysAllowGroups",
 	"alwaysAllowMcp",
 	"alwaysAllowModeSwitch",
 	"alwaysAllowSubtasks",
@@ -151,14 +152,14 @@ export interface ApprovalPosture {
  *
  * ## Why nothing is seeded ON, including `browser`
  *
- * The `browser` group is worth naming because it used to be the exception. It
+ * The `browser` category is worth naming because it used to be the exception. It
  * holds no native tools at all — every member arrives over MCP — so an unseeded
  * toggle parked the first browser call of a headless run, and the seed existed to
  * stop that. It is gone for the same reason the rest are: a browser that reaches a
  * live session can click, type, fill and submit, and "nobody declared a posture"
  * is not a licence to do so. A deployment that wants its headless agent to browse
- * says `alwaysAllowBrowser: true` in its own `.shofer/` scope, and then it parks
- * on nothing.
+ * says `alwaysAllowGroups: { "browser": true }` in its own `.shofer/` scope, and
+ * then it parks on nothing.
  */
 export function defaultApprovalSeed(): Partial<ShoferSettings> {
 	return { autoApprovalEnabled: false }
@@ -194,6 +195,23 @@ export function defaultApprovalSeed(): Partial<ShoferSettings> {
  *   - `alwaysAllowFollowupQuestions` — its effect is to answer a question with a
  *     suggestion after a timeout. Running unattended is a reason to surface the
  *     question, not to fabricate an answer to it.
+ *
+ * ## Why the dynamic categories are granted by WILDCARD
+ *
+ * `alwaysAllowGroups` is an open record — a category exists because something
+ * declared it, which may happen mid-run when a server connects — so there is no
+ * set of names this seed could enumerate. `"*"` is exactly the seed's own
+ * contract ("every declared capability") expressed for a vocabulary nobody has
+ * met yet.
+ *
+ * It is takeable over exactly like every other key here, and at the same
+ * granularity — the KEY. A scope that declares `alwaysAllowGroups` at all has
+ * stated its dynamic-category posture, so its record replaces this one wholesale
+ * (the wildcard included) rather than being merged into: merging would mean
+ * seeding a value for a configured key, which `ContextProxy` writes through into
+ * the operator's own `settings.json` — the one thing this module's precedence rule
+ * exists to prevent. Per-entry precedence is a question for the SCOPES, and
+ * `mergeLayeredConfig` answers it there.
  */
 export function unattendedApprovalSeed(): Partial<ShoferSettings> {
 	return {
@@ -203,7 +221,9 @@ export function unattendedApprovalSeed(): Partial<ShoferSettings> {
 		alwaysAllowWrite: true,
 		alwaysAllowWriteOutsideWorkspace: true,
 		alwaysAllowWriteProtected: true,
-		alwaysAllowBrowser: true,
+		// `TOOL_GROUP_WILDCARD` in `@shofer/core`; spelled literally here because the
+		// CLI consumes `@shofer/core/cli`, which does not re-export it.
+		alwaysAllowGroups: { "*": true },
 		alwaysAllowMcp: true,
 		alwaysAllowModeSwitch: true,
 		alwaysAllowSubtasks: true,
@@ -259,6 +279,14 @@ export function applyConfiguredApprovalPosture(
  * The `autoApprovalEnabled=false` fact carries more weight than it looks: a
  * configuration that names `alwaysAllowReadOnly` and forgets the master gate
  * approves nothing at all, and this line is where that shows.
+ *
+ * `alwaysAllowGroups` is rendered as the SET OF CATEGORIES it approves —
+ * `alwaysAllowGroups{*}`, `alwaysAllowGroups{browser,salesforce}` — rather than as
+ * a key count. A record is one key however many grants it carries, so counting it
+ * would report a node auto-approving every dynamic category identically to one
+ * approving none, which is the misreading this whole line exists to prevent. An
+ * empty `alwaysAllowGroups{}` therefore says "declared, and grants nothing",
+ * distinctly from the key being absent (no fact at all).
  */
 export function describeApprovalPosture(
 	effective: Partial<ShoferSettings>,
@@ -273,8 +301,17 @@ export function describeApprovalPosture(
 		effective.autoApprovalEnabled === true && effective.alwaysAllowExecute === true
 			? "execute auto-approved"
 			: "execute gated",
-		`${configuredKeys.length} key${configuredKeys.length === 1 ? "" : "s"} from .shofer config`,
 	]
+
+	const groups = effective.alwaysAllowGroups
+	if (groups) {
+		const approved = Object.keys(groups)
+			.filter((name) => groups[name] === true)
+			.sort()
+		facts.push(`alwaysAllowGroups{${approved.join(",")}}`)
+	}
+
+	facts.push(`${configuredKeys.length} key${configuredKeys.length === 1 ? "" : "s"} from .shofer config`)
 
 	return `from config (${facts.join(", ")})`
 }

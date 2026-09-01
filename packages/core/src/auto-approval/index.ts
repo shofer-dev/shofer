@@ -12,7 +12,12 @@ import { ShoferAskResponse } from "@shofer/types"
 import { getToolGroupForSayTool } from "./tools.js"
 import { getMcpToolGroup } from "./mcp.js"
 import { getCommandDecision } from "./commands.js"
-import { type AutoApprovalState, type AutoApprovalStateOptions, isGroupAutoApproved } from "./group-gates.js"
+import {
+	type AutoApprovalState,
+	type AutoApprovalStateOptions,
+	hasBuiltinGroupGate,
+	isGroupAutoApproved,
+} from "./group-gates.js"
 import { isPathAutoApproved } from "./paths.js"
 import { webviewLog } from "../logging/subsystems.js"
 
@@ -113,8 +118,9 @@ export async function checkAutoApproval({
 
 				// Per-group gating: beyond the master gate, a tool is only
 				// auto-approved if its group's dedicated toggle is also enabled
-				// (e.g. "browser" → `alwaysAllowBrowser`, "uncategorized" →
-				// `alwaysAllowUncategorized`). This keeps MCP-served tools aligned
+				// (a builtin's flat key, e.g. "uncategorized" →
+				// `alwaysAllowUncategorized`; a dynamic category's entry in
+				// `alwaysAllowGroups`). This keeps MCP-served tools aligned
 				// with the same per-group control that native tools respect, via the
 				// shared GROUP_GATE table. The MCP path does not apply the
 				// outside-workspace / protected-file modifiers (applyModifiers:false).
@@ -261,13 +267,33 @@ export async function checkAutoApproval({
 
 		const toolGroup = getToolGroupForSayTool(tool)
 
-		// Native-tool group gating via the shared GROUP_GATE table (§4). Only the
-		// browser / read / write groups are auto-approvable on this path — the
-		// other groups are either handled by the tool-specific branches above
-		// (mode → switchMode, subtasks → newTask/…) or intentionally fall through
-		// to a user prompt. The native path applies the outside-workspace /
-		// protected-file modifiers (applyModifiers:true).
-		if (toolGroup === "browser" || toolGroup === "read" || toolGroup === "write") {
+		// Native-tool group gating (§4). Exactly two kinds of group are
+		// auto-approvable on this path:
+		//
+		//   (a) `read` / `write` — the modifier-bearing groups, which additionally
+		//       enforce the outside-workspace / protected-file toggles
+		//       (applyModifiers:true) and the batch-file refinement below;
+		//   (b) any group with NO GROUP_GATE entry — a DYNAMIC category, `browser`
+		//       included — gated by its `alwaysAllowGroups` entry. Dynamic categories
+		//       have no modifier toggles, so applyModifiers is false.
+		//
+		// EVERY OTHER BUILTIN GROUP KEEPS FALLING THROUGH TO A USER PROMPT, and that
+		// is load-bearing rather than an omission. They are either handled by the
+		// tool-specific branches above (mode → switchMode, subtasks → newTask/…) or
+		// intentionally unhandled: widening them into the gate would let an
+		// `execute`-resolved say tool (the `ide_` prefix inference) auto-approve on
+		// `alwaysAllowExecute` ALONE, without the command-allowlist leg that toggle
+		// is documented to require, and would make an `uncategorized` say tool honour
+		// `alwaysAllowUncategorized` on a path where it never has.
+		const isDynamicGroup = !hasBuiltinGroupGate(toolGroup)
+
+		if (isDynamicGroup) {
+			return isGroupAutoApproved(toolGroup, state, {}, { applyModifiers: false })
+				? { decision: "approve" }
+				: { decision: "ask" }
+		}
+
+		if (toolGroup === "read" || toolGroup === "write") {
 			const approved = isGroupAutoApproved(
 				toolGroup,
 				state,

@@ -106,9 +106,10 @@ export type McpTool = {
 	 * tool accepts, each value that operation's own group.
 	 *
 	 * Absent when the server declared none, or when nothing in the declaration
-	 * survived validation. Sanitized at discovery: unknown group strings are
-	 * dropped entry by entry, exactly as {@link group} drops an unknown
-	 * tool-level declaration.
+	 * survived validation. Sanitized at discovery: a value that is not a valid
+	 * category slug is dropped entry by entry, exactly as {@link group} drops a
+	 * malformed tool-level declaration. A valid slug nobody has seen before is
+	 * KEPT and mints a dynamic category.
 	 */
 	opGroups?: Record<string, ToolGroup>
 	/**

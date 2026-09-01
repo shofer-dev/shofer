@@ -47,6 +47,9 @@ export const LOCKED_MANIFEST_VERSION = 1
  *   - A collection namespace (`"modes"`) locks the entire collection.
  *   - A `"<namespace>/<id>"` entry (`"modes/Code"`) locks a single named entity
  *     within a collection, leaving its siblings on the unlocked merge.
+ *   - The same `"<key>/<name>"` form against a RECORD-valued key
+ *     (`"alwaysAllowGroups/browser"`) locks a single entry of that record — see
+ *     {@link RECORD_ENTRY_KEYS}. The bare key still locks the whole map.
  */
 export const lockedManifestSchema = z.object({
 	version: z.literal(LOCKED_MANIFEST_VERSION),
@@ -93,6 +96,31 @@ const COLLECTION_SPECS: Readonly<Record<string, CollectionSpec>> = {
 	modes: { settingsKey: "customModes", idField: "slug" },
 	providers: { settingsKey: "listApiConfigMeta", idField: "name" },
 }
+
+/**
+ * Record-valued settings keys whose **entries** are individually lockable, keyed by
+ * the key itself (which doubles as the `locked.json` namespace, so
+ * `"alwaysAllowGroups/browser"` locks one entry and the bare
+ * `"alwaysAllowGroups"` still locks the whole map).
+ *
+ * This is the `<namespace>/<id>` grammar the named-entity collections already use,
+ * applied to a key that holds a RECORD rather than an array of entities — so the
+ * identity is the record's own property name and there is no `idField`.
+ *
+ * Why per-entry granularity is needed rather than the whole-map lock a scalar key
+ * gets: `alwaysAllowGroups` holds one toggle per tool category, and an org that
+ * pins `browser: false` is making a statement about the browser category alone.
+ * Locking the whole map to say it would freeze every user's unrelated category
+ * toggles at whatever the org happened to declare — including the ones the org has
+ * never heard of, since a dynamic category is minted by whatever server declares
+ * it.
+ *
+ * The asymmetry this leaves is deliberate and worth stating: the per-entry merge
+ * lets a scope ADD or OVERRIDE entries, never delete one, so an org revokes a
+ * user's grant by locking an explicit `false` — never by removing the entry, which
+ * would simply let the user's own value through.
+ */
+const RECORD_ENTRY_KEYS: ReadonlySet<string> = new Set<string>(["alwaysAllowGroups"])
 
 /** Reverse index: settings key → namespace, for collection detection. */
 const SETTINGS_KEY_TO_NAMESPACE: Readonly<Record<string, string>> = Object.fromEntries(
@@ -237,6 +265,70 @@ function mergeCollection(
 }
 
 /**
+ * Merge one record-valued key across the three layers, **per entry** — the
+ * record analogue of {@link mergeCollection}, for the keys in
+ * {@link RECORD_ENTRY_KEYS}.
+ *
+ *   - The whole key locked (and global defines it) → global's whole map wins,
+ *     final. A user/project map contributes nothing, not even a new entry: the
+ *     lock is on the map, so its membership is the org's to decide.
+ *   - Otherwise, per entry name across the union of the three layers:
+ *       - **Locked** (`"<key>/<name>"`) and global defines that entry → global's
+ *         value wins for that entry alone; siblings still merge normally.
+ *       - **Unlocked** → more-specific wins, `project ?? user ?? global`.
+ *
+ * Entry VALUES are replaced wholesale rather than deep-merged: a record entry is a
+ * leaf here (a boolean toggle), and treating it as a mergeable sub-object would
+ * invent a nesting level none of these keys have.
+ *
+ * Returns `undefined` when no layer defines the key, so the caller can leave it
+ * out of the effective config rather than materialising an empty map that reads as
+ * "declared, and empty".
+ */
+function mergeRecordKey(layers: LayeredConfigInput, key: string, manifest: LockedManifest): unknown {
+	const layerRecord = (layer: LayeredSettings | undefined): Record<string, unknown> | undefined => {
+		const value = (layer as Record<string, unknown> | undefined)?.[key]
+		return isPlainObject(value) ? value : undefined
+	}
+
+	const globalRecord = layerRecord(layers.global)
+	const userRecord = layerRecord(layers.user)
+	const projectRecord = layerRecord(layers.project)
+
+	if (globalRecord === undefined && userRecord === undefined && projectRecord === undefined) {
+		// Either nobody declared it, or every layer that did declared a non-object.
+		// Fall back to the scalar rule so a malformed value still resolves the same
+		// way any other unmergeable value does.
+		return mergeScalarKey(layers, key, manifest)
+	}
+
+	const wholeKeyLocked = isPathLocked(key, manifest)
+	if (globalRecord !== undefined && wholeKeyLocked) {
+		return { ...globalRecord }
+	}
+
+	const merged: Record<string, unknown> = {}
+	for (const record of [globalRecord, userRecord, projectRecord]) {
+		if (!record) continue
+		for (const name of Object.keys(record)) {
+			if (name in merged) continue
+
+			const globalValue = globalRecord?.[name]
+			if (globalValue !== undefined && isPathLocked(`${key}/${name}`, manifest)) {
+				merged[name] = globalValue
+				continue
+			}
+
+			const projectValue = projectRecord?.[name]
+			const userValue = userRecord?.[name]
+			merged[name] = projectValue !== undefined ? projectValue : userValue !== undefined ? userValue : globalValue
+		}
+	}
+
+	return merged
+}
+
+/**
  * Merge one non-collection key across the three layers.
  *   - **Locked** (and global defines it) → global's value wins, final.
  *   - **Unlocked** → for plain objects, deep-merge `global ← user ← project`
@@ -289,6 +381,9 @@ export function mergeLayeredConfig(
 		const spec = namespace ? COLLECTION_SPECS[namespace] : undefined
 		if (namespace && spec) {
 			effective[key] = mergeCollection(layers, key, namespace, spec.idField, manifest)
+		} else if (RECORD_ENTRY_KEYS.has(key)) {
+			const value = mergeRecordKey(layers, key, manifest)
+			if (value !== undefined) effective[key] = value
 		} else {
 			const value = mergeScalarKey(layers, key, manifest)
 			if (value !== undefined) effective[key] = value

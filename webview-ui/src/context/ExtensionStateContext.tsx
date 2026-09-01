@@ -31,6 +31,7 @@ import { experimentDefault } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { convertTextMateToHljs } from "@src/utils/textMateToHljs"
+import { asAlwaysAllowGroupsSetting } from "@src/utils/alwaysAllowGroups"
 
 export interface ManagedTask {
 	id: string
@@ -90,7 +91,14 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setAlwaysAllowReadOnlyOutsideWorkspace: (value: boolean) => void
 	setAlwaysAllowWrite: (value: boolean) => void
 	setAlwaysAllowWriteOutsideWorkspace: (value: boolean) => void
-	setAlwaysAllowBrowser: (value: boolean) => void
+	/**
+	 * Set one DYNAMIC category's auto-approval toggle.
+	 *
+	 * Updates local state and posts a PER-ENTRY patch — never the whole
+	 * `alwaysAllowGroups` map, which is the deep-merged effective view across the
+	 * `.shofer/` scopes and would copy another scope's entries into the write scope.
+	 */
+	setDynamicToolGroupApproval: (name: string, value: boolean) => void
 	setAlwaysAllowExecute: (value: boolean) => void
 	setAlwaysAllowMcp: (value: boolean) => void
 	setAlwaysAllowUncategorized: (value: boolean) => void
@@ -248,6 +256,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		enhancementApiConfigId: "",
 		hasOpenedModeSelector: false, // Default to false (not opened yet)
 		autoApprovalEnabled: false,
+		alwaysAllowGroups: {},
+		dynamicToolGroups: [],
 		customModes: [],
 		maxOpenTabsContext: 20,
 		maxWorkspaceFiles: 200,
@@ -720,6 +730,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			cloudOrganizations: state.cloudOrganizations ?? [],
 			organizationSettingsVersion: state.organizationSettingsVersion ?? -1,
 			profileThresholds: state.profileThresholds ?? {},
+			alwaysAllowGroups: state.alwaysAllowGroups ?? {},
+			dynamicToolGroups: state.dynamicToolGroups ?? [],
 			alwaysAllowFollowupQuestions: state.alwaysAllowFollowupQuestions ?? false,
 			followupAutoApproveTimeoutMs: state.followupAutoApproveTimeoutMs,
 			taskSyncEnabled: state.taskSyncEnabled,
@@ -734,7 +746,16 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			setAlwaysAllowWrite: (value) => setState((prevState) => ({ ...prevState, alwaysAllowWrite: value })),
 			setAlwaysAllowWriteOutsideWorkspace: (value) =>
 				setState((prevState) => ({ ...prevState, alwaysAllowWriteOutsideWorkspace: value })),
-			setAlwaysAllowBrowser: (value) => setState((prevState) => ({ ...prevState, alwaysAllowBrowser: value })),
+			setDynamicToolGroupApproval: (name, value) => {
+				setState((prevState) => ({
+					...prevState,
+					alwaysAllowGroups: { ...(prevState.alwaysAllowGroups ?? {}), [name]: value },
+				}))
+				vscode.postMessage({
+					type: "updateSettings",
+					updatedSettings: { alwaysAllowGroups: asAlwaysAllowGroupsSetting({ [name]: value }) },
+				})
+			},
 			setAlwaysAllowExecute: (value) => setState((prevState) => ({ ...prevState, alwaysAllowExecute: value })),
 			setAlwaysAllowMcp: (value) => setState((prevState) => ({ ...prevState, alwaysAllowMcp: value })),
 			setAlwaysAllowUncategorized: (value) =>

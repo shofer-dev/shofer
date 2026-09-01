@@ -23,7 +23,12 @@
 		"togglePromptInclusion": "Toggle inclusion in prompt",
 		"group": "Group",
 		"groupDefault": "Default (server-declared)",
-		"groupTooltip": "Auto-approval category for this tool. Tools are auto-approved only when their group is allowed."
+		"groupTooltip": "Auto-approval category for this tool. Tools are auto-approved only when their group is allowed.",
+		"groupNew": "New category…",
+		"groupNewPlaceholder": "e.g. salesforce",
+		"groupNewConfirm": "Create",
+		"groupNewInvalidError": "A category name must be lowercase letters, digits and single hyphens (for example \"salesforce\" or \"my-service\"), up to 64 characters.",
+		"groupNewWildcardError": "\"*\" is reserved: it is the wildcard that allows every custom category. Pick a name."
 	},
 	"tabs": {
 		"configuration": "Configuration",

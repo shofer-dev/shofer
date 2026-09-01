@@ -3,12 +3,16 @@ import { vi, describe, it, expect, beforeEach } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import React from "react"
 
-// Mock vscode API
-const mockPostMessage = vi.fn()
+// Mock vscode API. The wrapper in `@src/utils/vscode` is a module-load singleton that
+// captures `acquireVsCodeApi` before this file's statements run, so the module itself is
+// mocked as well as the global.
+const { mockPostMessage } = vi.hoisted(() => ({ mockPostMessage: vi.fn() }))
 const mockVscode = {
 	postMessage: mockPostMessage,
 }
 ;(global as any).acquireVsCodeApi = () => mockVscode
+
+vi.mock("@src/utils/vscode", () => ({ vscode: { postMessage: mockPostMessage } }))
 
 // Import the actual component
 import SettingsView from "../SettingsView"
@@ -191,8 +195,28 @@ vi.mock("../ApiOptions", () => ({
 	default: () => null,
 }))
 
+// Stubbed with two drivers so the alwaysAllowGroups staging path can be exercised
+// without the real toggle grid: one stages a CHANGED entry, the other re-stages the
+// value the entry already had (a new object identity, so change detection fires, but
+// an empty diff).
 vi.mock("../AutoApproveSettings", () => ({
-	AutoApproveSettings: () => null,
+	AutoApproveSettings: ({ alwaysAllowGroups, dynamicToolGroups, setCachedStateField }: any) => (
+		<div>
+			<div data-testid="dynamic-tool-groups">{(dynamicToolGroups ?? []).join(",")}</div>
+			<button
+				data-testid="stage-salesforce-on"
+				onClick={() =>
+					setCachedStateField("alwaysAllowGroups", { ...(alwaysAllowGroups ?? {}), salesforce: true })
+				}>
+				stage salesforce
+			</button>
+			<button
+				data-testid="restage-browser-unchanged"
+				onClick={() => setCachedStateField("alwaysAllowGroups", { ...(alwaysAllowGroups ?? {}) })}>
+				restage browser
+			</button>
+		</div>
+	),
 }))
 
 vi.mock("../SectionHeader", () => ({
@@ -345,6 +369,94 @@ describe("SettingsView - Change Detection Fix", () => {
 
 	// These tests are passing for the basic case but failing due to vi.doMock limitations
 	// The core fix has been verified - when no actual changes are made, no unsaved changes dialog appears
+
+	describe("alwaysAllowGroups", () => {
+		const renderAutoApproveTab = (overrides = {}) => {
+			;(useExtensionState as any).mockReturnValue(
+				createExtensionState({
+					alwaysAllowGroups: { browser: true },
+					dynamicToolGroups: ["browser", "salesforce"],
+					...overrides,
+				}),
+			)
+
+			return render(
+				<QueryClientProvider client={queryClient}>
+					<SettingsView onDone={vi.fn()} targetSection="autoApprove" />
+				</QueryClientProvider>,
+			)
+		}
+
+		const lastUpdateSettingsPayload = () => {
+			const calls = mockPostMessage.mock.calls.filter(([message]) => message?.type === "updateSettings")
+			return calls[calls.length - 1]?.[0]?.updatedSettings
+		}
+
+		it("passes the registry snapshot down to the Auto-Approve section", async () => {
+			renderAutoApproveTab()
+
+			await waitFor(() => {
+				expect(screen.getByTestId("dynamic-tool-groups")).toHaveTextContent("browser,salesforce")
+			})
+		})
+
+		it("flips change detection when a category toggle is staged", async () => {
+			renderAutoApproveTab()
+
+			await waitFor(() => expect(screen.getByTestId("stage-salesforce-on")).toBeInTheDocument())
+			expect((screen.getByTestId("save-button") as HTMLButtonElement).disabled).toBe(true)
+
+			fireEvent.click(screen.getByTestId("stage-salesforce-on"))
+
+			await waitFor(() => {
+				expect((screen.getByTestId("save-button") as HTMLButtonElement).disabled).toBe(false)
+			})
+		})
+
+		it("saves ONLY the entry that changed, never the whole effective map", async () => {
+			renderAutoApproveTab()
+
+			await waitFor(() => expect(screen.getByTestId("stage-salesforce-on")).toBeInTheDocument())
+			fireEvent.click(screen.getByTestId("stage-salesforce-on"))
+			await waitFor(() => {
+				expect((screen.getByTestId("save-button") as HTMLButtonElement).disabled).toBe(false)
+			})
+
+			fireEvent.click(screen.getByTestId("save-button"))
+
+			// `browser` came from some scope's settings file; echoing it back would copy
+			// that scope's entry into the write scope and shadow it forever.
+			expect(lastUpdateSettingsPayload().alwaysAllowGroups).toEqual({ salesforce: true })
+		})
+
+		it("omits the key entirely when no entry moved", async () => {
+			renderAutoApproveTab()
+
+			await waitFor(() => expect(screen.getByTestId("restage-browser-unchanged")).toBeInTheDocument())
+			fireEvent.click(screen.getByTestId("restage-browser-unchanged"))
+			await waitFor(() => {
+				expect((screen.getByTestId("save-button") as HTMLButtonElement).disabled).toBe(false)
+			})
+
+			fireEvent.click(screen.getByTestId("save-button"))
+
+			expect(lastUpdateSettingsPayload()).not.toHaveProperty("alwaysAllowGroups")
+		})
+
+		it("never sends the retired alwaysAllowBrowser key", async () => {
+			renderAutoApproveTab()
+
+			await waitFor(() => expect(screen.getByTestId("stage-salesforce-on")).toBeInTheDocument())
+			fireEvent.click(screen.getByTestId("stage-salesforce-on"))
+			await waitFor(() => {
+				expect((screen.getByTestId("save-button") as HTMLButtonElement).disabled).toBe(false)
+			})
+
+			fireEvent.click(screen.getByTestId("save-button"))
+
+			expect(lastUpdateSettingsPayload()).not.toHaveProperty("alwaysAllowBrowser")
+		})
+	})
 
 	it("verifies the fix: empty string should not be treated as a change", () => {
 		// This test verifies the core logic of our fix

@@ -3,8 +3,9 @@ import path from "path"
 import type OpenAI from "openai"
 
 import type { ProviderSettings, ModeConfig, ModelInfo, ToolGroup } from "@shofer/types"
-import { toolGroupsSchema, getHost } from "@shofer/types"
+import { toolGroupNameSchema, getHost } from "@shofer/types"
 import { customToolRegistry } from "../custom-tools/custom-tool-registry.js"
+import { toolGroupRegistry } from "../tool-groups/category-registry.js"
 import { toolsLog } from "../logging/subsystems.js"
 import { formatNative } from "../custom-tools/format-native.js"
 import { pluginRegistry } from "../plugins/plugin-registry.js"
@@ -186,15 +187,45 @@ async function getPrivateLmToolMeta(): Promise<PrivateToolMeta[]> {
 }
 
 /**
+ * Whether `name` is usable as a category name.
+ *
+ * Builtins need no separate arm: every builtin name is itself a valid slug, so
+ * "builtin or slug" collapses to "slug" (`toolGroupNameSchema`'s contract).
+ */
+function isValidToolGroupName(name: string): boolean {
+	return toolGroupNameSchema.safeParse(name).success
+}
+
+/**
+ * Accept a private tool's DECLARED group: register the category (minting it when
+ * the name is new) and record the tool → group mapping so the approval path
+ * resolves the same group `filterPrivateToolsForMode` uses for visibility.
+ *
+ * Without the mapping the two paths disagree — visibility reads the declaration
+ * while approval infers from the name prefix — and a `salesforce` tool is shown
+ * as salesforce yet gated as `uncategorized`: its toggle on, and the tool still
+ * asking.
+ */
+function acceptPrivateToolGroup(toolName: string, group: string): string {
+	toolGroupRegistry.registerToolMapping(toolName, group)
+	return group
+}
+
+/**
  * Resolve the ToolGroup for a private tool:
  *  1. If the tool definition has an explicit `group`, validate and use it.
  *  2. Fall back to the provider's `shofer.<providerId>.toolGroups` config.
  *  3. Default to "uncategorized".
+ *
+ * A name that is a valid slug is accepted whether or not anything has used it
+ * before — that is how a provider mints a category. Only a malformed name falls
+ * through to `uncategorized`, which is the bucket for tools that declared
+ * nothing usable.
  */
 function resolvePrivateToolGroup(providerId: string, def: PrivateToolDef): ToolGroup {
 	// 1. Explicit group in the definition
-	if (def.group && (toolGroupsSchema.options as readonly string[]).includes(def.group)) {
-		return def.group as ToolGroup
+	if (def.group && isValidToolGroupName(def.group)) {
+		return acceptPrivateToolGroup(def.name, def.group)
 	}
 
 	// 2. Provider-level config
@@ -206,8 +237,8 @@ function resolvePrivateToolGroup(providerId: string, def: PrivateToolDef): ToolG
 		)
 		if (toolGroups && typeof toolGroups[def.name] === "string") {
 			const declared = toolGroups[def.name]!
-			if ((toolGroupsSchema.options as readonly string[]).includes(declared)) {
-				return declared as ToolGroup
+			if (isValidToolGroupName(declared)) {
+				return acceptPrivateToolGroup(def.name, declared)
 			}
 		}
 	} catch {
@@ -280,8 +311,10 @@ export interface ToolCategories {
  *   `ALWAYS_AVAILABLE_TOOLS`, so `attempt_completion` etc. always survive — a
  *   restricted agent can still complete stakes). MCP tools belong to the `mcp`
  *   group; native custom tools to `write`; private tools carry their own group.
- * - Unknown group names are dropped (fail-closed): `tools: [typo]` restricts to
- *   always-available only.
+ * - Malformed group names are dropped (fail-closed): `tools: [Bad_Name]`
+ *   restricts to always-available only. A valid SLUG is kept even when nothing
+ *   has registered it yet — a task restricted to a category whose server has not
+ *   connected is legitimate; its tools arrive when it does.
  */
 export function restrictToolsToDeclaredGroups(
 	agentToolGroups: string[] | undefined,
@@ -291,9 +324,7 @@ export function restrictToolsToDeclaredGroups(
 	if (agentToolGroups === undefined) {
 		return { native, mcp, custom, private: priv }
 	}
-	const declaredGroups = agentToolGroups.filter((g): g is ToolGroup =>
-		(toolGroupsSchema.options as readonly string[]).includes(g),
-	)
+	const declaredGroups = agentToolGroups.filter((g): g is ToolGroup => isValidToolGroupName(g))
 	const declaredSet = new Set<ToolGroup>(declaredGroups)
 	const allowedNativeNames = new Set(getToolsForMode(declaredGroups))
 	const privateGroupByName = new Map(privateMeta.map((m) => [getToolName(m.tool), m.group]))

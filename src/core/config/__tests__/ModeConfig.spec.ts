@@ -89,15 +89,30 @@ describe("CustomModeSchema", () => {
 			expect(() => validateCustomMode(emptyRoleMode)).toThrow(ZodError)
 		})
 
-		test("rejects invalid group configurations", () => {
+		// The category vocabulary is OPEN: a mode may list any valid slug, because a
+		// dynamic category is minted by whatever declares it and a mode is entitled to
+		// name one whose server has not connected yet. What is still refused is a
+		// MALFORMED name — that is the fail-closed guard, and it is the only one left.
+		test("rejects a group name that is not a valid slug", () => {
 			const invalidGroupMode = {
 				slug: "123e4567-e89b-12d3-a456-426614174000",
 				name: "Test Mode",
 				roleDefinition: "Test role definition",
-				tools: ["not-a-valid-group"] as any,
+				tools: ["Not A Group"],
 			}
 
 			expect(() => validateCustomMode(invalidGroupMode)).toThrow(ZodError)
+		})
+
+		test("accepts a group name no builtin defines", () => {
+			const dynamicGroupMode = {
+				slug: "123e4567-e89b-12d3-a456-426614174000",
+				name: "Test Mode",
+				roleDefinition: "Test role definition",
+				tools: ["salesforce"],
+			}
+
+			expect(() => validateCustomMode(dynamicGroupMode)).not.toThrow()
 		})
 
 		test("handles null and undefined gracefully", () => {
@@ -279,14 +294,29 @@ describe("CustomModeSchema", () => {
 			expect(result.tools).toEqual(["browser"])
 		})
 
-		it("should reject invalid group names", () => {
+		it("should reject a malformed group name", () => {
+			for (const name of ["Not A Group", "read/write", "trailing-", "has_underscore"]) {
+				const result = modeConfigSchema.safeParse({
+					slug: "test-mode",
+					name: "Test Mode",
+					roleDefinition: "Test role",
+					tools: ["read", name],
+				})
+				expect({ name, success: result.success }).toEqual({ name, success: false })
+			}
+		})
+
+		// An unknown-but-well-formed name is a DYNAMIC category, not an error. It
+		// matches nothing until something registers it — which is why the drift is
+		// surfaced as a UI hint rather than a load-time failure.
+		it("should accept a group name that matches no builtin", () => {
 			const result = modeConfigSchema.safeParse({
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test role",
 				tools: ["read", "nonexistent"],
 			})
-			expect(result.success).toBe(false)
+			expect(result.success).toBe(true)
 		})
 
 		it("should accept valid group names", () => {

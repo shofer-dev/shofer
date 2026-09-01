@@ -22,14 +22,14 @@ describe("Native Tools Filtering by Mode", () => {
 
 			// Import the functions we need to test
 			const { isToolAllowedForMode } = await import("../../tools/validateToolUse.js")
-			const { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } = await import("@shofer/types")
+			const { getToolGroupConfig, ALWAYS_AVAILABLE_TOOLS } = await import("@shofer/types")
 			const { getGroupName } = await import("@shofer/types")
 
 			// Test architect mode - should NOT have edit tools
 			const architectAllowedTools = new Set<string>()
 			architectMode.tools!.forEach((groupEntry) => {
 				const groupName = getGroupName(groupEntry)
-				const toolGroup = TOOL_GROUPS[groupName]
+				const toolGroup = getToolGroupConfig(groupName)
 				if (toolGroup) {
 					toolGroup.tools.forEach((tool: string) => {
 						if (isToolAllowedForMode(tool as any, "architect", [architectMode])) {
@@ -56,7 +56,7 @@ describe("Native Tools Filtering by Mode", () => {
 			const codeAllowedTools = new Set<string>()
 			codeMode.tools!.forEach((groupEntry) => {
 				const groupName = getGroupName(groupEntry)
-				const toolGroup = TOOL_GROUPS[groupName]
+				const toolGroup = getToolGroupConfig(groupName)
 				if (toolGroup) {
 					toolGroup.tools.forEach((tool: string) => {
 						if (isToolAllowedForMode(tool as any, "code", [codeMode])) {
