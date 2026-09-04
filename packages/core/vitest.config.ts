@@ -31,5 +31,12 @@ export default defineConfig({
 		// have to know to opt in. Per-test overrides LARGER than this (live-memory's
 		// 60s cold-esbuild bundle) still apply. A genuinely hung test still fails.
 		testTimeout: 30_000,
+		coverage: {
+			provider: "v8",
+			reporter: ["text-summary"],
+			// Ratchet floor toward the 90% target: records what a real run
+			// achieved and only moves up (enforced by run-all-tests.sh).
+			thresholds: { statements: 71.1 },
+		},
 	},
 })

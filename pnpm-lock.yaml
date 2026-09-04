@@ -12,7 +12,7 @@ overrides:
   '@types/react': ^18.3.23
   '@types/react-dom': ^18.3.5
   zod: 3.25.76
-  brace-expansion: ^2.1.3
+  brace-expansion@<5: ^2.1.3
   form-data: '>=4.0.6'
   '@babel/core@<7.29.6': '>=7.29.6'
   '@eslint/plugin-kit@<0.3.4': '>=0.3.4'
@@ -183,6 +183,9 @@ importers:
       '@types/react':
         specifier: ^18.3.23
         version: 18.3.23
+      '@vitest/coverage-v8':
+        specifier: ^3.2.7
+        version: 3.2.7(vitest@3.2.7)
       ink-testing-library:
         specifier: ^4.0.0
         version: 4.0.0(@types/react@18.3.23)
@@ -644,6 +647,9 @@ importers:
       '@types/shell-quote':
         specifier: ^1.7.5
         version: 1.7.5
+      '@vitest/coverage-v8':
+        specifier: ^3.2.7
+        version: 3.2.7(vitest@3.2.7)
       nock:
         specifier: ^14.0.4
         version: 14.0.10
@@ -770,6 +776,9 @@ importers:
       '@types/vscode':
         specifier: ^1.84.0
         version: 1.100.0
+      '@vitest/coverage-v8':
+        specifier: ^3.2.7
+        version: 3.2.7(vitest@3.2.7)
       vitest:
         specifier: ^3.2.7
         version: 3.2.7(@types/debug@4.1.12)(@types/node@20.17.57)(@vitest/ui@3.2.7)(jiti@2.4.2)(jsdom@26.1.0)(lightningcss@1.30.1)(tsx@4.19.4)(yaml@2.9.0)
@@ -801,6 +810,9 @@ importers:
       '@types/shell-quote':
         specifier: ^1.7.5
         version: 1.7.5
+      '@vitest/coverage-v8':
+        specifier: ^3.2.7
+        version: 3.2.7(vitest@3.2.7)
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -1189,6 +1201,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      '@vitest/coverage-v8':
+        specifier: ^3.2.7
+        version: 3.2.7(vitest@3.2.7)
       '@vscode/test-electron':
         specifier: ^2.5.2
         version: 2.5.2
@@ -1487,6 +1502,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.4.1(vite@6.4.3(@types/node@20.17.57)(jiti@2.4.2)(lightningcss@1.30.1)(tsx@4.19.4)(yaml@2.9.0))
+      '@vitest/coverage-v8':
+        specifier: ^3.2.7
+        version: 3.2.7(vitest@3.2.7)
       '@vitest/ui':
         specifier: ^3.2.7
         version: 3.2.7(vitest@3.2.7)
@@ -2052,6 +2070,10 @@ packages:
   '@bcoe/v8-coverage@0.2.3':
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
 
+  '@bcoe/v8-coverage@1.0.2':
+    resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
+    engines: {node: '>=18'}
+
   '@braintree/sanitize-url@7.1.2':
     resolution: {integrity: sha512-jigsZK+sMF/cuiB7sERuo9V7N9jx+dhmHHnQyDSVdpZwVutaBu7WvNYqMDLSgFgfB30n452TP3vjDAvFC973mA==}
 
@@ -2177,11 +2199,11 @@ packages:
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild-kit/esm-loader@2.6.5':
     resolution: {integrity: sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild/aix-ppc64@0.25.9':
     resolution: {integrity: sha512-OaGtL73Jck6pBKjNIe24BnFE6agGl+6KxDtTfHhy1HmhthfKouEcOhqpSL64K4/0WCtbKFLOdzD/44cJ4k9opA==}
@@ -2664,9 +2686,6 @@ packages:
 
   '@jridgewell/sourcemap-codec@1.5.0':
     resolution: {integrity: sha512-gv3ZRaISU3fjPAgNsriBRqGWQL6quFx04YMPW/zD8XMLsU32mhCCbfbO6KZFLjvYpCZ8zyDEgqsgf+PwPaM7GQ==}
-
-  '@jridgewell/trace-mapping@0.3.25':
-    resolution: {integrity: sha512-vNk6aEwybGtawWmy/PzwnGDOjCkLWSD2wqvjGGAgOAwCGWySYXfYoxt00IJkTF+8Lb57DwOb3Aa0o9CApepiYQ==}
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
@@ -4818,6 +4837,15 @@ packages:
     peerDependencies:
       vite: '>=6.4.3'
 
+  '@vitest/coverage-v8@3.2.7':
+    resolution: {integrity: sha512-NEGWJS2XNu2PfRLQwOO3CTKj1tTETxNBdk454vDxVBhxJYhPaA/eS0nAI0c+1El1P7a60z8+i+ZrQoGESweGKg==}
+    peerDependencies:
+      '@vitest/browser': 3.2.7
+      vitest: 3.2.7
+    peerDependenciesMeta:
+      '@vitest/browser':
+        optional: true
+
   '@vitest/expect@3.2.7':
     resolution: {integrity: sha512-E8eBXaKibuvH2pSZErOjdVb5vF4PbKYcrnluBTYxEk1l/VhhwZg1kZQsdtjq+CsF5CFydf2Rdkz7jDHKSisi3w==}
 
@@ -4929,6 +4957,7 @@ packages:
   '@xmldom/xmldom@0.8.13':
     resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   '@xobotyi/scrollbar-width@1.9.5':
     resolution: {integrity: sha512-N8tkAACJx2ww8vFMneJmaAgmjAG1tnVBZJRLRcx061tmsLRZHSEZSLuGWnwPtunsSLvSqXQ2wfp7Mgqg1I+2dQ==}
@@ -5135,6 +5164,9 @@ packages:
     resolution: {integrity: sha512-x1FCFnFifvYDDzTaLII71vG5uvDwgtmDTEVWAxrgeiR8VjMONcCXJx7E+USjDtHlwFmt9MysbqgF9b9Vjr6w+w==}
     engines: {node: '>=4'}
 
+  ast-v8-to-istanbul@0.3.12:
+    resolution: {integrity: sha512-BRRC8VRZY2R4Z4lFIL35MwNXmwVqBityvOIwETtsCSwvjl0IdgFsy9NhdaA6j74nUdtJJlIypeRhpDam19Wq3g==}
+
   async-function@1.0.0:
     resolution: {integrity: sha512-hsU18Ae8CDTR6Kgu9DYf0EbCr/a5iGL0rytQDobUcdpYOKokk8LEjVphnXkDkgpi0wYVsqrXuP0bZxJaTqdgoA==}
     engines: {node: '>= 0.4'}
@@ -5179,6 +5211,10 @@ packages:
 
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
+
+  balanced-match@4.0.4:
+    resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
+    engines: {node: 18 || 20 || >=22}
 
   bare-events@2.5.4:
     resolution: {integrity: sha512-+gFfDkR8pj4/TrWCGUGWmJIkBwuxPS5F+a5yWjOHQt2hHvNZd5YLzadjmDUtFmMM4y429bnKLa8bYBMHcYdnQA==}
@@ -5267,6 +5303,10 @@ packages:
 
   brace-expansion@2.1.4:
     resolution: {integrity: sha512-hGfVzPxthbf3+2yjg/RBs60cB0FhqBS/zvdV/4wn4/BmN0bNMMHPc4V/BbFieqf1TKAGGAHnY4eSjajCl0f2Xg==}
+
+  brace-expansion@5.0.9:
+    resolution: {integrity: sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==}
+    engines: {node: 20 || >=22}
 
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
@@ -6421,6 +6461,7 @@ packages:
   eslint@9.27.0:
     resolution: {integrity: sha512-ixRawFQuMB9DZ7fjU3iGGganFDp3+45bPOdaRurcFHSXO1e/sYwUX/FtQZpLZJR6SjMoJH8hR2pPEAfDyCoU2Q==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -6431,6 +6472,7 @@ packages:
   eslint@9.28.0:
     resolution: {integrity: sha512-ocgh41VhRlf9+fVpe7QKzwLj9c92fDiqOj8Y3Sd4/ZmVA4Btx4PlUYPq4pp9JDyupkf1upbEXecxL2mwNV7jPQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -6525,6 +6567,7 @@ packages:
 
   exenv-es6@1.1.1:
     resolution: {integrity: sha512-vlVu3N8d6yEMpMsEm+7sUBAI81aqYYuEvfK0jNqmdb/OPXzzH7QWDDnVjMvDSY47JdHEqx/dfC/q8WkfoTmpGQ==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   expand-template@2.0.3:
     resolution: {integrity: sha512-XYfuKMvj4O35f/pOXLObndIRvyQ+/+6AhODh+OKWj9S9498pHHn/IMszH+gt0fBCRWMNfk1ZSp5x3AifmnI2vg==}
@@ -7478,6 +7521,10 @@ packages:
     resolution: {integrity: sha512-GCfE1mtsHGOELCU8e/Z7YWzpmybrx/+dSTfLrvY8qRmaY6zXTKWn6WQIjaAFw069icm6GVMNkgu0NzI4iPZUNw==}
     engines: {node: '>=10'}
 
+  istanbul-lib-source-maps@5.0.6:
+    resolution: {integrity: sha512-yg2d+Em4KizZC5niWhQaIomgf5WlL4vOOjZ5xGCmF8SnPE/mDWWXgvRExdcpCgh9lLRRa1/fSYp2ymmbJ1pI+A==}
+    engines: {node: '>=10'}
+
   istanbul-reports@3.1.7:
     resolution: {integrity: sha512-BewmUXImeuRk2YY0PVbxgKAysvhRPUQE0h5QRM++nVWyubKGV0l8qQ5op8+B2DOmwSe63Jivj0BjkPQVf8fP5g==}
     engines: {node: '>=8'}
@@ -7997,6 +8044,9 @@ packages:
 
   magic-string@0.30.17:
     resolution: {integrity: sha512-sNPKHvyjVf7gyjwS4xGTaW/mCnF8wnjtifKBEhxfZ7E/S8tQ0rssrwGNn6q8JH/ohItJfSQp9mBtQYuTlH5QnA==}
+
+  magicast@0.3.5:
+    resolution: {integrity: sha512-L0WhttDl+2BOsybvEOLK7fW3UA0OQ0IQ2d6Zl2x/a6vVRs3bAY0ECOSHHeL5jD+SbOpOCUEi0y1DgHEn9Qn1AQ==}
 
   make-dir@4.0.0:
     resolution: {integrity: sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==}
@@ -9876,6 +9926,10 @@ packages:
     resolution: {integrity: sha512-cAGWPIyOHU6zlmg88jwm7VRyXnMN7iV68OGAbYDk/Mh/xC/pzVPlQtY6ngoIH/5/tciuhGfvESU8GrHrcxD56w==}
     engines: {node: '>=8'}
 
+  test-exclude@7.0.2:
+    resolution: {integrity: sha512-u9E6A+ZDYdp7a4WnarkXPZOx8Ilz46+kby6p1yZ8zsGTz9gYa6FIS7lj2oezzNKmtdyyJNNmmXDppga5GB7kSw==}
+    engines: {node: '>=18'}
+
   text-decoder@1.2.3:
     resolution: {integrity: sha512-3/o9z3X0X0fTupwsYvR03pJ/DjWuqqrfwBgTQzdWDiQSm9KitAyz/9WqsT2JQW7KV2m+bC2ol/zqpW37NHxLaA==}
 
@@ -10844,8 +10898,8 @@ snapshots:
 
   '@ampproject/remapping@2.3.0':
     dependencies:
-      '@jridgewell/gen-mapping': 0.3.8
-      '@jridgewell/trace-mapping': 0.3.25
+      '@jridgewell/gen-mapping': 0.3.13
+      '@jridgewell/trace-mapping': 0.3.31
 
   '@antfu/install-pkg@1.1.0':
     dependencies:
@@ -11634,6 +11688,8 @@ snapshots:
 
   '@bcoe/v8-coverage@0.2.3': {}
 
+  '@bcoe/v8-coverage@1.0.2': {}
+
   '@braintree/sanitize-url@7.1.2': {}
 
   '@changesets/apply-release-plan@7.0.13':
@@ -11959,7 +12015,7 @@ snapshots:
   '@eslint/config-array@0.20.0':
     dependencies:
       '@eslint/object-schema': 2.1.6
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
       minimatch: 3.1.5
     transitivePeerDependencies:
       - supports-color
@@ -11977,7 +12033,7 @@ snapshots:
   '@eslint/eslintrc@3.3.1':
     dependencies:
       ajv: 6.15.0
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
       espree: 10.4.0
       globals: 14.0.0
       ignore: 5.3.2
@@ -12239,18 +12295,13 @@ snapshots:
     dependencies:
       '@jridgewell/set-array': 1.2.1
       '@jridgewell/sourcemap-codec': 1.5.0
-      '@jridgewell/trace-mapping': 0.3.25
+      '@jridgewell/trace-mapping': 0.3.31
 
   '@jridgewell/resolve-uri@3.1.2': {}
 
   '@jridgewell/set-array@1.2.1': {}
 
   '@jridgewell/sourcemap-codec@1.5.0': {}
-
-  '@jridgewell/trace-mapping@0.3.25':
-    dependencies:
-      '@jridgewell/resolve-uri': 3.1.2
-      '@jridgewell/sourcemap-codec': 1.5.0
 
   '@jridgewell/trace-mapping@0.3.31':
     dependencies:
@@ -12259,7 +12310,7 @@ snapshots:
 
   '@kwsites/file-exists@1.1.1':
     dependencies:
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
@@ -12630,7 +12681,7 @@ snapshots:
 
   '@puppeteer/browsers@2.10.5':
     dependencies:
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
       extract-zip: 2.0.1
       progress: 2.0.3
       proxy-agent: 6.5.0
@@ -12643,7 +12694,7 @@ snapshots:
 
   '@puppeteer/browsers@2.6.1':
     dependencies:
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
       extract-zip: 2.0.1
       progress: 2.0.3
       proxy-agent: 6.5.0
@@ -14476,6 +14527,25 @@ snapshots:
       react-refresh: 0.17.0
       vite: 6.4.3(@types/node@20.17.57)(jiti@2.4.2)(lightningcss@1.30.1)(tsx@4.19.4)(yaml@2.9.0)
 
+  '@vitest/coverage-v8@3.2.7(vitest@3.2.7)':
+    dependencies:
+      '@ampproject/remapping': 2.3.0
+      '@bcoe/v8-coverage': 1.0.2
+      ast-v8-to-istanbul: 0.3.12
+      debug: 4.4.3
+      istanbul-lib-coverage: 3.2.2
+      istanbul-lib-report: 3.0.1
+      istanbul-lib-source-maps: 5.0.6
+      istanbul-reports: 3.1.7
+      magic-string: 0.30.17
+      magicast: 0.3.5
+      std-env: 3.9.0
+      test-exclude: 7.0.2
+      tinyrainbow: 2.0.0
+      vitest: 3.2.7(@types/debug@4.1.12)(@types/node@24.2.1)(@vitest/ui@3.2.7)(jiti@2.4.2)(jsdom@26.1.0)(lightningcss@1.30.1)(tsx@4.19.4)(yaml@2.9.0)
+    transitivePeerDependencies:
+      - supports-color
+
   '@vitest/expect@3.2.7':
     dependencies:
       '@types/chai': 5.2.2
@@ -14912,6 +14982,12 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  ast-v8-to-istanbul@0.3.12:
+    dependencies:
+      '@jridgewell/trace-mapping': 0.3.31
+      estree-walker: 3.0.3
+      js-tokens: 10.0.0
+
   async-function@1.0.0: {}
 
   async-mutex@0.5.0:
@@ -14956,6 +15032,8 @@ snapshots:
   bail@2.0.2: {}
 
   balanced-match@1.0.2: {}
+
+  balanced-match@4.0.4: {}
 
   bare-events@2.5.4:
     optional: true
@@ -15047,6 +15125,10 @@ snapshots:
   brace-expansion@2.1.4:
     dependencies:
       balanced-match: 1.0.2
+
+  brace-expansion@5.0.9:
+    dependencies:
+      balanced-match: 4.0.4
 
   braces@3.0.3:
     dependencies:
@@ -16071,7 +16153,7 @@ snapshots:
 
   esbuild-register@3.6.0(esbuild@0.25.9):
     dependencies:
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
       esbuild: 0.25.9
     transitivePeerDependencies:
       - supports-color
@@ -16460,7 +16542,7 @@ snapshots:
 
   extract-zip@2.0.1:
     dependencies:
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
       get-stream: 5.2.0
       yauzl: 2.10.0
     optionalDependencies:
@@ -17088,7 +17170,7 @@ snapshots:
   http-proxy-agent@7.0.2:
     dependencies:
       agent-base: 7.1.3
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
@@ -17102,7 +17184,7 @@ snapshots:
   https-proxy-agent@7.0.6:
     dependencies:
       agent-base: 7.1.3
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
@@ -17465,6 +17547,14 @@ snapshots:
       istanbul-lib-coverage: 3.2.2
       make-dir: 4.0.0
       supports-color: 7.2.0
+
+  istanbul-lib-source-maps@5.0.6:
+    dependencies:
+      '@jridgewell/trace-mapping': 0.3.31
+      debug: 4.4.3
+      istanbul-lib-coverage: 3.2.2
+    transitivePeerDependencies:
+      - supports-color
 
   istanbul-reports@3.1.7:
     dependencies:
@@ -17992,9 +18082,15 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.0
 
+  magicast@0.3.5:
+    dependencies:
+      '@babel/parser': 7.27.2
+      '@babel/types': 7.27.1
+      source-map-js: 1.2.1
+
   make-dir@4.0.0:
     dependencies:
-      semver: 7.7.3
+      semver: 7.8.5
 
   mammoth@1.12.0:
     dependencies:
@@ -18502,7 +18598,7 @@ snapshots:
 
   minimatch@10.2.5:
     dependencies:
-      brace-expansion: 2.1.4
+      brace-expansion: 5.0.9
 
   minimatch@3.1.5:
     dependencies:
@@ -19186,7 +19282,7 @@ snapshots:
   proxy-agent@6.5.0:
     dependencies:
       agent-base: 7.1.3
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
       http-proxy-agent: 7.0.2
       https-proxy-agent: 7.0.6
       lru-cache: 7.18.3
@@ -19243,7 +19339,7 @@ snapshots:
     dependencies:
       '@puppeteer/browsers': 2.10.5
       chromium-bidi: 5.1.0(devtools-protocol@0.0.1452169)
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
       devtools-protocol: 0.0.1452169
       typed-query-selector: 2.12.0
       ws: 8.21.1
@@ -20372,6 +20468,12 @@ snapshots:
       glob: 11.1.0
       minimatch: 3.1.5
 
+  test-exclude@7.0.2:
+    dependencies:
+      '@istanbuljs/schema': 0.1.3
+      glob: 11.1.0
+      minimatch: 10.2.5
+
   text-decoder@1.2.3:
     dependencies:
       b4a: 1.6.7
@@ -20799,7 +20901,7 @@ snapshots:
 
   v8-to-istanbul@9.3.0:
     dependencies:
-      '@jridgewell/trace-mapping': 0.3.25
+      '@jridgewell/trace-mapping': 0.3.31
       '@types/istanbul-lib-coverage': 2.0.6
       convert-source-map: 2.0.0
 
@@ -20844,7 +20946,7 @@ snapshots:
   vite-node@3.2.4(@types/node@20.17.50)(jiti@2.4.2)(lightningcss@1.30.1)(tsx@4.19.4)(yaml@2.9.0):
     dependencies:
       cac: 6.7.14
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 2.0.3
       vite: 6.4.3(@types/node@20.17.50)(jiti@2.4.2)(lightningcss@1.30.1)(tsx@4.19.4)(yaml@2.9.0)
@@ -20865,7 +20967,7 @@ snapshots:
   vite-node@3.2.4(@types/node@20.17.57)(jiti@2.4.2)(lightningcss@1.30.1)(tsx@4.19.4)(yaml@2.9.0):
     dependencies:
       cac: 6.7.14
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 2.0.3
       vite: 6.4.3(@types/node@20.17.57)(jiti@2.4.2)(lightningcss@1.30.1)(tsx@4.19.4)(yaml@2.9.0)
@@ -20886,7 +20988,7 @@ snapshots:
   vite-node@3.2.4(@types/node@24.2.1)(jiti@2.4.2)(lightningcss@1.30.1)(tsx@4.19.4)(yaml@2.9.0):
     dependencies:
       cac: 6.7.14
-      debug: 4.4.1(supports-color@8.1.1)
+      debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 2.0.3
       vite: 6.4.3(@types/node@24.2.1)(jiti@2.4.2)(lightningcss@1.30.1)(tsx@4.19.4)(yaml@2.9.0)

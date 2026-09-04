@@ -14,6 +14,13 @@ export default defineConfig({
 		environment: "jsdom",
 		include: ["src/**/*.spec.ts", "src/**/*.spec.tsx"],
 		onConsoleLog,
+		coverage: {
+			provider: "v8",
+			reporter: ["text-summary"],
+			// Ratchet floor toward the 90% target: records what a real run
+			// achieved and only moves up (enforced by run-all-tests.sh).
+			thresholds: { statements: 57.4 },
+		},
 	},
 	resolve: {
 		alias: {

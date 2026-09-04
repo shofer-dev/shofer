@@ -34,6 +34,15 @@ VITEST_OPTS="--maxConcurrency=2 --maxWorkers=${VITEST_MAX_WORKERS}"
 VITEST_RETRIES="${VITEST_RETRIES:-0}"
 FLAKY=0
 
+# Coverage is part of the gate: each suite runs with --coverage so the
+# per-package `coverage.thresholds` in its vitest.config.ts are enforced — a
+# suite that drops below its recorded statement floor fails exactly like a
+# red test. Thresholds are a ratchet toward 90%: they record what a real run
+# achieved and only move up. Plain `vitest` runs (no --coverage) are
+# unaffected. Set VITEST_NO_COVERAGE=1 to opt out locally.
+COVERAGE_OPTS="--coverage"
+[[ "${VITEST_NO_COVERAGE:-0}" == "1" ]] && COVERAGE_OPTS=""
+
 run_suite() {
     local label="$1" dir="$2" extra="${3:-}" max_retries="${4:-$VITEST_RETRIES}" ts0 ts1 elapsed rc attempt
     local tmpfile="/tmp/shofer-suite-${label//\//-}.log"
@@ -44,7 +53,7 @@ run_suite() {
     for ((attempt=1; attempt <= max_retries + 1; attempt++)); do
         ts0=$(date +%s)
         set +e
-        (cd "${WS}/${dir}" && npx vitest run ${VITEST_OPTS} ${extra}) > "${tmpfile}" 2>&1
+        (cd "${WS}/${dir}" && npx vitest run ${VITEST_OPTS} ${COVERAGE_OPTS} ${extra}) > "${tmpfile}" 2>&1
         rc=$?
         set -e
         ts1=$(date +%s)
