@@ -70,6 +70,31 @@ flowchart TD
     TOOL --> ASK
 ```
 
+### The posture is consulted only when an ask COMPLETES
+
+`checkAutoApproval` runs in the three complete-message branches of `Task.ask()`
+and in none of the partial ones: a `partial: true` call throws
+`AskIgnoredError` before any decision is taken. That is correct — a streaming
+chunk is not a request for permission — but it has a consequence worth stating,
+because it looks like a posture failure and is not one.
+
+A native tool renders its invocation while its arguments are still streaming
+(`BaseTool.handlePartial` → `ask(type, text, true)`), and the COMPLETE ask is
+raised later by the tool's own `execute()`. So a call that never reaches
+`execute()` — arguments that did not parse, a mode/tool validation refusal, a
+previously rejected tool — has an ask row published for it that the posture was
+never asked about. It is not "auto-approval declined"; nobody was consulted, and
+nobody can be: there is no tool call left to permit.
+
+`Task.withdrawStreamedToolAsk()` closes that row on every such path, marking it
+`abandoned` — finalized, with nothing to decide, and explicitly neither
+`isAnswered` nor `autoApproved`, because withdrawing is not deciding. Leaving it
+open is not cosmetic: those paths hand the model a re-emit instruction, so one
+tool call leaves one orphan per retry, all carrying the same arguments, and a
+controller that records asks durably opens an approval for each. Any consumer
+deciding "is there something to approve here" must read all four flags —
+`partial`, `autoApproved`, `isAnswered`, `abandoned`.
+
 ### The ask-level fast path, and why idle asks are excluded
 
 Step 1 above is not a convenience: `isAutoApprovableAsk` short-circuits

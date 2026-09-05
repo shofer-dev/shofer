@@ -675,6 +675,19 @@ how `Task` raises the event rather than of how a subscriber handles it:
   an ask that arrives without `autoApproved` is genuinely outstanding and a
   controller may open a durable approval row for it; there is no later update that
   retracts one.
+- **An ask a controller may act on is finalized, undecided AND not withdrawn.**
+  Four flags answer "is there something to decide here", and all four must be
+  read: `partial` (a streaming preview a tool renders through
+  `BaseTool.handlePartial` — no decision has been taken yet, because
+  `checkAutoApproval` runs only when an ask completes), `autoApproved` and
+  `isAnswered` (decided), and `abandoned` (WITHDRAWN — the tool call the preview
+  belonged to was abandoned before it executed, so there is nothing to decide and
+  nothing was decided). Withdrawal is the one that is neither a decision nor a
+  live ask, and the one a consumer is most likely to miss: the abandoning paths
+  hand the model a re-emit instruction, so a single tool call produces one
+  withdrawn ask per retry, all carrying the same arguments and none carrying an
+  `askId` — a controller that reads them as live opens an approval row for every
+  attempt of a call that never ran.
 
 #### Task Analytics
 

@@ -375,6 +375,21 @@ export const shoferMessageSchema = z.object({
 	 * otherwise be presented for the ask, since no input is required.
 	 */
 	autoApproved: z.boolean().optional(),
+	/**
+	 * True when this `ask` was WITHDRAWN rather than decided: the tool call it
+	 * previewed while its arguments were streaming never reached `execute()`
+	 * (the arguments did not parse, mode/tool validation refused it, or a
+	 * previously rejected tool short-circuited the block), so the row is
+	 * finalized with nothing to approve.
+	 *
+	 * Withdrawing is not deciding — nothing was approved and nothing was
+	 * refused — which is why it is its own flag rather than `isAnswered` or
+	 * `autoApproved`. Every consumer that asks "is there something to decide
+	 * here" must read it alongside those two: a withdrawn ask that reads as
+	 * live opens a durable approval for a call that was never attempted, and
+	 * the loop's re-emit instruction makes the model produce one per retry.
+	 */
+	abandoned: z.boolean().optional(),
 })
 
 export type ShoferMessage = z.infer<typeof shoferMessageSchema>

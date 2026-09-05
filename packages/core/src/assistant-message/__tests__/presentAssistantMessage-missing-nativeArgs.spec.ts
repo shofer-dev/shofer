@@ -46,6 +46,9 @@ describe("presentAssistantMessage — missing nativeArgs guard (§C)", () => {
 			},
 			recordToolUsage: vi.fn(),
 			recordToolError: vi.fn(),
+			// A tool call that is abandoned before it executes withdraws the ask its
+			// streaming arguments already rendered (Task.withdrawStreamedToolAsk).
+			withdrawStreamedToolAsk: vi.fn().mockResolvedValue(undefined),
 			toolRepetitionDetector: {
 				check: vi.fn().mockReturnValue({ allowExecution: true }),
 			},

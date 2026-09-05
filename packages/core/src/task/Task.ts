@@ -3948,6 +3948,42 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
+	/**
+	 * Withdraw the streamed `ask` row a tool call leaves behind when the call is
+	 * ABANDONED before it ever reaches `execute()`.
+	 *
+	 * A native tool renders its invocation while the arguments are still
+	 * streaming — `BaseTool.handlePartial` calls `ask(type, text, true)`, which
+	 * publishes an ask message with `partial: true` and NO decision on it.
+	 * `checkAutoApproval` is consulted only when an ask COMPLETES, and the
+	 * complete ask is raised by the tool's own `execute()`. So a call that never
+	 * gets there — arguments that did not parse, a mode/tool validation refusal,
+	 * a previously rejected tool — leaves that row published forever:
+	 * unfinalized, undecided, and unanswerable. The posture cannot suppress it,
+	 * because the posture is never asked.
+	 *
+	 * That remnant is not cosmetic. The abandoning paths hand the model a
+	 * re-emit instruction, so ONE tool call produces one such row PER RETRY, all
+	 * carrying the same (usually empty) arguments; a controller that records
+	 * asks durably opens an approval per row, for a call that was never
+	 * attempted. Measured on a live L2 conversation whose tool arguments kept
+	 * arriving empty: 39 orphaned partial ask rows against 37 parse failures.
+	 *
+	 * Withdrawing is NOT deciding — nothing was approved and nothing was refused
+	 * — which is why the row is marked `abandoned` rather than answered or
+	 * auto-approved.
+	 */
+	public async withdrawStreamedToolAsk(): Promise<void> {
+		const index = findLastIndex(this.shoferMessages, (m) => m.type === "ask" && m.partial === true)
+		if (index === -1) {
+			return
+		}
+		const message = this.shoferMessages[index]!
+		message.partial = false
+		message.abandoned = true
+		await this.updateShoferMessage(message)
+	}
+
 	async sayAndCreateMissingParamError(toolName: ToolName, paramName: string, relPath?: string) {
 		await this.say(
 			"error",

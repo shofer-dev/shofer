@@ -202,6 +202,10 @@ describe("findOutstandingAsk", () => {
 		["partial", { partial: true }],
 		["auto-approved", { autoApproved: true }],
 		["already answered", { isAnswered: true }],
+		// Withdrawn: the tool call this ask previewed while its arguments streamed
+		// was abandoned before it executed, so it is finalized with nothing to
+		// decide — and unlike the two above, nothing decided it.
+		["withdrawn", { abandoned: true }],
 	])("reports nothing for an ask that is %s", (_label, over) => {
 		expect(findOutstandingAsk([ask(over)])).toBeUndefined()
 	})

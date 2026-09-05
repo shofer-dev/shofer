@@ -99,8 +99,8 @@ export const FORWARDED_EVENTS = [
  * The ask a task is blocked on, or `undefined` when it is not blocked.
  *
  * The rule is the transcript's own: a task is waiting on an ask exactly when the LAST
- * message is a complete (`partial !== true`) ask that was neither auto-approved nor
- * already answered. Anything after it — a tool result, the next assistant turn — means
+ * message is a complete (`partial !== true`) ask that was neither auto-approved, nor
+ * already answered, nor withdrawn. Anything after it — a tool result, the next assistant turn — means
  * the ask was resolved and the loop moved on. This is the same shape the chat view
  * uses to decide whether to show approve/deny, which is what keeps an attached view's
  * affordances identical to the owning host's.
@@ -109,6 +109,9 @@ export function findOutstandingAsk(messages: ShoferMessage[]): OutstandingAsk | 
 	const last = messages[messages.length - 1]
 	if (!last || last.type !== "ask" || !last.ask) return undefined
 	if (last.partial === true || last.autoApproved === true || last.isAnswered === true) return undefined
+	// A withdrawn ask is finalized but was never a decision: the tool call it
+	// previewed was abandoned before it executed, so there is nothing to approve.
+	if (last.abandoned === true) return undefined
 	return { ask: last.ask, askId: last.askId, text: last.text, ts: last.ts }
 }
 

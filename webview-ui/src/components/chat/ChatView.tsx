@@ -607,8 +607,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					askIdRef.current = lastMessage.askId
 					// When the backend has already auto-approved (or auto-denied) this
 					// ask, no user input is required. Suppress the action buttons and
-					// re-enable sending so the chat doesn't appear blocked.
-					if (lastMessage.autoApproved) {
+					// re-enable sending so the chat doesn't appear blocked. A WITHDRAWN
+					// ask reads the same way here and for the same reason: the tool call
+					// it previewed was abandoned before it executed, so there is nothing
+					// to approve — offering buttons would park the chat on a decision
+					// that can have no effect.
+					if (lastMessage.autoApproved || lastMessage.abandoned) {
 						setSendingDisabled(false)
 						setShoferAsk(undefined)
 						setEnableButtons(false)

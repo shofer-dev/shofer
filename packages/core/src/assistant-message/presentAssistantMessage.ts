@@ -604,6 +604,11 @@ export async function presentAssistantMessage(shofer: Task) {
 					? `Skipping tool ${toolDescription()} due to user rejecting a previous tool.`
 					: `Tool ${toolDescription()} was interrupted and not executed due to user rejecting a previous tool.`
 
+				// This call will never execute, so the ask row its streaming
+				// arguments already published must be withdrawn rather than left
+				// outstanding (Task.withdrawStreamedToolAsk).
+				await shofer.withdrawStreamedToolAsk()
+
 				shofer.pushToolResultToUserContent({
 					type: "tool_result",
 					tool_use_id: sanitizeToolUseId(toolCallId),
@@ -645,6 +650,14 @@ export async function presentAssistantMessage(shofer: Task) {
 							? ` Partial params seen during streaming: ${JSON.stringify(block.params)}.`
 							: ""
 					const fullErrorMessage = `${errorMessage}${receivedParams}`
+
+					// The tool is about to be refused without ever executing, so the
+					// ask row `handlePartial` published while these arguments streamed
+					// has no decision coming and nobody to answer it. Withdraw it
+					// BEFORE the error say, or the model's re-emit produces one more
+					// orphan per retry — the approval storm this guard used to feed
+					// (Task.withdrawStreamedToolAsk).
+					await shofer.withdrawStreamedToolAsk()
 
 					shofer.consecutiveMistakeCount++
 					try {
@@ -941,6 +954,10 @@ export async function presentAssistantMessage(shofer: Task) {
 					// which would cause the extension to appear to hang
 					const errMsg = error instanceof Error ? error.message : String(error)
 					const errorContent = formatResponse.toolError(errMsg)
+					// Validation refused the call, so it never executes: withdraw the
+					// ask row its streaming arguments published
+					// (Task.withdrawStreamedToolAsk).
+					await shofer.withdrawStreamedToolAsk()
 					// Push tool_result directly without setting didAlreadyUseTool
 					shofer.pushToolResultToUserContent({
 						type: "tool_result",

@@ -59,6 +59,9 @@ describe("presentAssistantMessage - Image Handling in Native Tool Calling", () =
 				}),
 			},
 			say: vi.fn().mockResolvedValue(undefined),
+			// A tool call that is abandoned before it executes withdraws the ask its
+			// streaming arguments already rendered (Task.withdrawStreamedToolAsk).
+			withdrawStreamedToolAsk: vi.fn().mockResolvedValue(undefined),
 			ask: vi.fn().mockResolvedValue({ response: "yesButtonClicked" }),
 		}
 
