@@ -1,9 +1,12 @@
 import { NativeToolCallParser } from "../NativeToolCallParser.js"
 
 describe("NativeToolCallParser", () => {
+	// Stream-assembly state is per-instance (one parser per task), so each test
+	// gets a fresh one; the parse itself stays static.
+	let parser: NativeToolCallParser
+
 	beforeEach(() => {
-		NativeToolCallParser.clearAllStreamingToolCalls()
-		NativeToolCallParser.clearRawChunkState()
+		parser = new NativeToolCallParser()
 	})
 
 	describe("parseToolCall", () => {
@@ -705,13 +708,13 @@ describe("NativeToolCallParser", () => {
 		describe("read_file tool", () => {
 			it("should emit a partial ToolUse with nativeArgs.path during streaming", () => {
 				const id = "toolu_streaming_123"
-				NativeToolCallParser.startStreamingToolCall(id, "read_file")
+				parser.startStreamingToolCall(id, "read_file")
 
 				// Simulate streaming chunks
 				const fullArgs = JSON.stringify({ path: "src/test.ts" })
 
 				// Process the complete args as a single chunk for simplicity
-				const result = NativeToolCallParser.processStreamingChunk(id, fullArgs)
+				const result = parser.processStreamingChunk(id, fullArgs)
 
 				expect(result).not.toBeNull()
 				expect(result?.nativeArgs).toBeDefined()
@@ -725,10 +728,10 @@ describe("NativeToolCallParser", () => {
 		describe("read_file tool", () => {
 			it("should parse read_file args on finalize", () => {
 				const id = "toolu_finalize_123"
-				NativeToolCallParser.startStreamingToolCall(id, "read_file")
+				parser.startStreamingToolCall(id, "read_file")
 
 				// Add the complete arguments
-				NativeToolCallParser.processStreamingChunk(
+				parser.processStreamingChunk(
 					id,
 					JSON.stringify({
 						path: "finalized.ts",
@@ -738,7 +741,7 @@ describe("NativeToolCallParser", () => {
 					}),
 				)
 
-				const result = NativeToolCallParser.finalizeStreamingToolCall(id)
+				const result = parser.finalizeStreamingToolCall(id)
 
 				expect(result).not.toBeNull()
 				expect(result?.type).toBe("tool_use")
@@ -761,16 +764,16 @@ describe("NativeToolCallParser", () => {
 				// incomplete args MUST return null, so Task.ts's null-branch
 				// (which now clears nativeArgs) is reached.
 				const id = "toolu_incomplete_002"
-				NativeToolCallParser.startStreamingToolCall(id, "read_file")
+				parser.startStreamingToolCall(id, "read_file")
 
 				// Optimistic partial: path was streamed, populate a partial nativeArgs
-				NativeToolCallParser.processStreamingChunk(id, JSON.stringify({ path: "src/incomplete.ts" }))
+				parser.processStreamingChunk(id, JSON.stringify({ path: "src/incomplete.ts" }))
 
 				// Now feed an overwriting chunk that is valid JSON but is MISSING
 				// the required 'path' field -- the final parse must fail.
-				NativeToolCallParser.processStreamingChunk(id, JSON.stringify({ mode: "slice", offset: 10 }))
+				parser.processStreamingChunk(id, JSON.stringify({ mode: "slice", offset: 10 }))
 
-				const result = NativeToolCallParser.finalizeStreamingToolCall(id)
+				const result = parser.finalizeStreamingToolCall(id)
 
 				// Parser contract: null on incomplete/malformed final args.
 				expect(result).toBeNull()
@@ -1187,13 +1190,10 @@ describe("NativeToolCallParser", () => {
 		describe("streaming", () => {
 			it("survives a half-streamed arguments_json without rendering a broken call", () => {
 				const id = "toolu_hatch_stream_partial"
-				NativeToolCallParser.startStreamingToolCall(id, "read_file")
+				parser.startStreamingToolCall(id, "read_file")
 
 				// The inner JSON is still arriving, escaped inside the outer string.
-				const partial = NativeToolCallParser.processStreamingChunk(
-					id,
-					'{"arguments_json": "{\\"path\\": \\"src/',
-				)
+				const partial = parser.processStreamingChunk(id, '{"arguments_json": "{\\"path\\": \\"src/')
 
 				// Optimistically unwrapped: the partial path renders the same keys a
 				// direct-arguments call would, and never throws.
@@ -1202,21 +1202,21 @@ describe("NativeToolCallParser", () => {
 
 				// Truncated mid-escape — no inner object yet, so nothing is decided.
 				const id2 = "toolu_hatch_stream_truncated"
-				NativeToolCallParser.startStreamingToolCall(id2, "read_file")
-				const early = NativeToolCallParser.processStreamingChunk(id2, '{"arguments_json": "{\\"pa')
+				parser.startStreamingToolCall(id2, "read_file")
+				const early = parser.processStreamingChunk(id2, '{"arguments_json": "{\\"pa')
 				expect(early).not.toBeNull()
 				expect((early?.nativeArgs as { path?: string } | undefined)?.path).toBeUndefined()
 			})
 
 			it("unwraps on finalize — the authoritative parse is the complete one", () => {
 				const id = "toolu_hatch_stream_final"
-				NativeToolCallParser.startStreamingToolCall(id, "read_file")
-				NativeToolCallParser.processStreamingChunk(
+				parser.startStreamingToolCall(id, "read_file")
+				parser.processStreamingChunk(
 					id,
 					JSON.stringify({ arguments_json: JSON.stringify({ path: "streamed.ts", limit: 3 }) }),
 				)
 
-				const result = NativeToolCallParser.finalizeStreamingToolCall(id)
+				const result = parser.finalizeStreamingToolCall(id)
 
 				expect(result?.type).toBe("tool_use")
 				if (result?.type === "tool_use") {

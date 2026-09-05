@@ -69,6 +69,22 @@ export type ToolCallStreamEvent = ApiStreamToolCallStartChunk | ApiStreamToolCal
  *
  * This class also handles raw tool call chunk processing, converting
  * provider-level raw chunks into start/delta/end events.
+ *
+ * **One parser INSTANCE per streaming task.** The parse itself is pure and
+ * stays static (`parseToolCall` and its helpers), but the stream-assembly half
+ * — `processRawChunk` and the `startStreamingToolCall` / `processStreamingChunk`
+ * / `finalizeStreamingToolCall` trio — carries state that is meaningful only
+ * within ONE stream and must never be shared. The wire `index` an
+ * OpenAI-compatible provider stamps on each argument fragment restarts at 0 for
+ * every stream, and after the first fragment a chunk carries nothing else: no
+ * id, no name. So a tracker shared by two concurrently streaming tasks — which
+ * a headless worker running many tasks per process has — collides on `index`,
+ * and the collision does not drop the second stream's fragments: it re-emits
+ * them under the FIRST stream's tool-call id, splicing one tool call's
+ * arguments character-by-character through the other's. `Task` therefore owns
+ * one of these for its lifetime (`Task.nativeToolCallParser`), and a provider
+ * that needs to know a tool call ended tracks the ids it saw itself rather than
+ * reading another task's assembly state.
  */
 /**
  * A single firing of a silent recovery layer (alias coercion, path recovery,
@@ -126,9 +142,14 @@ export class NativeToolCallParser {
 		this.lastRecoveries.push(record)
 	}
 
-	// Streaming state management for argument accumulation (keyed by tool call id)
-	// Note: name is string to accommodate dynamic MCP tools (mcp--serverName--toolName)
-	private static streamingToolCalls = new Map<
+	/**
+	 * Per-tool-call argument accumulation for ONE stream (keyed by tool call id).
+	 *
+	 * Instance state, not static: see the class docstring's "one parser per
+	 * task" note. `name` is a string to accommodate dynamic MCP tools
+	 * (`mcp--serverName--toolName`).
+	 */
+	private readonly streamingToolCalls = new Map<
 		string,
 		{
 			id: string
@@ -137,8 +158,14 @@ export class NativeToolCallParser {
 		}
 	>()
 
-	// Raw chunk tracking state (keyed by index from API stream)
-	private static rawChunkTracker = new Map<
+	/**
+	 * Raw chunk tracking for ONE stream, keyed by the wire `index` the provider
+	 * assigns to each tool call within that stream.
+	 *
+	 * The index restarts at 0 for every stream, so this map is only meaningful
+	 * scoped to a single stream — hence instance state.
+	 */
+	private readonly rawChunkTracker = new Map<
 		number,
 		{
 			id: string
@@ -171,7 +198,7 @@ export class NativeToolCallParser {
 	 * This is the entry point for providers that emit tool_call_partial chunks.
 	 * Returns an array of events to be processed by the consumer.
 	 */
-	public static processRawChunk(chunk: {
+	public processRawChunk(chunk: {
 		index: number
 		id?: string
 		name?: string
@@ -239,29 +266,10 @@ export class NativeToolCallParser {
 	}
 
 	/**
-	 * Process stream finish reason.
-	 * Emits end events when finish_reason is 'tool_calls'.
-	 */
-	public static processFinishReason(finishReason: string | null | undefined): ToolCallStreamEvent[] {
-		const events: ToolCallStreamEvent[] = []
-
-		if (finishReason === "tool_calls" && this.rawChunkTracker.size > 0) {
-			for (const [, tracked] of this.rawChunkTracker.entries()) {
-				events.push({
-					type: "tool_call_end",
-					id: tracked.id,
-				})
-			}
-		}
-
-		return events
-	}
-
-	/**
 	 * Finalize any remaining tool calls that weren't explicitly ended.
 	 * Should be called at the end of stream processing.
 	 */
-	public static finalizeRawChunks(): ToolCallStreamEvent[] {
+	public finalizeRawChunks(): ToolCallStreamEvent[] {
 		const events: ToolCallStreamEvent[] = []
 
 		if (this.rawChunkTracker.size > 0) {
@@ -280,10 +288,11 @@ export class NativeToolCallParser {
 	}
 
 	/**
-	 * Clear all raw chunk tracking state.
-	 * Should be called when a new API request starts.
+	 * Clear this task's raw chunk tracking state.
+	 * Should be called when a new API request starts on the SAME task — it must
+	 * not be reachable for any other, which is what owning the parser gives.
 	 */
-	public static clearRawChunkState(): void {
+	public clearRawChunkState(): void {
 		this.rawChunkTracker.clear()
 	}
 
@@ -292,7 +301,7 @@ export class NativeToolCallParser {
 	 * Initializes tracking for incremental argument parsing.
 	 * Accepts string to support both ToolName and dynamic MCP tools (mcp--serverName--toolName).
 	 */
-	public static startStreamingToolCall(id: string, name: string): void {
+	public startStreamingToolCall(id: string, name: string): void {
 		this.streamingToolCalls.set(id, {
 			id,
 			name,
@@ -301,11 +310,11 @@ export class NativeToolCallParser {
 	}
 
 	/**
-	 * Clear all streaming tool call state.
-	 * Should be called when a new API request starts to prevent memory leaks
-	 * from interrupted streams.
+	 * Clear this task's streaming tool call state.
+	 * Should be called when a new API request starts on the SAME task, to
+	 * prevent leaking accumulators from interrupted streams.
 	 */
-	public static clearAllStreamingToolCalls(): void {
+	public clearAllStreamingToolCalls(): void {
 		this.streamingToolCalls.clear()
 	}
 
@@ -313,7 +322,7 @@ export class NativeToolCallParser {
 	 * Check if there are any active streaming tool calls.
 	 * Useful for debugging and testing.
 	 */
-	public static hasActiveStreamingToolCalls(): boolean {
+	public hasActiveStreamingToolCalls(): boolean {
 		return this.streamingToolCalls.size > 0
 	}
 
@@ -322,7 +331,7 @@ export class NativeToolCallParser {
 	 * Uses partial-json-parser to extract values from incomplete JSON immediately.
 	 * Returns a partial ToolUse with currently parsed parameters.
 	 */
-	public static processStreamingChunk(id: string, chunk: string): ToolUse | null {
+	public processStreamingChunk(id: string, chunk: string): ToolUse | null {
 		const toolCall = this.streamingToolCalls.get(id)
 		if (!toolCall) {
 			return null
@@ -347,14 +356,18 @@ export class NativeToolCallParser {
 			// `arguments_json`; unwrap leniently so partial rendering sees the same
 			// keys a direct-arguments call would. Still-truncated inner JSON yields
 			// the wrapper unchanged, which renders as "no arguments yet".
-			const partialArgs = this.unwrapStubArguments(parseJSON(toolCall.argumentsAccumulator), resolvedName, true)
-			this.normalizeArgAliases(partialArgs)
+			const partialArgs = NativeToolCallParser.unwrapStubArguments(
+				parseJSON(toolCall.argumentsAccumulator),
+				resolvedName,
+				true,
+			)
+			NativeToolCallParser.normalizeArgAliases(partialArgs)
 
 			// Preserve original name if it differs from resolved (i.e., it was an alias)
 			const originalName = toolCall.name !== resolvedName ? toolCall.name : undefined
 
 			// Create partial ToolUse with extracted values
-			return this.createPartialToolUse(
+			return NativeToolCallParser.createPartialToolUse(
 				toolCall.id,
 				resolvedName,
 				partialArgs || {},
@@ -372,16 +385,16 @@ export class NativeToolCallParser {
 	 * Finalize a streaming tool call.
 	 * Parses the complete JSON and returns the final ToolUse or McpToolUse.
 	 */
-	public static finalizeStreamingToolCall(id: string): ToolUse | McpToolUse | null {
+	public finalizeStreamingToolCall(id: string): ToolUse | McpToolUse | null {
 		const toolCall = this.streamingToolCalls.get(id)
 		if (!toolCall) {
-			this.lastParseError = `Unknown streaming tool call ID "${id}" — may have been finalized already or never started`
+			NativeToolCallParser.lastParseError = `Unknown streaming tool call ID "${id}" — may have been finalized already or never started`
 			return null
 		}
 
 		// Parse the complete accumulated JSON
 		// Cast to any for the name since parseToolCall handles both ToolName and dynamic MCP tools
-		const finalToolUse = this.parseToolCall({
+		const finalToolUse = NativeToolCallParser.parseToolCall({
 			id: toolCall.id,
 			name: toolCall.name as ToolName,
 			arguments: toolCall.argumentsAccumulator,

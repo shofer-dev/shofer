@@ -13,8 +13,6 @@ import {
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { NativeToolCallParser } from "./_deps.js"
-
 import type { ApiHandlerOptions } from "./_deps.js"
 import { apiLog } from "./_deps.js"
 
@@ -388,6 +386,8 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		}
 
 		let lastUsage: CompletionUsage | undefined = undefined
+		/** Tool-call ids seen on THIS stream, so it can close its own on finish. */
+		const activeToolCallIds = new Set<string>()
 		// Accumulator for reasoning_details FROM the API.
 		// We preserve the original shape of reasoning_details to prevent malformed responses.
 		const reasoningDetailsAccumulator = new Map<
@@ -518,9 +518,14 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 					}
 				}
 
-				// Emit raw tool call chunks - NativeToolCallParser handles state management
+				// Emit raw tool call chunks - the consumer's own NativeToolCallParser
+				// assembles them; the ids are remembered here only so this stream can
+				// close its own tool calls below.
 				if ("tool_calls" in delta && Array.isArray(delta.tool_calls)) {
 					for (const toolCall of delta.tool_calls) {
+						if (toolCall.id) {
+							activeToolCallIds.add(toolCall.id)
+						}
 						yield {
 							type: "tool_call_partial",
 							index: toolCall.index,
@@ -536,13 +541,15 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 				}
 			}
 
-			// Process finish_reason to emit tool_call_end events
-			// This ensures tool calls are finalized even if the stream doesn't properly close
-			if (finishReason) {
-				const endEvents = NativeToolCallParser.processFinishReason(finishReason)
-				for (const event of endEvents) {
-					yield event
+			// Emit tool_call_end events when finish_reason is "tool_calls", so tool
+			// calls are finalized even if the stream doesn't properly close. The ids
+			// come from THIS stream's own chunks — never from shared parser state,
+			// which would be another task's tool calls on a multi-task host.
+			if (finishReason === "tool_calls" && activeToolCallIds.size > 0) {
+				for (const id of activeToolCallIds) {
+					yield { type: "tool_call_end", id }
 				}
+				activeToolCallIds.clear()
 			}
 
 			if (chunk.usage) {

@@ -8,8 +8,6 @@ import { type ModelInfo, qwenCodeModels, qwenCodeDefaultModelId } from "@shofer/
 
 import type { ApiHandlerOptions } from "./_deps.js"
 
-import { NativeToolCallParser } from "./_deps.js"
-
 import { convertToOpenAiMessages } from "./_deps.js"
 import { ApiStream } from "./_deps.js"
 
@@ -244,6 +242,8 @@ export class QwenCodeHandler extends BaseProvider implements SingleCompletionHan
 		const stream = await this.callApiWithRetry(() => client.chat.completions.create(requestOptions))
 
 		let fullContent = ""
+		/** Tool-call ids seen on THIS stream, so it can close its own on finish. */
+		const activeToolCallIds = new Set<string>()
 
 		for await (const apiChunk of stream) {
 			const delta = apiChunk.choices[0]?.delta ?? {}
@@ -294,9 +294,13 @@ export class QwenCodeHandler extends BaseProvider implements SingleCompletionHan
 				}
 			}
 
-			// Handle tool calls in stream - emit partial chunks for NativeToolCallParser
+			// Handle tool calls in stream - emit partial chunks the consumer's own
+			// NativeToolCallParser assembles.
 			if (delta.tool_calls) {
 				for (const toolCall of delta.tool_calls) {
+					if (toolCall.id) {
+						activeToolCallIds.add(toolCall.id)
+					}
 					yield {
 						type: "tool_call_partial",
 						index: toolCall.index,
@@ -307,12 +311,14 @@ export class QwenCodeHandler extends BaseProvider implements SingleCompletionHan
 				}
 			}
 
-			// Process finish_reason to emit tool_call_end events
-			if (finishReason) {
-				const endEvents = NativeToolCallParser.processFinishReason(finishReason)
-				for (const event of endEvents) {
-					yield event
+			// Emit tool_call_end events when finish_reason is "tool_calls". The ids
+			// come from THIS stream's own chunks — never from shared parser state,
+			// which would be another task's tool calls on a multi-task host.
+			if (finishReason === "tool_calls" && activeToolCallIds.size > 0) {
+				for (const id of activeToolCallIds) {
+					yield { type: "tool_call_end", id }
 				}
+				activeToolCallIds.clear()
 			}
 
 			if (apiChunk.usage) {

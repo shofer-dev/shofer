@@ -70,7 +70,6 @@ export { t } from "../../i18n/index.js"
 export { default as i18n } from "../../i18n/index.js"
 
 // ── assistant-message / utils (values) ─────────────────────────────────────
-export { NativeToolCallParser } from "../../assistant-message/NativeToolCallParser.js"
 export { TagMatcher } from "../../utils/tag-matcher.js"
 export { isMcpTool } from "../../utils/mcp-name.js"
 export { normalizeToolSchema } from "../../utils/json-schema.js"

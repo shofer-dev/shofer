@@ -455,12 +455,6 @@ describe("OpenRouterHandler", () => {
 		})
 
 		it("yields tool_call_end events when finish_reason is tool_calls", async () => {
-			// Import NativeToolCallParser to set up state
-			const { NativeToolCallParser } = await import("../_deps.js")
-
-			// Clear any previous state
-			NativeToolCallParser.clearRawChunkState()
-
 			const handler = new OpenRouterHandler(mockOptions)
 
 			const mockStream = {
@@ -505,16 +499,6 @@ describe("OpenRouterHandler", () => {
 			const chunks = []
 
 			for await (const chunk of generator) {
-				// Simulate what Task.ts does: when we receive tool_call_partial,
-				// process it through NativeToolCallParser to populate rawChunkTracker
-				if (chunk.type === "tool_call_partial") {
-					NativeToolCallParser.processRawChunk({
-						index: chunk.index,
-						id: chunk.id,
-						name: chunk.name,
-						arguments: chunk.arguments,
-					})
-				}
 				chunks.push(chunk)
 			}
 
