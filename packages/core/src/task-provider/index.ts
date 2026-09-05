@@ -129,6 +129,19 @@ export interface TaskProviderLike<TTask = TaskLike> {
 	 */
 	findMailboxTransport(to: string, from: string): Promise<PluginMailboxTransport | undefined>
 	/**
+	 * Why no registered transport could ANSWER for `to`, when none could.
+	 *
+	 * Asked only where the caller is about to refuse a send on one of the host's own
+	 * in-process rules. `findMailboxTransport` resolving `undefined` conflates "no
+	 * transport carries that address" with "no transport could find out", because for
+	 * ROUTING the two must behave the same; for the MESSAGE they must not, or a
+	 * transient routing gap is reported to the agent as a scope decision it cannot
+	 * distinguish from a real one.
+	 *
+	 * Mirrors `ShoferProvider.mailboxRoutingUnavailable`.
+	 */
+	mailboxRoutingUnavailable(to: string, from: string): Promise<string | undefined>
+	/**
 	 * The registered transport that carries `plane`, or `undefined`.
 	 *
 	 * How a `reply` reaches a request that arrived from off-node: the plane the request

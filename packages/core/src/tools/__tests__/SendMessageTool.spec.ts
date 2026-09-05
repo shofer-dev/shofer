@@ -135,6 +135,66 @@ describe("SendMessageTool", () => {
 			expect(results[0]).toContain("does not share your root task")
 		})
 
+		it("reports a transport that could not ANSWER as a routing gap, never as a scope refusal", async () => {
+			// The live defect: hosts sharing one Postgres task store each hold a
+			// history row for a task a SIBLING host is running, so during the seconds
+			// before a transport can reach its directory this branch found the remote
+			// peer in history and refused it with an in-process ACL sentence. The
+			// agent cannot tell that from a real scope decision, so it gave up on an
+			// address that was about to become reachable
+			// (`integration-tests/bugs_found.md`, 2026-08-29).
+			const mailboxRoutingUnavailable = vi.fn(
+				async () => "this task's agent-mesh transport is not attached yet; send the same message again shortly",
+			)
+			const provider = buildProvider({
+				getTaskWithId: vi.fn(async (id: string) => ({ historyItem: { id, rootTaskId: "other-root" } })),
+				findMailboxTransport: vi.fn(async () => undefined),
+				mailboxRoutingUnavailable,
+			})
+			const { callbacks, results } = buildCallbacks()
+			await tool.execute({ to: "peer-1", body: "hi" }, buildTask({ provider }), callbacks)
+			expect(results[0]).toContain("Could not resolve peer-1")
+			expect(results[0]).toContain("not attached yet")
+			expect(results[0]).not.toContain("does not share your root task")
+			// Asked about the right principal: the transport authenticates its lookup
+			// as the SENDER, and asking as anyone else answers about the wrong one.
+			expect(mailboxRoutingUnavailable).toHaveBeenCalledWith("peer-1", "caller-1")
+			expect(deliverToTask).not.toHaveBeenCalled()
+		})
+
+		it("keeps the scope refusal when the transports looked and had nothing to say", async () => {
+			// A directory that ANSWERED and did not list the id is an established
+			// answer, so the id really is a dormant local task in another tree — and
+			// the in-process rule is then the honest explanation.
+			const provider = buildProvider({
+				getTaskWithId: vi.fn(async (id: string) => ({ historyItem: { id, rootTaskId: "other-root" } })),
+				findMailboxTransport: vi.fn(async () => undefined),
+				mailboxRoutingUnavailable: vi.fn(async () => undefined),
+			})
+			const { callbacks, results } = buildCallbacks()
+			await tool.execute({ to: "peer-1", body: "hi" }, buildTask({ provider }), callbacks)
+			expect(results[0]).toContain("does not share your root task")
+		})
+
+		it("never asks for a routing reason on the peer-set refusal, which is a real ACL decision", async () => {
+			// Roots MATCH on that branch, so the target is a local task in the
+			// caller's own tree: a genuine in-process ACL answer, and rewording it
+			// with a mesh excuse would be the inverse of the defect above.
+			const mailboxRoutingUnavailable = vi.fn(async () => "the mesh is still coming up")
+			const provider = buildProvider({
+				findMailboxTransport: vi.fn(async () => undefined),
+				mailboxRoutingUnavailable,
+			})
+			const { callbacks, results } = buildCallbacks()
+			await tool.execute(
+				{ to: "peer-2", body: "hi" },
+				buildTask({ provider, taskId: "sub-1", rootTaskId: "root-1", knownPeers: new Set(["peer-1"]) }),
+				callbacks,
+			)
+			expect(results[0]).toContain("is not in your allowed peer set")
+			expect(mailboxRoutingUnavailable).not.toHaveBeenCalled()
+		})
+
 		it("refuses a peer outside a sub-task's granted set", async () => {
 			const { callbacks, results } = buildCallbacks()
 			await tool.execute(

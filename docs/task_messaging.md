@@ -199,6 +199,18 @@ Only the directory distinguishes them, so it is consulted first; `canRoute` is
 asynchronous for exactly that reason, and answers `false` whenever the answer is
 unknown, so an unclaimed id still falls through to history.
 
+**A transport that has not come up yet leaves the same trap one layer down, so
+the refusal asks it why.** Answering `false` for an unknown answer is right for
+ROUTING and wrong for the EXPLANATION: during the seconds before a transport can
+reach its directory, step 3 runs anyway, finds the sibling pod's row, and refuses
+with "does not share your root task" — an authorization sentence for a routing
+gap, which an agent cannot tell from a real scope decision, so it stops trying
+instead of retrying. Before stating an in-process rule, `send_message` therefore
+asks `mailboxRoutingUnavailable` (each transport's optional `unavailableReason`)
+and reports the gap instead when there is one. A transport that DID establish an
+answer returns nothing, and the in-process rule stands — an id the directory
+looked up and did not list is absent, not unavailable.
+
 **The in-process ACL applies to the local branches only.** Both checks below are
 about a shared `rootTaskId`, which a remote peer does not have by construction;
 what gates a remote send is the message-broker's A2A facet — badge, registration,
@@ -604,12 +616,16 @@ than "seen by a plugin". An `a2a_notify` becomes a `notification` carrying the
 claim id.
 
 Outbound, the mesh plugin registers a **mailbox transport** with the host —
-`{ canRoute(to), send(envelope) }` — and `send_message` hands it any `to` that no
-LIVE local instance resolves, before consulting history (see
-[the three tools](#the-three-tools)). `canRoute` asks the mesh directory whether
-that id is registered on another node: "registered here" is `false` and costs no
-call, "registered elsewhere" is `true`, and anything unknown is `false` so the
-host falls through to its own history. The recipient's `reply` travels back the
+`{ canRoute(to), unavailableReason(to), send(envelope) }` — and `send_message`
+hands it any `to` that no LIVE local instance resolves, before consulting history
+(see [the three tools](#the-three-tools)). `canRoute` asks the mesh directory
+whether that id is registered on another node: "registered here" is `false` and
+costs no call, "registered elsewhere" is `true`, and anything unknown is `false`
+so the host falls through to its own history. `unavailableReason` is the second
+half of that last case: it says why nothing could be established (no badge yet,
+an unreachable or unparseable directory) so the host can report a routing gap
+instead of an in-process ACL, and returns nothing when the directory did answer.
+The recipient's `reply` travels back the
 same way, and its `in_reply_to` — which is the relay's own `message_id` — is how
 the plugin finds the exchange to answer on, so no second correlation map exists
 to drift.

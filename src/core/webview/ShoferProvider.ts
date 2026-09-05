@@ -2671,6 +2671,39 @@ export class ShoferProvider
 	}
 
 	/**
+	 * Why no transport could ANSWER for `to`, when none could — or `undefined`.
+	 *
+	 * The companion to {@link findMailboxTransport}, and the reason it can stay binary.
+	 * `canRoute` answers `false` both for "that address is not mine" and for "I could
+	 * not find out", because routing must be conservative either way; but the two
+	 * produce very different EXPLANATIONS, and only the transport knows which it gave.
+	 * Callers ask this exclusively on the path where they are about to refuse the send
+	 * on an in-process rule, so a transport that was merely unavailable is never
+	 * reported to the agent as an authorization decision.
+	 *
+	 * First reason wins, in registration order — the same order {@link findMailboxTransport}
+	 * offers in, so the transport that would have claimed the id is the one that explains
+	 * itself. A transport that implements nothing, or throws, contributes no reason: this
+	 * runs on a path that already has an answer to give, so a failure here must degrade to
+	 * that answer rather than replace it with an error about the diagnosis.
+	 */
+	public async mailboxRoutingUnavailable(to: string, from: string): Promise<string | undefined> {
+		for (const transport of this.mailboxTransports) {
+			if (!transport.unavailableReason) continue
+			try {
+				const reason = await transport.unavailableReason(to, from)
+				if (reason) return reason
+			} catch (error) {
+				this.log(
+					`A registered mailbox transport failed unavailableReason(${to}) for sender ${from}; skipping it: ` +
+						`${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+		}
+		return undefined
+	}
+
+	/**
 	 * The registered transport carrying `plane`, or `undefined`.
 	 *
 	 * The reply path's lookup: a request that arrived on a plane is answered on the same

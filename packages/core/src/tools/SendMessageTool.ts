@@ -25,6 +25,15 @@
  * a SECOND live instance of a task another pod is already running. Only the
  * directory can tell those apart, so it is consulted first.
  *
+ * **A transport that has not come up yet leaves the same trap one layer down.**
+ * `canRoute` must answer `false` when it cannot establish an answer — otherwise a
+ * local message goes off-node — so during the seconds before a transport can reach
+ * its directory, step 3 runs anyway and refuses the remote peer with that same
+ * scope sentence. Routing is right to be conservative there; the EXPLANATION is
+ * not, because nothing distinguishes it from a real ACL decision. So before this
+ * file states an in-process rule it asks `mailboxRoutingUnavailable`, and reports
+ * the routing gap instead when there is one.
+ *
  * The full contract, including the validation order this file implements, is
  * `docs/task_messaging.md` § "The three tools".
  */
@@ -149,7 +158,23 @@ export class SendMessageTool extends BaseTool<"send_message"> {
 			if (!transport) {
 				// 3. Same tree. A root id is the boundary of a conversation.
 				if (targetRootId !== effectiveRootId) {
-					pushToolResult(formatResponse.toolError(`Task ${to} does not share your root task.`))
+					// …unless no transport was in a position to ANSWER. On a pool
+					// sharing one task store, the row this branch just read may belong
+					// to a task another pod is running right now, and only a transport
+					// can tell — so while one is still coming up, "not in your tree" is
+					// a sentence about the wrong question, and it is indistinguishable
+					// from a real scope decision. Asking for the reason is confined to
+					// this refusal path: a send that succeeds never pays for it, and a
+					// transport with nothing to say leaves the scope refusal intact,
+					// which is the honest answer once the mesh HAS looked.
+					const unavailable = await provider.mailboxRoutingUnavailable?.(to, task.taskId)
+					pushToolResult(
+						formatResponse.toolError(
+							unavailable
+								? `Could not resolve ${to}: ${unavailable}`
+								: `Task ${to} does not share your root task.`,
+						),
+					)
 					return
 				}
 

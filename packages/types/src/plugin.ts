@@ -924,6 +924,32 @@ export interface PluginMailboxTransport {
 	 * rejecting when the answer cannot be established.
 	 */
 	canRoute(to: string, from: string): Promise<boolean>
+	/**
+	 * Why a `false` from {@link canRoute} was an INABILITY TO ANSWER rather than a
+	 * statement that `to` is not out there.
+	 *
+	 * `canRoute` is deliberately binary and deliberately conservative: it answers
+	 * `false` whenever the answer cannot be established, so the host falls through
+	 * to its own history rather than sending a local message off-node. That is the
+	 * right ROUTING decision and the wrong EXPLANATION — the two are not the same
+	 * question, and conflating them is what this method exists to stop.
+	 *
+	 * It is asked only when the host is about to refuse the send on one of its
+	 * own in-process rules, and a reason answered here replaces that refusal's
+	 * text. The failure it prevents was observed live: several hosts sharing one
+	 * task store each hold a history row for a task running on a SIBLING host, so
+	 * during the seconds before a transport can reach its directory the host found
+	 * the remote peer in history and refused it with "does not share your root
+	 * task" — an authorization sentence for a routing gap, indistinguishable from
+	 * a real scope decision, and acted on by the agent as though it had been told
+	 * `to` was off limits.
+	 *
+	 * Answer `undefined` whenever the transport DID establish an answer — an id it
+	 * looked up and did not find is not unavailable, it is absent, and the host's
+	 * own rules are then the honest explanation. Say what is missing and whether
+	 * waiting fixes it; the sentence is shown to the agent verbatim.
+	 */
+	unavailableReason?(to: string, from: string): Promise<string | undefined>
 	/** Hand the envelope to the far side. Rejects with a message the agent will read. */
 	send(envelope: Envelope): Promise<void>
 }
