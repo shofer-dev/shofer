@@ -36,7 +36,7 @@ export default defineConfig({
 			reporter: ["text-summary"],
 			// Ratchet floor toward the 90% target: records what a real run
 			// achieved and only moves up (enforced by run-all-tests.sh).
-			thresholds: { statements: 71.1 },
+			thresholds: { statements: 89.5 },
 		},
 	},
 })
