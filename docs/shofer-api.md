@@ -681,8 +681,9 @@ how `Task` raises the event rather than of how a subscriber handles it:
   `BaseTool.handlePartial` — no decision has been taken yet, because
   `checkAutoApproval` runs only when an ask completes), `autoApproved` and
   `isAnswered` (decided), and `abandoned` (WITHDRAWN — the tool call the preview
-  belonged to was abandoned before it executed, so there is nothing to decide and
-  nothing was decided). Withdrawal is the one that is neither a decision nor a
+  belonged to ended without ever raising its complete ask, whether it was refused
+  before `execute()` ran or returned early inside it, so there is nothing to
+  decide and nothing was decided). Withdrawal is the one that is neither a decision nor a
   live ask, and the one a consumer is most likely to miss: the abandoning paths
   hand the model a re-emit instruction, so a single tool call produces one
   withdrawn ask per retry, all carrying the same arguments and none carrying an

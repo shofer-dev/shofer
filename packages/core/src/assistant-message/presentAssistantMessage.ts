@@ -1649,6 +1649,37 @@ export async function presentAssistantMessage(shofer: Task) {
 		}
 	}
 
+	// A COMPLETE tool block ends HERE, whatever happened inside it — so this is
+	// where a streamed ask that nobody will ever decide gets retired.
+	//
+	// `BaseTool.handlePartial` publishes the tool's invocation as an `ask` row with
+	// `partial: true` and NO decision on it, one row per streamed call; the row is
+	// finalized only when the tool's own `execute()` raises the COMPLETE ask, which
+	// is where `checkAutoApproval` is consulted. Every way a call can end WITHOUT
+	// raising that complete ask therefore leaves the row published forever —
+	// unfinalized, undecided, unanswerable, and invisible to the posture that would
+	// have approved it. There are many such ways and they are not all pre-execute:
+	// a refusal inside `execute()` (`new_task`'s `Invalid mode: …`, a missing
+	// required parameter, a path outside the workspace), a throw, the repetition
+	// limiter, a `beforeToolCall` plugin veto — and any early return a tool written
+	// next year adds. Patching each one is a list that goes stale; ending the block
+	// with the invariant does not.
+	//
+	// This is a `finally`-shaped guard rather than a literal `finally` because every
+	// exit from the tool cases above is a `break` (their only `return`s are inside
+	// nested closures), so control always arrives here. It is IDEMPOTENT: a call
+	// that did raise its complete ask left no `partial: true` row behind, and the
+	// withdrawal is then a no-op — so the explicit pre-dispatch withdrawals above
+	// stay, because two of them can also fire on a still-PARTIAL block (the
+	// `didRejectTool` skip), which this guard deliberately does not touch: a partial
+	// block's ask is still being streamed and its `execute()` is still to come.
+	//
+	// Withdrawing is NOT deciding (`Task.withdrawStreamedToolAsk`): the row is
+	// marked `abandoned`, neither answered nor auto-approved.
+	if (!block.partial && (block.type === "tool_use" || block.type === "mcp_tool_use")) {
+		await shofer.withdrawStreamedToolAsk()
+	}
+
 	// Seeing out of bounds is fine, it means that the next too call is being
 	// built up and ready to add to assistantMessageContent to present.
 	// When you see the UI inactive during this, it means that a tool is

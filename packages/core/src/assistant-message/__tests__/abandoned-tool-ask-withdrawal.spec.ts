@@ -28,8 +28,9 @@ vi.mock("@shofer/telemetry", () => ({
 	},
 }))
 
-import { ShoferEventName, type ShoferMessage } from "@shofer/types"
+import { ShoferEventName, createInMemoryHost, setHost, type ShoferMessage } from "@shofer/types"
 
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-config.js"
 import { Task } from "../../task/Task.js"
 import { presentAssistantMessage } from "../presentAssistantMessage.js"
 
@@ -254,5 +255,125 @@ describe("an abandoned tool call withdraws its streamed ask", () => {
 		expect(asks).toHaveLength(1)
 		expect(asks[0]!.abandoned).toBe(true)
 		expect(asks.filter(needsADecision)).toHaveLength(0)
+	})
+})
+
+/**
+ * The same defect one layer deeper, and the reason the withdrawal is a guard at
+ * the END of the tool block rather than a patch on each abandoning path.
+ *
+ * The three paths above all abandon BEFORE `execute()` runs. A tool can also
+ * abandon INSIDE it: `NewTaskTool.execute` refuses an unknown mode with
+ * `Invalid mode: <slug>` and returns before it ever builds `toolMessage` or calls
+ * `askApproval`, so the streamed row `handlePartial` published is neither
+ * finalized nor withdrawn — identical remnant, identical re-emit instruction to
+ * the model, identical one-orphan-per-retry shape. Observed live: the model
+ * guessed the slug `ask`, which no deployed bundle contributes, and a
+ * `partial: true` `{"tool":"newTask","mode":"ask",…}` row survived the turn.
+ */
+describe("a tool that refuses inside execute() withdraws its streamed ask too", () => {
+	/** Stubs `NewTaskTool.execute` needs to reach its mode check and no further. */
+	const equipForNewTask = (task: Task) => {
+		setHost(createInMemoryHost())
+		const provider = {
+			// The effective mode list a real host assembles. `ask` is not in it —
+			// there are six contributed modes and none is named that.
+			getState: vi.fn(async () => ({ mode: "code", customModes: BUILTIN_MODES })),
+			getCurrentTask: vi.fn(() => undefined),
+			taskManager: {
+				getFocusedTaskId: vi.fn(() => undefined),
+				countActiveTasks: vi.fn(() => 0),
+			},
+			contextProxy: { getValue: vi.fn(() => undefined) },
+			getTaskWithId: vi.fn(async () => ({ historyItem: {} })),
+			postMessageToWebview: vi.fn(async () => {}),
+			log: vi.fn(),
+		}
+		;(task as any).providerRef = { deref: () => provider }
+		;(task as any).getTaskMode = vi.fn(async () => "code")
+		;(task as any).agentContext = undefined
+		;(task as any).didToolFailInCurrentTurn = false
+		;(task as any).costLimit = undefined
+		;(task as any).emitTaskInteraction = vi.fn(async () => {})
+		;(task as any).timelineOriginMs = 0
+	}
+
+	it("withdraws the row when new_task names a mode that does not exist", async () => {
+		const { task, askMessages } = buildTask()
+		equipForNewTask(task)
+
+		// The tool renders itself while its arguments stream.
+		await task
+			.ask("tool", JSON.stringify({ tool: "newTask", mode: "ask", content: "Summarise the repo" }), true)
+			.catch(() => {})
+		expect(askMessages().filter((m: ShoferMessage) => m.partial === true)).toHaveLength(1)
+
+		// …and then the complete call executes and refuses.
+		;(task as any).assistantMessageContent = [
+			{
+				type: "tool_use",
+				id: "toolu_invalid_mode",
+				name: "new_task",
+				params: {},
+				partial: false,
+				nativeArgs: { mode: "ask", message: "Summarise the repo" },
+			},
+		]
+		;(task as any).currentStreamingContentIndex = 0
+		await presentAssistantMessage(task)
+		for (let i = 0; i < 8; i++) await Promise.resolve()
+
+		// Execution really did reach `execute()` and take the refusal branch —
+		// otherwise this would be re-testing one of the pre-execute guards.
+		const results = (task as any).userMessageContent as Array<{ content?: string }>
+		expect(JSON.stringify(results)).toContain("Invalid mode: ask")
+
+		const asks = askMessages()
+		expect(asks).toHaveLength(1)
+
+		// The regression: the row stayed `partial: true` for the life of the task.
+		expect(asks.filter((m: ShoferMessage) => m.partial === true)).toHaveLength(0)
+		expect(asks[0]!.abandoned).toBe(true)
+		expect(asks[0]!.partial).toBe(false)
+		expect(asks[0]!.isAnswered).toBeUndefined()
+		expect(asks[0]!.autoApproved).toBeUndefined()
+		expect(asks.filter(needsADecision)).toHaveLength(0)
+	})
+
+	it("leaves a call that DID raise its complete ask alone", async () => {
+		const { task, askMessages } = buildTask()
+		equipForNewTask(task)
+
+		// A finalized ask — the shape `Task.ask(…, partial: false)` leaves behind
+		// once the streamed row transitions. The guard must not touch it: it is
+		// decided, and marking it `abandoned` would retract a real approval.
+		;(task as any).shoferMessages.push({
+			ts: Date.now(),
+			type: "ask",
+			ask: "tool",
+			text: JSON.stringify({ tool: "newTask", mode: "code", content: "go" }),
+			partial: false,
+			askId: "ask-decided",
+			autoApproved: true,
+			isAnswered: true,
+		})
+		;(task as any).assistantMessageContent = [
+			{
+				type: "tool_use",
+				id: "toolu_valid_mode",
+				name: "new_task",
+				params: {},
+				partial: false,
+				nativeArgs: { mode: "ask", message: "Summarise the repo" },
+			},
+		]
+		;(task as any).currentStreamingContentIndex = 0
+		await presentAssistantMessage(task)
+		for (let i = 0; i < 8; i++) await Promise.resolve()
+
+		const asks = askMessages()
+		expect(asks).toHaveLength(1)
+		expect(asks[0]!.abandoned).toBeUndefined()
+		expect(asks[0]!.isAnswered).toBe(true)
 	})
 })

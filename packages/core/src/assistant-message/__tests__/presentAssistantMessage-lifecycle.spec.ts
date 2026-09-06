@@ -74,6 +74,9 @@ function makeMockTask(): any {
 		api: { getModel: () => ({ id: "test-model", info: {} }) },
 		recordToolUsage: vi.fn(),
 		recordToolError: vi.fn(),
+		// Every complete tool block ends by withdrawing any streamed ask its
+		// arguments published and nothing decided (Task.withdrawStreamedToolAsk).
+		withdrawStreamedToolAsk: vi.fn().mockResolvedValue(undefined),
 		toolRepetitionDetector: { check: vi.fn().mockReturnValue({ allowExecution: true }) },
 		providerRef: {
 			deref: () => ({

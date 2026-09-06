@@ -80,20 +80,31 @@ because it looks like a posture failure and is not one.
 
 A native tool renders its invocation while its arguments are still streaming
 (`BaseTool.handlePartial` → `ask(type, text, true)`), and the COMPLETE ask is
-raised later by the tool's own `execute()`. So a call that never reaches
-`execute()` — arguments that did not parse, a mode/tool validation refusal, a
-previously rejected tool — has an ask row published for it that the posture was
-never asked about. It is not "auto-approval declined"; nobody was consulted, and
-nobody can be: there is no tool call left to permit.
+raised later by the tool's own `execute()`. So a call that never raises that
+complete ask has an ask row published for it that the posture was never asked
+about. It is not "auto-approval declined"; nobody was consulted, and nobody can
+be: there is no tool call left to permit. Both halves of the call happen:
 
-`Task.withdrawStreamedToolAsk()` closes that row on every such path, marking it
-`abandoned` — finalized, with nothing to decide, and explicitly neither
-`isAnswered` nor `autoApproved`, because withdrawing is not deciding. Leaving it
-open is not cosmetic: those paths hand the model a re-emit instruction, so one
-tool call leaves one orphan per retry, all carrying the same arguments, and a
-controller that records asks durably opens an approval for each. Any consumer
-deciding "is there something to approve here" must read all four flags —
-`partial`, `autoApproved`, `isAnswered`, `abandoned`.
+- **before `execute()`** — arguments that did not parse, a mode/tool validation
+  refusal, a previously rejected tool, a repetition-limit refusal, a
+  `beforeToolCall` plugin veto;
+- **inside `execute()`** — every early return a tool takes before its approval
+  line: a missing required parameter, a path the workspace or `.shoferignore`
+  refuses, `new_task`'s `Invalid mode: <slug>`, a throw that lands in
+  `handleError`. These are the more numerous by far, and just as reachable: a
+  model supplies the arguments that trigger them.
+
+`Task.withdrawStreamedToolAsk()` closes that row, marking it `abandoned` —
+finalized, with nothing to decide, and explicitly neither `isAnswered` nor
+`autoApproved`, because withdrawing is not deciding. It is called from the three
+pre-dispatch refusal paths in `presentAssistantMessage` (two of which can also
+fire on a still-partial block) and, for everything else, from the guard that
+ends every COMPLETE tool block there — so a tool added later inherits it without
+knowing it exists. Leaving a row open is not cosmetic: those paths hand the model
+a re-emit instruction, so one tool call leaves one orphan per retry, all carrying
+the same arguments, and a controller that records asks durably opens an approval
+for each. Any consumer deciding "is there something to approve here" must read
+all four flags — `partial`, `autoApproved`, `isAnswered`, `abandoned`.
 
 ### The ask-level fast path, and why idle asks are excluded
 

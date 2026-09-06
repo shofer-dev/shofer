@@ -3949,8 +3949,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	/**
-	 * Withdraw the streamed `ask` row a tool call leaves behind when the call is
-	 * ABANDONED before it ever reaches `execute()`.
+	 * Withdraw the streamed `ask` row a tool call leaves behind when the call
+	 * ends without ever raising its COMPLETE ask.
 	 *
 	 * A native tool renders its invocation while the arguments are still
 	 * streaming — `BaseTool.handlePartial` calls `ask(type, text, true)`, which
@@ -3960,7 +3960,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * gets there — arguments that did not parse, a mode/tool validation refusal,
 	 * a previously rejected tool — leaves that row published forever:
 	 * unfinalized, undecided, and unanswerable. The posture cannot suppress it,
-	 * because the posture is never asked.
+	 * because the posture is never asked. A call that DOES reach `execute()` and
+	 * refuses inside it (`new_task`'s `Invalid mode: …`, a missing parameter, a
+	 * path outside the workspace) leaves exactly the same remnant, which is why
+	 * the guard that calls this sits at the END of the tool block in
+	 * `presentAssistantMessage` and not only on the pre-execute paths.
 	 *
 	 * That remnant is not cosmetic. The abandoning paths hand the model a
 	 * re-emit instruction, so ONE tool call produces one such row PER RETRY, all
