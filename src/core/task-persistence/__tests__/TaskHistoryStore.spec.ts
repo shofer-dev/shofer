@@ -465,3 +465,97 @@ describe("TaskHistoryStore", () => {
 		})
 	})
 })
+
+/**
+ * Cache invalidation and the degraded paths.
+ *
+ * The store's cache IS the read model — `getAll()` never touches disk — so every
+ * write path that forgets to invalidate presents as the UI showing a stale task
+ * list with no error anywhere. And because a task directory is user-visible on
+ * disk, the store must tolerate one being edited or removed underneath it.
+ */
+describe("TaskHistoryStore — invalidation and degraded reads", () => {
+	let tmpDir: string
+	let store: TaskHistoryStore
+
+	/** Write a task's `history_item.json` directly, behind the store's back. */
+	async function writeOnDisk(item: HistoryItem) {
+		const taskDir = path.join(tmpDir, "tasks", item.id)
+		await fs.mkdir(taskDir, { recursive: true })
+		await fs.writeFile(path.join(taskDir, GlobalFileNames.historyItem), JSON.stringify(item), "utf8")
+	}
+
+	beforeEach(async () => {
+		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "task-history-invalidate-"))
+		store = new TaskHistoryStore(tmpDir)
+		await store.initialize()
+	})
+
+	afterEach(async () => {
+		store.dispose()
+		await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {})
+	})
+
+	it("PICKS UP a task another writer created, on invalidate", async () => {
+		const item = makeHistoryItem({ id: "outsider", task: "written elsewhere" })
+		await writeOnDisk(item)
+
+		await store.invalidate("outsider")
+
+		expect(store.get("outsider")).toMatchObject({ id: "outsider", task: "written elsewhere" })
+	})
+
+	it("DROPS a task whose file has disappeared", async () => {
+		const item = makeHistoryItem({ id: "gone" })
+		await store.upsert(item)
+		expect(store.get("gone")).toBeDefined()
+
+		await fs.rm(path.join(tmpDir, "tasks", "gone"), { recursive: true, force: true })
+		await store.invalidate("gone")
+
+		expect(store.get("gone")).toBeUndefined()
+	})
+
+	it("drops a task whose file is CORRUPT rather than surfacing half a row", async () => {
+		const item = makeHistoryItem({ id: "corrupt" })
+		await store.upsert(item)
+		await fs.writeFile(path.join(tmpDir, "tasks", "corrupt", GlobalFileNames.historyItem), "{not json", "utf8")
+
+		await store.invalidate("corrupt")
+
+		expect(store.get("corrupt")).toBeUndefined()
+	})
+
+	it("invalidateAll empties the read model until something reloads it", async () => {
+		await store.upsert(makeHistoryItem({ id: "a" }))
+		await store.upsert(makeHistoryItem({ id: "b" }))
+
+		store.invalidateAll()
+
+		expect(store.getAll()).toEqual([])
+	})
+
+	it("getOrLoad reaches DISK for a task this replica has never seen", async () => {
+		await writeOnDisk(makeHistoryItem({ id: "other-replica", task: "written by a sibling" }))
+
+		// A shared task store means another replica may have written a task after
+		// this process built its index; a cache miss must not read as "no task".
+		await expect(store.getOrLoad("other-replica")).resolves.toMatchObject({ id: "other-replica" })
+	})
+
+	it("getOrLoad answers undefined for a task that exists nowhere", async () => {
+		await expect(store.getOrLoad("never-existed")).resolves.toBeUndefined()
+	})
+
+	it("SKIPS a legacy entry with no id during migration", async () => {
+		await store.migrateFromGlobalState([{ ts: 1, task: "orphan" } as HistoryItem])
+
+		expect(store.getAll()).toEqual([])
+	})
+
+	it("is inert after dispose — a late write must not resurrect the timer", async () => {
+		store.dispose()
+
+		await expect(store.upsert(makeHistoryItem({ id: "after-dispose" }))).resolves.toBeDefined()
+	})
+})

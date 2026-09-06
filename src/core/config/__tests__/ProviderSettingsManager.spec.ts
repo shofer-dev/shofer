@@ -524,3 +524,211 @@ describe("ProviderSettingsManager", () => {
 		})
 	})
 })
+
+/**
+ * The MIGRATION pass and the surfaces around it. Every migration is wrapped so a
+ * failure leaves the old value in place and logs — a throw here would abort
+ * `initialize()` and leave the extension with no provider profiles at all — and
+ * every public method wraps its own failure into a named error, because a bare
+ * rejection out of the lock reads to the caller as "the settings are gone".
+ */
+describe("ProviderSettingsManager migrations and refusals", () => {
+	let manager: ProviderSettingsManager
+
+	/** A legacy blob with no `migrations` field, so every migration runs. */
+	function unmigratedBlob(apiConfigs: Record<string, Record<string, unknown>>) {
+		return JSON.stringify({ currentApiConfigName: Object.keys(apiConfigs)[0], apiConfigs })
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		hoisted.files.org = emptyDoc()
+		hoisted.files.user = emptyDoc()
+		hoisted.files.project = emptyDoc()
+		hoisted.locked.clear()
+		mockSecrets.get.mockResolvedValue(null)
+		mockSecrets.store.mockResolvedValue(undefined)
+		mockSecrets.delete.mockResolvedValue(undefined)
+		mockGlobalState.get.mockReturnValue(undefined)
+		mockGlobalState.update.mockResolvedValue(undefined)
+		manager = new ProviderSettingsManager(mockContext)
+	})
+
+	it("seeds the rate limit from the retired global-state value", async () => {
+		const { seed } = wireSecretsRoundTrip()
+		seed(unmigratedBlob({ work: { id: "w", apiProvider: "anthropic" } }))
+		mockGlobalState.get.mockReturnValue(12)
+
+		await manager.initialize()
+
+		expect(hoisted.files.user.profiles.work.rateLimitSeconds).toBe(12)
+	})
+
+	it("falls back to ZERO when the retired value cannot be read", async () => {
+		const { seed } = wireSecretsRoundTrip()
+		seed(unmigratedBlob({ work: { id: "w", apiProvider: "anthropic" } }))
+		mockGlobalState.get.mockImplementation(() => {
+			throw new Error("state store gone")
+		})
+
+		await manager.initialize()
+
+		// A failed read must not leave the field undefined — that would be read
+		// downstream as "no limit configured" and re-migrated on every start.
+		expect(hoisted.files.user.profiles.work.rateLimitSeconds).toBe(0)
+	})
+
+	it("does not overwrite a rate limit the profile already carries", async () => {
+		const { seed } = wireSecretsRoundTrip()
+		seed(unmigratedBlob({ work: { id: "w", apiProvider: "anthropic", rateLimitSeconds: 5 } }))
+		mockGlobalState.get.mockReturnValue(12)
+
+		await manager.initialize()
+
+		expect(hoisted.files.user.profiles.work.rateLimitSeconds).toBe(5)
+	})
+
+	it("MOVES a legacy openAiHostHeader into the headers map", async () => {
+		const { seed } = wireSecretsRoundTrip()
+		seed(unmigratedBlob({ work: { id: "w", apiProvider: "openai", openAiHostHeader: "api.internal" } }))
+
+		await manager.initialize()
+
+		expect(hoisted.files.user.profiles.work.openAiHeaders).toEqual({ Host: "api.internal" })
+		// The old key must go, or a later delete of the header silently
+		// resurrects it on the next migration pass.
+		expect(hoisted.files.user.profiles.work.openAiHostHeader).toBeUndefined()
+	})
+
+	it("leaves an existing headers map alone", async () => {
+		const { seed } = wireSecretsRoundTrip()
+		seed(
+			unmigratedBlob({
+				work: {
+					id: "w",
+					apiProvider: "openai",
+					openAiHostHeader: "api.internal",
+					openAiHeaders: { "X-Mine": "1" },
+				},
+			}),
+		)
+
+		await manager.initialize()
+
+		expect(hoisted.files.user.profiles.work.openAiHeaders).toEqual({ "X-Mine": "1" })
+	})
+
+	it("seeds the consecutive-mistake limit and the todo-list toggle", async () => {
+		const { seed } = wireSecretsRoundTrip()
+		seed(unmigratedBlob({ work: { id: "w", apiProvider: "anthropic" } }))
+
+		await manager.initialize()
+
+		expect(hoisted.files.user.profiles.work.consecutiveMistakeLimit).toBeTypeOf("number")
+		expect(hoisted.files.user.profiles.work.todoListEnabled).toBe(true)
+	})
+
+	it("records every migration as done so the next start is a no-op", async () => {
+		const { seed } = wireSecretsRoundTrip()
+		seed(unmigratedBlob({ work: { id: "w", apiProvider: "anthropic" } }))
+		await manager.initialize()
+		const writesAfterFirst = mockSecrets.store.mock.calls.length
+
+		const second = new ProviderSettingsManager(mockContext)
+		await second.initialize()
+
+		expect(mockSecrets.store.mock.calls.length).toBe(writesAfterFirst)
+	})
+
+	it("REFUSES to delete an org-locked profile rather than appearing to succeed", async () => {
+		wireSecretsRoundTrip()
+		hoisted.files.org = {
+			version: 1,
+			profiles: { corp: { id: "c", apiProvider: "anthropic" }, other: { id: "o", apiProvider: "anthropic" } },
+		} as never
+		hoisted.locked.add("providers/corp")
+
+		// The delete would only drop local secret overlays; the profile would
+		// reappear on the next merge.
+		await expect(manager.deleteConfig("corp")).rejects.toThrow(/locked by org policy/)
+	})
+
+	it("reports the org-locked names, sorted, for the settings UI to mark read-only", async () => {
+		hoisted.files.org = {
+			version: 1,
+			profiles: { zeta: { id: "z" }, alpha: { id: "a" } },
+		} as never
+		hoisted.locked.add("providers/zeta")
+		hoisted.locked.add("providers/alpha")
+
+		await expect(manager.getLockedProfileNames()).resolves.toEqual(["alpha", "zeta"])
+	})
+
+	it("answers hasConfig from the COMPOSED set, not just the user file", async () => {
+		wireSecretsRoundTrip()
+		hoisted.files.org = { version: 1, profiles: { corp: { id: "c", apiProvider: "anthropic" } } } as never
+
+		await expect(manager.hasConfig("corp")).resolves.toBe(true)
+		await expect(manager.hasConfig("nope")).resolves.toBe(false)
+	})
+
+	it("round-trips the whole mode → profile map", async () => {
+		wireSecretsRoundTrip()
+		hoisted.files.user = { version: 1, profiles: { work: { id: "w", apiProvider: "anthropic" } } } as never
+
+		await manager.setModeConfig("code" as never, "w")
+		await manager.setModeConfig("architect" as never, "w")
+
+		await expect(manager.getModeConfigId("code" as never)).resolves.toBe("w")
+		await expect(manager.getModeConfigs()).resolves.toEqual({ code: "w", architect: "w" })
+	})
+
+	it("hands out a COPY of the mode map, so a caller cannot mutate the store", async () => {
+		wireSecretsRoundTrip()
+		hoisted.files.user = {
+			version: 1,
+			profiles: { work: { id: "w", apiProvider: "anthropic" } },
+			modeApiConfigs: { code: "w" },
+		} as never
+
+		const first = await manager.getModeConfigs()
+		first.code = "tampered"
+
+		await expect(manager.getModeConfigs()).resolves.toEqual({ code: "w" })
+	})
+
+	it("getProfile finds a profile by ID as well as by name", async () => {
+		wireSecretsRoundTrip()
+		hoisted.files.user = { version: 1, profiles: { work: { id: "w-1", apiProvider: "anthropic" } } } as never
+
+		await expect(manager.getProfile({ id: "w-1" })).resolves.toMatchObject({ name: "work", id: "w-1" })
+	})
+
+	it("NAMES what was missing when a lookup fails", async () => {
+		wireSecretsRoundTrip()
+		hoisted.files.user = { version: 1, profiles: { work: { id: "w-1" } } } as never
+
+		await expect(manager.getProfile({ id: "nope" })).rejects.toThrow(/'nope' not found/)
+		await expect(manager.getProfile({ name: "missing" })).rejects.toThrow(/'missing' not found/)
+	})
+
+	it("wraps a save failure in a named error rather than leaking the schema's", async () => {
+		wireSecretsRoundTrip()
+
+		await expect(manager.saveConfig("bad", { apiProvider: 42 } as never)).rejects.toThrow(/Failed to save config/)
+	})
+
+	it("import replaces the whole set in one write", async () => {
+		wireSecretsRoundTrip()
+
+		await manager.import({
+			currentApiConfigName: "fresh",
+			apiConfigs: { fresh: { id: "f", apiProvider: "anthropic", apiKey: "sk-imported" } },
+		} as never)
+
+		expect(hoisted.files.user.profiles.fresh).toMatchObject({ id: "f", apiProvider: "anthropic" })
+		// The credential goes to the secrets blob, never to the file.
+		expect(hoisted.files.user.profiles.fresh.apiKey).toBeUndefined()
+		expect(JSON.stringify(lastBlob())).toContain("sk-imported")
+	})
+})

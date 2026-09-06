@@ -43,6 +43,7 @@ import {
 	handleDeleteSkill,
 	handleMoveSkill,
 	handleOpenSkillFile,
+	handleUpdateSkillModes,
 } from "../skillsMessageHandler"
 
 describe("skillsMessageHandler", () => {
@@ -430,5 +431,120 @@ describe("skillsMessageHandler", () => {
 				'Failed to open skill file: Skill "nonexistent-skill" not found',
 			)
 		})
+	})
+})
+
+/**
+ * The two surfaces the suite above does not reach: the mode-association editor,
+ * and the LOADED-skill projection that tells the webview which skills the
+ * running task actually has in context.
+ *
+ * Both are error-reporting handlers rather than throwing ones — a webview
+ * message has no caller to catch for it — so every failure must produce a
+ * notification AND an `undefined` return, never a rejected promise the message
+ * loop swallows.
+ */
+describe("skillsMessageHandler — modes and the loaded projection", () => {
+	const post = vi.fn(async (..._args: unknown[]): Promise<void> => undefined)
+	const log = vi.fn()
+	const updateSkillModes = vi.fn(async (..._args: unknown[]): Promise<void> => undefined)
+	const getSkillsMetadata = vi.fn(() => [] as SkillMetadata[])
+
+	function makeProvider(options: { manager?: boolean; loadedSkills?: Map<string, string> } = {}) {
+		const manager =
+			options.manager === false
+				? undefined
+				: { updateSkillModes, getSkillsMetadata, discoverSkills: vi.fn(async () => undefined) }
+		return {
+			log,
+			postMessageToWebview: post,
+			getSkillsManager: () => manager,
+			getCurrentTask: () => (options.loadedSkills ? { loadedSkills: options.loadedSkills } : undefined),
+		} as unknown as ShoferProvider
+	}
+
+	beforeEach(() => {
+		installVsCodeForwardingHost()
+		vi.clearAllMocks()
+		getSkillsMetadata.mockReturnValue([])
+	})
+
+	it("writes the new mode association and pushes the refreshed list", async () => {
+		const skills = [{ name: "s", description: "d", path: "/p", source: "global" as const }]
+		getSkillsMetadata.mockReturnValue(skills)
+
+		const result = await handleUpdateSkillModes(makeProvider(), {
+			type: "updateSkillModes",
+			skillName: "s",
+			source: "global",
+			newSkillModeSlugs: ["code", "architect"],
+		} as unknown as WebviewMessage)
+
+		expect(updateSkillModes).toHaveBeenCalledWith("s", "global", ["code", "architect"])
+		expect(post).toHaveBeenCalledWith({ type: "skills", skills })
+		expect(result).toEqual(skills)
+	})
+
+	it("clears the association when the caller passes no slugs at all", async () => {
+		await handleUpdateSkillModes(makeProvider(), {
+			type: "updateSkillModes",
+			skillName: "s",
+			source: "project",
+		} as unknown as WebviewMessage)
+
+		expect(updateSkillModes).toHaveBeenCalledWith("s", "project", undefined)
+	})
+
+	it("REFUSES an incomplete message rather than writing a half-identified skill", async () => {
+		const result = await handleUpdateSkillModes(makeProvider(), {
+			type: "updateSkillModes",
+			skillName: "s",
+		} as unknown as WebviewMessage)
+
+		expect(result).toBeUndefined()
+		expect(updateSkillModes).not.toHaveBeenCalled()
+		expect(vi.mocked(vscode.window.showErrorMessage)).toHaveBeenCalled()
+	})
+
+	it("reports rather than throwing when there is no skills manager", async () => {
+		const result = await handleUpdateSkillModes(makeProvider({ manager: false }), {
+			type: "updateSkillModes",
+			skillName: "s",
+			source: "global",
+		} as unknown as WebviewMessage)
+
+		expect(result).toBeUndefined()
+		expect(log).toHaveBeenCalledWith(expect.stringContaining("Error updating skill modes"))
+	})
+
+	it("reports a write that failed on disk", async () => {
+		updateSkillModes.mockRejectedValueOnce(new Error("EACCES"))
+
+		const result = await handleUpdateSkillModes(makeProvider(), {
+			type: "updateSkillModes",
+			skillName: "s",
+			source: "global",
+		} as unknown as WebviewMessage)
+
+		expect(result).toBeUndefined()
+		expect(vi.mocked(vscode.window.showErrorMessage)).toHaveBeenCalledWith(
+			expect.stringContaining("Failed to update skill modes"),
+		)
+	})
+
+	it("PROJECTS the running task's loaded skills as a plain object — a Map does not survive the bridge", async () => {
+		const provider = makeProvider({ loadedSkills: new Map([["s", "/p/SKILL.md"]]) })
+
+		await handleRequestSkills(provider)
+
+		expect(post).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "skills", loadedSkills: { s: "/p/SKILL.md" } }),
+		)
+	})
+
+	it("projects an EMPTY set when no task is running", async () => {
+		await handleRequestSkills(makeProvider())
+
+		expect(post).toHaveBeenCalledWith(expect.objectContaining({ loadedSkills: {} }))
 	})
 })
