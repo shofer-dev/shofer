@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from "node:timers/promises"
+
 import { Text } from "ink"
 import { render } from "ink-testing-library"
 
@@ -16,7 +18,45 @@ interface Item extends AutocompleteItem {
 
 const item = (key: string): Item => ({ key, label: key })
 
-const flush = (ms = 10) => new Promise((resolve) => setTimeout(resolve, ms))
+/**
+ * Advance past `ms` of real time AND then drain a fixed number of event-loop
+ * turns.
+ *
+ * The turns are the part that matters, and they are why this is not a sleep.
+ * Once a zero-debounce trigger's timer has fired, what remains is a FIXED
+ * number of hops — `await search()`, `setState`, React's commit, our read —
+ * and a count of hops is invariant under load, while a duration is not. The
+ * gate runs six coverage-instrumented suites at once, where the 30ms these
+ * sites used to allow is routinely not enough for four turns.
+ *
+ * The wall-clock argument is still honoured because a few tests are ABOUT
+ * duration (the 80ms and default-150ms debounce assertions); draining turns
+ * afterwards costs no meaningful time on a loop that has nothing else to run,
+ * so those keep their meaning.
+ */
+const flush = async (ms = 10) => {
+	await sleep(ms)
+	for (let turn = 0; turn < 20; turn++) {
+		await sleep(0)
+	}
+}
+
+/**
+ * Poll until `done()` holds. Used where the assertion is about an effect
+ * landing rather than about how long it took.
+ */
+async function waitFor(done: () => boolean, what: string, timeoutMs = 4_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs
+	while (!done()) {
+		if (Date.now() > deadline) {
+			throw new Error(`timed out after ${timeoutMs}ms waiting for ${what}`)
+		}
+		await sleep(10)
+	}
+}
+
+/** Every tree this file mounts, so `afterEach` can tear them down. */
+const mountedPickers: Array<() => void> = []
 
 /**
  * A trigger fires on `@` anywhere in the line. `debounceMs: 0` keeps the tests
@@ -68,6 +108,7 @@ function renderPicker(triggers: AutocompleteTrigger<Item>[]) {
 	}
 
 	const result = render(<Probe triggers={triggers} />)
+	mountedPickers.push(result.unmount)
 	return {
 		...result,
 		latest: () => api as Api,
@@ -78,10 +119,21 @@ function renderPicker(triggers: AutocompleteTrigger<Item>[]) {
 		rerenderWith(next: AutocompleteTrigger<Item>[]) {
 			result.rerender(<Probe triggers={next} />)
 		},
+		/** Wait until the hook's published state satisfies `done`. */
+		waitForState: (done: (state: AutocompletePickerState<Item>) => boolean, what: string) =>
+			waitFor(() => done((api as Api)[0]), what),
 	}
 }
 
 describe("useAutocompletePicker", () => {
+	afterEach(() => {
+		// A picker left mounted keeps its debounce timers armed, and they fire
+		// during whatever test is running next.
+		while (mountedPickers.length > 0) {
+			mountedPickers.pop()?.()
+		}
+	})
+
 	describe("initial state", () => {
 		it("starts closed and empty", () => {
 			const picker = renderPicker([makeTrigger()])
@@ -223,10 +275,13 @@ describe("useAutocompletePicker", () => {
 			const picker = renderPicker([makeTrigger({ debounceMs: 80, search })])
 
 			picker.actions().handleInputChange("@q", "@q")
-			await flush(20)
+			// The claim is that the search is DEFERRED, asserted at the one
+			// instant no scheduler can perturb: synchronously, before any await.
+			// "Not called within 20ms" was the same claim expressed as a bet on
+			// wall-clock, and the gate's contention wins that bet often enough.
 			expect(search).not.toHaveBeenCalled()
 
-			await flush(100)
+			await waitFor(() => search.mock.calls.length > 0, "the debounced search to fire")
 			expect(search).toHaveBeenCalledTimes(1)
 		})
 
@@ -237,10 +292,9 @@ describe("useAutocompletePicker", () => {
 			const picker = renderPicker([trigger])
 
 			picker.actions().handleInputChange("@q", "@q")
-			await flush(90)
 			expect(search).not.toHaveBeenCalled()
 
-			await flush(120)
+			await waitFor(() => search.mock.calls.length > 0, "the default-debounced search to fire")
 			expect(search).toHaveBeenCalledTimes(1)
 		})
 
@@ -251,7 +305,10 @@ describe("useAutocompletePicker", () => {
 			picker.actions().handleInputChange("@a", "@a")
 			await flush(10)
 			picker.actions().handleInputChange("@ab", "@ab")
-			await flush(120)
+			await waitFor(() => search.mock.calls.length > 0, "the surviving search to fire")
+			// Let anything the cancelled timer might still do land, so "once" is
+			// a statement about cancellation rather than about arriving early.
+			await flush(60)
 
 			expect(search).toHaveBeenCalledTimes(1)
 			expect(search).toHaveBeenCalledWith("ab")
@@ -333,7 +390,9 @@ describe("useAutocompletePicker", () => {
 			])
 
 			picker.actions().handleInputChange("@q", "@q")
-			await flush(30)
+			// The seed threw, so the results can only come from `search()` —
+			// wait for THAT rather than for a duration.
+			await picker.waitForState((s) => s.results.length > 0, "the search results to replace the failed seed")
 
 			expect(picker.state().results.map((r) => r.key)).toEqual(["from-search"])
 		})
@@ -458,7 +517,9 @@ describe("useAutocompletePicker", () => {
 			const picker = renderPicker([makeTrigger({ debounceMs: 60, search })])
 
 			picker.actions().handleInputChange("@a", "@a")
-			await flush(10)
+			// Close while the timer is still pending, with NO await in between:
+			// a 10ms gap here is only "still pending" if the scheduler comes back
+			// within 60ms, which under the gate's contention it need not.
 			picker.actions().handleClose()
 			await flush(120)
 

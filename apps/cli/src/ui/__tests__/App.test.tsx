@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from "node:timers/promises"
+
 import { render } from "ink-testing-library"
 
 import type { AutocompletePickerState } from "../components/autocomplete/types.js"
@@ -153,11 +155,58 @@ const KEY = {
 	escape: ESC,
 } as const
 
-const tick = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms))
+/**
+ * Yield real event-loop turns. `node:timers/promises` keeps working under a fake
+ * clock, so a suite that installs one elsewhere cannot freeze these waits.
+ */
+const tick = (ms = 30) => sleep(ms)
+
+/** The picker debounce these tests have to outlast (`DEFAULT_DEBOUNCE_MS`). */
+const PICKER_DEBOUNCE_MS = 150
+
+/**
+ * Poll until `done()` holds, bounded by wall-clock rather than by a fixed sleep.
+ *
+ * Every assertion below is about an effect Ink produces ASYNCHRONOUSLY — a
+ * keystroke crossing the stdin stub, a debounced search resolving, a `useEffect`
+ * publishing the new picker state — so waiting a fixed number of milliseconds
+ * only sets the odds. The gate runs six suites concurrently with coverage
+ * instrumentation, where "long enough on an idle laptop" is not long enough.
+ */
+async function waitFor(done: () => boolean, what: string, timeoutMs = 4_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs
+	while (!done()) {
+		if (Date.now() > deadline) {
+			throw new Error(`timed out after ${timeoutMs}ms waiting for ${what}`)
+		}
+		await tick(10)
+	}
+}
+
+/**
+ * Every App this file mounts, so `afterEach` can tear them down.
+ *
+ * This is load-bearing, not tidiness. The faked hooks are MODULE-LEVEL spies
+ * shared by every mounted tree, so an App left mounted by one test goes on
+ * publishing into the spy the NEXT test reads — its 150ms picker debounce and
+ * ScrollArea's 100ms measure interval both outlive the test that started them.
+ * That is what made the trigger tests read one trigger behind (and, under
+ * enough load, two), reporting each other's `activeTrigger.id`. Unmounting ends
+ * the tree's subscriptions and clears its debounce timers, so a stale
+ * publication cannot exist to be read.
+ */
+const mountedApps: Array<() => void> = []
 
 /** The picker state App last pushed to its (faked) picker-handlers hook. */
 const lastPickerState = () =>
 	h.hooks.handlePickerStateChange.mock.lastCall?.[0] as AutocompletePickerState<{ key: string }> | undefined
+
+/** Wait until the picker App published names `triggerId` and has results. */
+const waitForPicker = (triggerId: string) =>
+	waitFor(
+		() => lastPickerState()?.activeTrigger?.id === triggerId && (lastPickerState()?.results.length ?? 0) > 0,
+		`the ${triggerId} picker to open with results`,
+	)
 
 const message = (over: Partial<TUIMessage> = {}): TUIMessage => ({
 	id: "m1",
@@ -190,8 +239,17 @@ function baseProps(): TUIAppProps {
 
 async function renderApp(overrides: Partial<TUIAppProps> = {}) {
 	const result = render(<App {...baseProps()} {...overrides} />)
+	mountedApps.push(result.unmount)
 	// Ink subscribes to stdin from an effect and ScrollArea measures on a
-	// 100ms interval, so give the first frame room to settle before driving it.
+	// 100ms interval, so wait for the first frame to exist before driving it.
+	await waitFor(() => (result.lastFrame() ?? "").length > 0, "the first frame to render")
+	// A write that lands before Ink has subscribed is DROPPED — the stub's
+	// `write` just emits — and no wait afterwards can recover it. Ink listens on
+	// "readable" (verified against the version we run), so the listener count is
+	// the observable happens-before that a sleep only approximated. BEST EFFORT:
+	// some states App renders (an open picker replacing the input, the error
+	// screen) register no `useInput` at all, and those tests drive no keys.
+	await waitFor(() => result.stdin.listenerCount("readable") > 0, "Ink to subscribe to stdin", 1_000).catch(() => {})
 	await tick(160)
 
 	const press = async (sequence: string) => {
@@ -224,10 +282,16 @@ async function renderApp(overrides: Partial<TUIAppProps> = {}) {
 			await tick(60)
 		},
 		/**
-		 * Types `text`, waits past the triggers' 150ms debounce, and — if the
-		 * keystrokes were dropped before Ink subscribed — backspaces the line
-		 * clean and tries again. Clearing between attempts is what keeps this
-		 * deterministic: a retry that appended would change the query.
+		 * Types `text`, WAITS FOR THE OBSERVED EFFECT past the triggers' 150ms
+		 * debounce, and — only if the keystrokes were dropped before Ink
+		 * subscribed — backspaces the line clean and tries again. Clearing
+		 * between attempts is what keeps this deterministic: a retry that
+		 * appended would change the query.
+		 *
+		 * Each attempt polls rather than sleeping a fixed 220ms, so a loaded
+		 * machine waits longer instead of retyping over a search still in
+		 * flight — retyping was how a query got typed twice and the picker
+		 * ended up publishing a state the assertion had not asked for.
 		 */
 		async typeUntil(text: string, done: () => boolean) {
 			for (let attempt = 0; attempt < 10; attempt++) {
@@ -236,13 +300,13 @@ async function renderApp(overrides: Partial<TUIAppProps> = {}) {
 					result.stdin.write(char)
 					await tick(25)
 				}
-				await tick(220)
+				await waitFor(done, `typing ${JSON.stringify(text)} to take effect`, 1_000).catch(() => {})
 				if (done()) return
 				for (let i = 0; i < text.length; i++) {
 					result.stdin.write(BACKSPACE)
 					await tick(20)
 				}
-				await tick(60)
+				await tick(PICKER_DEBOUNCE_MS + 60)
 			}
 			if (!done()) throw new Error(`typing ${JSON.stringify(text)} never took effect`)
 		},
@@ -296,6 +360,19 @@ describe("App", () => {
 			isScrollAreaActive: false,
 			isInputAreaActive: true,
 		})
+	})
+
+	afterEach(async () => {
+		// Tear every tree down BEFORE the next test clears the shared spies —
+		// see `mountedApps`. Unmounting runs `useAutocompletePicker`'s cleanup
+		// (which clears its debounce timers) and ScrollArea's interval cleanup,
+		// so nothing is left that could publish into the next test's spies.
+		while (mountedApps.length > 0) {
+			mountedApps.pop()?.()
+		}
+		// Drain anything that was already in flight when the trees went away,
+		// so it lands here rather than inside the next test.
+		await tick(PICKER_DEBOUNCE_MS + 60)
 	})
 
 	describe("error state", () => {
@@ -588,7 +665,11 @@ describe("App", () => {
 
 			await pressUntil(KEY.down, () => (lastFrame() ?? "").includes("❯ Type something..."))
 			await press(KEY.enter)
-			await tick(80)
+			// Wait for the escape hatch to have FIRED rather than for a fixed
+			// 80ms; the confirming Enter cannot be re-pressed (the Select emits
+			// `onChange` once per distinct value), so the wait is the only
+			// thing standing between this and a load-dependent result.
+			await waitFor(() => h.ui.setShowCustomInput.mock.calls.length > 0, "the custom input to be switched on")
 
 			expect(h.hooks.cancelCountdown).toHaveBeenCalled()
 			expect(h.ui.setIsTransitioningToCustomInput).toHaveBeenCalledWith(true)
@@ -783,7 +864,11 @@ describe("App", () => {
 		it("opens the slash-command picker", async () => {
 			const { typeUntil } = await renderApp()
 
-			await typeUntil("/", () => (lastPickerState()?.results.length ?? 0) > 0)
+			// The predicate names the TRIGGER, not just "some results": a
+			// predicate that any open picker satisfies is one a stale
+			// publication can satisfy too.
+			await typeUntil("/", () => lastPickerState()?.activeTrigger?.id === "slash-command")
+			await waitForPicker("slash-command")
 
 			expect(lastPickerState()?.activeTrigger?.id).toBe("slash-command")
 		})
@@ -792,7 +877,8 @@ describe("App", () => {
 			h.cli.allSlashCommands = [{ name: "extension-only", source: "project" }]
 			const { typeUntil } = await renderApp()
 
-			await typeUntil("/", () => (lastPickerState()?.results.length ?? 0) > 0)
+			await typeUntil("/", () => lastPickerState()?.activeTrigger?.id === "slash-command")
+			await waitForPicker("slash-command")
 
 			const last = lastPickerState()!
 			expect(last.results.some((r) => r.key === "extension-only")).toBe(true)
@@ -803,7 +889,8 @@ describe("App", () => {
 			h.cli.availableModes = [{ slug: "architect", name: "Architect" }]
 			const { typeUntil } = await renderApp()
 
-			await typeUntil("!", () => (lastPickerState()?.results.length ?? 0) > 0)
+			await typeUntil("!", () => lastPickerState()?.activeTrigger?.id === "mode")
+			await waitForPicker("mode")
 
 			expect(lastPickerState()?.activeTrigger?.id).toBe("mode")
 			expect(lastPickerState()?.results.map((r) => r.key)).toContain("architect")
@@ -812,7 +899,8 @@ describe("App", () => {
 		it("opens the help picker", async () => {
 			const { typeUntil } = await renderApp()
 
-			await typeUntil("?", () => (lastPickerState()?.results.length ?? 0) > 0)
+			await typeUntil("?", () => lastPickerState()?.activeTrigger?.id === "help")
+			await waitForPicker("help")
 
 			expect(lastPickerState()?.activeTrigger?.id).toBe("help")
 		})
@@ -821,6 +909,7 @@ describe("App", () => {
 			const { typeUntil } = await renderApp()
 
 			await typeUntil("@src", () => h.hooks.sendToExtension.mock.calls.length > 0)
+			await waitFor(() => h.hooks.sendToExtension.mock.calls.length > 0, "the file search to be requested")
 
 			expect(h.hooks.sendToExtension).toHaveBeenCalledWith(expect.objectContaining({ type: "grepSearch" }))
 		})
@@ -848,7 +937,8 @@ describe("App", () => {
 			]
 			const { typeUntil } = await renderApp()
 
-			await typeUntil("#", () => (lastPickerState()?.results.length ?? 0) > 0)
+			await typeUntil("#", () => lastPickerState()?.activeTrigger?.id === "history")
+			await waitForPicker("history")
 
 			expect(lastPickerState()?.activeTrigger?.id).toBe("history")
 			expect(lastPickerState()?.results.map((r) => r.key)).toEqual(["t1"])
