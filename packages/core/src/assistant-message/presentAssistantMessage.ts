@@ -1660,14 +1660,23 @@ export async function presentAssistantMessage(shofer: Task) {
 	// unfinalized, undecided, unanswerable, and invisible to the posture that would
 	// have approved it. There are many such ways and they are not all pre-execute:
 	// a refusal inside `execute()` (`new_task`'s `Invalid mode: …`, a missing
-	// required parameter, a path outside the workspace), a throw, the repetition
-	// limiter, a `beforeToolCall` plugin veto — and any early return a tool written
-	// next year adds. Patching each one is a list that goes stale; ending the block
-	// with the invariant does not.
+	// required parameter, a path outside the workspace), the repetition limiter, a
+	// `beforeToolCall` plugin veto — and any early return a tool written next year
+	// adds. Patching each one is a list that goes stale; ending the block with the
+	// invariant does not.
+	//
+	// What this guard CANNOT cover is a THROW: nothing catches between the tool
+	// cases above and here, and this function's call sites are fire-and-forget, so
+	// a throwing `execute()` propagates past this line (and past the lock release
+	// below) as an unhandled rejection. The throw path is therefore covered at its
+	// chokepoint instead — `BaseTool.handle` withdraws the streamed ask in its
+	// execute-catch before rethrowing. A throw from the glue between the cases and
+	// this guard remains uncovered, as does the lock release on that path; both are
+	// pre-existing exposures of the fire-and-forget call shape, not of this guard.
 	//
 	// This is a `finally`-shaped guard rather than a literal `finally` because every
-	// exit from the tool cases above is a `break` (their only `return`s are inside
-	// nested closures), so control always arrives here. It is IDEMPOTENT: a call
+	// NON-THROWING exit from the tool cases above is a `break` (their only `return`s
+	// are inside nested closures), so control always arrives here. It is IDEMPOTENT: a call
 	// that did raise its complete ask left no `partial: true` row behind, and the
 	// withdrawal is then a no-op — so the explicit pre-dispatch withdrawals above
 	// stay, because two of them can also fire on a still-PARTIAL block (the

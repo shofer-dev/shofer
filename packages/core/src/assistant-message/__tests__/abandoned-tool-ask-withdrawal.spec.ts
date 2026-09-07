@@ -377,3 +377,49 @@ describe("a tool that refuses inside execute() withdraws its streamed ask too", 
 		expect(asks[0]!.isAnswered).toBe(true)
 	})
 })
+
+describe("a tool whose execute() THROWS withdraws its streamed ask before the rethrow", () => {
+	// The block-end guard in presentAssistantMessage cannot cover a throw:
+	// nothing catches between the tool cases and the guard, and the function's
+	// call sites are fire-and-forget, so a throwing execute() propagates past it
+	// as an unhandled rejection. The chokepoint every tool shares is
+	// BaseTool.handle's execute-catch, which rethrows — the withdrawal must
+	// happen there, or the row this call's handlePartial published survives
+	// undecided forever, exactly like the early-return paths this file pins.
+	it("retires the row and still rethrows the original error", async () => {
+		const { BaseTool } = await import("../../tools/BaseTool.js")
+		const { task, askMessages } = buildTask()
+
+		// The streamed preview a real call publishes before execute() runs.
+		await task.ask("tool", JSON.stringify({ tool: "newTask", mode: "", content: "" }), true).catch(() => {})
+		expect(askMessages().filter((m: any) => m.partial === true)).toHaveLength(1)
+
+		const boom = new Error("unexpected mid-execute failure")
+		class ThrowingTool extends BaseTool<"new_task"> {
+			readonly name = "new_task" as const
+			async execute(): Promise<void> {
+				throw boom
+			}
+		}
+
+		await expect(
+			new ThrowingTool().handle(
+				task,
+				{ type: "tool_use", name: "new_task", params: {}, nativeArgs: {}, partial: false } as any,
+				{
+					askApproval: vi.fn(async () => true),
+					handleError: vi.fn(),
+					pushToolResult: vi.fn(),
+					removeClosingTag: vi.fn((_t: string, v?: string) => v ?? ""),
+				} as any,
+			),
+		).rejects.toBe(boom)
+
+		const asks = askMessages()
+		expect(asks.filter((m: any) => m.partial === true)).toHaveLength(0)
+		const withdrawn = asks.filter((m: any) => m.abandoned === true)
+		expect(withdrawn).toHaveLength(1)
+		expect(withdrawn[0]!.isAnswered ?? false).toBe(false)
+		expect((withdrawn[0] as any).autoApproved ?? false).toBe(false)
+	})
+})

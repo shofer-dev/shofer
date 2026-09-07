@@ -214,6 +214,18 @@ export abstract class BaseTool<TName extends ToolName> {
 			toolsLog.warn(
 				`✖ ${this.name} failed after ${Math.round(dur)}ms: ${err instanceof Error ? err.message : String(err)} (task ${task.taskId})`,
 			)
+			// A throw is an abandonment path too, and the block-end guard in
+			// presentAssistantMessage cannot cover it: this rethrow propagates
+			// past that guard (the call sites are fire-and-forget, so it ends as
+			// an unhandled rejection, not a caught error). Retire the streamed
+			// ask HERE, before rethrowing, or the row this call's handlePartial
+			// published survives undecided forever. Best-effort: a failure to
+			// withdraw must not mask the original error.
+			try {
+				await task.withdrawStreamedToolAsk()
+			} catch (withdrawErr) {
+				taskLog.error(`Failed to withdraw streamed ask after ${this.name} threw:`, withdrawErr)
+			}
 			throw err
 		}
 	}
