@@ -108,3 +108,98 @@
   is an ephemeral settings-delivery path (a seed that populates `globalState`
   without write-through), which does not exist today; adding one touches every
   CLI-seeded setting, not just approvals, so it was left out of scope.
+
+- **`packages/core`: `McpHub.updateServerConnections` RESTARTS EVERY MCP SERVER
+  ON EVERY RECONCILE.** It compares the VALIDATED config held on the connection
+  — which carries the schema's defaults (`timeout: 60`, `disabledTools: []`, a
+  defaulted `cwd`) — against the RAW config read from the file, so for a normal
+  entry the two can never be `deepEqual` and the "changed config" branch always
+  fires: `deleteConnection` + `connectToServer`. Every stdio server's child
+  process is killed and respawned whenever `mcp.json` is written, a workspace
+  folder changes, or `refreshProjectMcpServers` runs after a plugin change. The
+  no-change branch is reachable only if the caller feeds back the validated
+  shape. The comparison has to be like-for-like — validate the incoming config
+  before diffing it, or diff against the raw config the connection was built
+  from.
+
+- **`packages/core`: `Task._cleanupOrphanedToolUses` throws `TypeError` (reading
+  `'role'`).** Its backward pass nulls a message, and a later message's scan
+  then dereferences the nulled slot. It runs immediately before an API request,
+  so the whole turn fails instead of the history being cleaned — and it is
+  reachable whenever truncation leaves a leading unanchored `tool_result`,
+  which is the exact situation the function exists to repair.
+
+- **`packages/core`: `ExecuteCommandTool.onShellExecutionComplete` dereferences
+  `details.exitCode` unguarded**, throwing inside the terminal callback — where
+  the tool's own `try`/`catch` cannot see it, so the failure escapes the tool's
+  error handling entirely.
+
+- **`packages/core`: `ApplyPatchTool`'s per-file existence guards are dead
+  code.** `processAllHunks` reads the file first and throws `ENOENT`, so the
+  tailored per-file messages below it are unreachable and the model only ever
+  sees the generic error.
+
+- **`packages/core`: `CheckTaskStatusTool`'s completion-result transcript read
+  is not wrapped in `try`/`catch`**, while the `include_activity` read of the
+  same file is. So an unreadable transcript throws on the path that matters
+  most — the one asking for the result.
+
+- **`src/`: `PluginPanelManager.buildHtml` interpolates
+  `JSON.stringify(config)` unescaped into a `<script>` block.**
+  `JSON.stringify` does not escape `</script>`, so a plugin config value
+  containing that sequence breaks out of the tag and the remainder is parsed as
+  markup in the panel.
+
+- **`src/`: `OpenAiCodexHandler`'s refresh-and-retry-once loop is DEAD CODE.**
+  `executeRequest` catches every SDK error, 401 included, and falls back to the
+  raw SSE transport — so the auth-retry arm is never reached, and the raw SSE
+  path is what actually runs in production. Either the catch has to let 401
+  through to the retry, or the retry arm should go.
+
+- **`src/`: `mergeJson`'s catch handler re-reads the file it just failed on**,
+  so a corrupt file is parsed twice and the second failure escapes the guard
+  rather than being handled by it.
+
+- **`src/`: `VsCodeLmHandler`'s constructor fires `initializeClient()`
+  fire-and-forget**, so a `selectChatModels` that fails at construction becomes
+  an unhandled rejection instead of a surfaced error the caller can report.
+
+- **`src/`: `ShoferProvider.getState()` carries ~40 statements of dead
+  cloud-surface code** — `try`/`catch` blocks wrapped around resolved constants
+  for retired cloud / sharing / org surfaces, whose catch arms can never run.
+  Removing them is the Dead Config/Code Rule applied to a function every state
+  broadcast passes through.
+
+- **`webview-ui`: `UpdateTodoListToolBlock` renders infinitely when given no
+  todos.** The default `todos = []` is a fresh array on each render, so its
+  `useEffect` keyed on `[todos]` re-fires forever. It is reachable from
+  `ChatRow` via `say: "user_edit_todos"`, which renders the block with no
+  todos — so this is a live hang, not a theoretical one. That case is
+  **deliberately omitted** from `ChatRow.variants.spec.tsx`, with a comment
+  saying why: including it hangs the test runner at collection. Whoever fixes
+  the effect (a stable empty-array reference, or keying on contents) removes
+  that omission in the same change.
+
+- **`webview-ui`: `useScrollLifecycle`'s `SCROLL_DEBUG` is hard-false**, so the
+  four `vscode.postMessage` diagnostic blocks behind it are dead code.
+
+- **`apps/cli`, `packages/telemetry`: an EPIPE on stdout surfaces as an
+  `unhandledRejection`.** `useGlobalInput`'s Ctrl+C double-press does
+  `cleanup().finally()` with no `catch`, and `json-event-emitter`'s
+  `writeToStdout` has the same shape. An EPIPE there is an ordinary
+  driver-shutdown race for that transport — the reader going away first — so
+  the normal ending of a piped session is reported as a crash.
+
+- **`apps/cli`: `stdin-stream`'s `pendingQueuedMessageRequestIds` is only ever
+  shifted, never pushed to.** The documented `taskCompleted` re-attribution of
+  queued-message request ids therefore never happens; the array is always
+  empty and the feature is dead code with a doc comment describing it as live.
+
+- **`apps/cli`: `upgrade.ts`'s `getLatestCliVersion` bypasses `compareVersions`
+  for the first candidate tag**, so a malformed `cli-v` tag becomes `'latest'`
+  and `upgrade()` then dies on it. One bad tag in the listing is enough.
+
+- **`apps/cli`: `run.ts` validates `--output-format` only when a TTY is
+  present**, so an invalid value is silently accepted when the CLI is piped
+  without `--print` — the case where a machine consumer is reading the output
+  and least able to notice.
