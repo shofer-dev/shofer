@@ -214,6 +214,50 @@ describe("createRequestHandler (§11)", () => {
 		expect(res.statusCode).toBe(400)
 	})
 
+	// This door is the ONLY one that answers before its work runs — `Task.start()` detaches
+	// `startTask()` with no `.catch` — so a malformed id accepted here is not reported anywhere a
+	// caller can see it: the run dies inside an unheld promise, `shofer serve` logs the
+	// `unhandledRejection` and stays up, and the client's SSE stream waits forever for a terminal
+	// event that will never come. Under `task_store=postgres` the id reaches a `UUID` column and
+	// Postgres answers `invalid input syntax for type uuid`.
+	it("400s on a taskId that is not a UUID, rather than 201-then-silence", async () => {
+		for (const taskId of ["draintest-1788894937", "t-1", "", 42]) {
+			const res = mockRes()
+			await run(
+				mockReq("POST", "/api/v1/task", { prompt: "hello", mode: "code", taskId }),
+				res as unknown as ServerResponse,
+			)
+			expect(res.statusCode, `taskId=${JSON.stringify(taskId)}`).toBe(400)
+			expect(res.body).toContain("taskId must be a UUID")
+		}
+		expect(api.createTask).not.toHaveBeenCalled()
+	})
+
+	it("accepts a UUID taskId, and still accepts none at all", async () => {
+		const withId = mockRes()
+		await run(
+			mockReq("POST", "/api/v1/task", {
+				prompt: "hello",
+				mode: "code",
+				taskId: "0198f0a1-2b3c-7d4e-8f90-1a2b3c4d5e6f",
+			}),
+			withId as unknown as ServerResponse,
+		)
+		expect(withId.statusCode).toBe(201)
+		expect(api.createTask).toHaveBeenCalledWith(
+			expect.objectContaining({ taskId: "0198f0a1-2b3c-7d4e-8f90-1a2b3c4d5e6f" }),
+		)
+
+		// Omitting it is the ordinary path: the task mints its own uuidv7.
+		const without = mockRes()
+		await run(
+			mockReq("POST", "/api/v1/task", { prompt: "hello", mode: "code" }),
+			without as unknown as ServerResponse,
+		)
+		expect(without.statusCode).toBe(201)
+		expect(api.createTask).toHaveBeenLastCalledWith(expect.objectContaining({ taskId: undefined }))
+	})
+
 	it("routes message and cancel to the agent", async () => {
 		const m = mockRes()
 		await run(mockReq("POST", "/api/v1/task/t1/message", { message: "go" }), m as unknown as ServerResponse)

@@ -1,6 +1,8 @@
 import http from "node:http"
 import { randomUUID } from "node:crypto"
 
+import { validate as uuidValidate } from "uuid"
+
 import { deriveSubject, envelopeSchema, traceContextFromHeaders, traceContextSchema } from "@shofer/types"
 
 import type { ShoferApi, ProviderSettings, ServerEvent, TraceContext } from "@shofer/types"
@@ -277,6 +279,23 @@ export function createRequestHandler(
 			const body = await readJson(req)
 			if (typeof body.prompt !== "string") return send(res, 400, { error: "prompt is required" })
 			if (typeof body.mode !== "string") return send(res, 400, { error: "mode is required" })
+			// A supplied task id must be a UUID, and this is the ONLY door where saying so
+			// matters. Every other task route awaits its `api.*` call inside `handle()`, so a
+			// throw becomes a 500; this one answers 201 and DETACHES the work (`Task.start()`
+			// calls `startTask()` without awaiting it and without a `.catch`). So a malformed id
+			// that gets past here is accepted, fails later inside a promise nobody holds, and
+			// arrives as an `unhandledRejection` the serve loop logs and swallows — leaving the
+			// caller's SSE stream open with no terminal event, waiting forever for a turn that
+			// already died. Observed under `task_store=postgres`, where the id reaches a UUID
+			// column and Postgres answers `invalid input syntax for type uuid`.
+			//
+			// The invariant is core's own, not a deployment's: core mints its task ids with
+			// `uuidv7()`, so a caller-supplied one is substituting for that and must be the same
+			// shape. A store with looser typing would merely hide the mismatch rather than make
+			// it legal.
+			if (body.taskId !== undefined && !(typeof body.taskId === "string" && uuidValidate(body.taskId))) {
+				return send(res, 400, { error: "taskId must be a UUID" })
+			}
 			const result = await api.createTask({
 				prompt: body.prompt,
 				mode: body.mode,

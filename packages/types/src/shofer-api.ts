@@ -136,6 +136,16 @@ export interface TaskPlacementQuestion {
 export interface CreateTaskInput {
 	prompt: string
 	mode: string
+	/**
+	 * The task's id, when the CONTROLLER chooses it rather than letting the task mint its own.
+	 *
+	 * It **must be a UUID**. Core mints ids with `uuidv7()`, so supplying one is substituting for
+	 * that and has to be the same shape — a task id is a key in every store the run touches, and
+	 * a UUID-typed one (the postgres task store's columns are `UUID`) rejects anything else. The
+	 * HTTP transport enforces this at the door because task creation is the one route that
+	 * answers before the work runs: a malformed id accepted there fails inside a detached promise
+	 * and the caller's stream simply never terminates.
+	 */
 	taskId?: string
 	apiConfiguration?: ProviderSettings
 	/** Image data URIs to seed the task with, same shape as {@link AskResponse.images}. */
