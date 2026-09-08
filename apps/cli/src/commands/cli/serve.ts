@@ -43,6 +43,17 @@ export interface ServeOptions {
 	 * its source.
 	 */
 	interactive?: boolean
+	/**
+	 * Ceiling, in milliseconds, on the graceful drain a SIGTERM/SIGINT starts:
+	 * how long the node keeps serving the turns already in flight after it has
+	 * stopped accepting new ones. Falls back to `SHOFER_DRAIN_GRACE_MS`, then to
+	 * `DEFAULT_DRAIN_GRACE_MS`.
+	 *
+	 * Size it from the longest turn worth saving, and size the supervisor's own
+	 * kill timeout ABOVE it — a runtime that SIGKILLs mid-drain undoes the whole
+	 * exercise. A second signal exits at once, so nobody is stuck waiting one out.
+	 */
+	drainGraceMs?: string
 }
 
 /**
@@ -108,7 +119,8 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 
 	const extHost = new ExtensionHost(hostOptions)
 	await extHost.activate()
-	const server = extHost.serve({ port, host, token, allowClientConfig: !hasOverride })
+	const node = extHost.serve({ port, host, token, allowClientConfig: !hasOverride })
+	const { server } = node
 
 	// Await the actual bind before claiming success — `listen()` is async, so without
 	// this a taken port (EADDRINUSE) would print "serving on …" and then silently fail,
@@ -146,11 +158,68 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 		wireActivityLog(extHost.api)
 	}
 
+	// ── Graceful shutdown ────────────────────────────────────────────────────
+	//
+	// A node's unit of work is a TURN, and a turn outlives the request that
+	// started it: the reply streams for as long as the agent takes. Closing the
+	// listener and exiting therefore kills whatever conversations happened to be
+	// mid-sentence — which is what any rollout, restart or config change does to
+	// a served node, several times a day.
+	//
+	// So SIGTERM starts a DRAIN rather than a shutdown: refuse new turns (at the
+	// transport level, so a pooled controller fails the turn over to a peer
+	// instead of surfacing an error to its user), answer `/health` 503 so
+	// whatever selects over this node's peers stops selecting it, and keep the
+	// turns already in flight running until they finish or `graceMs` elapses.
+	//
+	// A SECOND signal exits at once. Waiting out a ten-minute grace on a laptop
+	// because one turn is parked on an ask nobody will answer is not a shutdown
+	// story anyone would use; the escape has to exist for the drain to be
+	// acceptable at all.
+	const graceMs = Number.parseInt(options.drainGraceMs ?? process.env.SHOFER_DRAIN_GRACE_MS ?? "", 10)
 	await new Promise<void>((resolve) => {
-		const shutdown = () => server.close(() => resolve())
-		process.on("SIGINT", shutdown)
-		process.on("SIGTERM", shutdown)
+		let draining = false
+		const shutdown = (signal: string) => {
+			if (draining) {
+				console.error(`[shofer] second ${signal} — exiting now, ${node.drain.inFlight} turn(s) dropped`)
+				process.exit(1)
+			}
+			draining = true
+			const inFlight = node.drain.inFlightTasks()
+			console.error(
+				`[shofer] ${signal}: draining — refusing new turns, ` +
+					(inFlight.length
+						? `finishing ${inFlight.length} in flight (${inFlight.map((id) => id.slice(0, 8)).join(", ")})`
+						: "nothing in flight"),
+			)
+			void node
+				.shutdown(Number.isFinite(graceMs) && graceMs > 0 ? { graceMs } : {})
+				.then((stranded) => {
+					// Stranded turns are the drain's only failure mode, and they are
+					// reported rather than swallowed: a node that regularly strands
+					// turns is one whose grace is sized below its real turn length.
+					console.error(
+						stranded
+							? `[shofer] drain grace elapsed with ${stranded} turn(s) unfinished; exiting`
+							: "[shofer] drained cleanly; exiting",
+					)
+					resolve()
+				})
+				.catch((error: unknown) => {
+					console.error(`[shofer] drain failed: ${error instanceof Error ? error.message : String(error)}`)
+					resolve()
+				})
+		}
+		process.on("SIGINT", () => shutdown("SIGINT"))
+		process.on("SIGTERM", () => shutdown("SIGTERM"))
 	})
+
+	// The drain has finished, but the agent's own dependencies — a database pool
+	// behind the task store, a plugin's watcher — keep handles open that nothing
+	// here owns, so returning would leave the process alive until its supervisor
+	// lost patience and SIGKILLed it. Exit deliberately instead: by this point the
+	// settle window has passed, so the last turn's persistence teardown has landed.
+	process.exit(0)
 }
 
 /**

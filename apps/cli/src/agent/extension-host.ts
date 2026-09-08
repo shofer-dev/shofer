@@ -28,6 +28,7 @@ import type {
 import { ShoferEventName } from "@shofer/types"
 import { createVSCodeAPI, IExtensionHost, ExtensionHostEventMap, setRuntimeConfigValues } from "@shofer/vscode-shim"
 import { DebugLogger, setDebugLogEnabled } from "@shofer/core/cli"
+import type { ShoferHttpService } from "@shofer/core"
 
 import { DEFAULT_FLAGS, type SupportedProvider } from "@/types/index.js"
 import type { User } from "@/lib/sdk/index.js"
@@ -148,12 +149,13 @@ interface ExtensionModule {
 		api: unknown,
 		streams: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream; agentVersion?: string },
 	) => Promise<void>
-	/** §11 — start the HTTP/SSE server over the activated ShoferExtensionApi. Returns the node
-	 *  `http.Server` so the caller can await `listening`/`error` before reporting success. */
+	/** §11 — start the HTTP/SSE server over the activated ShoferExtensionApi. Returns the served
+	 *  node: the `http.Server` (so the caller can await `listening`/`error` before reporting
+	 *  success), its drain registry, and the graceful `shutdown`. */
 	serveHttpOverShoferApi?: (
 		api: unknown,
 		opts: { port: number; host?: string; token?: string; version?: string },
-	) => import("node:http").Server
+	) => ShoferHttpService
 }
 
 interface WebviewViewProvider {
@@ -645,8 +647,8 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	}
 
 	/**
-	 * §11 — start the HTTP/SSE server over the activated `ShoferExtensionApi`. Returns a
-	 * handle whose `close()` stops the server.
+	 * §11 — start the HTTP/SSE server over the activated `ShoferExtensionApi`. Returns the
+	 * served node, whose `shutdown()` drains the turns in flight and stops the server.
 	 */
 	public serve(opts: {
 		port: number
@@ -655,7 +657,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		version?: string
 		/** Honor the controller's per-task API Configuration (no local CLI override). */
 		allowClientConfig?: boolean
-	}): import("node:http").Server {
+	}): ShoferHttpService {
 		const serve = this.extensionModule?.serveHttpOverShoferApi
 		if (!serve) {
 			throw new Error("ExtensionHost: this extension bundle does not export serveHttpOverShoferApi")

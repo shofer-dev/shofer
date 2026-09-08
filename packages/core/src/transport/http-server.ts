@@ -5,6 +5,8 @@ import { deriveSubject, envelopeSchema, traceContextFromHeaders, traceContextSch
 
 import type { ShoferApi, ProviderSettings, ServerEvent, TraceContext } from "@shofer/types"
 
+import type { TurnDrain } from "./drain.js"
+
 /**
  * HTTP + SSE transport boundary (v3 architecture §11).
  *
@@ -44,6 +46,28 @@ function startEventStream(res: http.ServerResponse): void {
 		connection: "keep-alive",
 	})
 	res.flushHeaders()
+}
+
+/**
+ * Refuse a turn-opening request while draining, by DESTROYING the connection
+ * instead of answering it.
+ *
+ * The shape matters more than it looks. A controller driving a pool of nodes
+ * fails a turn over to the next-best node on a TERMINAL TRANSPORT failure — a
+ * refused dial, a reset, an EOF before the response headers — and deliberately
+ * does NOT fail over on anything the node ANSWERED, because a status line means
+ * the node made a decision about the request and re-issuing it elsewhere would
+ * either repeat the rejection or start the turn twice. A `503` is therefore the
+ * one refusal that strands the caller: it reads as "this node says no", not as
+ * "this node is gone". Destroying the socket says the second, which is the true
+ * statement — the node is leaving — and it is what lets a peer pick the turn up.
+ *
+ * Readiness is the opposite case and answers a status code (see `/health`):
+ * that question comes from the orchestrator over its own probe, and a probe has
+ * no concept of failing over.
+ */
+function refuseTurn(res: http.ServerResponse): void {
+	res.destroy()
 }
 
 /**
@@ -94,7 +118,7 @@ async function readJson(req: http.IncomingMessage): Promise<Record<string, unkno
 	return JSON.parse(raw) as Record<string, unknown>
 }
 
-/** Options for the HTTP/SSE server (auth + version handshake). */
+/** Options for the HTTP/SSE server (auth + version handshake + drain). */
 export interface HttpServerOptions {
 	/**
 	 * Optional bearer token. When set, every `/api/v1/*` route requires
@@ -108,12 +132,20 @@ export interface HttpServerOptions {
 	 * build before driving it.
 	 */
 	version?: string
+	/**
+	 * The graceful-drain registry (see `drain.ts`). When supplied, the handler
+	 * records every per-task event stream as a turn in flight, refuses to open a
+	 * NEW turn once draining, and reports not-ready on `/health`. Omitted → the
+	 * transport has no shutdown story and every route is always served, which is
+	 * the right default for an in-process or single-shot host.
+	 */
+	drain?: TurnDrain
 }
 
 /**
  * Create the shofer HTTP/SSE server. Routes (all under `/api/<version>` except
  * `/health`):
- *   GET  /health                     → liveness + version (open)
+ *   GET  /health                     → 200 liveness + version (open); 503 while draining
  *   GET  /api/v1/whoami              → { version } (authed; one-shot liveness+version+auth)
  *   GET  /api/v1/event               → SSE event stream (worker-wide: ALL tasks)
  *   GET  /api/v1/task/:id/event      → SSE event stream filtered to ONE task
@@ -139,7 +171,7 @@ export function createRequestHandler(
 	opts: HttpServerOptions = {},
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
 	const base = `/api/${API_VERSION}`
-	const { token, version } = opts
+	const { token, version, drain } = opts
 
 	return (req, res) => {
 		void handle(req, res).catch((error) => {
@@ -152,8 +184,18 @@ export function createRequestHandler(
 		const path = url.pathname
 		const method = req.method ?? "GET"
 
-		// Open liveness probe — never gated by the bearer token.
+		// Open health probe — never gated by the bearer token.
+		//
+		// A draining node answers 503 here, and this is the ONE refusal in this
+		// file that is a status code rather than a closed socket: readiness is the
+		// orchestrator's question, asked over its own probe, and a probe cannot
+		// fail over — it can only be told yes or no. Answering it honestly is what
+		// takes the node out of whatever set its peers select over, so the turns
+		// that would have been refused below are never routed here at all.
 		if (method === "GET" && path === "/health") {
+			if (drain?.draining) {
+				return send(res, 503, { ok: false, version, draining: true })
+			}
 			return send(res, 200, { ok: true, version })
 		}
 
@@ -171,11 +213,19 @@ export function createRequestHandler(
 		}
 
 		if (method === "GET" && path === `${base}/event`) {
+			// An observer, not a turn: it is registered so the drain can release it
+			// at shutdown, and refused while draining because a node that is leaving
+			// has nothing worth watching.
+			if (drain?.draining) return refuseTurn(res)
 			startEventStream(res)
 			const unsubscribe = api.subscribe((event) => {
 				res.write(`data: ${JSON.stringify(event)}\n\n`)
 			})
-			req.on("close", unsubscribe)
+			const deregister = drain?.registerObserver(() => res.end())
+			req.on("close", () => {
+				unsubscribe()
+				deregister?.()
+			})
 			return
 		}
 
@@ -184,16 +234,26 @@ export function createRequestHandler(
 		// a shared host subscribes per authorized task instead of to the worker-wide
 		// firehose, so it never receives (or has to demux) other tenants' content.
 		// The worker-wide /event stays for single-tenant / whole-host consumers.
+		//
+		// It is also the transport's view of a TURN IN FLIGHT, and therefore the
+		// unit the drain waits on: a controller opens this stream immediately
+		// before starting a turn and closes it when the turn's terminal event
+		// arrives, so an open one means work is still running here.
 		const taskEventMatch = path.match(new RegExp(`^${base}/task/([^/]+)/event$`))
 		if (method === "GET" && taskEventMatch) {
 			const taskId = decodeURIComponent(taskEventMatch[1]!)
+			if (drain?.draining) return refuseTurn(res)
 			startEventStream(res)
 			const unsubscribe = api.subscribe((event) => {
 				if (eventTaskId(event) === taskId) {
 					res.write(`data: ${JSON.stringify(event)}\n\n`)
 				}
 			})
-			req.on("close", unsubscribe)
+			const deregister = drain?.registerTurn(taskId, () => res.end())
+			req.on("close", () => {
+				unsubscribe()
+				deregister?.()
+			})
 			return
 		}
 
@@ -210,6 +270,10 @@ export function createRequestHandler(
 		}
 
 		if (method === "POST" && path === `${base}/task`) {
+			// Refused BEFORE the body is read: a drained request is not a request
+			// with a bad payload, and consuming the body would only delay the reset
+			// the caller is waiting to fail over on.
+			if (drain?.draining) return refuseTurn(res)
 			const body = await readJson(req)
 			if (typeof body.prompt !== "string") return send(res, 400, { error: "prompt is required" })
 			if (typeof body.mode !== "string") return send(res, 400, { error: "mode is required" })
@@ -237,6 +301,13 @@ export function createRequestHandler(
 			const taskId = taskMatch[1]!
 			const action = taskMatch[2]!
 			if (action === "message") {
+				// A follow-up message STARTS a turn, so it is refused while draining
+				// exactly as task creation is. The other three actions on this route
+				// are not: `ask` answers an ask a turn ALREADY parked on here (a peer
+				// has no such ask, so refusing it would strand the very turn the drain
+				// exists to finish), `cancel` ends one, and `mailbox` delivers to a
+				// task this node may be driving.
+				if (drain?.draining) return refuseTurn(res)
 				const body = await readJson(req)
 				if (typeof body.message !== "string") return send(res, 400, { error: "message is required" })
 				await api.sendMessage(

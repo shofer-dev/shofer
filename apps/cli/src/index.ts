@@ -173,6 +173,10 @@ program
 		"Surface tool approvals to the controller instead of auto-approving (default: auto-approve)",
 		false,
 	)
+	.option(
+		"--drain-grace-ms <ms>",
+		"On SIGTERM/SIGINT, how long to keep serving the turns already in flight while refusing new ones (falls back to SHOFER_DRAIN_GRACE_MS; a second signal exits at once)",
+	)
 	.action(
 		async (options: {
 			port?: string
@@ -188,6 +192,7 @@ program
 			quiet?: boolean
 			debug?: boolean
 			interactive?: boolean
+			drainGraceMs?: string
 		}) => {
 			await serve(options)
 		},

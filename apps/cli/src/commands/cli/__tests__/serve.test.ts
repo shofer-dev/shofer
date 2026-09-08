@@ -30,6 +30,12 @@ const hostState = vi.hoisted(() => ({
 	instances: [] as Array<Record<string, unknown>>,
 	/** How the fake HTTP server settles its bind. */
 	bind: { kind: "listening" } as { kind: "listening" } | { kind: "error"; code?: string; message?: string },
+	/** Tasks the fake node reports as having a turn in flight when the signal lands. */
+	inFlightTasks: [] as string[],
+	/** What the fake drain reports as STRANDED (unfinished at the grace). */
+	stranded: 0,
+	/** Resolves the fake `shutdown()` on demand, for the second-signal test. */
+	holdShutdown: false,
 }))
 
 vi.mock("@/agent/index.js", () => {
@@ -47,25 +53,39 @@ vi.mock("@/agent/index.js", () => {
 		serve = vi.fn((serverOptions: unknown) => {
 			this.serveOptions = serverOptions
 			return {
-				once: (event: string, listener: (arg?: unknown) => void) => {
-					if (hostState.bind.kind === "listening" && event === "listening") {
-						listener()
-					}
-					if (hostState.bind.kind === "error" && event === "error") {
-						listener(
-							Object.assign(new Error(hostState.bind.message ?? "bind failed"), {
-								code: hostState.bind.code,
-							}),
-						)
-					}
+				server: {
+					once: (event: string, listener: (arg?: unknown) => void) => {
+						if (hostState.bind.kind === "listening" && event === "listening") {
+							listener()
+						}
+						if (hostState.bind.kind === "error" && event === "error") {
+							listener(
+								Object.assign(new Error(hostState.bind.message ?? "bind failed"), {
+									code: hostState.bind.code,
+								}),
+							)
+						}
+					},
 				},
-				close: (cb: () => void) => {
+				drain: {
+					draining: false,
+					get inFlight() {
+						return hostState.inFlightTasks.length
+					},
+					inFlightTasks: () => hostState.inFlightTasks,
+				},
+				shutdown: async (opts?: { graceMs?: number }) => {
 					this.serverClosed = true
-					cb()
+					this.shutdownOptions = opts
+					// The second-signal test needs a shutdown that has started and
+					// not finished, so a held one never settles.
+					if (hostState.holdShutdown) await new Promise(() => {})
+					return hostState.stranded
 				},
 			}
 		})
 		serveOptions: unknown
+		shutdownOptions: unknown
 		serverClosed = false
 
 		constructor(options: unknown) {
@@ -98,6 +118,10 @@ describe("serve", () => {
 		vi.clearAllMocks()
 		hostState.instances = []
 		hostState.bind = { kind: "listening" }
+		hostState.inFlightTasks = []
+		hostState.stranded = 0
+		hostState.holdShutdown = false
+		delete process.env.SHOFER_DRAIN_GRACE_MS
 		registered = []
 		errorLines = []
 
@@ -124,9 +148,17 @@ describe("serve", () => {
 	 * returned BOXED on purpose — `await` unwraps a nested promise, so returning
 	 * it bare would make the helper itself wait for the shutdown that has not
 	 * been requested yet.
+	 *
+	 * A completed drain ends in a deliberate `process.exit(0)` (the agent's own
+	 * dependencies keep handles open, so returning would hang the process), which
+	 * the harness turns into an `ExitSignal` throw. Swallowing it here keeps every
+	 * `await pending` in this file about what the test is asserting; the exit code
+	 * itself is asserted through `exitSpy` where it is the point.
 	 */
 	async function startServe(options: Parameters<typeof runServe>[0] = {}): Promise<{ pending: Promise<void> }> {
-		const pending = runServe(options)
+		const pending = runServe(options).catch((error: unknown) => {
+			if (!(error instanceof ExitSignal)) throw error
+		})
 		for (let i = 0; i < 100 && !registered.some(([event]) => event === "SIGINT"); i++) {
 			await Promise.resolve()
 		}
@@ -277,5 +309,89 @@ describe("serve", () => {
 		await pending
 
 		expect((lastHost() as unknown as { serverClosed: boolean }).serverClosed).toBe(true)
+	})
+
+	// ── The graceful drain ───────────────────────────────────────────────────
+	//
+	// A rollout SIGTERMs the node several times a day, and its unit of work
+	// outlives the request that started it, so what happens between the signal
+	// and the exit is the whole difference between a deploy that is invisible to
+	// users and one that cuts conversations mid-sentence.
+
+	it("drains rather than closing, naming the turns it is finishing", async () => {
+		hostState.inFlightTasks = ["0123456789abcdef", "fedcba9876543210"]
+		const { pending } = await startServe()
+
+		handlers().SIGTERM!()
+		await pending
+
+		expect(stderr()).toContain("SIGTERM: draining — refusing new turns, finishing 2 in flight")
+		// Short ids, as the activity log renders them.
+		expect(stderr()).toContain("01234567, fedcba98")
+		expect(stderr()).toContain("drained cleanly; exiting")
+		expect(exitSpy).toHaveBeenCalledWith(0)
+	})
+
+	it("says so plainly when nothing is in flight", async () => {
+		const { pending } = await startServe()
+
+		handlers().SIGTERM!()
+		await pending
+
+		expect(stderr()).toContain("draining — refusing new turns, nothing in flight")
+	})
+
+	it("reports the turns STRANDED by the grace rather than exiting quietly", async () => {
+		// A node that regularly strands turns has its grace sized below its real
+		// turn length, and the only way anyone finds out is this line.
+		hostState.inFlightTasks = ["0123456789abcdef"]
+		hostState.stranded = 1
+		const { pending } = await startServe()
+
+		handlers().SIGTERM!()
+		await pending
+
+		expect(stderr()).toContain("drain grace elapsed with 1 turn(s) unfinished; exiting")
+		expect(exitSpy).toHaveBeenCalledWith(0)
+	})
+
+	it("exits at once on a SECOND signal instead of waiting the grace out", async () => {
+		hostState.inFlightTasks = ["0123456789abcdef"]
+		hostState.holdShutdown = true
+		const { pending } = await startServe()
+
+		handlers().SIGTERM!()
+		await Promise.resolve()
+		// The drain is running and will never settle; the escape must not depend
+		// on it, or an operator is stuck behind an ask nobody will answer.
+		expect(() => handlers().SIGINT!()).toThrow(ExitSignal)
+
+		expect(stderr()).toContain("second SIGINT — exiting now, 1 turn(s) dropped")
+		expect(exitSpy).toHaveBeenCalledWith(1)
+		void pending
+	})
+
+	it("takes the drain grace from --drain-grace-ms", async () => {
+		const { pending } = await startServe({ drainGraceMs: "120000" })
+		handlers().SIGTERM!()
+		await pending
+		expect((lastHost() as unknown as { shutdownOptions: unknown }).shutdownOptions).toEqual({ graceMs: 120000 })
+	})
+
+	it("takes the drain grace from SHOFER_DRAIN_GRACE_MS when the flag is absent", async () => {
+		process.env.SHOFER_DRAIN_GRACE_MS = "90000"
+		const { pending } = await startServe()
+		handlers().SIGTERM!()
+		await pending
+		expect((lastHost() as unknown as { shutdownOptions: unknown }).shutdownOptions).toEqual({ graceMs: 90000 })
+	})
+
+	it("falls back to the built-in grace when the value is absent or unusable", async () => {
+		// A junk value must not become `NaN` milliseconds — that is a grace of
+		// "immediately", i.e. the mid-stream kill this whole path exists to stop.
+		const { pending } = await startServe({ drainGraceMs: "not-a-number" })
+		handlers().SIGTERM!()
+		await pending
+		expect((lastHost() as unknown as { shutdownOptions: unknown }).shutdownOptions).toEqual({})
 	})
 })

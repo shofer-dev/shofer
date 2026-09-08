@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest"
 import type { IncomingMessage, ServerResponse } from "node:http"
 
 import { createRequestHandler, type ShoferApi, type ServerEvent } from "../http-server.js"
+import { TurnDrain } from "../drain.js"
 
 /**
  * §11 HTTP/SSE transport. Drives the request handler with mock req/res (no
@@ -50,7 +51,18 @@ function mockRes() {
 			return true
 		},
 		end(body?: string) {
+			res.ended = true
 			if (body) res.body = body
+		},
+		ended: false,
+		/**
+		 * The drain's refusal shape: the socket is torn down without a status
+		 * line, because a pooled controller fails a turn over to a peer on a
+		 * transport failure and never on an answered status.
+		 */
+		destroyed: false,
+		destroy() {
+			res.destroyed = true
 		},
 	}
 	return res
@@ -484,6 +496,138 @@ describe("createRequestHandler (§11)", () => {
 			const res = await call(authed(), mockReq("GET", "/health"))
 			expect(res.statusCode).toBe(200)
 			expect(JSON.parse(res.body)).toMatchObject({ ok: true, version: "1.2.3" })
+		})
+	})
+
+	// ── Draining ─────────────────────────────────────────────────────────────
+	//
+	// The transport's half of the graceful shutdown (`../drain.ts` owns the
+	// registry and the wait). Two rules, and the difference between them is the
+	// whole design: a TURN-OPENING request is refused by destroying the socket,
+	// because that is the only refusal a pooled controller fails over on; the
+	// READINESS probe is refused with a status code, because a probe cannot fail
+	// over and can only be told yes or no.
+	describe("drain", () => {
+		let drain: TurnDrain
+		let draining: ReturnType<typeof createRequestHandler>
+
+		beforeEach(() => {
+			drain = new TurnDrain()
+			draining = createRequestHandler(api, { drain, version: "1.2.3" })
+		})
+
+		const call = async (req: IncomingMessage) => {
+			const res = mockRes()
+			draining(req, res as unknown as ServerResponse)
+			await flush()
+			return res
+		}
+
+		it("registers a per-task event stream as a turn in flight, and releases it on close", async () => {
+			const req = mockReq("GET", "/api/v1/task/t1/event")
+			draining(req, mockRes() as unknown as ServerResponse)
+			await flush()
+
+			expect(drain.inFlight).toBe(1)
+			expect(drain.inFlightTasks()).toEqual(["t1"])
+
+			req.fireClose()
+			expect(drain.inFlight).toBe(0)
+		})
+
+		it("does NOT count the node-wide firehose as a turn", async () => {
+			// It has no turn boundary — an observer may hold it for the process's
+			// whole life — so waiting on one would make every drain hit its ceiling.
+			draining(mockReq("GET", "/api/v1/event"), mockRes() as unknown as ServerResponse)
+			await flush()
+
+			expect(drain.inFlight).toBe(0)
+		})
+
+		it("ends the firehose when the drain begins", async () => {
+			const res = mockRes()
+			draining(mockReq("GET", "/api/v1/event"), res as unknown as ServerResponse)
+			await flush()
+
+			drain.begin()
+
+			expect(res.ended).toBe(true)
+		})
+
+		it("/health answers 503 while draining, so peers stop selecting this node", async () => {
+			drain.begin()
+			const res = await call(mockReq("GET", "/health"))
+
+			expect(res.statusCode).toBe(503)
+			expect(JSON.parse(res.body)).toMatchObject({ ok: false, version: "1.2.3", draining: true })
+		})
+
+		it.each([
+			["POST", "/api/v1/task", { prompt: "hi", mode: "code" }],
+			["POST", "/api/v1/task/t1/message", { message: "go" }],
+			["GET", "/api/v1/task/t1/event", undefined],
+			["GET", "/api/v1/event", undefined],
+		])("destroys the socket rather than answering %s %s while draining", async (method, path, body) => {
+			drain.begin()
+			const res = await call(mockReq(method, path, body))
+
+			expect(res.destroyed).toBe(true)
+			// No status line at all: a 503 would read to the controller as "this
+			// node decided", which it never re-issues elsewhere — the turn would be
+			// stranded instead of picked up by a peer.
+			expect(res.statusCode).toBe(0)
+			expect(api.createTask).not.toHaveBeenCalled()
+			expect(api.sendMessage).not.toHaveBeenCalled()
+		})
+
+		it.each([
+			["POST", "/api/v1/task/t1/ask", { askResponse: "yesButtonClicked" }, 202],
+			["POST", "/api/v1/task/t1/cancel", undefined, 202],
+			[
+				"POST",
+				"/api/v1/task/t1/mailbox",
+				{
+					id: "env-1",
+					from: "task-sender",
+					kind: "notification",
+					body: "hello",
+					deadline: 4_000_000_000_000,
+					wake: true,
+					plane: "bus",
+				},
+				202,
+			],
+			["POST", "/api/v1/task/t1/plugin-request", { plugin: "p", method: "m" }, 200],
+			["GET", "/api/v1/task/t1/snapshot", undefined, 200],
+		])(
+			"keeps serving %s %s while draining — it addresses a turn already here",
+			async (method, path, body, status) => {
+				// Refusing an `ask` would strand the very turn the drain exists to
+				// finish: a peer has no such pending ask to answer.
+				drain.begin()
+				const res = await call(mockReq(method, path, body))
+
+				expect(res.destroyed).toBe(false)
+				expect(res.statusCode).toBe(status)
+			},
+		)
+
+		it("does not consume a refused turn's body before destroying the socket", async () => {
+			// A drained request is not a request with a bad payload; reading the
+			// body would only delay the reset the caller is waiting to fail over on.
+			drain.begin()
+			let consumed = false
+			const req = mockReq("POST", "/api/v1/task", { prompt: "hi", mode: "code" })
+			const original = req[Symbol.asyncIterator].bind(req)
+			;(req as unknown as { [Symbol.asyncIterator]: unknown })[Symbol.asyncIterator] = () => {
+				consumed = true
+				return original()
+			}
+
+			draining(req, mockRes() as unknown as ServerResponse)
+			await flush()
+
+			expect(consumed).toBe(false)
 		})
 	})
 })

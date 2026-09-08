@@ -86,7 +86,7 @@ function writeBundle(options: {
 			? "module.exports.runAcpAgentOverShoferApi = async function (api, streams) { globalThis.__shoferTestAcp = { api, streams }; };"
 			: "",
 		options.withServe
-			? "module.exports.serveHttpOverShoferApi = function (api, opts) { globalThis.__shoferTestServe = { api, opts }; return { close() {} }; };"
+			? "module.exports.serveHttpOverShoferApi = function (api, opts) { globalThis.__shoferTestServe = { api, opts }; return { server: {}, drain: {}, async shutdown() { return 0 } }; };"
 			: "",
 		"",
 	]
