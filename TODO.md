@@ -110,17 +110,43 @@
   CLI-seeded setting, not just approvals, so it was left out of scope.
 
 - **`packages/core`: `McpHub.updateServerConnections` RESTARTS EVERY MCP SERVER
-  ON EVERY RECONCILE.** It compares the VALIDATED config held on the connection
-  — which carries the schema's defaults (`timeout: 60`, `disabledTools: []`, a
-  defaulted `cwd`) — against the RAW config read from the file, so for a normal
-  entry the two can never be `deepEqual` and the "changed config" branch always
-  fires: `deleteConnection` + `connectToServer`. Every stdio server's child
-  process is killed and respawned whenever `mcp.json` is written, a workspace
-  folder changes, or `refreshProjectMcpServers` runs after a plugin change. The
-  no-change branch is reachable only if the caller feeds back the validated
-  shape. The comparison has to be like-for-like — validate the incoming config
-  before diffing it, or diff against the raw config the connection was built
-  from.
+  ON EVERY RECONCILE.** The reconcile compares
+  `JSON.parse(currentConnection.server.config)` against the RAW entry read from
+  config — but the connection's `config` field is the stringified **validated**
+  shape (`connectToServer`/the disconnected constructor store
+  `JSON.stringify(config)` where `config` is `z.infer<typeof
+ServerConfigSchema>`), which carries the schema's defaults (`timeout: 60`,
+  `disabledTools: []`, a defaulted `cwd`) that the raw file entry does not. So
+  for a normal entry `deepEqual` can never hold, the "changed config" branch
+  fires unconditionally, and the reconcile does `deleteConnection` +
+  `connectToServer` — every stdio server's child process is killed and
+  respawned whenever `mcp.json` is written, a workspace folder changes, or
+  `refreshProjectMcpServers` runs after a plugin change. Costs, none of them
+  logged (the reconnect succeeds, so the restart reads as normal startup): any
+  in-flight tool call on that connection dies mid-turn, and a server holding
+  warm state — an index, a session, a login — loses it on every reconcile.
+
+    **The fix is one identifier, and the basis question it raised is already
+    settled by the code itself.** `updateServerConnections` computes
+    `validatedConfig = this.validateServerConfig(config, name)` immediately
+    BEFORE the comparison and then ignores it there; comparing
+    `deepEqual(JSON.parse(currentConnection.server.config), validatedConfig)`
+    makes the diff validated-to-validated, which is the correct basis: the
+    stored side is already validated, and the question the branch is asking is
+    "did the EFFECTIVE config change" — so a schema-default change that alters
+    what a connection would actually use SHOULD restart it, and a raw-file
+    reordering or omitted-default should not. Do NOT "fix" it the other way, by
+    storing the raw entry on the connection: `connection.server.config` is the
+    effective definition every other consumer reads (the Per-Server Config Reads
+    The CONNECTION rule above), and demoting it to the raw shape would re-open
+    the scope-loss bug that rule exists to prevent.
+
+    **The fix is unshipped without its test**, because this defect is invisible
+    by construction: a spawn-counting fake transport, asserting (a) a reconcile
+    over an UNCHANGED config set spawns zero processes and tears down zero
+    connections, and (b) a genuinely changed entry (a new `command` arg, a
+    flipped `disabled`) restarts exactly that one server and no other. Case (a)
+    fails against today's code for every configured stdio server.
 
 - **`packages/core`: `Task._cleanupOrphanedToolUses` throws `TypeError` (reading
   `'role'`).** Its backward pass nulls a message, and a later message's scan
