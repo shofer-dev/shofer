@@ -28,7 +28,7 @@ import type {
 import { ShoferEventName } from "@shofer/types"
 import { createVSCodeAPI, IExtensionHost, ExtensionHostEventMap, setRuntimeConfigValues } from "@shofer/vscode-shim"
 import { DebugLogger, setDebugLogEnabled } from "@shofer/core/cli"
-import type { ShoferHttpService } from "@shofer/core"
+import type { AuthEvent, JwtAuthConfig, ShoferHttpService } from "@shofer/core"
 
 import { DEFAULT_FLAGS, type SupportedProvider } from "@/types/index.js"
 import type { User } from "@/lib/sdk/index.js"
@@ -154,7 +154,14 @@ interface ExtensionModule {
 	 *  success), its drain registry, and the graceful `shutdown`. */
 	serveHttpOverShoferApi?: (
 		api: unknown,
-		opts: { port: number; host?: string; token?: string; version?: string },
+		opts: {
+			port: number
+			host?: string
+			token?: string
+			jwt?: JwtAuthConfig
+			onAuthEvent?: (event: AuthEvent) => void
+			version?: string
+		},
 	) => ShoferHttpService
 }
 
@@ -653,7 +660,12 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	public serve(opts: {
 		port: number
 		host?: string
+		/** The shared node bearer (machine trust). */
 		token?: string
+		/** Per-caller JWT verification, when the deployment configured one. */
+		jwt?: JwtAuthConfig
+		/** Where the node reports each request's authentication outcome. */
+		onAuthEvent?: (event: AuthEvent) => void
 		version?: string
 		/** Honor the controller's per-task API Configuration (no local CLI override). */
 		allowClientConfig?: boolean

@@ -5,10 +5,12 @@ import type { ShoferExtensionApi } from "@shofer/types"
 
 import { Package } from "../shared/package.js"
 import { ShoferApiAgent } from "./shofer-api-agent.js"
+import { createNodeAuthenticator, type AuthEvent, type JwtAuthConfig } from "./auth.js"
 import { createHttpServer } from "./http-server.js"
 import { STORE_SETTLE_MS, TurnDrain } from "./drain.js"
 import { runAcpAgent } from "./run-acp-agent.js"
 
+export * from "./auth.js"
 export * from "./http-server.js"
 export * from "./drain.js"
 export * from "./http-client.js"
@@ -63,15 +65,32 @@ export interface ShoferHttpService {
  * Serving is also what makes this host REMOTELY DRIVEN: `shofer serve` always
  * starts its ask dispatcher with `brokerInteractiveAsks`, so an interactive ask
  * here is answered by a subscribed controller or by nobody at all.
+ *
+ * `token` and `jwt` are the two credentials the node accepts (`auth.ts`); the
+ * authenticator is built here rather than by the caller so there is exactly one
+ * place a node's gate is assembled, and so a misconfigured one throws at
+ * startup instead of failing every request identically to an attack.
  */
 export function serveHttpOverShoferApi(
 	api: ShoferExtensionApi,
-	opts: { port: number; host?: string; token?: string; version?: string; allowClientConfig?: boolean },
+	opts: {
+		port: number
+		host?: string
+		token?: string
+		jwt?: JwtAuthConfig
+		onAuthEvent?: (event: AuthEvent) => void
+		version?: string
+		allowClientConfig?: boolean
+	},
 ): ShoferHttpService {
 	const agent = new ShoferApiAgent(api, { allowClientConfig: opts.allowClientConfig })
 	const drain = new TurnDrain()
+	const auth =
+		opts.token || opts.jwt
+			? createNodeAuthenticator({ token: opts.token, jwt: opts.jwt, onAuthEvent: opts.onAuthEvent })
+			: undefined
 	const server = createHttpServer(agent, {
-		token: opts.token,
+		auth,
 		version: opts.version ?? Package.version,
 		drain,
 	})

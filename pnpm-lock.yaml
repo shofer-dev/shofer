@@ -535,6 +535,9 @@ importers:
       isbinaryfile:
         specifier: ^5.0.2
         version: 5.0.4
+      jose:
+        specifier: ^6.2.7
+        version: 6.2.7
       json-stream-stringify:
         specifier: ^3.1.6
         version: 3.1.6

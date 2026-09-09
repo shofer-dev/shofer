@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from "node:http"
 import type { ShoferApi, ServerEvent, ShoferMessage } from "@shofer/types"
 
 import { ShoferHttpClient } from "../http-client.js"
+import { createNodeAuthenticator } from "../auth.js"
 import { createRequestHandler, type HttpServerOptions } from "../http-server.js"
 
 const flush = () => new Promise((resolve) => setTimeout(resolve))
@@ -267,7 +268,7 @@ describe("ShoferHttpClient (typed SDK)", () => {
 			const guarded = new ShoferHttpClient({
 				baseUrl: "http://host:1",
 				token: "wrong",
-				fetch: handlerFetch(api, { token: "s3cret" }),
+				fetch: handlerFetch(api, { auth: createNodeAuthenticator({ token: "s3cret" }) }),
 			})
 			await expect(guarded.getTaskSnapshot("t1")).rejects.toThrow(/401/)
 		})

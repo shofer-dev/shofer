@@ -2,6 +2,7 @@ import path from "path"
 import { fileURLToPath } from "url"
 
 import { getProviderDefaultModelId, ShoferEventName, type TokenUsage } from "@shofer/types"
+import type { AuthEvent, JwtAuthConfig, NodeAuthPosture } from "@shofer/core"
 
 import { ExtensionHost, type ExtensionHostOptions } from "@/agent/index.js"
 import { getDefaultExtensionPath } from "@/lib/utils/extension.js"
@@ -22,6 +23,29 @@ export interface ServeOptions {
 	debug?: boolean
 	/** Bearer token required on `/api/v1/*`. Falls back to `SHOFER_NODE_TOKEN`. */
 	token?: string
+	/**
+	 * Per-caller JWT authentication (`@shofer/core` `auth.ts`). A node that
+	 * serves more than one user's controller cannot tell its callers apart from
+	 * a shared bearer alone; these four say who may drive it, in ordinary OIDC
+	 * terms. All of `issuer`/`audience`/`jwksUri` are needed together — a
+	 * partial statement is refused rather than quietly leaving the node on the
+	 * shared bearer.
+	 *
+	 * Each falls back to an env var (`SHOFER_AUTH_JWT_*`), which is how a
+	 * container image configures one without a flag per key in its entrypoint.
+	 */
+	authJwtIssuer?: string
+	authJwtAudience?: string
+	authJwtJwksUri?: string
+	/**
+	 * The claim carrying the ONE task a credential may address. Set it and a
+	 * token reaches exactly the task it names — a stateless confinement that
+	 * survives a restart, a reschedule and a task rehydrated from a peer.
+	 * Unset, a verified token authenticates its caller and reaches every task.
+	 */
+	authJwtTaskClaim?: string
+	/** `observe` (JWT preferred, node token still accepted) or `require`. */
+	authJwtPosture?: string
 	/** Suppress the live per-task activity log on stderr (on by default). */
 	quiet?: boolean
 	/**
@@ -57,6 +81,83 @@ export interface ServeOptions {
 }
 
 /**
+ * Read the node's JWT authentication config from flags, falling back to env.
+ *
+ * Returns `undefined` when a deployment configured none — the node then accepts
+ * only the shared bearer, which is where every deployment starts. A PARTIAL
+ * statement throws instead: an issuer with no audience, or an audience with no
+ * key source, is somebody trying to turn the gate on and getting a node that
+ * silently kept the old one. Failing at startup is the only way that mistake is
+ * visible, because every symptom of it looks exactly like the previous
+ * behaviour working correctly.
+ */
+export function resolveJwtAuth(options: ServeOptions): JwtAuthConfig | undefined {
+	const env = process.env
+	const issuer = options.authJwtIssuer ?? env.SHOFER_AUTH_JWT_ISSUER ?? ""
+	const audience = options.authJwtAudience ?? env.SHOFER_AUTH_JWT_AUDIENCE ?? ""
+	const jwksUri = options.authJwtJwksUri ?? env.SHOFER_AUTH_JWT_JWKS_URI ?? ""
+	const stated = [issuer, audience, jwksUri].filter(Boolean).length
+	if (stated === 0) return undefined
+	if (stated < 3) {
+		throw new Error(
+			"jwt auth: --auth-jwt-issuer, --auth-jwt-audience and --auth-jwt-jwks-uri must be given together " +
+				"(or SHOFER_AUTH_JWT_ISSUER / _AUDIENCE / _JWKS_URI)",
+		)
+	}
+	const posture = (options.authJwtPosture ?? env.SHOFER_AUTH_JWT_POSTURE ?? "observe") as NodeAuthPosture
+	const algorithms = (env.SHOFER_AUTH_JWT_ALGORITHMS ?? "")
+		.split(",")
+		.map((a) => a.trim())
+		.filter(Boolean)
+	const skew = Number.parseInt(env.SHOFER_AUTH_JWT_CLOCK_SKEW_SEC ?? "", 10)
+	const taskClaim = options.authJwtTaskClaim ?? env.SHOFER_AUTH_JWT_TASK_CLAIM ?? ""
+	return {
+		issuer,
+		audience,
+		jwksUri,
+		posture,
+		taskClaim: taskClaim || undefined,
+		...(algorithms.length ? { algorithms } : {}),
+		...(Number.isFinite(skew) && skew >= 0 ? { clockToleranceSec: skew } : {}),
+	}
+}
+
+/**
+ * Report the authentication outcome of a request on stderr, sparingly.
+ *
+ * The healthy path — a verified JWT — is silent: a line per turn per task is
+ * noise that hides everything else in the log. The two that are NOT silent are
+ * the two an operator acts on:
+ *
+ *   - a REFUSAL, always, because it is rare and it is either a misconfigured
+ *     caller or an attempt;
+ *   - a node-token FALLBACK, at most once a minute with a running count, which
+ *     is the ratchet's readiness signal. `require` is safe to take exactly when
+ *     that count stops moving.
+ */
+function authEventLogger(): (event: AuthEvent) => void {
+	let fallbacks = 0
+	let lastReport = 0
+	const reportEveryMs = 60_000
+	return (event) => {
+		if (event.outcome === "jwt") return
+		if (event.outcome === "rejected") {
+			console.error(`[shofer] auth refused (posture=${event.posture}): ${event.reason ?? "no reason given"}`)
+			return
+		}
+		fallbacks++
+		const now = Date.now()
+		if (now - lastReport < reportEveryMs) return
+		lastReport = now
+		console.error(
+			`[shofer] auth: ${fallbacks} call(s) still on the shared node token ` +
+				`(posture=${event.posture}; last jwt failure: ${event.reason ?? "none presented"}). ` +
+				"`require` is safe once this stops growing.",
+		)
+	}
+}
+
+/**
  * `shofer serve` — run the Shofer HTTP/SSE server over a headless extension host.
  *
  * Boots the agent, then exposes it on `http://<host>:<port>` via the versioned
@@ -89,6 +190,7 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 	const port = Number.parseInt(options.port ?? "30099", 10)
 	const host = options.host ?? "127.0.0.1"
 	const token = options.token ?? process.env.SHOFER_NODE_TOKEN
+	const jwt = resolveJwtAuth(options)
 
 	const hostOptions: ExtensionHostOptions = {
 		mode: "code",
@@ -119,7 +221,14 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 
 	const extHost = new ExtensionHost(hostOptions)
 	await extHost.activate()
-	const node = extHost.serve({ port, host, token, allowClientConfig: !hasOverride })
+	const node = extHost.serve({
+		port,
+		host,
+		token,
+		jwt,
+		onAuthEvent: jwt ? authEventLogger() : undefined,
+		allowClientConfig: !hasOverride,
+	})
 	const { server } = node
 
 	// Await the actual bind before claiming success — `listen()` is async, so without
@@ -138,7 +247,19 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 	})
 
 	console.error(
-		`[shofer] serving on http://${host}:${port}${token ? " (token auth enabled)" : ""} · ` +
+		`[shofer] serving on http://${host}:${port}` +
+			// The gate is printed as what it RESOLVED to, not as which flags were
+			// passed: "node token only" and "jwt, observe" behave differently for
+			// every caller, and an operator reading a startup line is usually
+			// checking exactly which of the two this pod came up in.
+			(jwt
+				? ` (jwt auth: ${jwt.posture}, aud=${jwt.audience}` +
+					`${jwt.taskClaim ? `, task-scoped on ${jwt.taskClaim}` : ""}` +
+					`${jwt.posture === "observe" ? " + node token" : ""})`
+				: token
+					? " (node token auth enabled)"
+					: " (no auth)") +
+			" · " +
 			(hasOverride
 				? `API config: pinned to ${provider} (CLI override)`
 				: "API config: per-task from controller") +

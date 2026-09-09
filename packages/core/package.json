@@ -49,6 +49,7 @@
 		"i18next": "^25.0.0",
 		"ignore": "^7.0.3",
 		"isbinaryfile": "^5.0.2",
+		"jose": "^6.2.7",
 		"json-stream-stringify": "^3.1.6",
 		"lodash.debounce": "^4.0.8",
 		"mammoth": "^1.12.0",

@@ -308,21 +308,25 @@ connects with `ShoferHttpClient`. Every option is a CLI flag (defined in
 [`apps/cli/src/index.ts`](../apps/cli/src/index.ts), handled in
 [`commands/cli/serve.ts`](../apps/cli/src/commands/cli/serve.ts)):
 
-| Flag                     | Default                                          | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-p, --port <port>`      | `30099`                                          | Port to listen on.                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `--host <host>`          | `127.0.0.1`                                      | Bind address. **Use `0.0.0.0` to accept traffic from outside the process** (e.g. in a container).                                                                                                                                                                                                                                                                                                                                        |
-| `-w, --workspace <path>` | cwd                                              | Workspace directory. Custom modes are read from `<workspace>/.shofer/shofermodes`.                                                                                                                                                                                                                                                                                                                                                       |
-| `-e, --extension <path>` | auto (`ROO_EXTENSION_PATH` → sibling `src/dist`) | Path to the built extension bundle (`extension.js`).                                                                                                                                                                                                                                                                                                                                                                                     |
-| `--provider <provider>`  | `openrouter`                                     | LLM provider. Any of `--provider/--model/--api-key/--base-url` **pins** the worker's credentials and model (a controller's per-task `apiConfiguration` is then narrowed to `CLIENT_TUNABLE_PROVIDER_SETTINGS` — tool calling / reasoning / temperature / verbosity — rather than dropped wholesale).                                                                                                                                     |
-| `-m, --model <model>`    | provider default                                 | Model id. The `shofer` provider has **no** default model — pass one or task creation errors.                                                                                                                                                                                                                                                                                                                                             |
-| `-k, --api-key <key>`    | –                                                | Provider API key.                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `--base-url <url>`       | –                                                | Provider base URL (e.g. `http://llm-router:3000/v1`).                                                                                                                                                                                                                                                                                                                                                                                    |
-| `-t, --token <token>`    | `$SHOFER_NODE_TOKEN`                             | Bearer token required on every `/api/v1/*` call. Omit for an open (dev) worker. **Machine trust** (authenticates the controller, not the end user).                                                                                                                                                                                                                                                                                      |
-| `--require-user-auth`    | off _(proposed)_                                 | **User-identity enforcement (launch-time only).** When on, the worker trusts a **validated end-user identity** injected upstream (Istio `RequestAuthentication` → header — see _User-identity enforcement_) and **blocks** any ShoferApi call whose user is not the task's owner. Operator-set at launch like `--provider`; **no in-session user or agent can change it.** The `--token` worker bearer is unaffected and still required. |
-| `--interactive`          | off                                              | **How asks are surfaced — NOT the approval posture** (see below). The posture comes from the worker's `.shofer/` scopes and nothing else; with either setting of this flag, a tool the posture does not pre-approve raises an `ask` over ShoferApi that the controller brokers to its user via `respondToAsk`.                                                                                                                           |
-| `-q, --quiet`            | off                                              | Suppress the per-task activity log on stderr.                                                                                                                                                                                                                                                                                                                                                                                            |
-| `-d, --debug`            | off                                              | Debug logging to `~/.shofer/cli-debug.log`.                                                                                                                                                                                                                                                                                                                                                                                              |
+| Flag                            | Default                                          | Meaning                                                                                                                                                                                                                                                                                                        |
+| ------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-p, --port <port>`             | `30099`                                          | Port to listen on.                                                                                                                                                                                                                                                                                             |
+| `--host <host>`                 | `127.0.0.1`                                      | Bind address. **Use `0.0.0.0` to accept traffic from outside the process** (e.g. in a container).                                                                                                                                                                                                              |
+| `-w, --workspace <path>`        | cwd                                              | Workspace directory. Custom modes are read from `<workspace>/.shofer/shofermodes`.                                                                                                                                                                                                                             |
+| `-e, --extension <path>`        | auto (`ROO_EXTENSION_PATH` → sibling `src/dist`) | Path to the built extension bundle (`extension.js`).                                                                                                                                                                                                                                                           |
+| `--provider <provider>`         | `openrouter`                                     | LLM provider. Any of `--provider/--model/--api-key/--base-url` **pins** the worker's credentials and model (a controller's per-task `apiConfiguration` is then narrowed to `CLIENT_TUNABLE_PROVIDER_SETTINGS` — tool calling / reasoning / temperature / verbosity — rather than dropped wholesale).           |
+| `-m, --model <model>`           | provider default                                 | Model id. The `shofer` provider has **no** default model — pass one or task creation errors.                                                                                                                                                                                                                   |
+| `-k, --api-key <key>`           | –                                                | Provider API key.                                                                                                                                                                                                                                                                                              |
+| `--base-url <url>`              | –                                                | Provider base URL (e.g. `http://llm-router:3000/v1`).                                                                                                                                                                                                                                                          |
+| `-t, --token <token>`           | `$SHOFER_NODE_TOKEN`                             | Shared bearer required on every `/api/v1/*` call. Omit for an open (dev) worker. **Machine trust** — it authenticates the controller, not the end user, and is identical for every caller. On a worker driven for more than one user, pair it with the JWT flags below.                                        |
+| `--auth-jwt-issuer <iss>`       | `$SHOFER_AUTH_JWT_ISSUER`                        | Verify a per-caller **JWT** on every `/api/v1/*` call instead of (or alongside) the shared bearer — see _Per-caller authentication_. Needs `--auth-jwt-audience` and `--auth-jwt-jwks-uri`; stating one of the three alone is a startup error.                                                                 |
+| `--auth-jwt-audience <aud>`     | `$SHOFER_AUTH_JWT_AUDIENCE`                      | The `aud` every accepted token must carry — this worker's own name in the deployment's token estate.                                                                                                                                                                                                           |
+| `--auth-jwt-jwks-uri <url>`     | `$SHOFER_AUTH_JWT_JWKS_URI`                      | Where the issuer's public keys are fetched from. Cached, and re-fetched on an unknown `kid`, so a key rotation needs no restart.                                                                                                                                                                               |
+| `--auth-jwt-task-claim <claim>` | `$SHOFER_AUTH_JWT_TASK_CLAIM`                    | Claim naming the ONE task a credential may address. Set it and a token reaches exactly that task; unset, a verified token authenticates its caller and reaches every task. Once named the claim is **required** — a token without it is refused, not treated as unconfined.                                    |
+| `--auth-jwt-posture <p>`        | `observe` (`$SHOFER_AUTH_JWT_POSTURE`)           | `observe` — a JWT is preferred and the `--token` bearer is still accepted, with every fallback counted on stderr. `require` — the JWT is the only accepted credential.                                                                                                                                         |
+| `--interactive`                 | off                                              | **How asks are surfaced — NOT the approval posture** (see below). The posture comes from the worker's `.shofer/` scopes and nothing else; with either setting of this flag, a tool the posture does not pre-approve raises an `ask` over ShoferApi that the controller brokers to its user via `respondToAsk`. |
+| `-q, --quiet`                   | off                                              | Suppress the per-task activity log on stderr.                                                                                                                                                                                                                                                                  |
+| `-d, --debug`                   | off                                              | Debug logging to `~/.shofer/cli-debug.log`.                                                                                                                                                                                                                                                                    |
 
 **The worker's approval posture is its configuration, and only its
 configuration.** The host seeds one key — `autoApprovalEnabled: false` — and
@@ -374,51 +378,65 @@ sequenceDiagram
     N-->>C: SSE: lifecycle event
 ```
 
-### User-identity enforcement (proposed)
+### Per-caller authentication
 
-The `--token` worker bearer is **machine trust** — it authenticates the _controller_ (e.g.
-user-console) to the worker, not the end user. On a shared worker pool the controller is
-trusted to only ever open/drive tasks for the user it authenticated; the worker itself does not
-know _which_ user is behind a call. To make that a defense-in-depth invariant rather than a
-controller-only guarantee, the worker is fronted by the **Istio ambient mesh** and given the
-end-user identity — the worker token is **kept**, this layers on top:
+The `--token` bearer is **machine trust**: it authenticates the _controller_, not
+the end user, and it is the same string for every caller. On a worker that one
+controller drives for many users that is a network gate rather than
+authentication — the worker cannot tell two of its users apart, so all isolation
+between them rests on the controller being correct.
 
-- **Connection authN** — ztunnel **mTLS + SPIFFE** identifies the _caller workload_; an
-  `AuthorizationPolicy` can restrict the ShoferApi to the controller's identity.
-- **End-user identity** — the controller forwards the caller's **validated JWT**; Istio
-  `RequestAuthentication` verifies it at the worker's waypoint and **injects the identity
-  downstream as a header** (`outputClaimToHeaders`, e.g. `X-User-ID`), so the worker reads a
-  _trusted_ user id it did not have to take on faith from the controller.
-- **Enforcement** — with `--require-user-auth` on, the worker **blocks** any call whose injected
-  user is not the task's owner (recorded at `createTask`). This is **launch-time,
-  integrator-owned**: no in-session user or agent can disable it (same principle as provider
-  pinning).
+`--auth-jwt-*` is the second credential, and it is an ordinary OIDC-shaped
+bearer JWT verified per request: `iss`, `aud`, `exp`/`nbf` and the signature,
+against a key set fetched from `--auth-jwt-jwks-uri`. Nothing about it is
+specific to any deployment — an issuer, an audience, a key location and the name
+of a claim are the whole configuration, and the worker learns nothing about who
+mints them.
+
+It buys two different things:
+
+- **Authentication.** The credential names a subject (`sub`, required) and
+  expires on its own, so a leaked one is a bounded, attributable loss rather
+  than a standing master key.
+- **Confinement**, when `--auth-jwt-task-claim` is set. The credential then
+  addresses exactly the task that claim names: every per-task route refuses a
+  different id with `403`, and the **node-wide** `GET /api/v1/event` — which
+  carries every task's content for every user on the worker — is refused
+  outright. The check is stateless (the binding is in the token, not in a table
+  on the worker), so it survives a restart, a reschedule, and a task rehydrated
+  from a shared store. A worker that kept the binding in memory would silently
+  stop enforcing it for every task it rehydrated.
 
 ```mermaid
 flowchart LR
-    CTRL["Controller<br/>authenticates the end user"]
-    ZT["ztunnel — mTLS + SPIFFE<br/>identifies the caller workload"]
-    WP["waypoint — RequestAuthentication<br/>verifies the forwarded user JWT"]
-    NODE["Worker — 'shofer serve' --require-user-auth"]
-    OWNER{"injected user ==<br/>the task's owner,<br/>recorded at createTask?"}
+    CTRL["Controller<br/>mints per-caller, per-task tokens"]
+    NODE["Worker — 'shofer serve'<br/>--auth-jwt-issuer/audience/jwks-uri"]
+    JWKS["Issuer JWKS<br/>--auth-jwt-jwks-uri"]
+    SCOPE{"task claim ==<br/>the task the route<br/>addresses?"}
     OK["serve the ShoferApi call"]
-    NO["block"]
+    NO["403"]
 
-    CTRL -.->|"worker bearer token (machine trust)<br/>+ the caller's validated JWT"| ZT
-    ZT -.-> WP
-    WP -.->|"injects the identity downstream as a header<br/>e.g. X-User-ID"| NODE
-    NODE -.-> OWNER
-    OWNER -.->|yes| OK
-    OWNER -.->|no| NO
-
-    classDef proposed stroke-dasharray: 4 3
-    class ZT,WP,NODE,OWNER,OK,NO proposed
+    CTRL -->|"Authorization: Bearer &lt;jwt&gt;"| NODE
+    NODE -->|"fetch + cache keys"| JWKS
+    NODE --> SCOPE
+    SCOPE -->|yes| OK
+    SCOPE -->|no| NO
 ```
 
-Everything dashed above is _proposed_. What exists today is the `--token` worker
-bearer, which this layers on top of and does not replace.
+**The posture is a one-way ratchet.** `--auth-jwt-posture observe` (the default
+when the JWT flags are given) prefers a JWT and still accepts `--token`, printing
+a running count of the calls that fell back; `require` accepts only the JWT, even
+though the shared bearer is still configured. The configuration deliberately
+survives the flip rather than being deleted with it, so the position can be
+walked back within one restart if the minting side turns out to be broken. There
+is no third position that turns verification off: not configuring the JWT flags
+at all is that position, and a value that disables a control is a control one
+config edit away from being absent.
 
-Full model + rationale: `docs/authnz_arch.md` §11.2.
+Two things this is NOT. It is not authorization — the worker decides nothing
+about what a caller may do, which stays with the controller. And it does not
+replace `--token`: a single-tenant worker, or one on loopback, is correctly
+served by the shared bearer alone.
 
 ### stdio NDJSON (`--stdin-prompt-stream`)
 

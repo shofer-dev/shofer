@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest"
 import type { IncomingMessage, ServerResponse } from "node:http"
 
 import { createRequestHandler, type ShoferApi, type ServerEvent } from "../http-server.js"
+import { createNodeAuthenticator, type NodeAuthenticator } from "../auth.js"
 import { TurnDrain } from "../drain.js"
 
 /**
@@ -480,7 +481,8 @@ describe("createRequestHandler (§11)", () => {
 	})
 
 	describe("auth + version handshake", () => {
-		const authed = () => createRequestHandler(api, { token: "s3cret", version: "1.2.3" })
+		const authed = () =>
+			createRequestHandler(api, { auth: createNodeAuthenticator({ token: "s3cret" }), version: "1.2.3" })
 		const call = async (h: ReturnType<typeof createRequestHandler>, req: IncomingMessage) => {
 			const res = mockRes()
 			h(req, res as unknown as ServerResponse)
@@ -673,5 +675,130 @@ describe("createRequestHandler (§11)", () => {
 
 			expect(consumed).toBe(false)
 		})
+	})
+})
+
+/**
+ * Task confinement, at the routing layer.
+ *
+ * The verification itself is `auth.spec.ts`'s subject; what is asserted here is
+ * the half that lives in the routes — which surfaces a task-scoped credential
+ * reaches, and (the one that matters most) which it does not. The authenticator
+ * is hand-built rather than signed so these cases say what they are about: the
+ * route's decision, not the token's shape.
+ */
+describe("HTTP transport — a task-scoped credential", () => {
+	let api: ShoferApi
+	let handler: ReturnType<typeof createRequestHandler>
+
+	const scopedTo = (taskId: string | undefined): NodeAuthenticator => {
+		const real = createNodeAuthenticator({ token: "s3cret" })
+		return {
+			enabled: true,
+			posture: "require",
+			async authenticate() {
+				return { ok: true, caller: { credential: "jwt", subject: "user-1", taskId } }
+			},
+			checkTaskScope: real.checkTaskScope,
+			checkNodeScope: real.checkNodeScope,
+		}
+	}
+
+	const call = async (req: IncomingMessage) => {
+		const res = mockRes()
+		handler(req, res as unknown as ServerResponse)
+		await flush()
+		return res
+	}
+
+	beforeEach(() => {
+		api = {
+			createTask: vi.fn(async () => ({ taskId: "mine" })),
+			sendMessage: vi.fn(async () => {}),
+			cancelTask: vi.fn(async () => {}),
+			respondToAsk: vi.fn(async () => {}),
+			deliverToMailbox: vi.fn(async () => {}),
+			pluginRequest: vi.fn(async () => ({})),
+			getTaskSnapshot: vi.fn(async () => undefined),
+			subscribe: vi.fn(() => () => {}),
+		} as unknown as ShoferApi
+		handler = createRequestHandler(api, { auth: scopedTo("mine"), version: "1.2.3" })
+	})
+
+	it("403s a follow-up message addressed to a different task", async () => {
+		const res = await call(mockReq("POST", "/api/v1/task/theirs/message", { message: "hi" }))
+		expect(res.statusCode).toBe(403)
+		expect(api.sendMessage).not.toHaveBeenCalled()
+	})
+
+	it("serves a follow-up message addressed to its own task", async () => {
+		const res = await call(mockReq("POST", "/api/v1/task/mine/message", { message: "hi" }))
+		expect(res.statusCode).toBe(202)
+		expect(api.sendMessage).toHaveBeenCalled()
+	})
+
+	it("403s another task's snapshot — the transcript is the thing being protected", async () => {
+		const res = await call(mockReq("GET", "/api/v1/task/theirs/snapshot"))
+		expect(res.statusCode).toBe(403)
+		expect(api.getTaskSnapshot).not.toHaveBeenCalled()
+	})
+
+	it("403s another task's event stream", async () => {
+		const res = await call(mockReq("GET", "/api/v1/task/theirs/event"))
+		expect(res.statusCode).toBe(403)
+		expect(api.subscribe).not.toHaveBeenCalled()
+	})
+
+	it("403s the NODE-WIDE event stream outright", async () => {
+		// Every task's content for every user on this pod. A credential scoped to
+		// one task must not be able to read the rest by asking a different route.
+		const res = await call(mockReq("GET", "/api/v1/event"))
+		expect(res.statusCode).toBe(403)
+		expect(api.subscribe).not.toHaveBeenCalled()
+	})
+
+	it("403s another task's cancel, ask, mailbox and plugin-request", async () => {
+		expect((await call(mockReq("POST", "/api/v1/task/theirs/cancel"))).statusCode).toBe(403)
+		expect(
+			(await call(mockReq("POST", "/api/v1/task/theirs/ask", { askResponse: "yesButtonClicked" }))).statusCode,
+		).toBe(403)
+		expect((await call(mockReq("POST", "/api/v1/task/theirs/mailbox", { body: "hi" }))).statusCode).toBe(403)
+		expect(
+			(await call(mockReq("POST", "/api/v1/task/theirs/plugin-request", { plugin: "p", method: "m" })))
+				.statusCode,
+		).toBe(403)
+		expect(api.cancelTask).not.toHaveBeenCalled()
+		expect(api.respondToAsk).not.toHaveBeenCalled()
+		expect(api.deliverToMailbox).not.toHaveBeenCalled()
+		expect(api.pluginRequest).not.toHaveBeenCalled()
+	})
+
+	it("403s creating a task under a different id", async () => {
+		const res = await call(
+			mockReq("POST", "/api/v1/task", {
+				prompt: "hi",
+				mode: "code",
+				taskId: "11111111-1111-4111-8111-111111111111",
+			}),
+		)
+		expect(res.statusCode).toBe(403)
+		expect(api.createTask).not.toHaveBeenCalled()
+	})
+
+	/**
+	 * With no `taskId` the node would mint one of its own, and the caller would
+	 * hold a credential that cannot address the task it just created. Saying so
+	 * is better than producing a task nobody can drive.
+	 */
+	it("403s creating a task with no id at all", async () => {
+		const res = await call(mockReq("POST", "/api/v1/task", { prompt: "hi", mode: "code" }))
+		expect(res.statusCode).toBe(403)
+		expect(api.createTask).not.toHaveBeenCalled()
+	})
+
+	it("lets an UNCONFINED credential reach every route", async () => {
+		handler = createRequestHandler(api, { auth: scopedTo(undefined), version: "1.2.3" })
+		expect((await call(mockReq("POST", "/api/v1/task/theirs/message", { message: "hi" }))).statusCode).toBe(202)
+		expect((await call(mockReq("GET", "/api/v1/event"))).statusCode).toBe(200)
 	})
 })

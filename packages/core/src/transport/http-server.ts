@@ -7,6 +7,7 @@ import { deriveSubject, envelopeSchema, traceContextFromHeaders, traceContextSch
 
 import type { ShoferApi, ProviderSettings, ServerEvent, TraceContext } from "@shofer/types"
 
+import type { AuthenticatedCaller, AuthRefusal, NodeAuthenticator } from "./auth.js"
 import type { TurnDrain } from "./drain.js"
 
 /**
@@ -123,11 +124,14 @@ async function readJson(req: http.IncomingMessage): Promise<Record<string, unkno
 /** Options for the HTTP/SSE server (auth + version handshake + drain). */
 export interface HttpServerOptions {
 	/**
-	 * Optional bearer token. When set, every `/api/v1/*` route requires
-	 * `Authorization: Bearer <token>` (→ `401` when missing/wrong). `/health`
-	 * stays open (liveness only). Unset → no auth (loopback/dev default).
+	 * Who the node believes its callers are (see `auth.ts`). When supplied,
+	 * every `/api/v1/*` route is authenticated before it is routed, and a route
+	 * that addresses ONE task additionally checks the credential reaches that
+	 * task. `/health` stays open (liveness only, and a probe carries no
+	 * credential). Unset → no auth at all, which is the loopback/dev default and
+	 * the only position in which a node serves an unidentified caller.
 	 */
-	token?: string
+	auth?: NodeAuthenticator
 	/**
 	 * The agent build version this executor reports. Surfaced on the open
 	 * `/health` and the authed `/whoami` so a client can verify the served
@@ -145,8 +149,13 @@ export interface HttpServerOptions {
 }
 
 /**
- * Create the shofer HTTP/SSE server. Routes (all under `/api/<version>` except
- * `/health`):
+ * Create the shofer HTTP/SSE server. Every route below except `/health` is
+ * authenticated by {@link HttpServerOptions.auth} when one is configured, and
+ * the per-task routes additionally refuse a credential scoped to a different
+ * task (`403`); `/api/v1/event` refuses a task-scoped credential outright,
+ * because it is the node-wide firehose.
+ *
+ * Routes (all under `/api/<version>` except `/health`):
  *   GET  /health                     → 200 liveness + version (open); 503 while draining
  *   GET  /api/v1/whoami              → { version } (authed; one-shot liveness+version+auth)
  *   GET  /api/v1/event               → SSE event stream (worker-wide: ALL tasks)
@@ -173,7 +182,10 @@ export function createRequestHandler(
 	opts: HttpServerOptions = {},
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
 	const base = `/api/${API_VERSION}`
-	const { token, version, drain } = opts
+	const { auth, version, drain } = opts
+
+	/** The caller an unauthenticated node attributes every request to. */
+	const anonymous: AuthenticatedCaller = { credential: "node-token" }
 
 	return (req, res) => {
 		void handle(req, res).catch((error) => {
@@ -201,12 +213,28 @@ export function createRequestHandler(
 			return send(res, 200, { ok: true, version })
 		}
 
-		// Bearer-token gate for the entire versioned API surface.
-		if (token && (path === base || path.startsWith(`${base}/`))) {
-			const header = req.headers["authorization"]
-			if (header !== `Bearer ${token}`) {
-				return send(res, 401, { error: "unauthorized" })
-			}
+		// Authentication gate for the entire versioned API surface. It runs before
+		// any routing, so an unauthenticated caller cannot learn which routes
+		// exist, and before the drain checks, so a draining node still answers a
+		// bad credential with a status rather than a torn-down socket — the
+		// refusals mean different things and a caller acts on them differently.
+		let caller = anonymous
+		if (auth && (path === base || path.startsWith(`${base}/`))) {
+			const outcome = await auth.authenticate(req.headers["authorization"])
+			if (!outcome.ok) return send(res, outcome.status, { error: outcome.error })
+			caller = outcome.caller
+		}
+
+		/**
+		 * Refuse a route this credential does not reach. `undefined` from the
+		 * check means "in scope"; anything else is answered as-is, because a
+		 * scope failure is a decision about a well-formed, authenticated request
+		 * and must not read as "who are you".
+		 */
+		const outOfScope = (refusal: AuthRefusal | undefined): boolean => {
+			if (!refusal) return false
+			send(res, refusal.status, { error: refusal.error })
+			return true
 		}
 
 		// Authed liveness+version+auth check in a single round-trip.
@@ -215,6 +243,12 @@ export function createRequestHandler(
 		}
 
 		if (method === "GET" && path === `${base}/event`) {
+			// The NODE-WIDE firehose: every task's content, for every user this node
+			// serves. A task-confined credential is refused here, and that refusal
+			// is what makes confinement mean anything — without it a credential
+			// scoped to one task would read every other task by asking a different
+			// route for the same data.
+			if (auth && outOfScope(auth.checkNodeScope(caller))) return
 			// An observer, not a turn: it is registered so the drain can release it
 			// at shutdown, and refused while draining because a node that is leaving
 			// has nothing worth watching.
@@ -244,6 +278,7 @@ export function createRequestHandler(
 		const taskEventMatch = path.match(new RegExp(`^${base}/task/([^/]+)/event$`))
 		if (method === "GET" && taskEventMatch) {
 			const taskId = decodeURIComponent(taskEventMatch[1]!)
+			if (auth && outOfScope(auth.checkTaskScope(caller, taskId))) return
 			if (drain?.draining) return refuseTurn(res)
 			startEventStream(res)
 			const unsubscribe = api.subscribe((event) => {
@@ -266,6 +301,7 @@ export function createRequestHandler(
 		const snapshotMatch = path.match(new RegExp(`^${base}/task/([^/]+)/snapshot$`))
 		if (method === "GET" && snapshotMatch) {
 			const snapshotTaskId = decodeURIComponent(snapshotMatch[1]!)
+			if (auth && outOfScope(auth.checkTaskScope(caller, snapshotTaskId))) return
 			const snapshot = await api.getTaskSnapshot(snapshotTaskId)
 			if (!snapshot) return send(res, 404, { error: `no task ${snapshotTaskId}` })
 			return send(res, 200, snapshot)
@@ -296,6 +332,17 @@ export function createRequestHandler(
 			if (body.taskId !== undefined && !(typeof body.taskId === "string" && uuidValidate(body.taskId))) {
 				return send(res, 400, { error: "taskId must be a UUID" })
 			}
+			// A task-confined credential may create exactly the task it names, and
+			// must name it: with no `taskId` in the body the node would mint one of
+			// its own, and the caller would hold a credential that cannot address
+			// the task it just created. Refusing here says that plainly instead of
+			// producing a task nobody can drive.
+			if (auth && caller.taskId !== undefined) {
+				if (typeof body.taskId !== "string") {
+					return send(res, 403, { error: "credential is scoped to a single task; state it as taskId" })
+				}
+				if (outOfScope(auth.checkTaskScope(caller, body.taskId))) return
+			}
 			const result = await api.createTask({
 				prompt: body.prompt,
 				mode: body.mode,
@@ -319,6 +366,7 @@ export function createRequestHandler(
 		if (method === "POST" && taskMatch) {
 			const taskId = taskMatch[1]!
 			const action = taskMatch[2]!
+			if (auth && outOfScope(auth.checkTaskScope(caller, decodeURIComponent(taskId)))) return
 			if (action === "message") {
 				// A follow-up message STARTS a turn, so it is refused while draining
 				// exactly as task creation is. The other three actions on this route
@@ -398,6 +446,7 @@ export function createRequestHandler(
 		const pluginRequestMatch = path.match(new RegExp(`^${base}/task/([^/]+)/plugin-request$`))
 		if (method === "POST" && pluginRequestMatch) {
 			const taskId = decodeURIComponent(pluginRequestMatch[1]!)
+			if (auth && outOfScope(auth.checkTaskScope(caller, taskId))) return
 			const body = await readJson(req)
 			if (typeof body.plugin !== "string" || typeof body.method !== "string") {
 				return send(res, 400, { error: "plugin and method are required" })

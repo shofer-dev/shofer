@@ -163,6 +163,26 @@ program
 	.option("-m, --model <model>", "Model to use")
 	.option("-t, --token <token>", "Bearer token required on /api/v1/* (falls back to SHOFER_NODE_TOKEN)")
 	.option(
+		"--auth-jwt-issuer <iss>",
+		"Verify per-caller JWTs from this issuer on /api/v1/* (falls back to SHOFER_AUTH_JWT_ISSUER). Needs --auth-jwt-audience and --auth-jwt-jwks-uri",
+	)
+	.option(
+		"--auth-jwt-audience <aud>",
+		"Audience every accepted JWT must carry (falls back to SHOFER_AUTH_JWT_AUDIENCE)",
+	)
+	.option(
+		"--auth-jwt-jwks-uri <url>",
+		"Where the issuer's public keys are fetched from (falls back to SHOFER_AUTH_JWT_JWKS_URI)",
+	)
+	.option(
+		"--auth-jwt-task-claim <claim>",
+		"Claim naming the ONE task a credential may address; unset = a verified token reaches every task (falls back to SHOFER_AUTH_JWT_TASK_CLAIM)",
+	)
+	.option(
+		"--auth-jwt-posture <posture>",
+		"observe (jwt preferred, node token still accepted) or require (jwt only). Default observe (falls back to SHOFER_AUTH_JWT_POSTURE)",
+	)
+	.option(
 		"--state-dir <path>",
 		"Where this node keeps its own state (default $HOME/.vscode-mock; falls back to SHOFER_STATE_DIR). Required per node when several share a filesystem",
 	)
@@ -188,6 +208,11 @@ program
 			baseUrl?: string
 			model?: string
 			token?: string
+			authJwtIssuer?: string
+			authJwtAudience?: string
+			authJwtJwksUri?: string
+			authJwtTaskClaim?: string
+			authJwtPosture?: string
 			stateDir?: string
 			quiet?: boolean
 			debug?: boolean

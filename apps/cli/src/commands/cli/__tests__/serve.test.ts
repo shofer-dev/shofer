@@ -17,7 +17,7 @@ import { ShoferEventName } from "@shofer/types"
 // imported binding by NAME, and the fake host below carries a `serve` class
 // field — importing it unaliased makes that field rewrite into the module
 // namespace and the file fails to load with a TDZ error.
-import { serve as runServe } from "../serve.js"
+import { serve as runServe, resolveJwtAuth } from "../serve.js"
 
 class ExitSignal extends Error {
 	constructor(readonly code: number | undefined) {
@@ -216,7 +216,7 @@ describe("serve", () => {
 			brokerInteractiveAsks: true,
 			nonInteractive: true,
 		})
-		expect(stderr()).toContain("(token auth enabled)")
+		expect(stderr()).toContain("(node token auth enabled)")
 
 		handlers().SIGINT!()
 		await pending
@@ -393,5 +393,89 @@ describe("serve", () => {
 		handlers().SIGTERM!()
 		await pending
 		expect((lastHost() as unknown as { shutdownOptions: unknown }).shutdownOptions).toEqual({})
+	})
+})
+
+/**
+ * `resolveJwtAuth` — how a node learns to authenticate its callers.
+ *
+ * The case worth writing a test for is the PARTIAL statement. Everything else
+ * here is table-reading; a half-configured verifier is the one input whose
+ * symptom is indistinguishable from "the feature was never turned on", so it
+ * has to be an error at startup rather than a silent fall-back to the shared
+ * bearer.
+ */
+describe("resolveJwtAuth", () => {
+	const JWT_ENV = [
+		"SHOFER_AUTH_JWT_ISSUER",
+		"SHOFER_AUTH_JWT_AUDIENCE",
+		"SHOFER_AUTH_JWT_JWKS_URI",
+		"SHOFER_AUTH_JWT_TASK_CLAIM",
+		"SHOFER_AUTH_JWT_POSTURE",
+		"SHOFER_AUTH_JWT_ALGORITHMS",
+		"SHOFER_AUTH_JWT_CLOCK_SKEW_SEC",
+	] as const
+
+	beforeEach(() => {
+		for (const key of JWT_ENV) delete process.env[key]
+	})
+	afterEach(() => {
+		for (const key of JWT_ENV) delete process.env[key]
+	})
+
+	const full = {
+		authJwtIssuer: "https://issuer.test",
+		authJwtAudience: "shofer-l2-worker",
+		authJwtJwksUri: "https://issuer.test/jwks.json",
+	}
+
+	it("returns undefined when nothing is configured — the node stays on its shared bearer", () => {
+		expect(resolveJwtAuth({})).toBeUndefined()
+	})
+
+	it("defaults to the observe rung, with no task confinement", () => {
+		expect(resolveJwtAuth(full)).toEqual({
+			issuer: "https://issuer.test",
+			audience: "shofer-l2-worker",
+			jwksUri: "https://issuer.test/jwks.json",
+			posture: "observe",
+			taskClaim: undefined,
+		})
+	})
+
+	it("throws on a partial statement rather than quietly leaving the gate as it was", () => {
+		expect(() => resolveJwtAuth({ authJwtIssuer: "https://issuer.test" })).toThrow(/must be given together/)
+		expect(() =>
+			resolveJwtAuth({ authJwtIssuer: "https://issuer.test", authJwtAudience: "shofer-l2-worker" }),
+		).toThrow(/must be given together/)
+	})
+
+	it("reads every key from the environment when no flag is given", () => {
+		process.env.SHOFER_AUTH_JWT_ISSUER = "https://env.test"
+		process.env.SHOFER_AUTH_JWT_AUDIENCE = "aud-from-env"
+		process.env.SHOFER_AUTH_JWT_JWKS_URI = "https://env.test/jwks.json"
+		process.env.SHOFER_AUTH_JWT_TASK_CLAIM = "task_id"
+		process.env.SHOFER_AUTH_JWT_POSTURE = "require"
+		process.env.SHOFER_AUTH_JWT_ALGORITHMS = "RS256, ES384"
+		process.env.SHOFER_AUTH_JWT_CLOCK_SKEW_SEC = "5"
+		expect(resolveJwtAuth({})).toEqual({
+			issuer: "https://env.test",
+			audience: "aud-from-env",
+			jwksUri: "https://env.test/jwks.json",
+			taskClaim: "task_id",
+			posture: "require",
+			algorithms: ["RS256", "ES384"],
+			clockToleranceSec: 5,
+		})
+	})
+
+	it("lets a flag override the environment", () => {
+		process.env.SHOFER_AUTH_JWT_POSTURE = "observe"
+		expect(resolveJwtAuth({ ...full, authJwtPosture: "require" })).toMatchObject({ posture: "require" })
+	})
+
+	it("ignores an unusable clock skew rather than tolerating NaN seconds", () => {
+		process.env.SHOFER_AUTH_JWT_CLOCK_SKEW_SEC = "not-a-number"
+		expect(resolveJwtAuth(full)).not.toHaveProperty("clockToleranceSec")
 	})
 })
