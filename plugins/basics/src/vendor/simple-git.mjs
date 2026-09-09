@@ -10,8 +10,15 @@ var __require = /* @__PURE__ */ ((x2) => typeof require !== "undefined" ? requir
   if (typeof require !== "undefined") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + x2 + '" is not supported');
 });
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __commonJS = (cb, mod) => function __require2() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
 };
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
@@ -29,6 +36,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // ../../node_modules/.pnpm/ms@2.1.3/node_modules/ms/index.js
 var require_ms = __commonJS({
@@ -146,10 +154,10 @@ var require_ms = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/common.js
+// ../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/common.js
 var require_common = __commonJS({
-  "../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/common.js"(exports, module) {
-    function setup(env) {
+  "../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/common.js"(exports, module) {
+    function setup(env2) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
       createDebug.coerce = coerce;
@@ -158,8 +166,8 @@ var require_common = __commonJS({
       createDebug.enabled = enabled;
       createDebug.humanize = require_ms();
       createDebug.destroy = destroy;
-      Object.keys(env).forEach((key) => {
-        createDebug[key] = env[key];
+      Object.keys(env2).forEach((key) => {
+        createDebug[key] = env2[key];
       });
       createDebug.names = [];
       createDebug.skips = [];
@@ -323,9 +331,9 @@ var require_common = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/browser.js
+// ../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/browser.js
 var require_browser = __commonJS({
-  "../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/browser.js"(exports, module) {
+  "../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/browser.js"(exports, module) {
     exports.formatArgs = formatArgs;
     exports.save = save;
     exports.load = load;
@@ -493,137 +501,145 @@ var require_browser = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/has-flag@4.0.0/node_modules/has-flag/index.js
-var require_has_flag = __commonJS({
-  "../../node_modules/.pnpm/has-flag@4.0.0/node_modules/has-flag/index.js"(exports, module) {
-    "use strict";
-    module.exports = (flag, argv = process.argv) => {
-      const prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
-      const position = argv.indexOf(prefix + flag);
-      const terminatorPosition = argv.indexOf("--");
-      return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
-    };
-  }
+// ../../node_modules/.pnpm/supports-color@9.4.0/node_modules/supports-color/index.js
+var supports_color_exports = {};
+__export(supports_color_exports, {
+  createSupportsColor: () => createSupportsColor,
+  default: () => supports_color_default
 });
-
-// ../../node_modules/.pnpm/supports-color@8.1.1/node_modules/supports-color/index.js
-var require_supports_color = __commonJS({
-  "../../node_modules/.pnpm/supports-color@8.1.1/node_modules/supports-color/index.js"(exports, module) {
-    "use strict";
-    var os = __require("os");
-    var tty = __require("tty");
-    var hasFlag = require_has_flag();
-    var { env } = process;
-    var flagForceColor;
+import process2 from "node:process";
+import os from "node:os";
+import tty from "node:tty";
+function hasFlag(flag, argv = globalThis.Deno ? globalThis.Deno.args : process2.argv) {
+  const prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
+  const position = argv.indexOf(prefix + flag);
+  const terminatorPosition = argv.indexOf("--");
+  return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
+}
+function envForceColor() {
+  if ("FORCE_COLOR" in env) {
+    if (env.FORCE_COLOR === "true") {
+      return 1;
+    }
+    if (env.FORCE_COLOR === "false") {
+      return 0;
+    }
+    return env.FORCE_COLOR.length === 0 ? 1 : Math.min(Number.parseInt(env.FORCE_COLOR, 10), 3);
+  }
+}
+function translateLevel(level) {
+  if (level === 0) {
+    return false;
+  }
+  return {
+    level,
+    hasBasic: true,
+    has256: level >= 2,
+    has16m: level >= 3
+  };
+}
+function _supportsColor(haveStream, { streamIsTTY, sniffFlags = true } = {}) {
+  const noFlagForceColor = envForceColor();
+  if (noFlagForceColor !== void 0) {
+    flagForceColor = noFlagForceColor;
+  }
+  const forceColor = sniffFlags ? flagForceColor : noFlagForceColor;
+  if (forceColor === 0) {
+    return 0;
+  }
+  if (sniffFlags) {
+    if (hasFlag("color=16m") || hasFlag("color=full") || hasFlag("color=truecolor")) {
+      return 3;
+    }
+    if (hasFlag("color=256")) {
+      return 2;
+    }
+  }
+  if ("TF_BUILD" in env && "AGENT_NAME" in env) {
+    return 1;
+  }
+  if (haveStream && !streamIsTTY && forceColor === void 0) {
+    return 0;
+  }
+  const min = forceColor || 0;
+  if (env.TERM === "dumb") {
+    return min;
+  }
+  if (process2.platform === "win32") {
+    const osRelease = os.release().split(".");
+    if (Number(osRelease[0]) >= 10 && Number(osRelease[2]) >= 10586) {
+      return Number(osRelease[2]) >= 14931 ? 3 : 2;
+    }
+    return 1;
+  }
+  if ("CI" in env) {
+    if ("GITHUB_ACTIONS" in env || "GITEA_ACTIONS" in env) {
+      return 3;
+    }
+    if (["TRAVIS", "CIRCLECI", "APPVEYOR", "GITLAB_CI", "BUILDKITE", "DRONE"].some((sign) => sign in env) || env.CI_NAME === "codeship") {
+      return 1;
+    }
+    return min;
+  }
+  if ("TEAMCITY_VERSION" in env) {
+    return /^(9\.(0*[1-9]\d*)\.|\d{2,}\.)/.test(env.TEAMCITY_VERSION) ? 1 : 0;
+  }
+  if (env.COLORTERM === "truecolor") {
+    return 3;
+  }
+  if (env.TERM === "xterm-kitty") {
+    return 3;
+  }
+  if ("TERM_PROGRAM" in env) {
+    const version = Number.parseInt((env.TERM_PROGRAM_VERSION || "").split(".")[0], 10);
+    switch (env.TERM_PROGRAM) {
+      case "iTerm.app": {
+        return version >= 3 ? 3 : 2;
+      }
+      case "Apple_Terminal": {
+        return 2;
+      }
+    }
+  }
+  if (/-256(color)?$/i.test(env.TERM)) {
+    return 2;
+  }
+  if (/^screen|^xterm|^vt100|^vt220|^rxvt|color|ansi|cygwin|linux/i.test(env.TERM)) {
+    return 1;
+  }
+  if ("COLORTERM" in env) {
+    return 1;
+  }
+  return min;
+}
+function createSupportsColor(stream, options = {}) {
+  const level = _supportsColor(stream, {
+    streamIsTTY: stream && stream.isTTY,
+    ...options
+  });
+  return translateLevel(level);
+}
+var env, flagForceColor, supportsColor, supports_color_default;
+var init_supports_color = __esm({
+  "../../node_modules/.pnpm/supports-color@9.4.0/node_modules/supports-color/index.js"() {
+    ({ env } = process2);
     if (hasFlag("no-color") || hasFlag("no-colors") || hasFlag("color=false") || hasFlag("color=never")) {
       flagForceColor = 0;
     } else if (hasFlag("color") || hasFlag("colors") || hasFlag("color=true") || hasFlag("color=always")) {
       flagForceColor = 1;
     }
-    function envForceColor() {
-      if ("FORCE_COLOR" in env) {
-        if (env.FORCE_COLOR === "true") {
-          return 1;
-        }
-        if (env.FORCE_COLOR === "false") {
-          return 0;
-        }
-        return env.FORCE_COLOR.length === 0 ? 1 : Math.min(Number.parseInt(env.FORCE_COLOR, 10), 3);
-      }
-    }
-    function translateLevel(level) {
-      if (level === 0) {
-        return false;
-      }
-      return {
-        level,
-        hasBasic: true,
-        has256: level >= 2,
-        has16m: level >= 3
-      };
-    }
-    function supportsColor(haveStream, { streamIsTTY, sniffFlags = true } = {}) {
-      const noFlagForceColor = envForceColor();
-      if (noFlagForceColor !== void 0) {
-        flagForceColor = noFlagForceColor;
-      }
-      const forceColor = sniffFlags ? flagForceColor : noFlagForceColor;
-      if (forceColor === 0) {
-        return 0;
-      }
-      if (sniffFlags) {
-        if (hasFlag("color=16m") || hasFlag("color=full") || hasFlag("color=truecolor")) {
-          return 3;
-        }
-        if (hasFlag("color=256")) {
-          return 2;
-        }
-      }
-      if (haveStream && !streamIsTTY && forceColor === void 0) {
-        return 0;
-      }
-      const min = forceColor || 0;
-      if (env.TERM === "dumb") {
-        return min;
-      }
-      if (process.platform === "win32") {
-        const osRelease = os.release().split(".");
-        if (Number(osRelease[0]) >= 10 && Number(osRelease[2]) >= 10586) {
-          return Number(osRelease[2]) >= 14931 ? 3 : 2;
-        }
-        return 1;
-      }
-      if ("CI" in env) {
-        if (["TRAVIS", "CIRCLECI", "APPVEYOR", "GITLAB_CI", "GITHUB_ACTIONS", "BUILDKITE", "DRONE"].some((sign) => sign in env) || env.CI_NAME === "codeship") {
-          return 1;
-        }
-        return min;
-      }
-      if ("TEAMCITY_VERSION" in env) {
-        return /^(9\.(0*[1-9]\d*)\.|\d{2,}\.)/.test(env.TEAMCITY_VERSION) ? 1 : 0;
-      }
-      if (env.COLORTERM === "truecolor") {
-        return 3;
-      }
-      if ("TERM_PROGRAM" in env) {
-        const version = Number.parseInt((env.TERM_PROGRAM_VERSION || "").split(".")[0], 10);
-        switch (env.TERM_PROGRAM) {
-          case "iTerm.app":
-            return version >= 3 ? 3 : 2;
-          case "Apple_Terminal":
-            return 2;
-        }
-      }
-      if (/-256(color)?$/i.test(env.TERM)) {
-        return 2;
-      }
-      if (/^screen|^xterm|^vt100|^vt220|^rxvt|color|ansi|cygwin|linux/i.test(env.TERM)) {
-        return 1;
-      }
-      if ("COLORTERM" in env) {
-        return 1;
-      }
-      return min;
-    }
-    function getSupportLevel(stream, options = {}) {
-      const level = supportsColor(stream, {
-        streamIsTTY: stream && stream.isTTY,
-        ...options
-      });
-      return translateLevel(level);
-    }
-    module.exports = {
-      supportsColor: getSupportLevel,
-      stdout: getSupportLevel({ isTTY: tty.isatty(1) }),
-      stderr: getSupportLevel({ isTTY: tty.isatty(2) })
+    supportsColor = {
+      stdout: createSupportsColor({ isTTY: tty.isatty(1) }),
+      stderr: createSupportsColor({ isTTY: tty.isatty(2) })
     };
+    supports_color_default = supportsColor;
   }
 });
 
-// ../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/node.js
+// ../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/node.js
 var require_node = __commonJS({
-  "../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/node.js"(exports, module) {
-    var tty = __require("tty");
+  "../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/node.js"(exports, module) {
+    var tty2 = __require("tty");
     var util = __require("util");
     exports.init = init;
     exports.log = log;
@@ -638,8 +654,8 @@ var require_node = __commonJS({
     );
     exports.colors = [6, 2, 3, 4, 5, 1];
     try {
-      const supportsColor = require_supports_color();
-      if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+      const supportsColor2 = (init_supports_color(), __toCommonJS(supports_color_exports));
+      if (supportsColor2 && (supportsColor2.stderr || supportsColor2).level >= 2) {
         exports.colors = [
           20,
           21,
@@ -741,7 +757,7 @@ var require_node = __commonJS({
       return obj;
     }, {});
     function useColors() {
-      return "colors" in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty.isatty(process.stderr.fd);
+      return "colors" in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty2.isatty(process.stderr.fd);
     }
     function formatArgs(args) {
       const { namespace: name, useColors: useColors2 } = this;
@@ -794,9 +810,9 @@ var require_node = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/index.js
+// ../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/index.js
 var require_src = __commonJS({
-  "../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/index.js"(exports, module) {
+  "../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/index.js"(exports, module) {
     if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
       module.exports = require_browser();
     } else {
@@ -853,11 +869,670 @@ var require_src2 = __commonJS({
 var require_dist = __commonJS({
   "../../node_modules/.pnpm/@kwsites+file-exists@1.1.1/node_modules/@kwsites/file-exists/dist/index.js"(exports) {
     "use strict";
-    function __export2(m) {
+    function __export3(m) {
       for (var p2 in m) if (!exports.hasOwnProperty(p2)) exports[p2] = m[p2];
     }
     Object.defineProperty(exports, "__esModule", { value: true });
-    __export2(require_src2());
+    __export3(require_src2());
+  }
+});
+
+// ../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/common.js
+var require_common2 = __commonJS({
+  "../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/common.js"(exports, module) {
+    function setup(env2) {
+      createDebug.debug = createDebug;
+      createDebug.default = createDebug;
+      createDebug.coerce = coerce;
+      createDebug.disable = disable;
+      createDebug.enable = enable;
+      createDebug.enabled = enabled;
+      createDebug.humanize = require_ms();
+      createDebug.destroy = destroy;
+      Object.keys(env2).forEach((key) => {
+        createDebug[key] = env2[key];
+      });
+      createDebug.names = [];
+      createDebug.skips = [];
+      createDebug.formatters = {};
+      function selectColor(namespace) {
+        let hash = 0;
+        for (let i2 = 0; i2 < namespace.length; i2++) {
+          hash = (hash << 5) - hash + namespace.charCodeAt(i2);
+          hash |= 0;
+        }
+        return createDebug.colors[Math.abs(hash) % createDebug.colors.length];
+      }
+      createDebug.selectColor = selectColor;
+      function createDebug(namespace) {
+        let prevTime;
+        let enableOverride = null;
+        let namespacesCache;
+        let enabledCache;
+        function debug2(...args) {
+          if (!debug2.enabled) {
+            return;
+          }
+          const self = debug2;
+          const curr = Number(/* @__PURE__ */ new Date());
+          const ms = curr - (prevTime || curr);
+          self.diff = ms;
+          self.prev = prevTime;
+          self.curr = curr;
+          prevTime = curr;
+          args[0] = createDebug.coerce(args[0]);
+          if (typeof args[0] !== "string") {
+            args.unshift("%O");
+          }
+          let index = 0;
+          args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
+            if (match === "%%") {
+              return "%";
+            }
+            index++;
+            const formatter = createDebug.formatters[format];
+            if (typeof formatter === "function") {
+              const val = args[index];
+              match = formatter.call(self, val);
+              args.splice(index, 1);
+              index--;
+            }
+            return match;
+          });
+          createDebug.formatArgs.call(self, args);
+          const logFn = self.log || createDebug.log;
+          logFn.apply(self, args);
+        }
+        debug2.namespace = namespace;
+        debug2.useColors = createDebug.useColors();
+        debug2.color = createDebug.selectColor(namespace);
+        debug2.extend = extend;
+        debug2.destroy = createDebug.destroy;
+        Object.defineProperty(debug2, "enabled", {
+          enumerable: true,
+          configurable: false,
+          get: () => {
+            if (enableOverride !== null) {
+              return enableOverride;
+            }
+            if (namespacesCache !== createDebug.namespaces) {
+              namespacesCache = createDebug.namespaces;
+              enabledCache = createDebug.enabled(namespace);
+            }
+            return enabledCache;
+          },
+          set: (v) => {
+            enableOverride = v;
+          }
+        });
+        if (typeof createDebug.init === "function") {
+          createDebug.init(debug2);
+        }
+        return debug2;
+      }
+      function extend(namespace, delimiter) {
+        const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
+        newDebug.log = this.log;
+        return newDebug;
+      }
+      function enable(namespaces) {
+        createDebug.save(namespaces);
+        createDebug.namespaces = namespaces;
+        createDebug.names = [];
+        createDebug.skips = [];
+        const split = (typeof namespaces === "string" ? namespaces : "").trim().replace(/\s+/g, ",").split(",").filter(Boolean);
+        for (const ns of split) {
+          if (ns[0] === "-") {
+            createDebug.skips.push(ns.slice(1));
+          } else {
+            createDebug.names.push(ns);
+          }
+        }
+      }
+      function matchesTemplate(search, template) {
+        let searchIndex = 0;
+        let templateIndex = 0;
+        let starIndex = -1;
+        let matchIndex = 0;
+        while (searchIndex < search.length) {
+          if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === "*")) {
+            if (template[templateIndex] === "*") {
+              starIndex = templateIndex;
+              matchIndex = searchIndex;
+              templateIndex++;
+            } else {
+              searchIndex++;
+              templateIndex++;
+            }
+          } else if (starIndex !== -1) {
+            templateIndex = starIndex + 1;
+            matchIndex++;
+            searchIndex = matchIndex;
+          } else {
+            return false;
+          }
+        }
+        while (templateIndex < template.length && template[templateIndex] === "*") {
+          templateIndex++;
+        }
+        return templateIndex === template.length;
+      }
+      function disable() {
+        const namespaces = [
+          ...createDebug.names,
+          ...createDebug.skips.map((namespace) => "-" + namespace)
+        ].join(",");
+        createDebug.enable("");
+        return namespaces;
+      }
+      function enabled(name) {
+        for (const skip of createDebug.skips) {
+          if (matchesTemplate(name, skip)) {
+            return false;
+          }
+        }
+        for (const ns of createDebug.names) {
+          if (matchesTemplate(name, ns)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function coerce(val) {
+        if (val instanceof Error) {
+          return val.stack || val.message;
+        }
+        return val;
+      }
+      function destroy() {
+        console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+      }
+      createDebug.enable(createDebug.load());
+      return createDebug;
+    }
+    module.exports = setup;
+  }
+});
+
+// ../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/browser.js
+var require_browser2 = __commonJS({
+  "../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/browser.js"(exports, module) {
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.storage = localstorage();
+    exports.destroy = /* @__PURE__ */ (() => {
+      let warned = false;
+      return () => {
+        if (!warned) {
+          warned = true;
+          console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+        }
+      };
+    })();
+    exports.colors = [
+      "#0000CC",
+      "#0000FF",
+      "#0033CC",
+      "#0033FF",
+      "#0066CC",
+      "#0066FF",
+      "#0099CC",
+      "#0099FF",
+      "#00CC00",
+      "#00CC33",
+      "#00CC66",
+      "#00CC99",
+      "#00CCCC",
+      "#00CCFF",
+      "#3300CC",
+      "#3300FF",
+      "#3333CC",
+      "#3333FF",
+      "#3366CC",
+      "#3366FF",
+      "#3399CC",
+      "#3399FF",
+      "#33CC00",
+      "#33CC33",
+      "#33CC66",
+      "#33CC99",
+      "#33CCCC",
+      "#33CCFF",
+      "#6600CC",
+      "#6600FF",
+      "#6633CC",
+      "#6633FF",
+      "#66CC00",
+      "#66CC33",
+      "#9900CC",
+      "#9900FF",
+      "#9933CC",
+      "#9933FF",
+      "#99CC00",
+      "#99CC33",
+      "#CC0000",
+      "#CC0033",
+      "#CC0066",
+      "#CC0099",
+      "#CC00CC",
+      "#CC00FF",
+      "#CC3300",
+      "#CC3333",
+      "#CC3366",
+      "#CC3399",
+      "#CC33CC",
+      "#CC33FF",
+      "#CC6600",
+      "#CC6633",
+      "#CC9900",
+      "#CC9933",
+      "#CCCC00",
+      "#CCCC33",
+      "#FF0000",
+      "#FF0033",
+      "#FF0066",
+      "#FF0099",
+      "#FF00CC",
+      "#FF00FF",
+      "#FF3300",
+      "#FF3333",
+      "#FF3366",
+      "#FF3399",
+      "#FF33CC",
+      "#FF33FF",
+      "#FF6600",
+      "#FF6633",
+      "#FF9900",
+      "#FF9933",
+      "#FFCC00",
+      "#FFCC33"
+    ];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
+        return true;
+      }
+      if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+        return false;
+      }
+      let m;
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // Is firebug? http://stackoverflow.com/a/398120/376773
+      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // Is firefox >= v31?
+      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+      typeof navigator !== "undefined" && navigator.userAgent && (m = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m[1], 10) >= 31 || // Double check webkit in userAgent just in case we are in a worker
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    function formatArgs(args) {
+      args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module.exports.humanize(this.diff);
+      if (!this.useColors) {
+        return;
+      }
+      const c3 = "color: " + this.color;
+      args.splice(1, 0, c3, "color: inherit");
+      let index = 0;
+      let lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, (match) => {
+        if (match === "%%") {
+          return;
+        }
+        index++;
+        if (match === "%c") {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c3);
+    }
+    exports.log = console.debug || console.log || (() => {
+    });
+    function save(namespaces) {
+      try {
+        if (namespaces) {
+          exports.storage.setItem("debug", namespaces);
+        } else {
+          exports.storage.removeItem("debug");
+        }
+      } catch (error) {
+      }
+    }
+    function load() {
+      let r2;
+      try {
+        r2 = exports.storage.getItem("debug") || exports.storage.getItem("DEBUG");
+      } catch (error) {
+      }
+      if (!r2 && typeof process !== "undefined" && "env" in process) {
+        r2 = process.env.DEBUG;
+      }
+      return r2;
+    }
+    function localstorage() {
+      try {
+        return localStorage;
+      } catch (error) {
+      }
+    }
+    module.exports = require_common2()(exports);
+    var { formatters } = module.exports;
+    formatters.j = function(v) {
+      try {
+        return JSON.stringify(v);
+      } catch (error) {
+        return "[UnexpectedJSONParseError]: " + error.message;
+      }
+    };
+  }
+});
+
+// ../../node_modules/.pnpm/has-flag@4.0.0/node_modules/has-flag/index.js
+var require_has_flag = __commonJS({
+  "../../node_modules/.pnpm/has-flag@4.0.0/node_modules/has-flag/index.js"(exports, module) {
+    "use strict";
+    module.exports = (flag, argv = process.argv) => {
+      const prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
+      const position = argv.indexOf(prefix + flag);
+      const terminatorPosition = argv.indexOf("--");
+      return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
+    };
+  }
+});
+
+// ../../node_modules/.pnpm/supports-color@8.1.1/node_modules/supports-color/index.js
+var require_supports_color = __commonJS({
+  "../../node_modules/.pnpm/supports-color@8.1.1/node_modules/supports-color/index.js"(exports, module) {
+    "use strict";
+    var os2 = __require("os");
+    var tty2 = __require("tty");
+    var hasFlag2 = require_has_flag();
+    var { env: env2 } = process;
+    var flagForceColor2;
+    if (hasFlag2("no-color") || hasFlag2("no-colors") || hasFlag2("color=false") || hasFlag2("color=never")) {
+      flagForceColor2 = 0;
+    } else if (hasFlag2("color") || hasFlag2("colors") || hasFlag2("color=true") || hasFlag2("color=always")) {
+      flagForceColor2 = 1;
+    }
+    function envForceColor2() {
+      if ("FORCE_COLOR" in env2) {
+        if (env2.FORCE_COLOR === "true") {
+          return 1;
+        }
+        if (env2.FORCE_COLOR === "false") {
+          return 0;
+        }
+        return env2.FORCE_COLOR.length === 0 ? 1 : Math.min(Number.parseInt(env2.FORCE_COLOR, 10), 3);
+      }
+    }
+    function translateLevel2(level) {
+      if (level === 0) {
+        return false;
+      }
+      return {
+        level,
+        hasBasic: true,
+        has256: level >= 2,
+        has16m: level >= 3
+      };
+    }
+    function supportsColor2(haveStream, { streamIsTTY, sniffFlags = true } = {}) {
+      const noFlagForceColor = envForceColor2();
+      if (noFlagForceColor !== void 0) {
+        flagForceColor2 = noFlagForceColor;
+      }
+      const forceColor = sniffFlags ? flagForceColor2 : noFlagForceColor;
+      if (forceColor === 0) {
+        return 0;
+      }
+      if (sniffFlags) {
+        if (hasFlag2("color=16m") || hasFlag2("color=full") || hasFlag2("color=truecolor")) {
+          return 3;
+        }
+        if (hasFlag2("color=256")) {
+          return 2;
+        }
+      }
+      if (haveStream && !streamIsTTY && forceColor === void 0) {
+        return 0;
+      }
+      const min = forceColor || 0;
+      if (env2.TERM === "dumb") {
+        return min;
+      }
+      if (process.platform === "win32") {
+        const osRelease = os2.release().split(".");
+        if (Number(osRelease[0]) >= 10 && Number(osRelease[2]) >= 10586) {
+          return Number(osRelease[2]) >= 14931 ? 3 : 2;
+        }
+        return 1;
+      }
+      if ("CI" in env2) {
+        if (["TRAVIS", "CIRCLECI", "APPVEYOR", "GITLAB_CI", "GITHUB_ACTIONS", "BUILDKITE", "DRONE"].some((sign) => sign in env2) || env2.CI_NAME === "codeship") {
+          return 1;
+        }
+        return min;
+      }
+      if ("TEAMCITY_VERSION" in env2) {
+        return /^(9\.(0*[1-9]\d*)\.|\d{2,}\.)/.test(env2.TEAMCITY_VERSION) ? 1 : 0;
+      }
+      if (env2.COLORTERM === "truecolor") {
+        return 3;
+      }
+      if ("TERM_PROGRAM" in env2) {
+        const version = Number.parseInt((env2.TERM_PROGRAM_VERSION || "").split(".")[0], 10);
+        switch (env2.TERM_PROGRAM) {
+          case "iTerm.app":
+            return version >= 3 ? 3 : 2;
+          case "Apple_Terminal":
+            return 2;
+        }
+      }
+      if (/-256(color)?$/i.test(env2.TERM)) {
+        return 2;
+      }
+      if (/^screen|^xterm|^vt100|^vt220|^rxvt|color|ansi|cygwin|linux/i.test(env2.TERM)) {
+        return 1;
+      }
+      if ("COLORTERM" in env2) {
+        return 1;
+      }
+      return min;
+    }
+    function getSupportLevel(stream, options = {}) {
+      const level = supportsColor2(stream, {
+        streamIsTTY: stream && stream.isTTY,
+        ...options
+      });
+      return translateLevel2(level);
+    }
+    module.exports = {
+      supportsColor: getSupportLevel,
+      stdout: getSupportLevel({ isTTY: tty2.isatty(1) }),
+      stderr: getSupportLevel({ isTTY: tty2.isatty(2) })
+    };
+  }
+});
+
+// ../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/node.js
+var require_node2 = __commonJS({
+  "../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/node.js"(exports, module) {
+    var tty2 = __require("tty");
+    var util = __require("util");
+    exports.init = init;
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.destroy = util.deprecate(
+      () => {
+      },
+      "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`."
+    );
+    exports.colors = [6, 2, 3, 4, 5, 1];
+    try {
+      const supportsColor2 = require_supports_color();
+      if (supportsColor2 && (supportsColor2.stderr || supportsColor2).level >= 2) {
+        exports.colors = [
+          20,
+          21,
+          26,
+          27,
+          32,
+          33,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          56,
+          57,
+          62,
+          63,
+          68,
+          69,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          92,
+          93,
+          98,
+          99,
+          112,
+          113,
+          128,
+          129,
+          134,
+          135,
+          148,
+          149,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          178,
+          179,
+          184,
+          185,
+          196,
+          197,
+          198,
+          199,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          214,
+          215,
+          220,
+          221
+        ];
+      }
+    } catch (error) {
+    }
+    exports.inspectOpts = Object.keys(process.env).filter((key) => {
+      return /^debug_/i.test(key);
+    }).reduce((obj, key) => {
+      const prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, (_2, k2) => {
+        return k2.toUpperCase();
+      });
+      let val = process.env[key];
+      if (/^(yes|on|true|enabled)$/i.test(val)) {
+        val = true;
+      } else if (/^(no|off|false|disabled)$/i.test(val)) {
+        val = false;
+      } else if (val === "null") {
+        val = null;
+      } else {
+        val = Number(val);
+      }
+      obj[prop] = val;
+      return obj;
+    }, {});
+    function useColors() {
+      return "colors" in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty2.isatty(process.stderr.fd);
+    }
+    function formatArgs(args) {
+      const { namespace: name, useColors: useColors2 } = this;
+      if (useColors2) {
+        const c3 = this.color;
+        const colorCode = "\x1B[3" + (c3 < 8 ? c3 : "8;5;" + c3);
+        const prefix = `  ${colorCode};1m${name} \x1B[0m`;
+        args[0] = prefix + args[0].split("\n").join("\n" + prefix);
+        args.push(colorCode + "m+" + module.exports.humanize(this.diff) + "\x1B[0m");
+      } else {
+        args[0] = getDate() + name + " " + args[0];
+      }
+    }
+    function getDate() {
+      if (exports.inspectOpts.hideDate) {
+        return "";
+      }
+      return (/* @__PURE__ */ new Date()).toISOString() + " ";
+    }
+    function log(...args) {
+      return process.stderr.write(util.formatWithOptions(exports.inspectOpts, ...args) + "\n");
+    }
+    function save(namespaces) {
+      if (namespaces) {
+        process.env.DEBUG = namespaces;
+      } else {
+        delete process.env.DEBUG;
+      }
+    }
+    function load() {
+      return process.env.DEBUG;
+    }
+    function init(debug2) {
+      debug2.inspectOpts = {};
+      const keys = Object.keys(exports.inspectOpts);
+      for (let i2 = 0; i2 < keys.length; i2++) {
+        debug2.inspectOpts[keys[i2]] = exports.inspectOpts[keys[i2]];
+      }
+    }
+    module.exports = require_common2()(exports);
+    var { formatters } = module.exports;
+    formatters.o = function(v) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v, this.inspectOpts).split("\n").map((str) => str.trim()).join(" ");
+    };
+    formatters.O = function(v) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v, this.inspectOpts);
+    };
+  }
+});
+
+// ../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/index.js
+var require_src3 = __commonJS({
+  "../../node_modules/.pnpm/debug@4.4.1_supports-color@8.1.1/node_modules/debug/src/index.js"(exports, module) {
+    if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
+      module.exports = require_browser2();
+    } else {
+      module.exports = require_node2();
+    }
   }
 });
 
@@ -920,7 +1595,7 @@ function o(n) {
 }
 
 // ../../node_modules/.pnpm/simple-git@3.36.0/node_modules/simple-git/dist/esm/index.js
-var import_debug = __toESM(require_src(), 1);
+var import_debug = __toESM(require_src3(), 1);
 import { spawn } from "child_process";
 var import_promise_deferred = __toESM(require_dist2(), 1);
 import { normalize } from "node:path";
@@ -1396,13 +2071,13 @@ var __defProp2 = Object.defineProperty;
 var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames2 = Object.getOwnPropertyNames;
 var __hasOwnProp2 = Object.prototype.hasOwnProperty;
-var __esm = (fn, res) => function __init() {
+var __esm2 = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames2(fn)[0]])(fn = 0)), res;
 };
 var __commonJS2 = (cb, mod) => function __require2() {
   return mod || (0, cb[__getOwnPropNames2(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
-var __export = (target, all) => {
+var __export2 = (target, all) => {
   for (var name in all)
     __defProp2(target, name, { get: all[name], enumerable: true });
 };
@@ -1414,9 +2089,9 @@ var __copyProps2 = (to, from, except, desc) => {
   }
   return to;
 };
-var __toCommonJS = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
+var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
 var GitError;
-var init_git_error = __esm({
+var init_git_error = __esm2({
   "src/lib/errors/git-error.ts"() {
     "use strict";
     GitError = class extends Error {
@@ -1429,7 +2104,7 @@ var init_git_error = __esm({
   }
 });
 var GitResponseError;
-var init_git_response_error = __esm({
+var init_git_response_error = __esm2({
   "src/lib/errors/git-response-error.ts"() {
     "use strict";
     init_git_error();
@@ -1442,7 +2117,7 @@ var init_git_response_error = __esm({
   }
 });
 var TaskConfigurationError;
-var init_task_configuration_error = __esm({
+var init_task_configuration_error = __esm2({
   "src/lib/errors/task-configuration-error.ts"() {
     "use strict";
     init_git_error();
@@ -1573,7 +2248,7 @@ function orVoid(input) {
 var NULL;
 var NOOP;
 var objectToString;
-var init_util = __esm({
+var init_util = __esm2({
   "src/lib/utils/util.ts"() {
     "use strict";
     init_argument_filters();
@@ -1604,7 +2279,7 @@ var filterNumber;
 var filterString;
 var filterStringOrStringArray;
 var filterHasLength;
-var init_argument_filters = __esm({
+var init_argument_filters = __esm2({
   "src/lib/utils/argument-filters.ts"() {
     "use strict";
     init_util();
@@ -1629,7 +2304,7 @@ var init_argument_filters = __esm({
   }
 });
 var ExitCodes;
-var init_exit_codes = __esm({
+var init_exit_codes = __esm2({
   "src/lib/utils/exit-codes.ts"() {
     "use strict";
     ExitCodes = /* @__PURE__ */ ((ExitCodes2) => {
@@ -1642,7 +2317,7 @@ var init_exit_codes = __esm({
   }
 });
 var GitOutputStreams;
-var init_git_output_streams = __esm({
+var init_git_output_streams = __esm2({
   "src/lib/utils/git-output-streams.ts"() {
     "use strict";
     GitOutputStreams = class _GitOutputStreams {
@@ -1661,7 +2336,7 @@ function useMatchesDefault() {
 }
 var LineParser;
 var RemoteLineParser;
-var init_line_parser = __esm({
+var init_line_parser = __esm2({
   "src/lib/utils/line-parser.ts"() {
     "use strict";
     LineParser = class {
@@ -1720,7 +2395,7 @@ function createInstanceConfig(...options) {
   return config;
 }
 var defaultOptions;
-var init_simple_git_options = __esm({
+var init_simple_git_options = __esm2({
   "src/lib/utils/simple-git-options.ts"() {
     "use strict";
     defaultOptions = {
@@ -1778,7 +2453,7 @@ function trailingFunctionArgument(args, includeNoop = true) {
   const callback = asFunction(last(args));
   return includeNoop || isUserFunction(callback) ? callback : void 0;
 }
-var init_task_options = __esm({
+var init_task_options = __esm2({
   "src/lib/utils/task-options.ts"() {
     "use strict";
     init_argument_filters();
@@ -1802,14 +2477,14 @@ function parseStringResponse(result, parsers12, texts, trim = true) {
   });
   return result;
 }
-var init_task_parser = __esm({
+var init_task_parser = __esm2({
   "src/lib/utils/task-parser.ts"() {
     "use strict";
     init_util();
   }
 });
 var utils_exports = {};
-__export(utils_exports, {
+__export2(utils_exports, {
   ExitCodes: () => ExitCodes,
   GitOutputStreams: () => GitOutputStreams,
   LineParser: () => LineParser,
@@ -1854,7 +2529,7 @@ __export(utils_exports, {
   trailingFunctionArgument: () => trailingFunctionArgument,
   trailingOptionsArgument: () => trailingOptionsArgument
 });
-var init_utils = __esm({
+var init_utils = __esm2({
   "src/lib/utils/index.ts"() {
     "use strict";
     init_argument_filters();
@@ -1868,7 +2543,7 @@ var init_utils = __esm({
   }
 });
 var check_is_repo_exports = {};
-__export(check_is_repo_exports, {
+__export2(check_is_repo_exports, {
   CheckRepoActions: () => CheckRepoActions,
   checkIsBareRepoTask: () => checkIsBareRepoTask,
   checkIsRepoRootTask: () => checkIsRepoRootTask,
@@ -1915,7 +2590,7 @@ function isNotRepoMessage(error) {
 var CheckRepoActions;
 var onError;
 var parser;
-var init_check_is_repo = __esm({
+var init_check_is_repo = __esm2({
   "src/lib/tasks/check-is-repo.ts"() {
     "use strict";
     init_utils();
@@ -1950,7 +2625,7 @@ var CleanResponse;
 var removalRegexp;
 var dryRunRemovalRegexp;
 var isFolderRegexp;
-var init_CleanSummary = __esm({
+var init_CleanSummary = __esm2({
   "src/lib/responses/CleanSummary.ts"() {
     "use strict";
     init_utils();
@@ -1968,7 +2643,7 @@ var init_CleanSummary = __esm({
   }
 });
 var task_exports = {};
-__export(task_exports, {
+__export2(task_exports, {
   EMPTY_COMMANDS: () => EMPTY_COMMANDS,
   adhocExecTask: () => adhocExecTask,
   configurationErrorTask: () => configurationErrorTask,
@@ -2018,7 +2693,7 @@ function isEmptyTask(task) {
   return task.format === "empty" || !task.commands.length;
 }
 var EMPTY_COMMANDS;
-var init_task = __esm({
+var init_task = __esm2({
   "src/lib/tasks/task.ts"() {
     "use strict";
     init_task_configuration_error();
@@ -2026,7 +2701,7 @@ var init_task = __esm({
   }
 });
 var clean_exports = {};
-__export(clean_exports, {
+__export2(clean_exports, {
   CONFIG_ERROR_INTERACTIVE_MODE: () => CONFIG_ERROR_INTERACTIVE_MODE,
   CONFIG_ERROR_MODE_REQUIRED: () => CONFIG_ERROR_MODE_REQUIRED,
   CONFIG_ERROR_UNKNOWN_OPTION: () => CONFIG_ERROR_UNKNOWN_OPTION,
@@ -2097,7 +2772,7 @@ var CONFIG_ERROR_MODE_REQUIRED;
 var CONFIG_ERROR_UNKNOWN_OPTION;
 var CleanOptions;
 var CleanOptionValues;
-var init_clean = __esm({
+var init_clean = __esm2({
   "src/lib/tasks/clean.ts"() {
     "use strict";
     init_CleanSummary();
@@ -2169,7 +2844,7 @@ function* configParser(text, requestedKey = null) {
   }
 }
 var ConfigList;
-var init_ConfigList = __esm({
+var init_ConfigList = __esm2({
   "src/lib/responses/ConfigList.ts"() {
     "use strict";
     init_utils();
@@ -2286,7 +2961,7 @@ function config_default() {
   };
 }
 var GitConfigScope;
-var init_config = __esm({
+var init_config = __esm2({
   "src/lib/tasks/config.ts"() {
     "use strict";
     init_ConfigList();
@@ -2305,7 +2980,7 @@ function isDiffNameStatus(input) {
 }
 var DiffNameStatus;
 var diffNameStatus;
-var init_diff_name_status = __esm({
+var init_diff_name_status = __esm2({
   "src/lib/tasks/diff-name-status.ts"() {
     "use strict";
     DiffNameStatus = /* @__PURE__ */ ((DiffNameStatus2) => {
@@ -2377,7 +3052,7 @@ var disallowedOptions;
 var Query;
 var _a;
 var GrepQuery;
-var init_grep = __esm({
+var init_grep = __esm2({
   "src/lib/tasks/grep.ts"() {
     "use strict";
     init_utils();
@@ -2405,7 +3080,7 @@ var init_grep = __esm({
   }
 });
 var reset_exports = {};
-__export(reset_exports, {
+__export2(reset_exports, {
   ResetMode: () => ResetMode,
   getResetMode: () => getResetMode,
   resetTask: () => resetTask
@@ -2434,7 +3109,7 @@ function isValidResetMode(mode) {
 }
 var ResetMode;
 var validResetModes;
-var init_reset = __esm({
+var init_reset = __esm2({
   "src/lib/tasks/reset.ts"() {
     "use strict";
     init_utils();
@@ -2501,7 +3176,7 @@ function createLogger(label, verbose, initialStep, infoDebugger = createLog()) {
     });
   }
 }
-var init_git_logger = __esm({
+var init_git_logger = __esm2({
   "src/lib/git-logger.ts"() {
     "use strict";
     init_utils();
@@ -2515,7 +3190,7 @@ var init_git_logger = __esm({
   }
 });
 var TasksPendingQueue;
-var init_tasks_pending_queue = __esm({
+var init_tasks_pending_queue = __esm2({
   "src/lib/runners/tasks-pending-queue.ts"() {
     "use strict";
     init_git_error();
@@ -2605,7 +3280,7 @@ function onDataReceived(target, name, logger, output) {
   };
 }
 var GitExecutorChain;
-var init_git_executor_chain = __esm({
+var init_git_executor_chain = __esm2({
   "src/lib/runners/git-executor-chain.ts"() {
     "use strict";
     init_git_error();
@@ -2805,11 +3480,11 @@ var init_git_executor_chain = __esm({
   }
 });
 var git_executor_exports = {};
-__export(git_executor_exports, {
+__export2(git_executor_exports, {
   GitExecutor: () => GitExecutor
 });
 var GitExecutor;
-var init_git_executor = __esm({
+var init_git_executor = __esm2({
   "src/lib/runners/git-executor.ts"() {
     "use strict";
     init_git_executor_chain();
@@ -2866,7 +3541,7 @@ function addDeprecationNoticeToError(err) {
     return all;
   }
 }
-var init_task_callback = __esm({
+var init_task_callback = __esm2({
   "src/lib/task-callback.ts"() {
     "use strict";
     init_git_response_error();
@@ -2881,7 +3556,7 @@ function changeWorkingDirectoryTask(directory, root) {
     return (root || instance).cwd = directory;
   });
 }
-var init_change_working_directory = __esm({
+var init_change_working_directory = __esm2({
   "src/lib/tasks/change-working-directory.ts"() {
     "use strict";
     init_utils();
@@ -2917,7 +3592,7 @@ function checkout_default() {
     }
   };
 }
-var init_checkout = __esm({
+var init_checkout = __esm2({
   "src/lib/tasks/checkout.ts"() {
     "use strict";
     init_utils();
@@ -2950,7 +3625,7 @@ function count_objects_default() {
   };
 }
 var parser2;
-var init_count_objects = __esm({
+var init_count_objects = __esm2({
   "src/lib/tasks/count-objects.ts"() {
     "use strict";
     init_utils();
@@ -2980,7 +3655,7 @@ function parseCommitResult(stdOut) {
   return parseStringResponse(result, parsers, stdOut);
 }
 var parsers;
-var init_parse_commit = __esm({
+var init_parse_commit = __esm2({
   "src/lib/parsers/parse-commit.ts"() {
     "use strict";
     init_utils();
@@ -3060,7 +3735,7 @@ function commit_default() {
     );
   }
 }
-var init_commit = __esm({
+var init_commit = __esm2({
   "src/lib/tasks/commit.ts"() {
     "use strict";
     init_parse_commit();
@@ -3078,7 +3753,7 @@ function first_commit_default() {
     }
   };
 }
-var init_first_commit = __esm({
+var init_first_commit = __esm2({
   "src/lib/tasks/first-commit.ts"() {
     "use strict";
     init_utils();
@@ -3092,7 +3767,7 @@ function hashObjectTask(filePath, write) {
   }
   return straightThroughStringTask(commands, true);
 }
-var init_hash_object = __esm({
+var init_hash_object = __esm2({
   "src/lib/tasks/hash-object.ts"() {
     "use strict";
     init_task();
@@ -3121,7 +3796,7 @@ function parseInit(bare, path, text) {
 var InitSummary;
 var initResponseRegex;
 var reInitResponseRegex;
-var init_InitSummary = __esm({
+var init_InitSummary = __esm2({
   "src/lib/responses/InitSummary.ts"() {
     "use strict";
     InitSummary = class {
@@ -3153,7 +3828,7 @@ function initTask(bare = false, path, customArgs) {
   };
 }
 var bareCommand;
-var init_init = __esm({
+var init_init = __esm2({
   "src/lib/tasks/init.ts"() {
     "use strict";
     init_InitSummary();
@@ -3173,14 +3848,14 @@ function isLogFormat(customArg) {
   return logFormatRegex.test(customArg);
 }
 var logFormatRegex;
-var init_log_format = __esm({
+var init_log_format = __esm2({
   "src/lib/args/log-format.ts"() {
     "use strict";
     logFormatRegex = /^--(stat|numstat|name-only|name-status)(=|$)/;
   }
 });
 var DiffSummary;
-var init_DiffSummary = __esm({
+var init_DiffSummary = __esm2({
   "src/lib/responses/DiffSummary.ts"() {
     "use strict";
     DiffSummary = class {
@@ -3202,7 +3877,7 @@ var numStatParser;
 var nameOnlyParser;
 var nameStatusParser;
 var diffSummaryParsers;
-var init_parse_diff_summary = __esm({
+var init_parse_diff_summary = __esm2({
   "src/lib/parsers/parse-diff-summary.ts"() {
     "use strict";
     init_log_format();
@@ -3361,7 +4036,7 @@ var START_BOUNDARY;
 var COMMIT_BOUNDARY;
 var SPLITTER;
 var defaultFieldNames;
-var init_parse_list_log_summary = __esm({
+var init_parse_list_log_summary = __esm2({
   "src/lib/parsers/parse-list-log-summary.ts"() {
     "use strict";
     init_utils();
@@ -3374,7 +4049,7 @@ var init_parse_list_log_summary = __esm({
   }
 });
 var diff_exports = {};
-__export(diff_exports, {
+__export2(diff_exports, {
   diffSummaryTask: () => diffSummaryTask,
   validateLogFormatConfig: () => validateLogFormatConfig
 });
@@ -3405,7 +4080,7 @@ function validateLogFormatConfig(customArgs) {
     );
   }
 }
-var init_diff = __esm({
+var init_diff = __esm2({
   "src/lib/tasks/diff.ts"() {
     "use strict";
     init_log_format();
@@ -3495,7 +4170,7 @@ function log_default() {
   }
 }
 var excludeOptions;
-var init_log = __esm({
+var init_log = __esm2({
   "src/lib/tasks/log.ts"() {
     "use strict";
     init_log_format();
@@ -3523,7 +4198,7 @@ var init_log = __esm({
 });
 var MergeSummaryConflict;
 var MergeSummaryDetail;
-var init_MergeSummary = __esm({
+var init_MergeSummary = __esm2({
   "src/lib/responses/MergeSummary.ts"() {
     "use strict";
     MergeSummaryConflict = class {
@@ -3559,7 +4234,7 @@ var init_MergeSummary = __esm({
 });
 var PullSummary;
 var PullFailedSummary;
-var init_PullSummary = __esm({
+var init_PullSummary = __esm2({
   "src/lib/responses/PullSummary.ts"() {
     "use strict";
     PullSummary = class {
@@ -3617,7 +4292,7 @@ function asObjectCount(source) {
   };
 }
 var remoteMessagesObjectParsers;
-var init_parse_remote_objects = __esm({
+var init_parse_remote_objects = __esm2({
   "src/lib/parsers/parse-remote-objects.ts"() {
     "use strict";
     init_utils();
@@ -3655,7 +4330,7 @@ function parseRemoteMessages(_stdOut, stdErr) {
 }
 var parsers2;
 var RemoteMessageSummary;
-var init_parse_remote_messages = __esm({
+var init_parse_remote_messages = __esm2({
   "src/lib/parsers/parse-remote-messages.ts"() {
     "use strict";
     init_utils();
@@ -3701,7 +4376,7 @@ var parsers3;
 var errorParsers;
 var parsePullDetail;
 var parsePullResult;
-var init_parse_pull = __esm({
+var init_parse_pull = __esm2({
   "src/lib/parsers/parse-pull.ts"() {
     "use strict";
     init_PullSummary();
@@ -3762,7 +4437,7 @@ var init_parse_pull = __esm({
 var parsers4;
 var parseMergeResult;
 var parseMergeDetail;
-var init_parse_merge = __esm({
+var init_parse_merge = __esm2({
   "src/lib/parsers/parse-merge.ts"() {
     "use strict";
     init_MergeSummary();
@@ -3812,7 +4487,7 @@ function mergeTask(customArgs) {
     }
   };
 }
-var init_merge = __esm({
+var init_merge = __esm2({
   "src/lib/tasks/merge.ts"() {
     "use strict";
     init_git_response_error();
@@ -3837,7 +4512,7 @@ function pushResultPushedItem(local, remote, status) {
 var parsers5;
 var parsePushResult;
 var parsePushDetail;
-var init_parse_push = __esm({
+var init_parse_push = __esm2({
   "src/lib/parsers/parse-push.ts"() {
     "use strict";
     init_utils();
@@ -3896,7 +4571,7 @@ var init_parse_push = __esm({
   }
 });
 var push_exports = {};
-__export(push_exports, {
+__export2(push_exports, {
   pushTagsTask: () => pushTagsTask,
   pushTask: () => pushTask
 });
@@ -3921,7 +4596,7 @@ function pushTask(ref = {}, customArgs) {
     parser: parsePushResult
   };
 }
-var init_push = __esm({
+var init_push = __esm2({
   "src/lib/tasks/push.ts"() {
     "use strict";
     init_parse_push();
@@ -3949,7 +4624,7 @@ function show_default() {
     }
   };
 }
-var init_show = __esm({
+var init_show = __esm2({
   "src/lib/tasks/show.ts"() {
     "use strict";
     init_utils();
@@ -3958,7 +4633,7 @@ var init_show = __esm({
 });
 var fromPathRegex;
 var FileStatusSummary;
-var init_FileStatusSummary = __esm({
+var init_FileStatusSummary = __esm2({
   "src/lib/responses/FileStatusSummary.ts"() {
     "use strict";
     fromPathRegex = /^(.+)\0(.+)$/;
@@ -4013,7 +4688,7 @@ function splitLine(result, lineStr) {
 var StatusSummary;
 var parsers6;
 var parseStatusSummary;
-var init_StatusSummary = __esm({
+var init_StatusSummary = __esm2({
   "src/lib/responses/StatusSummary.ts"() {
     "use strict";
     init_utils();
@@ -4170,7 +4845,7 @@ function statusTask(customArgs) {
   };
 }
 var ignoredOptions;
-var init_status = __esm({
+var init_status = __esm2({
   "src/lib/tasks/status.ts"() {
     "use strict";
     init_StatusSummary();
@@ -4224,7 +4899,7 @@ function versionParser(stdOut) {
 }
 var NOT_INSTALLED;
 var parsers7;
-var init_version = __esm({
+var init_version = __esm2({
   "src/lib/tasks/version.ts"() {
     "use strict";
     init_utils();
@@ -4272,7 +4947,7 @@ function clone_default() {
 }
 var cloneTask;
 var cloneMirrorTask;
-var init_clone = __esm({
+var init_clone = __esm2({
   "src/lib/tasks/clone.ts"() {
     "use strict";
     init_task();
@@ -4290,11 +4965,11 @@ var init_clone = __esm({
   }
 });
 var simple_git_api_exports = {};
-__export(simple_git_api_exports, {
+__export2(simple_git_api_exports, {
   SimpleGitApi: () => SimpleGitApi
 });
 var SimpleGitApi;
-var init_simple_git_api = __esm({
+var init_simple_git_api = __esm2({
   "src/lib/simple-git-api.ts"() {
     "use strict";
     init_task_callback();
@@ -4431,12 +5106,12 @@ var init_simple_git_api = __esm({
   }
 });
 var scheduler_exports = {};
-__export(scheduler_exports, {
+__export2(scheduler_exports, {
   Scheduler: () => Scheduler
 });
 var createScheduledTask;
 var Scheduler;
-var init_scheduler = __esm({
+var init_scheduler = __esm2({
   "src/lib/runners/scheduler.ts"() {
     "use strict";
     init_utils();
@@ -4489,13 +5164,13 @@ var init_scheduler = __esm({
   }
 });
 var apply_patch_exports = {};
-__export(apply_patch_exports, {
+__export2(apply_patch_exports, {
   applyPatchTask: () => applyPatchTask
 });
 function applyPatchTask(patches, customArgs) {
   return straightThroughStringTask(["apply", ...customArgs, ...patches]);
 }
-var init_apply_patch = __esm({
+var init_apply_patch = __esm2({
   "src/lib/tasks/apply-patch.ts"() {
     "use strict";
     init_task();
@@ -4516,7 +5191,7 @@ function branchDeletionFailure(branch) {
   };
 }
 var BranchDeletionBatch;
-var init_BranchDeleteSummary = __esm({
+var init_BranchDeleteSummary = __esm2({
   "src/lib/responses/BranchDeleteSummary.ts"() {
     "use strict";
     BranchDeletionBatch = class {
@@ -4538,7 +5213,7 @@ var deleteSuccessRegex;
 var deleteErrorRegex;
 var parsers8;
 var parseBranchDeletions;
-var init_parse_branch_delete = __esm({
+var init_parse_branch_delete = __esm2({
   "src/lib/parsers/parse-branch-delete.ts"() {
     "use strict";
     init_BranchDeleteSummary();
@@ -4564,7 +5239,7 @@ var init_parse_branch_delete = __esm({
   }
 });
 var BranchSummaryResult;
-var init_BranchSummary = __esm({
+var init_BranchSummary = __esm2({
   "src/lib/responses/BranchSummary.ts"() {
     "use strict";
     BranchSummaryResult = class {
@@ -4603,7 +5278,7 @@ function parseBranchSummary(stdOut, currentOnly = false) {
 }
 var parsers9;
 var currentBranchParser;
-var init_parse_branch = __esm({
+var init_parse_branch = __esm2({
   "src/lib/parsers/parse-branch.ts"() {
     "use strict";
     init_BranchSummary();
@@ -4628,7 +5303,7 @@ var init_parse_branch = __esm({
   }
 });
 var branch_exports = {};
-__export(branch_exports, {
+__export2(branch_exports, {
   branchLocalTask: () => branchLocalTask,
   branchTask: () => branchTask,
   containsDeleteBranchCommand: () => containsDeleteBranchCommand,
@@ -4703,7 +5378,7 @@ function deleteBranchTask(branch, forceDelete = false) {
   };
   return task;
 }
-var init_branch = __esm({
+var init_branch = __esm2({
   "src/lib/tasks/branch.ts"() {
     "use strict";
     init_git_response_error();
@@ -4717,7 +5392,7 @@ function toPath(input) {
   return path && normalize(path);
 }
 var parseCheckIgnore;
-var init_CheckIgnore = __esm({
+var init_CheckIgnore = __esm2({
   "src/lib/responses/CheckIgnore.ts"() {
     "use strict";
     parseCheckIgnore = (text) => {
@@ -4726,7 +5401,7 @@ var init_CheckIgnore = __esm({
   }
 });
 var check_ignore_exports = {};
-__export(check_ignore_exports, {
+__export2(check_ignore_exports, {
   checkIgnoreTask: () => checkIgnoreTask
 });
 function checkIgnoreTask(paths) {
@@ -4736,7 +5411,7 @@ function checkIgnoreTask(paths) {
     parser: parseCheckIgnore
   };
 }
-var init_check_ignore = __esm({
+var init_check_ignore = __esm2({
   "src/lib/tasks/check-ignore.ts"() {
     "use strict";
     init_CheckIgnore();
@@ -4754,7 +5429,7 @@ function parseFetchResult(stdOut, stdErr) {
   return parseStringResponse(result, parsers10, [stdOut, stdErr]);
 }
 var parsers10;
-var init_parse_fetch = __esm({
+var init_parse_fetch = __esm2({
   "src/lib/parsers/parse-fetch.ts"() {
     "use strict";
     init_utils();
@@ -4794,7 +5469,7 @@ var init_parse_fetch = __esm({
   }
 });
 var fetch_exports = {};
-__export(fetch_exports, {
+__export2(fetch_exports, {
   fetchTask: () => fetchTask
 });
 function disallowedCommand(command) {
@@ -4815,7 +5490,7 @@ function fetchTask(remote, branch, customArgs) {
     parser: parseFetchResult
   };
 }
-var init_fetch = __esm({
+var init_fetch = __esm2({
   "src/lib/tasks/fetch.ts"() {
     "use strict";
     init_parse_fetch();
@@ -4826,7 +5501,7 @@ function parseMoveResult(stdOut) {
   return parseStringResponse({ moves: [] }, parsers11, stdOut);
 }
 var parsers11;
-var init_parse_move = __esm({
+var init_parse_move = __esm2({
   "src/lib/parsers/parse-move.ts"() {
     "use strict";
     init_utils();
@@ -4838,7 +5513,7 @@ var init_parse_move = __esm({
   }
 });
 var move_exports = {};
-__export(move_exports, {
+__export2(move_exports, {
   moveTask: () => moveTask
 });
 function moveTask(from, to) {
@@ -4848,7 +5523,7 @@ function moveTask(from, to) {
     parser: parseMoveResult
   };
 }
-var init_move = __esm({
+var init_move = __esm2({
   "src/lib/tasks/move.ts"() {
     "use strict";
     init_parse_move();
@@ -4856,7 +5531,7 @@ var init_move = __esm({
   }
 });
 var pull_exports = {};
-__export(pull_exports, {
+__export2(pull_exports, {
   pullTask: () => pullTask
 });
 function pullTask(remote, branch, customArgs) {
@@ -4882,7 +5557,7 @@ function pullTask(remote, branch, customArgs) {
     }
   };
 }
-var init_pull = __esm({
+var init_pull = __esm2({
   "src/lib/tasks/pull.ts"() {
     "use strict";
     init_git_response_error();
@@ -4913,14 +5588,14 @@ function parseGetRemotesVerbose(text) {
 function forEach(text, handler) {
   forEachLineWithContent(text, (line) => handler(line.split(/\s+/)));
 }
-var init_GetRemoteSummary = __esm({
+var init_GetRemoteSummary = __esm2({
   "src/lib/responses/GetRemoteSummary.ts"() {
     "use strict";
     init_utils();
   }
 });
 var remote_exports = {};
-__export(remote_exports, {
+__export2(remote_exports, {
   addRemoteTask: () => addRemoteTask,
   getRemotesTask: () => getRemotesTask,
   listRemotesTask: () => listRemotesTask,
@@ -4958,7 +5633,7 @@ function remoteTask(customArgs) {
 function removeRemoteTask(remoteName) {
   return straightThroughStringTask(["remote", "remove", remoteName]);
 }
-var init_remote = __esm({
+var init_remote = __esm2({
   "src/lib/tasks/remote.ts"() {
     "use strict";
     init_GetRemoteSummary();
@@ -4966,7 +5641,7 @@ var init_remote = __esm({
   }
 });
 var stash_list_exports = {};
-__export(stash_list_exports, {
+__export2(stash_list_exports, {
   stashListTask: () => stashListTask
 });
 function stashListTask(opt = {}, customArgs) {
@@ -4983,7 +5658,7 @@ function stashListTask(opt = {}, customArgs) {
     parser: parser4
   };
 }
-var init_stash_list = __esm({
+var init_stash_list = __esm2({
   "src/lib/tasks/stash-list.ts"() {
     "use strict";
     init_log_format();
@@ -4993,7 +5668,7 @@ var init_stash_list = __esm({
   }
 });
 var sub_module_exports = {};
-__export(sub_module_exports, {
+__export2(sub_module_exports, {
   addSubModuleTask: () => addSubModuleTask,
   initSubModuleTask: () => initSubModuleTask,
   subModuleTask: () => subModuleTask,
@@ -5015,7 +5690,7 @@ function subModuleTask(customArgs) {
 function updateSubModuleTask(customArgs) {
   return subModuleTask(["update", ...customArgs]);
 }
-var init_sub_module = __esm({
+var init_sub_module = __esm2({
   "src/lib/tasks/sub-module.ts"() {
     "use strict";
     init_task();
@@ -5043,7 +5718,7 @@ function toNumber(input) {
 }
 var TagList;
 var parseTagList;
-var init_TagList = __esm({
+var init_TagList = __esm2({
   "src/lib/responses/TagList.ts"() {
     "use strict";
     TagList = class {
@@ -5076,7 +5751,7 @@ var init_TagList = __esm({
   }
 });
 var tag_exports = {};
-__export(tag_exports, {
+__export2(tag_exports, {
   addAnnotatedTagTask: () => addAnnotatedTagTask,
   addTagTask: () => addTagTask,
   tagListTask: () => tagListTask
@@ -5109,7 +5784,7 @@ function addAnnotatedTagTask(name, tagMessage) {
     }
   };
 }
-var init_tag = __esm({
+var init_tag = __esm2({
   "src/lib/tasks/tag.ts"() {
     "use strict";
     init_TagList();
@@ -5118,10 +5793,10 @@ var init_tag = __esm({
 var require_git = __commonJS2({
   "src/git.js"(exports, module) {
     "use strict";
-    var { GitExecutor: GitExecutor2 } = (init_git_executor(), __toCommonJS(git_executor_exports));
-    var { SimpleGitApi: SimpleGitApi2 } = (init_simple_git_api(), __toCommonJS(simple_git_api_exports));
-    var { Scheduler: Scheduler2 } = (init_scheduler(), __toCommonJS(scheduler_exports));
-    var { adhocExecTask: adhocExecTask2, configurationErrorTask: configurationErrorTask2 } = (init_task(), __toCommonJS(task_exports));
+    var { GitExecutor: GitExecutor2 } = (init_git_executor(), __toCommonJS2(git_executor_exports));
+    var { SimpleGitApi: SimpleGitApi2 } = (init_simple_git_api(), __toCommonJS2(simple_git_api_exports));
+    var { Scheduler: Scheduler2 } = (init_scheduler(), __toCommonJS2(scheduler_exports));
+    var { adhocExecTask: adhocExecTask2, configurationErrorTask: configurationErrorTask2 } = (init_task(), __toCommonJS2(task_exports));
     var {
       asArray: asArray2,
       filterArray: filterArray2,
@@ -5132,39 +5807,39 @@ var require_git = __commonJS2({
       getTrailingOptions: getTrailingOptions2,
       trailingFunctionArgument: trailingFunctionArgument2,
       trailingOptionsArgument: trailingOptionsArgument2
-    } = (init_utils(), __toCommonJS(utils_exports));
-    var { applyPatchTask: applyPatchTask2 } = (init_apply_patch(), __toCommonJS(apply_patch_exports));
+    } = (init_utils(), __toCommonJS2(utils_exports));
+    var { applyPatchTask: applyPatchTask2 } = (init_apply_patch(), __toCommonJS2(apply_patch_exports));
     var {
       branchTask: branchTask2,
       branchLocalTask: branchLocalTask2,
       deleteBranchesTask: deleteBranchesTask2,
       deleteBranchTask: deleteBranchTask2
-    } = (init_branch(), __toCommonJS(branch_exports));
-    var { checkIgnoreTask: checkIgnoreTask2 } = (init_check_ignore(), __toCommonJS(check_ignore_exports));
-    var { checkIsRepoTask: checkIsRepoTask2 } = (init_check_is_repo(), __toCommonJS(check_is_repo_exports));
-    var { cleanWithOptionsTask: cleanWithOptionsTask2, isCleanOptionsArray: isCleanOptionsArray2 } = (init_clean(), __toCommonJS(clean_exports));
-    var { diffSummaryTask: diffSummaryTask2 } = (init_diff(), __toCommonJS(diff_exports));
-    var { fetchTask: fetchTask2 } = (init_fetch(), __toCommonJS(fetch_exports));
-    var { moveTask: moveTask2 } = (init_move(), __toCommonJS(move_exports));
-    var { pullTask: pullTask2 } = (init_pull(), __toCommonJS(pull_exports));
-    var { pushTagsTask: pushTagsTask2 } = (init_push(), __toCommonJS(push_exports));
+    } = (init_branch(), __toCommonJS2(branch_exports));
+    var { checkIgnoreTask: checkIgnoreTask2 } = (init_check_ignore(), __toCommonJS2(check_ignore_exports));
+    var { checkIsRepoTask: checkIsRepoTask2 } = (init_check_is_repo(), __toCommonJS2(check_is_repo_exports));
+    var { cleanWithOptionsTask: cleanWithOptionsTask2, isCleanOptionsArray: isCleanOptionsArray2 } = (init_clean(), __toCommonJS2(clean_exports));
+    var { diffSummaryTask: diffSummaryTask2 } = (init_diff(), __toCommonJS2(diff_exports));
+    var { fetchTask: fetchTask2 } = (init_fetch(), __toCommonJS2(fetch_exports));
+    var { moveTask: moveTask2 } = (init_move(), __toCommonJS2(move_exports));
+    var { pullTask: pullTask2 } = (init_pull(), __toCommonJS2(pull_exports));
+    var { pushTagsTask: pushTagsTask2 } = (init_push(), __toCommonJS2(push_exports));
     var {
       addRemoteTask: addRemoteTask2,
       getRemotesTask: getRemotesTask2,
       listRemotesTask: listRemotesTask2,
       remoteTask: remoteTask2,
       removeRemoteTask: removeRemoteTask2
-    } = (init_remote(), __toCommonJS(remote_exports));
-    var { getResetMode: getResetMode2, resetTask: resetTask2 } = (init_reset(), __toCommonJS(reset_exports));
-    var { stashListTask: stashListTask2 } = (init_stash_list(), __toCommonJS(stash_list_exports));
+    } = (init_remote(), __toCommonJS2(remote_exports));
+    var { getResetMode: getResetMode2, resetTask: resetTask2 } = (init_reset(), __toCommonJS2(reset_exports));
+    var { stashListTask: stashListTask2 } = (init_stash_list(), __toCommonJS2(stash_list_exports));
     var {
       addSubModuleTask: addSubModuleTask2,
       initSubModuleTask: initSubModuleTask2,
       subModuleTask: subModuleTask2,
       updateSubModuleTask: updateSubModuleTask2
-    } = (init_sub_module(), __toCommonJS(sub_module_exports));
-    var { addAnnotatedTagTask: addAnnotatedTagTask2, addTagTask: addTagTask2, tagListTask: tagListTask2 } = (init_tag(), __toCommonJS(tag_exports));
-    var { straightThroughBufferTask: straightThroughBufferTask2, straightThroughStringTask: straightThroughStringTask2 } = (init_task(), __toCommonJS(task_exports));
+    } = (init_sub_module(), __toCommonJS2(sub_module_exports));
+    var { addAnnotatedTagTask: addAnnotatedTagTask2, addTagTask: addTagTask2, tagListTask: tagListTask2 } = (init_tag(), __toCommonJS2(tag_exports));
+    var { straightThroughBufferTask: straightThroughBufferTask2, straightThroughStringTask: straightThroughStringTask2 } = (init_task(), __toCommonJS2(task_exports));
     function Git2(options, plugins) {
       this._plugins = plugins;
       this._executor = new GitExecutor2(
@@ -5535,8 +6210,8 @@ function abortPlugin(signal) {
 function blockUnsafeOperationsPlugin(options = {}) {
   return {
     type: "spawn.args",
-    action(args, { env }) {
-      for (const vulnerability of ne(args, env)) {
+    action(args, { env: env2 }) {
+      for (const vulnerability of ne(args, env2)) {
         if (options[vulnerability.category] !== true) {
           throw new GitPluginError(void 0, "unsafe", vulnerability.message);
         }
