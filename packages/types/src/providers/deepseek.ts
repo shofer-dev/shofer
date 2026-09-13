@@ -9,6 +9,18 @@ export type DeepSeekModelId = keyof typeof deepSeekModels
 export const deepSeekDefaultModelId: DeepSeekModelId = "deepseek-chat"
 
 export const deepSeekModels = {
+	"deepseek-flash": {
+		maxTokens: 384_000, // API cap per the V4 docs
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		preserveReasoning: true, // thinking mode (default-on) requires reasoning_content echoed back
+		inputPrice: 0.15, // $0.15 per million tokens (cache miss, off-peak)
+		outputPrice: 0.6, // $0.6 per million tokens (off-peak)
+		cacheWritesPrice: 0.15, // $0.15 per million tokens (cache miss, off-peak)
+		cacheReadsPrice: 0.003, // $0.003 per million tokens (cache hit, off-peak)
+		description: `DeepSeek-V4.1-Flash: fast and cost-effective with 1M context and reasoning capability close to V4-Pro; supersedes the retired deepseek-v4-flash id.`,
+	},
 	"deepseek-v4-pro": {
 		maxTokens: 384_000, // API cap per the V4 docs
 		contextWindow: 1_000_000,
