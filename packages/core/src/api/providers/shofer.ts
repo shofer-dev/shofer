@@ -136,6 +136,15 @@ export class ShoferHandler extends OpenRouterHandler {
 		// {@link shoferReasoningDirective}).
 		const reasoning = shoferReasoningDirective(this.options)
 
+		// An opaque scope identifier the DEPLOYMENT may hand this node, forwarded
+		// verbatim as `project_id` beside `task_id`. The router that owns those
+		// fields uses it to record which project's runtime produced the turn;
+		// this provider attaches meaning to neither the name nor the value. Env
+		// rather than settings because it is a property of the NODE the host
+		// runs on (one pod, one scope), not of any profile a user edits — and a
+		// node that sets nothing sends nothing, which is the standalone default.
+		const routerProjectId = process.env.SHOFER_ROUTER_PROJECT_ID
+
 		// Patch the OpenAI client so every downstream `chat.completions.create`:
 		//  1. carries `task_id` (llm-router requires it) and, when this turn has
 		//     one, `human_text`, and
@@ -164,6 +173,7 @@ export class ShoferHandler extends OpenRouterHandler {
 				...(parentTaskId ? { parent_task_id: parentTaskId } : {}),
 				...(rootTaskId ? { root_task_id: rootTaskId } : {}),
 				...(humanText ? { human_text: humanText } : {}),
+				...(routerProjectId ? { project_id: routerProjectId } : {}),
 				...rest,
 				...(reasoning ? { reasoning } : {}),
 			}

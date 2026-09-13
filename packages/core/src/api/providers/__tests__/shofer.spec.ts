@@ -192,6 +192,25 @@ describe("ShoferHandler request stamping", () => {
 		])
 	})
 
+	// The deployment may scope this NODE to a project; the provider forwards it
+	// verbatim as `project_id` beside `task_id`, and a node with no scope sends
+	// no field at all — the standalone default.
+	it("sends SHOFER_ROUTER_PROJECT_ID as project_id, and omits it when unset", async () => {
+		const prev = process.env.SHOFER_ROUTER_PROJECT_ID
+		try {
+			process.env.SHOFER_ROUTER_PROJECT_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+			const withScope = await capture([{ role: "user", content: [humanMessageBlock("hi"), envDetails] }])
+			expect(withScope.project_id).toBe("cccccccc-cccc-cccc-cccc-cccccccccccc")
+
+			delete process.env.SHOFER_ROUTER_PROJECT_ID
+			const without = await capture([{ role: "user", content: [humanMessageBlock("hi"), envDetails] }])
+			expect("project_id" in without).toBe(false)
+		} finally {
+			if (prev === undefined) delete process.env.SHOFER_ROUTER_PROJECT_ID
+			else process.env.SHOFER_ROUTER_PROJECT_ID = prev
+		}
+	})
+
 	it("omits human_text on a turn the human did not speak in", async () => {
 		const body = await capture([
 			{ role: "user", content: [humanMessageBlock("List my VMs.")] },
